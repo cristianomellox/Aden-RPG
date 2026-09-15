@@ -1,0 +1,3223 @@
+/* Estilos para o menu de abas */
+#tabMenu {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 20px;
+    background-color: #2e2e2e;
+    border-radius: 8px;
+    padding: 5px;
+    overflow: hidden;
+  left: 0;
+  margin: 0;
+  margin-left: -1rem;
+}
+
+.tab-btn {
+    flex-grow: 0.3;
+    padding: 4px 5px;
+    /* Remove todos os estilos padrão de botão */
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    outline: inherit;
+max-width: 120px;
+    /* Estilos para criar a aparência de abas */
+    background-color: #444;
+    color: white;
+    font-size: 0.7em;
+    transition: background-color 0.5s, color 0.2s;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    top: 7px;
+}
+
+/* Bordas entre as abas para separar visualmente */
+.tab-btn:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.tab-btn:hover:not(.active) {
+    background-color: #555;
+}
+
+.tab-btn.active {
+    background-color: #c9a94a;
+    color: #1a1a1a;
+    font-weight: bold;
+    z-index: 2;
+    border-top: 2px solid #c9a94a;
+}
+
+/* Arredonda as pontas do menu */
+.tab-btn:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.tab-btn:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* Esconde as abas de conteúdo por padrão */
+.tab-pane {
+    display: none;
+    font-size: 1em;
+    background-color: #2e2e2e;
+    border-radius: 8px;
+    text-align: left;
+    color: white;
+}
+
+/* Mostra apenas a aba ativa */
+.tab-pane.active {
+    display: block;
+}
+
+/* Estilos para a seção de informações da guilda */
+#guildInfoContainer {
+    text-align: center;
+}
+
+#guildName {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+#guildLevel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.xp-bar-container {
+    width: 80%;
+    height: 20px;
+    background-color: #1a1a1a;
+    border: 1px solid yellow;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.xp-bar-fill {
+    height: 100%;
+    background-color: #4caf50;
+    transition: width 0.3s;
+}
+
+.member-list-container {
+    margin-top: 20px;
+}
+
+#guildMemberList {
+    list-style: none;
+    padding: 0;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+#guildMemberList li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #777;
+}
+
+
+
+.member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid #888;
+}
+
+.member-name {
+    font-weight: bold;
+    flex-grow: 1;
+}
+
+.member-role {
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+#guildRankingList li {
+    display: flex;
+    justify-content: flex-start;   /* tudo alinhado à esquerda */
+    align-items: center;
+    gap: 10px;                     /* espaçamento entre itens */
+    padding: 10px;
+    
+    text-align: left;              /* força alinhamento do texto */
+}
+
+#guildViewMemberList li {
+  border-bottom: 1px solid #777;
+  margin-bottom: 10px;
+}
+
+
+.ranking-guild-name {
+    font-weight: bold;
+}
+
+/* Estilos para o Modal de Criação de Guilda */
+.modal {
+    display: flex; /* Oculto por padrão */
+    position: fixed;
+    z-index: 100;
+    left: 0!important;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    justify-content: center;
+    align-items: center;
+    margin-top: 0;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 1px solid #555;
+    border-radius: 10px;
+    width: 80%;
+    
+  
+    position: relative;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#newGuildNameInput {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin: 10px 0;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    color: #e0dccc;
+    border-radius: 5px;
+}
+
+.action-btn {
+  background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: cover;
+        box-sizing: border-box;
+        background-color: none;
+    padding: 10px 20px;
+    margin-top: 10px;
+    border: none;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 4s;
+    font-size: 0.8em;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+.action-btn:hover {
+    background-color: #a98d3e;
+}
+
+.message {
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.message.error {
+    color: #ff6347; /* Vermelho claro */
+}
+
+.message.success {
+    color: #4caf50; /* Verde */
+}
+p {
+  color: white;
+}
+#editTabMenu {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 10px;
+}
+
+/* esconder apenas a barra, mas manter o scroll funcional */
+#editTabMenu::-webkit-scrollbar { height: 0px; }
+#editTabMenu { scrollbar-width: none; } /* Firefox */
+
+#editTabMenu::-webkit-scrollbar { height: 6px; }
+#editTabMenu::-webkit-scrollbar-thumb { background: #999; border-radius: 4px; }
+
+.edit-tab-btn {
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.edit-tab-btn.active {
+  border-bottom: 2px solid #007bff;
+  font-weight: bold;
+}
+.notif-dot {
+  display:inline-block;
+  position: fixed;
+  width:10px;
+  height:10px;
+  background:red;
+  border-radius:50%;
+  margin-left: 6px;
+  vertical-align: middle;
+  border: 1px solid white;
+  right: 16px;
+  top: 96px;
+}
+
+#mainContainer {
+  width: 90%;
+  background: linear-gradient(to bottom, #444 0%, #222 20%, #444 60%); 
+}
+body {
+  width: 100vw;
+}
+
+#editGuildBtn {
+    position: fixed;
+    top: 97px;
+    right: 13px;
+    z-index: 9; 
+}
+
+/* As abas do modal precisam ser referência para a bolinha */
+.edit-tab-btn {
+  position: relative;
+}
+
+/* bolinha inline para abas do modal */
+.notif-dot {
+  position: absolute;
+  top: 40%;
+  right: -2px;          /* empurra pra direita do texto */
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background: red;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+/* bolinha fixa da tela inicial sobre o ícone "notifica.webp" */
+.notif-dot-main {
+  position: fixed;
+  width: 13px;
+  height: 13px;
+  background: red;
+  border-radius: 50%;
+  border: 2px solid white;
+  right: 13px;
+  top: 92px;
+  z-index: 10;
+}
+.xp-bar-container {
+  position: relative;
+}
+
+#guildXpFill {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;          /* ocupa toda a largura da barra */
+  text-align: center;   /* centraliza o texto */
+  pointer-events: none; /* evita atrapalhar cliques */
+  font-size: 0.9em;
+  color: white;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+
+.member-actions img,
+.request-actions img {
+  width: 20px !important;
+  height: 20px !important;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+
+/* Forçar: esconder barra de rolagem horizontal mas manter scrolling */
+#editTabMenu {
+  overflow-x: auto !important;
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;     /* Firefox */
+}
+#editTabMenu::-webkit-scrollbar { height: 0 !important; }
+
+/* Garantir tamanho dos ícones de ação (força 35x35) */
+.member-actions img,
+.request-actions img {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  
+}
+
+/* Alinhar o conteúdo (nomes/mensagens) à esquerda nas listas do modal */
+#manageMembersList li div,
+#guildRequestsList li div {
+  text-align: left !important;
+  flex: 1 1 auto !important;
+}
+
+/* Garante que o <li> seja flex e os itens fiquem alinhados corretamente */
+#manageMembersList li,
+#guildRequestsList li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 8px;
+}
+
+/* Espaçamento extra para os actions */
+.member-actions,
+.request-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start!important;
+  min-width: 120px;
+  left: 0;
+  
+}
+
+/* ---- Ajustes novos para requests e members ---- */
+
+/* Solicitações */
+.request-item {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.request-info {
+  flex: 1;
+  text-align: left;
+}
+
+.request-message {
+  font-size: 0.9em;
+  color: white;
+}
+
+/* Membros */
+.member-item {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.member-info {
+  flex: 1;
+  text-align: left;
+}
+
+.member-rank {
+  margin-left: 8px;
+  color: white;
+}
+
+/* Forçar que as listas usem 100% da largura disponível */
+#manageMembersList,
+#guildRequestsList {
+  width: 100% !important;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+/* Cada item ocupa toda a largura */
+#manageMembersList li,
+#guildRequestsList li {
+  width: 100% !important;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #777;
+}
+
+/* Informação do jogador/solicitação sempre colada à esquerda */
+.request-info,
+.member-info, #searchGuildResults {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+/* Botões de ação ficam colados logo após o texto */
+.request-actions,
+.member-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+}
+.modal-content {
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+}
+#tabContent #guilda, #tabContent #taverna, #tabContent #ranking, #tabContent #boss, #tabContent #batalhas {
+  background: none;
+  background-color: none;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+#playerTopBar {
+  z-index: 800;
+}
+#risco {
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 102, 102, 0.5), rgba(255, 102, 102, 0.2));
+  height: 97px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 5px; /* Espaço entre o título e os botões */
+}
+
+#risco h3 {
+  margin: 0; /* Remove a margem do título */
+  font-size: 1em;
+  padding: 0;
+}
+
+#risco > div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  gap: 60px; 
+  font-size: 0.8em;
+  font-weight: bold;
+}
+#deleteguild, #leaveguild {
+  border: 5px solid grey;
+  border-radius: 8px;
+  width: 110px;
+}
+
+#risco img {
+  width: 40px;
+  height: 40px;
+}
+
+#deleteguild, #leaveguild {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centraliza a imagem e o texto horizontalmente */
+  text-align: center;
+}
+#guildRankingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+#guildRankingList li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: 95% !important;
+}
+#guildRankingList li span:first-child {
+  font-size: 0.9em; 
+  font-weight: bold;
+}
+
+/* Container principal de cada item do ranking */
+.ranking-item-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 0;
+    
+    text-align: left;
+}
+
+/* Posição do ranking (1º, 2º, etc.) */
+.ranking-position {
+    width: 28px;
+    text-align: right;
+    font-size: 0.9em; 
+    font-weight: bold;
+}
+
+/* Bandeira da guilda */
+.ranking-flag {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    margin-left: 8px;
+}
+
+/* Novo contêiner para nome e poder */
+.ranking-info {
+    flex: 1; /* Permite que ocupe o espaço restante */
+    display: flex;
+    flex-direction: column; /* Empilha os itens verticalmente */
+    text-align: left;
+    white-space: nowrap; /* Evita que o nome quebre a linha */
+    overflow: hidden; /* Oculta qualquer texto que exceda a largura */
+    text-overflow: ellipsis; /* Adiciona "..." ao final de nomes longos */
+}
+
+/* Nome da guilda */
+.ranking-name {
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+/* Contêiner para a imagem e o valor do poder */
+.ranking-power {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Ícone de poder */
+.cp-icon {
+    width: 18px;
+    height: 25px;
+    vertical-align: -3px;
+}
+
+/* Valor do poder */
+.power-value {
+    color: orange;
+    font-weight: bold;
+    font-size: 1em;
+}
+
+/* Remova ou ajuste as regras antigas para #guildRankingList */
+#guildRankingList li {
+    padding: 0;
+  
+}
+
+#guildRankingList li img {
+    margin-left: 0;
+}
+
+
+
+
+#searchGuildResults, #guildViewMemberList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+  font-weight: bold;
+}
+
+#searchGuildResults li, #guildViewMemberList li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: 100% !important;
+}
+#guildViewMemberList {
+  font-size: 0.8em;
+  font-weight: bold;
+}
+#noGuildContainer {
+  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    height: 100vh;
+    width: 99vw;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    margin: 0;
+    left: 0;
+    top: 0;
+    position: absolute;
+    z-index: 0;
+}
+    #criar {
+      position: absolute;
+    left: 5%;
+    top: 15%;
+    width: 90%;
+    text-align: center;
+}
+
+
+
+.item-level {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    font-weight: bold;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Estilos de brilho para carregamento */
+.shimmer {
+    animation: shimmer 1.5s infinite linear;
+    background: #2e2e2e;
+    background: linear-gradient(to right, #2e2e2e 0%, #3a3a3a 50%, #2e2e2e 100%);
+    background-size: 200% 100%;
+    color: transparent;
+    border-radius: 4px;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* Estilos para o ícone de slot */
+.equipment-slot {
+    width: 70px;
+    height: 70px;
+    border-radius: 10px;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: visible;
+    position: relative;
+}
+
+.equipment-slot img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+
+/* ==== CSS mínimo para #playerModal (escopado) ==== */
+#playerModal { display: none; position: fixed; z-index: 1200; left:0; top:0; width:100%; height:100%; padding:20px; background-color: rgba(0,0,0,0.6); justify-content:center; align-items:center; }
+#playerModal .modal-content { width: 360px; max-width: calc(100% - 40px); background:#2e2e2e; padding:16px; border-radius:10px; border:1px solid #444; box-shadow: 0 6px 24px rgba(0,0,0,0.6); color:#e0dccc; position:relative; text-align:center; overflow:hidden; }
+
+#playerModal #playerName { font-size:1.25em; font-weight:80; margin:0; color:#fff; }
+#playerModal #playerLevel { font-size:0.95em; color:#dcd6c8; margin-top:6px;  
+  
+}
+
+/* avatar + guild header centralizados: guild-header fica dentro do avatar container para garantir posição acima do avatar */
+#playerModal #equipmentAndAvatarContainer { display:flex; justify-content:space-around; align-items:center; gap:12px; margin-top:6px; margin-bottom:8px; }
+#playerModal .equipment-column { display:flex; flex-direction:column; gap:10px; }
+#playerModal .equipment-slot { width:60px; height:60px; background:#444; border:1px solid #666; border-radius:6px; display:flex; justify-content:center; align-items:center; position:relative;  }
+#playerModal .equipment-slot img { max-width:100%; max-height:100%; object-fit:contain; }
+
+/* Avatar central: agora contém .guild-header em cima, e CP abaixo */
+#playerModal #playerAvatarEquipContainer { display:flex; flex-direction:column; align-items:center; gap:6px; }
+#playerModal .guild-header { display:flex; flex-direction:row; align-items:center; gap:8px; margin-bottom:4px; }
+#playerModal .guild-header img { width:50px; height:50px; object-fit:cover; 
+  
+}
+#playerModal #playerGuildName { font-weight:700; color:#f0e9d6; font-size:0.95em; text-align:left; }
+
+/* avatar */
+#playerModal #playerAvatarEquip { width:100px; height:100px; border-radius:50%; border:3px solid #FFD700; object-fit:cover; }
+
+/* combat power abaixo do avatar, não sobreposto */
+#playerModal #playerCombatPower { margin-top:6px; font-weight:800; color:orange; z-index:3; 
+  top: 120px;
+}
+
+/* item level */
+#playerModal .item-level {position: absolute;
+    bottom: -15px; /* Ajuste este valor se precisar de mais ou menos espaço */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75em;
+    color: #fff;
+    padding: 2px 6px;
+    white-space: nowrap;
+    z-index: 2;
+    
+}
+
+/* attributes */
+#playerModal #attributesSection { background:#181818; padding:12px; margin-top:12px; border-radius:8px; }
+#playerModal .attribute-row { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; }
+#playerModal .attribute-item { flex:1; text-align:center; }
+#playerModal .attribute-label { display:block; font-size:0.5em; color:#fff; }
+#playerModal .attribute-value { display:block; font-size: 0.6em; font-weight:700; color:#e0dccc; }
+
+/* shimmer */
+#playerModal .shimmer { background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.02) 75%); background-size:200% 100%; animation: shimmerAnim 1.1s infinite; color:transparent; }
+@keyframes shimmerAnim { from { background-position:-200% 0 } to { background-position:200% 0 } }
+
+#playerModal .close-btn { position:absolute; top:8px; right:10px; font-size:22px; color:#ddd; cursor:pointer; z-index:10; }
+
+#playerModal #playerInfoContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#playerModal #playerHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+#playerModal #playerName {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+#playerModal #playerLevel {
+  font-size: 1.3em;
+  color: #ccc;
+  display: flex;
+  justify-content: center;
+}
+
+#playerModal #playerCombatPower {
+  font-weight: 800;
+  color: orange;
+  top: 55%;
+  font-size: 1.6em;
+  left: -2%;
+  position: relative;
+}
+#playerName, #playerLevel {
+    text-align: center;
+    width: 100%; 
+}
+#infoModalMessage {
+    margin: 15px 0 25px 0;
+    font-size: 1em;
+    color: white;
+}
+#confirmModal .modal-content {
+    max-width: 95%;
+    min-width: 95%;
+    max-height: 580px;
+    text-align: center;
+}
+
+#confirmModalMessage {
+    margin: 15px 0 25px 0;
+    font-size: 1em;
+    color: white;
+}
+#confirmModal {
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  position: absolute!important;
+  left: 50%!important;
+  top: 50%;
+}
+#promptModal .modal-content {
+    max-width: 400px;
+    text-align: center;
+    
+}
+
+#promptModalMessage {
+    margin: 10px 0 15px 0;
+    font-size: 1em;
+    color: #e0dccc;
+}
+
+#promptModalInput {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 20px;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    color: #e0dccc;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 1em;
+    resize: vertical; 
+}
+
+.disabled-btn {
+  filter: grayscale(100%) brightness(83%);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* guild.css */
+
+/* ... código anterior ... */
+
+#guildMemberList li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #777;
+}
+
+#guildRankingList li {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid cyan;
+    text-align: left;
+}
+
+#guildViewMemberList li {
+  border-bottom: 1px solid #777;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+
+/* Nova classe para alinhar o nome e o nível em coluna */
+.member-details {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.member-name {
+    font-weight: bold;
+    flex-grow: 1;
+}
+
+.member-role {
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+/* Ajustes no nível para um melhor espaçamento */
+.member-level {
+    font-size: 0.8em;
+    color: lightblue;
+    margin-top: 2px;
+}
+.tab-btn active, .tab-btn {
+  font-size: 0.6em;
+}
+#tabMenu {
+  width: 95vw;
+  background: none;
+  justify-content: center;
+}
+#editGuildModal {
+  font-size: 0.8em;
+  z-index: 998;
+}
+#raidMonsterImage {
+  /* A respiração agora é controlada via JS (initOrganicBreathing em guild_raid.js),
+     para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+     Nunca usamos translateY aqui, só scale/rotate/translateX leves, então não flutua. */
+  transform-origin: bottom center;
+  will-change: transform;
+}
+
+#raidMonsterHpBar {
+  width: 80%;
+  max-width: 280px;
+  background: linear-gradient(180deg,#1a0000,#2d0000);
+  border-radius: 10px;
+  overflow: visible;
+  margin: 4px auto;
+  height: 14px;
+  position: relative;
+  border: 1px solid rgba(255,80,0,0.55) !important;
+  box-shadow: 0 0 12px rgba(200,0,0,0.35), inset 0 1px 3px rgba(0,0,0,0.8);
+}
+#raidMonsterHpFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg,#850000,#cc0000,#ff4444);
+  transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+  border: none !important;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 0 10px rgba(200,0,0,0.5);
+  overflow: hidden;
+}
+#raidMonsterHpFill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 45%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.18) 0%,transparent 100%);
+  border-radius: 12px 12px 0 0;
+  pointer-events: none;
+}
+
+#raidPlayerHpBar {
+  border: 1px solid rgba(100,200,255,0.4) !important;
+  background: linear-gradient(180deg,#001a00,#002800) !important;
+  box-shadow: 0 0 10px rgba(0,180,100,0.25), inset 0 1px 2px rgba(0,0,0,0.8) !important;
+  overflow: visible !important;
+}
+
+#raidPlayerHpFill {
+  background: linear-gradient(90deg,#005500,#00aa00,#55ff55);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.9em;
+  color: white;
+  transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+  border: none !important;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 0 8px rgba(0,180,80,0.45);
+  overflow: hidden;
+}
+#raidPlayerHpFill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 45%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.16) 0%,transparent 100%);
+  border-radius: 12px 12px 0 0;
+  pointer-events: none;
+}
+
+#raidPlayerHpText {
+  position: absolute;         /* fixa no centro */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  font-size: 0.8em!important;
+  color: white!important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+    margin-top: 2px;
+}
+#raidPlayerReviveText {
+  margin-top: 25px;
+}
+#raidMonsterHpText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.6em;
+}
+#raidCombatTitle {
+  margin-top: -2rem;
+}
+#raidTimerInfo {
+  font-weight: 900;
+  font-size: 1.6em!important;
+  background: linear-gradient(180deg, #add8ff 0%, #fff 50%, #4488ff 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  margin-top: -32px;
+}
+#tddimg {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  background: none;
+}
+#raid_1 {
+  position: relative!important;
+  width:100%;
+  height: 100%;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
+}
+#tdd {
+  position: relative !important;
+  display: block;
+  width: 90vw;
+  height: 180px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 5px 5px gold, inset 0 0 10px 2px rgba(255,255,255,0.5);
+  z-index: 2 !important;
+}
+
+/* Overlay escuro para legibilidade do texto */
+#tdd::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 10%, rgba(0,0,0,0.1) 50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.tdd_desc {
+  font-size: 0.68em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute !important;
+  left: 10px !important;
+  top: 26px !important;
+  margin-left: 0 !important;
+  background: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  z-index: 3;
+  max-width: 62%;
+  line-height: 1.2;
+}
+#tddbuttons {
+  position: absolute !important;
+  z-index: 4;
+  bottom: 8px !important;
+  top: auto !important;
+  background: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  left: 10px;
+  gap: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.tdd_h3 {
+  font-size: 0.88em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute;
+  text-align: left;
+  left: 10px;
+  margin-left: 0;
+  top: 3px;
+  margin-top: 0;
+  margin-bottom: 0;
+  z-index: 3;
+}
+#raidCombatModal .modal-content {
+background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/tdd_andar.webp')!important;
+    background-repeat: no-repeat!important;
+    background-position: center center!important;
+    background-size: cover!important;
+    background-color: transparent!important;
+    border: none!important;
+    width: 95%;
+    max-width: none;
+    height: 100%;
+    
+    position: relative;
+    z-index: 10000;
+    top: 0!important;
+    left: 0!important;
+    margin: 0!important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  justify-content: flex-start;
+    
+}
+/* raidMonsterArea ocupa só o espaço do seu próprio conteúdo (nome, imagem,
+   barras de hp) — não cresce mais, para não deixar um vão vazio entre a
+   barra de HP do jogador e o botão de ataque. */
+#raidMonsterArea {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+}
+#raidCombatModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding: 0 !important;
+  height: 100vh;
+  height: 100dvh;
+  z-index:  12000;
+  width: 100vw;
+  align-items: center;
+}
+#raidCombatModal .modal-content {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Quando o navegador está em modo fullscreen, ocupa toda a tela real do aparelho */
+html:fullscreen #raidCombatModal,
+html:-webkit-full-screen #raidCombatModal {
+  height: 100vh;
+  height: 100dvh;
+}
+
+
+
+#raidRewardModal #rewardItemsContainer {
+    align-items: center!important; 
+    justify-content: center!important;
+}
+#raidRewardModal #rewardItemsContainer ul li span {
+    font-size: 1.3em!important;
+}
+#raidRewardModal #rewardItemsContainer ul {
+    width: fit-content!important;
+    display: block!important; 
+}
+#raidRewardModal #rewardItemsContainer {
+  display: flex!important;
+    flex-direction: column!important;
+}
+hr {
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  height: 4px;
+}
+#raidMonsterImage {
+  position: absolute !important;
+  top: 50%;
+  margin-top: -210px !important; /* metade da altura (420px), centraliza verticalmente sem colidir com a animação (que usa transform) */
+  z-index: 0 !important;
+  width: 350px !important;
+  height: 420px !important;
+  filter: drop-shadow(0 0 8px rgba(200,50,50,0.22));
+  transition: filter 0.45s ease;
+}
+.crit-damage-number, .damage-number {
+  font-family: 'Cinzel', Georgia, serif !important;
+  font-size: 2em !important;
+  font-weight: bold !important;
+  text-shadow: 2px 2px 4px #000, 0 0 16px rgba(255,100,0,0.6) !important;
+}
+#buyModal .modal {
+  background: none;
+  background-color: none;
+}
+.confirmabuy-btn {
+  align-items: center!important;
+  justify-content: center!important;
+  text-align: center!important;
+  font-size: 0.7em!important;
+  padding: 2 0!important;
+  margin: 0!important;
+}
+
+#videoPlayer { 
+    visibility: hidden!important;
+    opacity: 0!important;
+    transition: opacity 0.5s!important;
+}
+#videoContainer { 
+    background-color: black!important;
+}
+#raidPlayerAvatar img {
+  border: 2px solid yellow;
+}
+
+/* Efeito de tremer para o monstro da raid */
+@keyframes shake-monster {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  10% { transform: translate(-9px,5px) rotate(-2deg); }
+  20% { transform: translate(9px,-5px) rotate(2deg); }
+  30% { transform: translate(-7px,7px) rotate(-1.5deg); }
+  40% { transform: translate(7px,-7px) rotate(1.5deg); }
+  55% { transform: translate(-5px,3px) rotate(-1deg); }
+  70% { transform: translate(5px,-3px) rotate(1deg); }
+  85% { transform: translate(-3px,2px); }
+}
+
+/* --- CORREÇÃO: Classe genérica para ser usada em qualquer elemento --- */
+.shake-animation {
+  /* !important garante que esta animação sobreponha a respiração orgânica do monstro (controlada via JS) */
+  animation: shake-monster 1s ease-in-out !important;
+}
+
+/* Estilização da lista de ranking de dano */
+#raidDamageRankingList {
+  list-style-type: none; /* Remove os marcadores '•' */
+  padding-left: 0;       /* Remove o recuo padrão da lista */
+  text-align: left;      /* Garante o alinhamento à esquerda */
+}
+
+#raidDamageRankingList li {
+  text-align: left;      /* Garante que cada item também seja alinhado à esquerda */
+}
+/* === Correção do modal de tutorial da Raid === */
+#tutorialModalRaid, #tddModalStory, #tutorialModalgvgt {
+  overflow-y: auto!important;
+  top: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%) !important; 
+  z-index: 13000 !important;
+}
+
+#tutorialModalRaid .modal-content2 p, #tutorialModalgvgt p,
+#tutorialModalRaid .modal-content2 li, #tutorialModalgvgt li {
+  text-align: left !important;
+  color: white;
+}
+#tutorialModalRaid .modal-content2 h3, #tutorialModalgvgt h3,
+#tutorialModalRaid .modal-content2 h4, #tutorialModalgvgt h4 {
+  color: white;
+}
+#tddModalStory .modal-content2 {
+  padding: 0 !important; 
+  margin: 0 !important; 
+  width: 100vw !important;
+  height: 100vh !important; display: block !important; 
+  overflow-y: auto !important; 
+  background: black !important;
+}
+#videoContainer {
+  width: 100% !important;
+  height: 100vh !important; 
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+  
+#tddStoryVideo {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important; 
+}
+/* --- TAVERNA --- */
+#tavernContainer {
+  text-align: center;
+  padding: 8px;
+  color: white;
+  width: 100%;
+  box-sizing: border-box;
+}
+#tavernTitle {
+  font-size: 1.2em;
+  color: #c9a94a;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+.tavern-seats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  justify-items: center;
+  margin-bottom: 12px;
+}
+.tavern-seat {
+  width: 68px;
+  height: 68px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(201,169,74,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: rgba(0,0,0,0.95);
+}
+.tavern-seat.empty {
+  opacity: 0.6;
+}
+.tavern-seat .seat-number {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  font-size: 0.7em;
+  color: white;
+  text-shadow: 0 1px 2px black;
+}
+.tavern-seat img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+/* Ouvintes (lista horizontal) */
+#tavernListeners {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  margin-bottom: 8px;
+}
+.tavern-listener {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 56px;
+  font-size: 0.7em;
+}
+.tavern-listener img { width: 42px; height: 42px; border-radius: 50%; }
+
+/* Chat */
+.tavern-chat {
+  background: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.1));
+  border-radius: 10px;
+  padding: 8px;
+  height: 220px;
+  overflow-y: auto;
+  font-size: 0.85em;
+  margin-bottom: 6px;
+}
+.tavern-message {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.tavern-message img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+.tavern-message .bubble {
+  background: rgba(0,0,0,0.6);
+  padding: 8px 10px;
+  border-radius: 12px;
+  color: white;
+  max-width: 78%;
+  text-align: left;
+}
+
+/* Chat input */
+#tavernChatInput {
+  display: flex;
+  gap: 6px;
+}
+#tavernMessageInput {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid #444;
+  padding: 8px;
+  background: #111;
+  color: white;
+}
+#tavernSendBtn, .tavernSendBtn {
+  background: linear-gradient(to bottom, orange 0%, red 50%, orange 100%);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  font-weight: bold;
+  min-width: 80px;
+  font-size: 0.9em;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+#tavernContainer {
+background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    width: 100vw;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    padding: 0;
+    position: absolute;
+}
+#tavernChat {
+  height: 62vh;
+}
+/* Correção para o layout do chat da Taverna */
+.tavern-message > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Garante que nome e balão fiquem alinhados à esquerda */
+}
+
+ #sendmp {
+        display: none; /* Controlado por playerModal.js */
+        width: 100%;
+        padding: 10px;
+        margin-top: 20px;
+        background: none;
+        background-color: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: background-color 0.2s;
+        text-align: center;
+        text-decoration: none; /* Estilizar como botão, mas é um link */
+    }
+  #gvgtimg {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  background: none;
+}
+#gvg_1 {
+  position: relative!important;
+  width:100%;
+  height: 100%;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
+}
+#gvgt {
+  position: relative !important;
+  display: block;
+  width: 90vw;
+  height: 180px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 5px 5px lightblue, inset 0 0 10px 2px rgba(255,255,255,0.5);
+  z-index: 2 !important;
+}
+
+/* Overlay escuro para legibilidade */
+#gvgt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 10%, rgba(0,0,0,0.1) 50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.gvgt_desc {
+  font-size: 0.68em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute !important;
+  left: 10px !important;
+  top: 30px !important;
+  margin-left: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  z-index: 3;
+  max-width: 62%;
+  line-height: 1.2;
+}
+#gvgtbuttons {
+  position: absolute !important;
+  z-index: 4;
+  bottom: 8px !important;
+  top: auto !important;
+  background: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  left: 10px;
+  gap: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.gvgt_h3 {
+  font-size: 0.88em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute;
+  text-align: left;
+  left: 10px;
+  margin-left: 0;
+  top: 3px;
+  margin-top: 0;
+  margin-bottom: 0;
+  z-index: 3;
+}
+.modal-content2 {
+  padding: 8px!important;
+}
+#guildPower {
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, white, orange, orange);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}
+#raidCountdownTimer {
+  font-weight: bold;
+  font-size: 2em;
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}
+
+/* Adicione isso ao final do arquivo guild.css */
+
+.tab-notification-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    z-index: 10;
+    pointer-events: none; /* O clique passa através da bolinha */
+    box-shadow: 0 0 4px rgba(255, 0, 0, 0.8);
+    animation: pulseTabDot 2s infinite;
+}
+
+@keyframes pulseTabDot {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+    70% { transform: scale(1.2); box-shadow: 0 0 0 3px rgba(255, 0, 0, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
+
+/* Botão de Upload (Reutilizável) */
+.upload-container {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* Alinhado a esquerda para o modal da guilda */
+    margin-bottom: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+}
+
+.custom-file-upload {
+    display: inline-block;
+    padding: 8px 15px;
+    cursor: pointer;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    color: #fff;
+    border-radius: 4px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    transition: opacity 0.2s;
+    border: 1px solid #ffd700;
+    font-size: 0.8em;
+}
+
+.custom-file-upload:hover {
+    opacity: 0.9;
+}
+
+@keyframes blink { 50% { opacity: 0.5; } }
+.uploading-text {
+    animation: blink 1s infinite;
+    color: gold !important;
+}
+/* ═══════════════════════════════════════════════
+   SKIN DO MODAL DE JOGADOR (guild)
+   ═══════════════════════════════════════════════ */
+
+/* Vídeo de fundo — z-index 0, atrás de tudo */
+#guild-modal-bg-video {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    background-color: black;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* Overlay escuro — z-index 1 */
+#guild-modal-bg-overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* Todo conteúdo — z-index 2 (explícito por elemento, sem usar > * que quebra position:absolute) */
+#playerModal h3,
+#playerModal #playerLevel,
+#playerModal #equipmentAndAvatarContainer,
+#playerModal #attributesSection,
+#playerModal #pm-social-stats,
+#playerModal #pm-follow-btn,
+#playerModal #sendmp {
+    position: relative;
+    z-index: 2;
+}
+
+/* ── Botões de ação (Seguir / Mensagem) — padrão taverna ── */
+#playerModal .pm-action-btn {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.65em;
+    font-family: 'Cinzel', serif;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: background 0.2s;
+    width: auto;
+    margin-top: 0;
+    text-decoration: none;
+}
+#playerModal .pm-action-follow {
+    background: rgba(122,184,255,0.08);
+    border: 1px solid rgba(122,184,255,0.3);
+    color: #7ab8ff;
+}
+#playerModal .pm-action-follow:hover { background: rgba(122,184,255,0.22); }
+#playerModal .pm-action-sendmp {
+    background: rgba(201,169,74,0.12);
+    border: 1px solid rgba(201,169,74,0.35);
+    color: #e8d08a;
+}
+#playerModal .pm-action-sendmp:hover { background: rgba(201,169,74,0.22); }
+
+/* ── Modais auxiliares: Lista social (Seguidores/Seguindo) e Info da Guilda ── */
+.pmx-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  background: rgba(0,0,0,0.65);
+  align-items: flex-end;
+  justify-content: center;
+}
+.pmx-modal.open { display: flex; }
+.pmx-inner {
+  width: 100%;
+  max-width: 420px;
+  max-height: 72vh;
+  background: linear-gradient(180deg, #1a0f02 0%, #110900 100%);
+  border: 1px solid rgba(201,169,74,0.55);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pmx-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(201,169,74,0.3);
+}
+.pmx-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  color: #e8d08a;
+  letter-spacing: 0.06em;
+}
+.pmx-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #b0a890;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+.pmx-close svg { width: 18px; height: 18px; }
+.pmx-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.pmx-empty {
+  text-align: center;
+  color: #b0a890;
+  font-size: 0.8rem;
+  padding: 32px 16px;
+}
+.pmx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(201,169,74,0.08);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pmx-row:hover { background: rgba(255,255,255,0.04); }
+.pmx-av {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(201,169,74,0.55);
+}
+.pmx-av img { width: 100%; height: 100%; object-fit: cover; }
+.pmx-text { flex: 1; font-size: 0.8rem; color: #cfc7b8; line-height: 1.4; }
+.pmx-text strong { color: #e8d08a; }
+.pmx-time { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+
+/* ── Top Presenteadores (ranking de quem mais deu presentes) ── */
+.pmx-gifter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(201,169,74,0.08);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pmx-gifter-row:hover { background: rgba(255,255,255,0.04); }
+.pmx-gifter-pos {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e8d08a;
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.pmx-gifter-av {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(201,169,74,0.55);
+}
+.pmx-gifter-av img { width: 100%; height: 100%; object-fit: cover; }
+.pmx-gifter-info { flex: 1; min-width: 0; }
+.pmx-gifter-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e8d08a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pmx-gifter-sub { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+.pmx-gifter-fame {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: #e8d08a;
+  font-weight: 700;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Top 3 — ouro / prata / bronze (mesmo padrão do ranking_cp) */
+.pmx-gifter-row.top-1 { background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%); border-left: 4px solid #FFD700; }
+.pmx-gifter-row.top-1 .pmx-gifter-pos,
+.pmx-gifter-row.top-1 .pmx-gifter-fame { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.6); }
+.pmx-gifter-row.top-1 .pmx-gifter-av { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.65); }
+
+.pmx-gifter-row.top-2 { background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%); border-left: 4px solid silver; }
+.pmx-gifter-row.top-2 .pmx-gifter-pos,
+.pmx-gifter-row.top-2 .pmx-gifter-fame { color: silver; text-shadow: 0 0 8px rgba(192,192,192,.6); }
+.pmx-gifter-row.top-2 .pmx-gifter-av { border-color: silver; box-shadow: 0 0 8px rgba(192,192,192,.55); }
+
+.pmx-gifter-row.top-3 { background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%); border-left: 4px solid #CD7F32; }
+.pmx-gifter-row.top-3 .pmx-gifter-pos,
+.pmx-gifter-row.top-3 .pmx-gifter-fame { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,.6); }
+.pmx-gifter-row.top-3 .pmx-gifter-av { border-color: #CD7F32; box-shadow: 0 0 8px rgba(205,127,50,.5); }
+
+/* Guild info modal específico */
+.pmx-guild-header { display: flex; gap: 12px; padding: 14px 16px; align-items: center; }
+.pmx-guild-flag { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: rgba(0,0,0,0.3); }
+.pmx-guild-name { font-family: 'Cinzel', serif; font-size: 1rem; color: #e8d08a; font-weight: 700; }
+.pmx-guild-desc { font-size: 0.75rem; color: #b0a890; margin-top: 2px; }
+.pmx-guild-meta { font-size: 0.7rem; color: #cfc7b8; margin-top: 4px; display: flex; gap: 10px; }
+.pmx-join-row { padding: 0 16px 12px; }
+.pmx-join-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(122,184,255,0.35);
+  background: rgba(122,184,255,0.12);
+  color: #7ab8ff;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8em;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.pmx-join-btn svg { width: 18px; height: 18px; }
+.pmx-join-btn:hover { background: rgba(122,184,255,0.22); }
+.pmx-join-btn:disabled { opacity: 0.5; cursor: default; }
+.pmx-member-label {
+  padding: 10px 16px 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  color: #b0a890;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.pmx-member-role {
+  font-size: 0.65rem;
+  color: #e8d08a;
+  padding: 3px 8px;
+  border: 1px solid rgba(201,169,74,0.3);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Ocultar bandeira e nome de guilda */
+#playerModal .guild-header { display: none !important; }
+
+/* Avatar wrapper 160px para moldura encaixar */
+#guild-avatar-wrapper {
+    position: relative;
+    width: 160px; height: 160px;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* Avatar dentro do wrapper */
+#playerModal #playerAvatarEquip {
+    width: 100px !important; height: 100px !important;
+}
+
+/* Moldura sobreposta */
+#guild-frame-overlay {
+    position: absolute; top: -5px; left: 0;
+    width: 160px; height: 160px;
+    pointer-events: none; z-index: 2;
+    object-fit: contain; display: none;
+}
+
+/* Sheen — brilho prateado varrendo a moldura */
+#guild-frame-sheen {
+    position: absolute; top: -5px; left: 0;
+    width: 160px; height: 160px;
+    pointer-events: none; z-index: 3; display: none;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    overflow: hidden;
+}
+#guild-frame-sheen::after {
+    content: ''; position: absolute; top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg,
+        transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _gfs 6s ease-in-out infinite;
+}
+@keyframes _gfs {
+    0%{left:-130%;opacity:0} 2%{opacity:1}
+    98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
+}
+
+/* Estado "já solicitado" no botão de entrada na guilda */
+.pmx-join-btn.pgi-requested {
+  opacity: 0.75;
+  cursor: default;
+  pointer-events: none;
+  background: rgba(39,174,96,0.12);
+  border-color: rgba(39,174,96,0.4);
+  color: #6ce6a0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FIX: Modal de jogador — centralizado e contido no viewport
+   ---------------------------------------------------------------
+   Problema original: .modal usava height:95vh (overlay incompleto)
+   e .modal-content não tinha max-height, fazendo o conteúdo
+   ultrapassar o rodapé.
+
+   Solução: sem wrapper extra. O vídeo é position:absolute dentro
+   de .modal-content (overflow-y:auto), então ele fica FIXO como
+   fundo enquanto o conteúdo em fluxo normal rola por cima — 
+   mesmo comportamento do .modal-inner do ranking_cp.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 1. Overlay: cobre 100% do viewport, sem padding (padding roubava largura) */
+#playerModal {
+  padding: 0 !important;
+  height: 100vh !important;
+}
+
+/* 2. Caixa do modal:
+      - overflow:hidden => video position:absolute cobre 100% do container
+      - padding:0 => elimina o duplo-padding (linha 752 tinha padding:16px)
+      - todo padding fica so no .modal-inner */
+#playerModal > .modal-content {
+  overflow: hidden;
+  max-height: 90vh;
+  border: 1px solid #c9a94a;
+  width: 92%;
+  max-width: 420px;
+  padding: 0 !important;
+}
+
+/* 3. Inner wrapper: aqui o conteudo rola com o unico padding.
+      Video (position:absolute no .modal-content) fica fixo como fundo. */
+#playerModal .modal-inner {
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  z-index: 2;
+  padding: 16px;
+}
+
+/* 4. closePlayerModal fica fora do modal-inner, precisa de z-index explicito */
+#playerModal #closePlayerModal {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  z-index: 10;
+}
+
+/* 5. Nome e nível: centralização explícita no modal-inner */
+#playerModal .modal-inner {
+  text-align: center;
+}
+#playerModal h3#playerName {
+  text-align: center;
+  width: 100%;
+  margin: 0 auto 4px;
+}
+#playerModal #playerLevel {
+  display: block;
+  text-align: center;
+  width: 100%;
+  margin: 0 auto 8px;
+}
+
+/* FIX DEFINITIVO: !important sobrepõe o inline style position:absolute;top:12% do HTML */
+#playerModal #playerLevel {
+  position: relative !important;
+  top: auto !important;
+  display: block !important;
+  text-align: center !important;
+  width: 100% !important;
+  margin: 0 auto 8px !important;
+}
+/* ═══════════════════════════════════════════════════════════════════════
+   GUILD.CSS — VISUAL UE5 / AAA DARK FANTASY OVERRIDE
+   Aplica sobre o guild.css existente sem quebrar nenhuma lógica.
+   Padrão: pedra escura, acentos dourados, glow atmosférico, Cinzel serif.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── VARIÁVEIS DE TEMA ─────────────────────────────────────────────── */
+:root {
+  --gold:          #c9a94a;
+  --gold-bright:   #ffd700;
+  --gold-dim:      rgba(201,169,74,0.18);
+  --gold-border:   rgba(201,169,74,0.40);
+  --gold-glow:     rgba(201,169,74,0.25);
+  --stone-dark:    #0d0b08;
+  --stone-mid:     #181410;
+  --stone-light:   #252018;
+  --text-primary:  #e0dccc;
+  --text-secondary:#b0a890;
+  --danger:        rgba(200,40,20,0.55);
+  --ts-black: 1px 1px 2px black,-1px -1px 2px black,
+              1px -1px 2px black,-1px 1px 2px black,
+              0 0 4px black;
+}
+
+/* ── CONTAINER PRINCIPAL ───────────────────────────────────────────── */
+#mainContainer {
+  width: 95%;
+  background: transparent !important;
+  padding-top: 4px;
+}
+
+/* ── TAB MENU ──────────────────────────────────────────────────────── */
+#tabMenu {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin: 0 0 8px 0;
+  margin-left: 0 !important;
+  padding: 0;
+  background: linear-gradient(180deg, #1c1508 0%, #110e07 100%) !important;
+  border: 1px solid var(--gold-border);
+  border-radius: 6px;
+  overflow: hidden;
+  width: 100% !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,215,0,0.06);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 9px 4px;
+  background: transparent !important;
+  border: none;
+  border-right: 1px solid rgba(201,169,74,0.15) !important;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6em;
+  font-weight: 700;
+  color: var(--text-secondary) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: var(--ts-black);
+  transition: color 0.25s, background 0.25s, box-shadow 0.25s;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  top: 0;
+  max-width: none;
+}
+.tab-btn:last-child { border-right: none !important; }
+
+.tab-btn:hover:not(.active) {
+  background: rgba(201,169,74,0.07) !important;
+  color: var(--gold) !important;
+}
+
+.tab-btn.active {
+  background: linear-gradient(180deg, rgba(201,169,74,0.22) 0%, rgba(201,169,74,0.06) 100%) !important;
+  color: var(--gold-bright) !important;
+  font-weight: 900;
+  border-bottom: 2px solid var(--gold-bright) !important;
+  text-shadow: 0 0 10px rgba(255,215,0,0.6), var(--ts-black);
+  z-index: 2;
+}
+
+/* Bolinha de notificação na aba (mantida funcional) */
+.tab-notification-dot {
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #0d0b08;
+}
+
+/* ── TAB PANES ─────────────────────────────────────────────────────── */
+.tab-pane {
+  display: none;
+  background: transparent !important;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1em;
+  text-align: left;
+  text-shadow: var(--ts-black);
+}
+.tab-pane.active { display: block; }
+
+/* ── GUILD INFO CONTAINER ──────────────────────────────────────────── */
+#guildInfoContainer {
+  text-align: center;
+  padding: 0 4px;
+}
+
+#guildName {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6em;
+  font-weight: 900;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+  background: linear-gradient(180deg, #fff 0%, var(--gold) 55%, #7a5c1c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 8px rgba(201,169,74,0.4));
+  -webkit-text-stroke: 0.5px gold;
+}
+
+#guildDescription {
+  margin: 6px 0;
+  color: var(--text-secondary) !important;
+  font-size: 0.78em;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ── XP BAR ────────────────────────────────────────────────────────── */
+#guildLevel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.xp-bar-container {
+  width: 80%;
+  height: 18px;
+  background: linear-gradient(180deg, #0a0805 0%, #12100a 100%);
+  border: 1px solid var(--gold-border) !important;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 1px 3px rgba(0,0,0,0.8);
+  position: relative;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5c3e08 0%, #c9a94a 50%, #ffd700 80%, #fff6c8 100%);
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  border-radius: 9px;
+  box-shadow: 0 0 12px rgba(255,215,0,0.45);
+  position: relative;
+}
+.xp-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.25) 0%,transparent 100%);
+  border-radius: 9px 9px 0 0;
+}
+
+#guildXpFill {
+  color: var(--text-primary);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: var(--ts-black);
+}
+
+/* ── MEMBER LIST ───────────────────────────────────────────────────── */
+.member-list-container {
+  margin-top: 16px;
+}
+
+.member-list-container h4 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gold-border);
+  text-shadow: 0 0 10px var(--gold-glow);
+}
+
+#guildMemberList {
+  list-style: none;
+  padding: 0;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+
+#guildMemberList li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  background: transparent;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#guildMemberList li:hover {
+  background: rgba(201,169,74,0.05);
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-border) !important;
+  box-shadow: 0 0 6px rgba(201,169,74,0.25);
+}
+
+.member-name { color: var(--text-primary); font-weight: 700; flex-grow: 1; }
+.member-role { font-size: 0.78em; color: var(--gold); }
+.member-level { font-size: 0.78em; color: #7ab8ff; margin-top: 2px; }
+
+/* ── ÁREA DE RISCO ─────────────────────────────────────────────────── */
+#risco {
+  margin-top: 18px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(160,20,10,0.35) 0%, rgba(80,8,5,0.2) 100%) !important;
+  border: 1px solid rgba(200,50,30,0.45);
+  box-shadow: 0 0 14px rgba(180,0,0,0.2), inset 0 1px 0 rgba(255,80,50,0.1);
+  height: auto;
+  min-height: 90px;
+  padding: 10px;
+  gap: 8px;
+}
+
+#risco h3 {
+  font-size: 0.78em;
+  letter-spacing: 2px;
+  color: #ff6b5b;
+  text-shadow: 0 0 10px rgba(255,80,50,0.5);
+  text-transform: uppercase;
+}
+
+#deleteguild, #leaveguild {
+  border: 1px solid rgba(200,50,30,0.5) !important;
+  border-radius: 8px;
+  width: 100px;
+  background: rgba(160,20,10,0.2);
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  color: #ffb0a0;
+  font-size: 0.78em;
+  text-shadow: var(--ts-black);
+}
+#deleteguild:hover, #leaveguild:hover {
+  background: rgba(200,40,20,0.35);
+}
+
+/* ── SEM GUILDA ────────────────────────────────────────────────────── */
+#noGuildContainer {
+  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  height: 100vh;
+  width: 100vw;
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 0;
+}
+#noGuildContainer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.65) 100%);
+  z-index: 1;
+}
+
+#criar {
+  position: absolute;
+  left: 5%;
+  top: 15%;
+  width: 90%;
+  text-align: center;
+  z-index: 2;
+}
+
+#criar p {
+  font-family: 'Cinzel', serif;
+  color: var(--text-primary);
+  font-size: 0.95em;
+  letter-spacing: 1px;
+  text-shadow: var(--ts-black);
+  margin-bottom: 16px;
+}
+
+/* ── RANKING DAS GUILDAS ───────────────────────────────────────────── */
+#ranking h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--gold-glow);
+  text-align: center;
+}
+#ranking h4 { color: #ffaa44; text-align: center; }
+
+#guildRankingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#guildRankingList li {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 6px 4px !important;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  width: 100% !important;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#guildRankingList li:hover { background: rgba(201,169,74,0.04); }
+
+.ranking-item-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.ranking-position {
+  width: 28px;
+  text-align: right;
+  font-size: 0.9em;
+  font-weight: 900;
+  color: var(--text-secondary);
+}
+
+/* Top 3 destaque */
+#guildRankingList li:nth-child(1) .ranking-position { color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.7); }
+#guildRankingList li:nth-child(2) .ranking-position { color: #C0C0C0; text-shadow: 0 0 8px rgba(192,192,192,0.6); }
+#guildRankingList li:nth-child(3) .ranking-position { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,0.6); }
+#guildRankingList li:nth-child(1) { background: linear-gradient(90deg, rgba(183,156,9,0.18) 0%, transparent 100%); border-left: 3px solid #FFD700; }
+#guildRankingList li:nth-child(2) { background: linear-gradient(90deg, rgba(168,140,140,0.12) 0%, transparent 100%); border-left: 3px solid silver; }
+#guildRankingList li:nth-child(3) { background: linear-gradient(90deg, rgba(173,99,26,0.12) 0%, transparent 100%); border-left: 3px solid #CD7F32; }
+
+.ranking-flag {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--gold-border);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+
+.ranking-name { color: var(--text-primary); font-weight: 700; font-size: 1em; }
+.power-value  { color: #ffaa44; font-weight: 700; font-size: 0.95em; }
+.cp-icon      { width: 18px; height: 24px; vertical-align: -3px; }
+
+/* ── MODALS GERAIS ─────────────────────────────────────────────────── */
+.modal {
+  display: flex;
+  position: fixed;
+  z-index: 100;
+  left: 0 !important;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0,0,0,0.75);
+  justify-content: center;
+  align-items: center;
+  margin-top: 0;
+  backdrop-filter: blur(3px);
+}
+
+.modal-content {
+  background: linear-gradient(160deg, #1e1808 0%, #120f07 55%, #1a1508 100%) !important;
+  border: 1px solid var(--gold-border) !important;
+  border-radius: 10px;
+  padding: 20px;
+  width: 88%;
+  max-width: 420px;
+  position: relative;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8), 0 0 30px rgba(201,169,74,0.1), inset 0 1px 0 rgba(255,215,0,0.05);
+  color: var(--text-primary);
+}
+
+.modal-content h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  text-align: center;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--gold-glow);
+  margin-top: 0;
+}
+
+.close-btn {
+  color: var(--text-secondary);
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 26px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.2s;
+  z-index: 10;
+}
+.close-btn:hover { color: var(--gold); }
+
+/* Modal inputs */
+#newGuildNameInput,
+#searchGuildInput,
+#promptModalInput {
+  width: calc(100% - 20px);
+  padding: 10px;
+  margin: 10px 0;
+  background: rgba(0,0,0,0.5) !important;
+  border: 1px solid var(--gold-border) !important;
+  color: var(--text-primary) !important;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85em;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#newGuildNameInput:focus,
+#searchGuildInput:focus,
+#promptModalInput:focus {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+/* Action buttons */
+.action-btn {
+  background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: cover;
+        box-sizing: border-box;
+        background-color: none;
+  padding: 10px 20px;
+  margin-top: 10px;
+  color: var(--text-primary);
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.8em;
+  font-family: 'Cinzel', serif;
+  text-shadow: var(--ts-black);
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+.action-btn:hover { opacity: 0.9; box-shadow: 0 0 14px var(--gold-glow); }
+
+/* ── SECTION: SEM GUILDA — Buscar/Criar botões ─────────────────────── */
+#criar .action-btn {
+  display: inline-block;
+  margin: 6px 8px;
+}
+
+/* ── GUILD INFO HEADER (bandeira + ícones) ─────────────────────────── */
+.icon-container { text-align: right; }
+
+/* ── POWER DISPLAY ─────────────────────────────────────────────────── */
+#guildPower {
+  text-shadow: none !important;
+  background: linear-gradient(180deg, #fff 0%, #ffaa22 50%, #c9a94a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── TAVERNA — área ativa ──────────────────────────────────────────── */
+#tavernContainer {
+  background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  width: 100vw;
+  height: 100vh;
+  top: 0; left: 0;
+  padding: 0;
+  position: absolute;
+  text-align: center;
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+#tavernTitle, #tavernTitle2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1em;
+  color: var(--gold) !important;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px var(--gold-glow), var(--ts-black);
+  margin-bottom: 8px;
+}
+
+/* Chat da taverna */
+.tavern-chat {
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 100%);
+  border: 1px solid rgba(201,169,74,0.2);
+  border-radius: 10px;
+  padding: 8px;
+  height: 62vh;
+  overflow-y: auto;
+  font-size: 0.85em;
+  margin-bottom: 6px;
+}
+.tavern-chat::-webkit-scrollbar { width: 4px; }
+.tavern-chat::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+.tavern-chat::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 2px; }
+
+.tavern-message .bubble {
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(201,169,74,0.1);
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+}
+
+/* Chat input da taverna */
+#tavernMessageInput {
+  flex: 1;
+  border-radius: 8px;
+  border: 1px solid var(--gold-border);
+  padding: 8px;
+  background: rgba(10,8,5,0.75);
+  color: var(--text-primary);
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+}
+#tavernMessageInput:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 8px var(--gold-glow); }
+
+#tavernSendBtn, .tavernSendBtn {
+  background: linear-gradient(180deg, #c97820 0%, #7a3c08 50%, #c97820 100%) !important;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(201,120,30,0.5) !important;
+  font-weight: 700;
+  min-width: 72px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+  box-shadow: 0 0 8px rgba(200,120,0,0.25);
+  text-shadow: var(--ts-black);
+}
+
+/* Assentos da taverna */
+.tavern-seat {
+  border: 1.5px solid var(--gold-border) !important;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.9);
+  box-shadow: 0 0 8px rgba(0,0,0,0.6);
+}
+
+/* ── RAID — card principal ─────────────────────────────────────────── */
+#tdd {
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255,215,0,0.55), 0 0 30px rgba(200,120,0,0.2), inset 0 0 10px rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,200,50,0.5) !important;
+}
+
+/* ── BATALHA GvG card ──────────────────────────────────────────────── */
+#gvgt {
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(100,180,255,0.5), 0 0 28px rgba(50,100,200,0.2), inset 0 0 10px rgba(100,200,255,0.04) !important;
+  border: 1px solid rgba(100,180,255,0.45) !important;
+}
+
+/* ── HP BARS (mantidas, apenas leve ajuste glow) ───────────────────── */
+#raidMonsterHpBar {
+  box-shadow: 0 0 14px rgba(200,0,0,0.4), inset 0 1px 3px rgba(0,0,0,0.8) !important;
+}
+#raidPlayerHpBar {
+  box-shadow: 0 0 12px rgba(0,180,100,0.3), inset 0 1px 2px rgba(0,0,0,0.8) !important;
+}
+
+/* ── HR DIVIDERS ───────────────────────────────────────────────────── */
+hr {
+  background: linear-gradient(90deg, transparent 0%, var(--gold-border) 30%, var(--gold) 50%, var(--gold-border) 70%, transparent 100%);
+  border: none;
+  height: 1px !important;
+  margin: 12px 0;
+}
+
+/* ── MENSAGENS DE FEEDBACK ─────────────────────────────────────────── */
+.message { margin-top: 10px; font-size: 0.85em; }
+.message.error   { color: #ff6b5b; }
+.message.success { color: #6ce6a0; }
+
+/* ── EDIT GUILD MODAL TABS ─────────────────────────────────────────── */
+#editTabMenu {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--gold-border);
+  margin-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px 6px 0 0;
+}
+#editTabMenu::-webkit-scrollbar { height: 0; }
+
+.edit-tab-btn {
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  position: relative;
+}
+.edit-tab-btn.active {
+  border-bottom: 2px solid var(--gold) !important;
+  color: var(--gold) !important;
+  font-weight: 700;
+}
+.edit-tab-btn:hover:not(.active) { color: var(--text-primary); }
+
+/* ── VIEW GUILD MODAL ──────────────────────────────────────────────── */
+#guildViewName {
+  font-family: 'Cinzel', serif;
+  font-size: 1.3em;
+  font-weight: 900;
+  background: linear-gradient(180deg, #fff 0%, var(--gold) 60%, #7a5c1c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+#guildViewDescription { color: var(--text-secondary) !important; font-size: 0.8em; text-align: center; }
+#guildViewMemberList li {
+  border-bottom: 1px solid rgba(201,169,74,0.12) !important;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── SEARCH GUILD RESULTS ──────────────────────────────────────────── */
+#searchGuildResults li {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#searchGuildResults li:hover { background: rgba(201,169,74,0.07); }
+
+/* ── PLAYER MODAL (já tem estilos próprios, apenas refinamento) ─────── */
+#playerModal > .modal-content {
+  border: 1px solid var(--gold-border) !important;
+  background: linear-gradient(160deg, #1a1208 0%, #0e0c07 60%, #18150a 100%) !important;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.9), 0 0 30px rgba(201,169,74,0.12) !important;
+}
+
+/* ── RANKING_CP - TOP BAR MEDAL COLORS (mantidos) ─────────────────── */
+.pmx-gifter-row.top-1 { background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%); border-left: 4px solid #FFD700; }
+.pmx-gifter-row.top-2 { background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%); border-left: 4px solid silver; }
+.pmx-gifter-row.top-3 { background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%); border-left: 4px solid #CD7F32; }
+
+/* ── SHIMMER (loading) ─────────────────────────────────────────────── */
+.shimmer {
+  animation: shimmer 1.5s infinite linear;
+  background: linear-gradient(to right, #1a1507 0%, #2a2010 50%, #1a1507 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  border-radius: 4px;
+}
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+
+/* ── UPLOAD CONTAINER ──────────────────────────────────────────────── */
+.upload-container {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+.custom-file-upload {
+  background: linear-gradient(145deg, #7a5c1c, #c9a94a) !important;
+  border: 1px solid var(--gold) !important;
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.78em;
+  padding: 7px 14px;
+  transition: opacity 0.2s;
+}
+.custom-file-upload:hover { opacity: 0.9; }
+
+/* ── NOTIF DOT PRINCIPAL ───────────────────────────────────────────── */
+.notif-dot-main {
+  position: fixed;
+  width: 12px; height: 12px;
+  background: #ff2222;
+  border-radius: 50%;
+  border: 2px solid #1a1409;
+  right: 13px; top: 92px;
+  z-index: 10;
+  box-shadow: 0 0 8px rgba(255,0,0,0.7);
+}
+
+/* ── CONFIRM / PROMPT MODALS ───────────────────────────────────────── */
+#confirmModal { position: absolute !important; left: 50% !important; top: 50%; }
+#confirmModal .modal-content { max-width: 95%; min-width: 95%; max-height: 580px; text-align: center; }
+#promptModal .modal-content   { max-width: 400px; text-align: center; }
+#infoModalMessage, #confirmModalMessage, #promptModalMessage {
+  margin: 14px 0 20px;
+  font-size: 0.92em;
+  color: var(--text-primary);
+}
+
+/* ── DISABLED BUTTON ───────────────────────────────────────────────── */
+.disabled-btn {
+  filter: grayscale(100%) brightness(60%);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* ── DAMAGE NUMBERS ────────────────────────────────────────────────── */
+.crit-damage-number, .damage-number {
+  font-family: 'Cinzel', Georgia, serif !important;
+  font-size: 2em !important;
+  font-weight: 900 !important;
+  text-shadow: 2px 2px 4px #000, 0 0 18px rgba(255,130,20,0.7) !important;
+}
+
+/* ── RAID COUNTDOWN ────────────────────────────────────────────────── */
+#raidCountdownTimer {
+  font-weight: 900;
+  font-size: 2em;
+  background: linear-gradient(180deg, #add8ff 0%, #fff 50%, #4488ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none !important;
+}
+
+/* ── SEPARADOR ANTES DA ÁREA DE RISCO ─────────────────────────────── */
+#guildInfoContainer > div[style*="border-bottom"] {
+  border-bottom: 1px solid var(--gold-border) !important;
+  border-radius: 0 !important;
+  margin: 14px 0;
+}
+
+/* ── RANKING: Cabeçalho de seção ───────────────────────────────────── */
+#ranking > center > p {
+  color: var(--text-secondary) !important;
+  font-size: 0.68em;
+}
+
+/* ── SCROLLBARS GLOBAIS (dark/gold) ───────────────────────────────── */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: rgba(10,8,4,0.6); }
+*::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 2px; }
+
+/* ── KEYFRAME: Pulso das abas ──────────────────────────────────────── */
+@keyframes pulseTabDot {
+  0%  { transform: scale(1);   box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
+  70% { transform: scale(1.2); box-shadow: 0 0 0 3px rgba(255,0,0,0);  }
+  100%{ transform: scale(1);   box-shadow: 0 0 0 0 rgba(255,0,0,0);   }
+}
+
+/* ── BLINK (uploading) ─────────────────────────────────────────────── */
+@keyframes blink { 50% { opacity: 0.5; } }
+.uploading-text { animation: blink 1s infinite; color: var(--gold-bright) !important; }
+
+/* ── SHAKE ANIMATION ───────────────────────────────────────────────── */
+@keyframes shake-monster {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  10%  { transform: translate(-9px,5px) rotate(-2deg); }
+  20%  { transform: translate(9px,-5px) rotate(2deg); }
+  30%  { transform: translate(-7px,7px) rotate(-1.5deg); }
+  40%  { transform: translate(7px,-7px) rotate(1.5deg); }
+  55%  { transform: translate(-5px,3px) rotate(-1deg); }
+  70%  { transform: translate(5px,-3px) rotate(1deg); }
+  85%  { transform: translate(-3px,2px); }
+}
+.shake-animation { animation: shake-monster 1s ease-in-out !important; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v2 — Correções pós-review
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. BACKGROUND — guildhall com blur + brightness ─────────── */
+body {
+  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp') !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  background-color: #0d0b08 !important;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: inherit;
+  filter: blur(0px) brightness(0.90);
+  z-index: -1;
+}
+
+/* 2. NOME DA GUILDA — gradiente com !important ─────────────── */
+#guildName {
+  font-family: 'Cinzel', serif !important;
+  font-size: 1.6em !important;
+  font-weight: 900 !important;
+  letter-spacing: 2px !important;
+  margin-bottom: 4px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #c9a94a 55%, #7a5c1c 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: transparent !important;
+  filter: drop-shadow(0 0 8px rgba(201,169,74,0.4)) !important;
+  text-shadow: none !important;
+}
+
+/* 3. PODER DA GUILDA — gradiente com !important ────────────── */
+#guildPower {
+  font-size: 1.6em !important;
+  font-weight: 900 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ffaa22 50%, #c9a94a 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: transparent !important;
+  text-shadow: none !important;
+  filter: drop-shadow(0 0 6px rgba(255,170,30,0.35)) !important;
+}
+
+/* 4. BARRA DE XP — sobrescreve verde do original ───────────── */
+.xp-bar-fill {
+  background: linear-gradient(90deg, #5c3e08 0%, #c9a94a 50%, #ffd700 80%, #fff6c8 100%) !important;
+  background-color: unset !important;
+}
+.xp-bar-container {
+  border: 1px solid rgba(201,169,74,0.4) !important;
+  background: linear-gradient(180deg, #0a0805 0%, #12100a 100%) !important;
+  background-color: unset !important;
+  border-radius: 9px !important;
+  box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 1px 3px rgba(0,0,0,0.8) !important;
+}
+
+/* 5. TUTORIAL MODAL — fix alinhamento central (era flex-start) */
+#tutorialModalRaid,
+#tddModalStory,
+#tutorialModalgvgt {
+  align-items: center !important;
+  justify-content: center !important;
+  /* SEM display !important — deixa o JS controlar show/hide */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0,0,0,0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 13000 !important;
+  overflow-y: auto !important;
+}
+/* O conteúdo em si centralizado */
+#tutorialModalRaid .tut-content,
+#tutorialModalgvgt .tut-content {
+  margin: auto !important;
+  position: relative !important;
+  top: auto !important;
+}
+
+/* 6. EDIT GUILD MODAL — max-height p/ não sumir atrás do footer */
+#editGuildModal .modal-content {
+  max-height: 82vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+#editTabContent {
+  overflow-y: auto !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+}
+
+/* 7. TAB MENU — garante fundo escuro não transparente ──────── */
+#tabMenu {
+  background: linear-gradient(180deg, #1c1508 0%, #110e07 100%) !important;
+  border: 1px solid rgba(201,169,74,0.38) !important;
+  border-radius: 6px !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+/* 8. TAB-PANE — fundo semi-transparente p/ cobrir imagem de fundo */
+.tab-pane {
+  background: rgba(10,8,5,0.10) !important;
+  backdrop-filter: none !important;
+  border-radius: 0 0 8px 8px !important;
+  padding: 10px 6px !important;
+}
+
+/* 9. MAIN CONTAINER — garante que não tape o bg ─────────────── */
+#mainContainer {
+  background: transparent !important;
+}
+
+/* 10. DESCRIPTION — cor visível sobre bg ───────────────────── */
+#guildDescription {
+  color: #b8b098 !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v3 — Posicionamento: engrenagem, confirmModal, lastRaid
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. BOTÃO ENGRENAGEM — canto superior direito dentro do guildInfoContainer */
+#guildInfoContainer {
+  position: relative !important;
+}
+.icon-container {
+  position: absolute !important;
+  top: 4px !important;
+  right: 4px !important;
+  z-index: 20 !important;
+  line-height: 0 !important;
+}
+
+/* 2. CONFIRM MODAL — centralizado corretamente */
+#confirmModal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  /* SEM display !important — JS controla visibilidade */
+  justify-content: center !important;
+  align-items: center !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+#confirmModal .modal-content {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  max-width: 88% !important;
+  min-width: 80% !important;
+  width: 88% !important;
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+  text-align: center !important;
+  margin: 0 !important;
+}
+
+/* 3. LAST RAID RESULT MODAL — centralizado */
+#lastRaidResultModal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  /* SEM display !important — JS controla visibilidade */
+  justify-content: center !important;
+  align-items: center !important;
+  z-index: 12000 !important;
+}
+#lastRaidResultModal .modal-content {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 88% !important;
+  max-width: 420px !important;
+  text-align: center !important;
+  margin: 0 !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v4 — gear fixed, tavern fixed, raid modal centered
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. ENGRENAGEM — position:fixed no viewport, abaixo do header */
+.icon-container {
+  position: fixed !important;
+  top: 108px !important;
+  right: 8px !important;
+  z-index: 50 !important;
+  line-height: 0 !important;
+  pointer-events: auto !important;
+}
+/* remove position relative do guildInfoContainer que não é mais necessário */
+#guildInfoContainer {
+  position: static !important;
+}
+
+/* 2. TAVERNA — position:fixed para cobrir viewport a partir do tab menu */
+#tavernContainer {
+  position: fixed !important;
+  top: 108px !important;   /* abaixo do header+tabmenu */
+  left: 0 !important;
+  width: 100vw !important;
+  height: calc(100vh - 108px) !important;
+  padding: 0 !important;
+  overflow-y: auto !important;
+  z-index: 5 !important;
+  background-position: center top !important;
+}
+
+/* 3. LAST RAID RESULT MODAL — força centralização via padding top */
+#lastRaidResultModal {
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+#lastRaidResultModal .modal-content {
+  margin: auto !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 88% !important;
+  max-width: 420px !important;
+  text-align: center !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v5 — ROOT FIX: remove backdrop-filter do tab-pane
+   backdrop-filter em ancestral cria containing block para
+   position:fixed no Chromium/Android, quebrando gear, tavern
+   e todos os modais dentro de tab-panes.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Remove backdrop-filter do tab-pane — mantém semi-transparência */
+.tab-pane {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(8, 6, 3, 0.10) !important;
+}
+
+/* Gear icon — agora position:fixed funciona corretamente */
+.icon-container {
+  position: fixed !important;
+  top: 108px !important;
+  right: 8px !important;
+  z-index: 50 !important;
+  width: auto !important;
+  height: auto !important;
+  line-height: 0 !important;
+}
+
+/* Taverna — position:fixed agora funciona corretamente */
+#tavernContainer {
+  position: fixed !important;
+  top: 100px !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: calc(100dvh - 100px) !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  z-index: 5 !important;
+  background-size: cover !important;
+  background-position: center top !important;
+}
+/* Remove padding do tab-pane da taverna para não criar gap */
+#taverna.tab-pane {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Raid tab-pane — sem background para o modal não ter offset */
+#raid.tab-pane {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* lastRaidResultModal — já tem .modal com fixed+center, 
+   agora que backdrop-filter foi removido vai funcionar */
+#lastRaidResultModal {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  justify-content: center !important;
+  align-items: center !important;
+  z-index: 12000 !important;
+}
+#lastRaidResultModal .modal-content {
+  margin: 0 auto !important;
+  width: 88% !important;
+  max-width: 420px !important;
+  position: relative !important;
+  top: auto !important; left: auto !important;
+  transform: none !important;
+}
+
+
+/* ═══ PATCH v6 — Taverna: top:0 (igual ao original) ═══ */
+#tavernContainer {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  z-index: 5 !important;
+  background-size: cover !important;
+  background-position: center center !important;
+}
+
+/* ═══ PATCH v7 — tabMenu sempre acima da taverna ═══ */
+#tabMenu {
+  position: relative !important;
+  z-index: 20 !important;
+}
+#raidMonsterName {
+  position: relative;
+  z-index: 2;
+}

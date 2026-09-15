@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <title>Ruínas Ancestrais - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="ruins.css" />
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.2rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body>
+
+    <div id="matchIntroOverlay" class="match-intro-overlay" style="display:none;">
+        <h1 class="intro-title">Partida Iniciada</h1>
+        <div class="intro-subtitle">Sobreviva ao Colapso</div>
+        
+        <div class="participants-container">
+            <h3>Participantes</h3>
+            <div id="participantsList" class="participants-grid">
+                </div>
+        </div>
+        
+        <div class="intro-countdown" id="introCountdown">3</div>
+    </div>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+        <div><span id="pageTitle"><strong>Ruínas Ancestrais</strong></span></div>
+        <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; cursor: pointer;">
+    </div>
+
+    <div id="lobbyScreen" class="screen-container">
+        <div class="lobby-header">
+            <h2 id="lobbyStatus">Carregando...</h2>
+            <div id="lobbyTimer" class="timer-display">--:--</div>
+            <p id="ticketsInfo">Tickets: <span id="ticketCount">0</span>/3</p>
+        </div>
+
+        <div id="classSelectionArea" style="display:none;">
+            <h3>Escolha sua Classe</h3>
+            <div class="class-grid">
+                <div class="class-card" data-class="vanguard" onclick="selectClass('vanguard')">
+                    <img src="https://aden-rpg.pages.dev/assets/vanguarda.webp" class="class-icon">
+                    <div class="class-info">
+                        <h4>Vanguarda</h4>
+                        <p>+20% HP. Crítico garantido no 1º turno.</p>
+                    </div>
+                </div>
+                <div class="class-card" data-class="scout" onclick="selectClass('scout')">
+                    <img src="https://aden-rpg.pages.dev/assets/batedor.webp" class="class-icon">
+                    <div class="class-info">
+                        <h4>Batedor</h4>
+                        <p>Imune a armadilhas. Relíquia custa 1 AP. Descanso de 10 segundos com a relíquia.</p>
+                    </div>
+                </div>
+                <div class="class-card" data-class="oracle" onclick="selectClass('oracle')">
+                    <img src="https://aden-rpg.pages.dev/assets/oraculo.webp" class="class-icon">
+                    <div class="class-info">
+                        <h4>Oráculo</h4>
+                        <p>Sondar custa 0 AP. Começa com 22 AP.</p>
+                    </div>
+                </div>
+                <div class="class-card" data-class="guardian" onclick="selectClass('guardian')">
+                    <img src="https://aden-rpg.pages.dev/assets/guardiao.webp" class="class-icon">
+                    <div class="class-info">
+                        <h4>Guardião</h4>
+                        <p>Menos 50% dano vs monstros e menos 25% dano vs player. Começa com 15 AP.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="waitingArea" style="display:none; text-align: center; margin-top: 20px;">
+            <p>Inscrito como <strong id="selectedClassName" style="color:gold;">...</strong></p>
+            <p>Aguardando início da partida...</p>
+            <div class="spinner"></div>
+        </div>
+        
+        <div id="ruinsKillsRanking" style="display:none;">
+    <div class="rk-header">
+        <h3 class="rk-title">☠ Top 10 Eliminações ☠</h3>
+        <p class="rk-subtitle">(atualiza todos os dias à meia-noite UTC)</p>
+    </div>
+    <div class="rk-podium"></div>
+    <ul class="rk-list">
+        <li class="rk-loading">Carregando...</li>
+    </ul>
+</div>
+    </div>
+
+    <div id="gameScreen" class="screen-container" style="display:none;">
+ <div id="toggleLogBtn" onclick="toggleSidebar()">
+        <svg viewBox="0 0 24 24">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+    </div>
+
+    <div id="ruinsSidebar">
+      
+      <div class="sidebar-header" style="border-top: 1px solid #444; padding-top:10px;">Salas Ativas</div>
+        <div id="sidebarRoomsArea"><div id="sidebarRoomsScroll"></div></div>
+      
+        <div class="sidebar-header">Histórico de Batalha</div>
+        <div id="sidebarLogsArea">
+            </div>
+
+        <div class="sidebar-header" style="border-top: 1px solid #444; padding-top:10px;">Participantes</div>
+        <div id="sidebarParticipantsArea">
+            </div>
+    </div>       
+        <div class="game-hud">
+            <div class="hud-row">
+                <div class="bar-container hp-bar">
+                    <div id="hudHpFill" class="bar-fill" style="width: 100%;"></div>
+                    <span id="hudHpText">HP: 1000/1000</span>
+                </div>
+                <div class="ap-display">
+                    <span id="hudApText">20</span> AP
+                </div>
+            </div>
+            <div class="hud-row secondary">
+                <span id="roomInfo">Sala: ?</span>
+                <span id="relicStatus">Relíquia: Livre</span>
+            </div>
+            <div style="text-align: center; font-size: 0.9em; margin-top: 4px; font-weight: bold;">
+                <span id="collapseTimer" style="color: white;">Colapso em: --:--</span>
+            </div>
+        </div>
+
+        <div id="roomView">
+            <!-- NOVO: Overlay do Colapso -->
+            <div id="collapseOverlay" style="display:none;"></div>
+
+            <div id="roomContent" class="room-entity" style="display:none;">
+                <img id="entityImg" src="">
+                <div id="entityName"></div>
+            </div>
+
+            <div id="combatOverlay" class="combat-overlay" style="display:none;">
+                <div id="combatCountdown" class="combat-countdown">5</div>
+                
+                <div id="combatArena" class="combat-arena" style="display:none;">
+                    <div class="combat-side left">
+                        <div class="combat-info">
+                            <span id="combatMyName" class="c-name">Carregando...</span>
+                            <span id="combatMyClass" class="c-class">Classe</span>
+                        </div>
+                        <div id="ruinsMyAvatarContainer" class="ruins-avatar-container">
+                            <img id="combatMyAvatar" src="" class="combat-avatar">
+                            <img id="ruinsMyFrameOverlay" class="ruins-frame-overlay" src="" alt="">
+                            <div id="ruinsMyFrameSheen" class="ruins-frame-sheen"></div>
+                        </div>
+                    </div>
+
+                    <div class="combat-vs">VS</div>
+
+                    <div class="combat-side right">
+                        <div class="combat-info">
+                            <span id="combatOppName" class="c-name">Inimigo</span>
+                            <span id="combatOppClass" class="c-class">Classe</span>
+                        </div>
+                        <div id="ruinsOppAvatarContainer" class="ruins-avatar-container">
+                            <img id="combatOppAvatar" src="" class="combat-avatar">
+                            <img id="ruinsOppFrameOverlay" class="ruins-frame-overlay" src="" alt="">
+                            <div id="ruinsOppFrameSheen" class="ruins-frame-sheen"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chestOverlay" class="chest-overlay" style="display:none;">
+                <h3>Baú!</h3>
+                <div id="chestRewards"></div>
+            </div>
+        </div>
+
+        <div id="navControls" class="nav-controls">
+            <p id="navMessage">Escolha seu caminho...</p>
+            
+            <div class="action-buttons">
+                <button id="btnMoveBlind" class="nav-btn" onclick="moveBlind()">
+                    Avançar na Névoa (1 AP)
+                </button>
+                <button id="btnProbe" class="nav-btn secondary" onclick="probeRooms()">
+                    Sondar (5 AP)
+                </button>
+            </div>
+
+            <div id="probeOptions" class="probe-grid" style="display:none;">
+            </div>
+            
+            <div id="cooldownTimerContainer" style="display: none;">
+                <div id="cooldownText">Recuperando fôlego: 10s</div>
+                <div id="decisionTimerBar"></div>
+                <div id="restPotionArea" style="display:none; margin-top: 10px; text-align: center;">
+        <strong style="color: #4caf50; font-size: 0.9em; display: block; margin-bottom: 5px;">Aproveite para usar poções de cura</strong>
+        <div id="restPotionList" style="display: flex; justify-content: center; gap: 10px;">
+      </div>
+        </div>
+    </div>
+
+            <div id="spectatorSyncContainer" style="display:none; margin-top:6px;">
+                <div id="spectatorSyncText" style="font-size:0.78em; color:#ffd700; text-align:center; margin-bottom:4px; letter-spacing:0.3px;">
+                    Próxima atualização: 60s
+                </div>
+                <div style="width:100%; height:3px; background:rgba(255,255,255,0.07); border-radius:2px; overflow:hidden;">
+                    <div id="spectatorSyncFill" style="height:100%; width:100%; background:#ffd700; border-radius:2px;"></div>
+                </div>
+            </div>
+</div>
+        
+        <!-- LOGS DIVIDIDOS -->
+        <div class="log-container left" id="eventLogLeft"></div>
+        <div class="log-container right" id="eventLogRight"></div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="spinner"></div>
+        <p>Sincronizando...</p>
+    </div>
+
+    <div id="resultModal" class="modal-container" style="display:none;">
+        <div class="modal-content">
+            <h2 id="resultTitle">Fim de Jogo</h2>
+            <p id="resultMessage">...</p>
+            <button class="action-btn" onclick="window.location.reload()">Voltar</button>
+        </div>
+    </div>
+
+    <div id="classConfirmModal" class="modal-container" style="display:none;">
+        <div class="modal-content" style="text-align:center; max-width: 340px;">
+            <h2 id="classConfirmTitle" style="color:gold; margin-bottom:10px;">Confirmar Classe</h2>
+            <p id="classConfirmText" style="color:#ddd; font-size:1em; margin-bottom:24px;">Escolher a classe <strong id="classConfirmName" style="color:gold;"></strong>?</p>
+            <div style="display:flex; gap:12px; justify-content:center;">
+                <button id="classConfirmNo" class="action-btn" style="background:#333; border:1px solid #555; flex:1;">Não</button>
+                <button id="classConfirmYes" class="action-btn" style="flex:1;">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tutorialModal" class="modal-container" style="display:none;">
+        <div class="modal-content" style="text-align: left; max-height: 85vh; overflow-y: auto; font-family: 'Cinzel', serif; border: 2px solid #ffd700; background: #111;">
+        <span class="close-btn" onclick="document.getElementById('tutorialModal').style.display='none'" style="color: #ffd700;">&times;</span>
+        
+        <h2 style="text-align: center; color: gold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px;">Manual das Ruínas</h2>
+        <p style="text-align: center; color: #888; font-size: 0.8em; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+            <em>"Apenas um sairá com a glória eterna."</em>
+        </p>
+
+        <!-- 1. HORÁRIOS -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #00bfff; margin-bottom: 5px; border-left: 3px solid #00bfff; padding-left: 10px;">1. Horários e Inscrição</h4>
+            <p style="font-size: 0.95em; color: #ddd; line-height: 1.5;">
+                As Ruínas Ancestrais são um evento pontual. As portas se abrem a cada <strong>4 horas</strong>, seguindo o horário UTC (Universal Time).
+            </p>
+            <ul style="background: #1a1a1a; padding: 10px 10px 10px 30px; border-radius: 5px; color: #ccc; font-size: 0.9em;">
+                <li><strong>Abertura dos Portões:</strong> 00:00, 04:00, 08:00, 12:00, 16:00 e 20:00 (UTC).</li>
+                <li><strong>Tempo de Inscrição:</strong> Você tem exatos <strong>30 minutos</strong> após a abertura para se inscrever.</li>
+                <li><strong>Capacidade:</strong> Máximo de 15 participantes por instância. Se houver menos jogadores, a masmorra será preenchida por Bots (IA).</li>
+            </ul>
+        </div>
+
+        <!-- 2. OBJETIVO -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: gold; margin-bottom: 5px; border-left: 3px solid gold; padding-left: 10px;">2. Condição de Vitória</h4>
+            <p style="font-size: 0.95em; color: #ddd; line-height: 1.5;">
+                Existem duas formas de vencer e clamar as recompensas máximas:
+            </p>
+            <ol style="color: #e0dccc; font-size: 0.95em;">
+                <li style="margin-bottom: 8px;"><strong>Último Sobrevivente:</strong> Elimine todos os oponentes e sobreviva aos perigos da masmorra.</li>
+                <li><strong>Portador da Relíquia:</strong> Se o tempo acabar ou todos morrerem simultaneamente, vence quem estiver segurando a <span style="color: gold;">Relíquia Ancestral</span> no momento final.</li>
+            </ol>
+        </div>
+
+        <!-- 3. ENERGIA (AP) -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #76ff03; margin-bottom: 5px; border-left: 3px solid #76ff03; padding-left: 10px;">3. Gerenciamento de Energia (AP)</h4>
+            <p style="font-size: 0.95em; color: #ddd; line-height: 1.5;">
+                Cada ação consome Pontos de Ação (AP). Se seu AP chegar a zero, você não poderá se mover ou atacar.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                <div style="background: #222; padding: 8px; border-radius: 4px;">
+                    <strong style="color: #ff5555; display:block;">Custos:</strong>
+                    <ul style="padding-left: 20px; margin: 5px 0; font-size: 0.85em; color: #ccc;">
+                        <li>Mover: <strong>-1 AP</strong></li>
+                        <li>Sondar Sala: <strong>-5 AP</strong></li>
+                        <li>Mover c/ Relíquia: <strong>-2 AP</strong></li>
+                    </ul>
+                </div>
+                <div style="background: #222; padding: 8px; border-radius: 4px;">
+                    <strong style="color: #76ff03; display:block;">Como Ganhar AP:</strong>
+                    <ul style="padding-left: 20px; margin: 5px 0; font-size: 0.85em; color: #ccc;">
+                        <li>Matar Monstro: <strong>+3 AP</strong></li>
+                        <li>Matar Jogador: <strong>+2 AP</strong></li>
+                        <li>Abrir Baú: <strong>+2 AP</strong></li>
+                        <li>Regenera <strong>+1 AP</strong> a cada 30 segundos.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. EXPLORAÇÃO -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #ff9800; margin-bottom: 5px; border-left: 3px solid #ff9800; padding-left: 10px;">4. O Labirinto e Perigos</h4>
+            <p style="font-size: 0.95em; color: #ddd;">
+                O mapa possui 50 salas ocultas pela névoa. Você pode usar a ação <strong>"Sondar"</strong> para revelar 3 opções de salas adjacentes antes de se mover.
+            </p>
+            <ul style="margin-top: 5px; padding-left: 20px; color: #ccc; font-size: 0.9em;">
+                <li style="margin-bottom: 5px;"><strong style="color: #ff5555;">Monstros (PvE):</strong> Causam dano baseado na sua defesa. Guardiões sofrem menos dano aqui.</li>
+                <li style="margin-bottom: 5px;"><strong style="color: #ff9800;">Armadilhas:</strong> Se você cair em uma, perde <strong>10% da Vida Máxima</strong> e perde AP. Batedores são imunes.</li>
+                <li style="margin-bottom: 5px;"><strong style="color: gold;">Baús:</strong> Contêm Cristais, Moedas Rúnicas e recarregam seu AP.</li>
+                <li style="margin-bottom: 5px;"><strong style="color: #00bfff;">Jogadores (PvP):</strong> Ao entrar em uma sala ocupada, você realiza uma <strong>Emboscada</strong> (ataca primeiro). O combate dura 3 turnos automáticos.</li>
+            </ul>
+        </div>
+
+        <!-- 5. A RELÍQUIA -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: cyan; margin-bottom: 5px; border-left: 3px solid cyan; padding-left: 10px;">5. A Maldição da Relíquia</h4>
+            <p style="font-size: 0.95em; color: #ddd;">
+                A Relíquia está escondida em uma das 50 salas. Ao usar "Sondar", a Relíquia estará em uma das 3 opções.
+            </p>
+            <p style="font-size: 0.95em; color: #ddd;">
+                Ao atacar o portador da Relíquia, você tem 40% de chance de roubá-la, mesmo se não eliminar o oponente, e ao eliminar, o roubo é garantido.
+            </p>
+            <div style="background: rgba(0, 255, 255, 0.1); border: 1px solid cyan; padding: 10px; border-radius: 5px; margin-top: 5px;">
+                <strong style="color: cyan;">Ao possuir a Relíquia:</strong>
+                <ul style="padding-left: 20px; margin: 5px 0; font-size: 0.9em; color: #eee;">
+                    <li><strong>Peso:</strong> Mover-se custa o dobro de energia (2 AP), exceto para Batedores.</li>
+                    <li><strong>Exaustão:</strong> Após qualquer combate ou ao pegar a relíquia, você sofre uma penalidade de <strong>30 segundos de descanso</strong> obrigatória (exceto para Batedores).</li>
+                    <li><strong>Alvo:</strong> Sua localização aproximada é revelada nos logs globais.</li>
+                    <li><strong>Vantagens:</strong> Ao adquirir a Relíquia, você restaura imediatamente 5000 de HP, e em posse dela, você recupera 3000 de HP a cada 30 segundos. E se encontrar baús, as recompensas são dobradas.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 6. O COLAPSO -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #ff0000; margin-bottom: 5px; border-left: 3px solid #ff0000; padding-left: 10px;">6. O Colapso (5 Minutos)</h4>
+            <p style="font-size: 0.95em; color: #ddd;">
+                A estrutura das ruínas é instável. Exatamente após <strong>3 minutos</strong> de partida, o Colapso começa.
+            </p>
+            <p style="font-size: 0.9em; color: #ffaaaa; margin-top: 5px;">
+                ⚠️ A cada <strong>10 segundos</strong>, 3 salas aleatórias são destruídas permanentemente. Apenas salas vazias são destruídas.
+            </p>
+        </div>
+
+        <!-- 7. CLASSES -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #e0e0e0; margin-bottom: 5px; border-left: 3px solid #e0e0e0; padding-left: 10px;">7. Classes e Especializações</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                
+                <div style="background: #2a2a2a; padding: 8px; border-radius: 4px; border-left: 4px solid #ff6b6b;">
+                    <strong style="color: #ff6b6b;">Vanguarda (Duelista)</strong>
+                    <p style="margin: 2px 0; font-size: 0.85em; color: #ccc;">
+                        • <strong>+20% HP Máximo</strong>.<br>
+                        • <strong>Crítico Garantido</strong> no primeiro ataque de qualquer combate PvP.
+                    </p>
+                </div>
+
+                <div style="background: #2a2a2a; padding: 8px; border-radius: 4px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #4caf50;">Batedor (Explorador)</strong>
+                    <p style="margin: 2px 0; font-size: 0.85em; color: #ccc;">
+                        • <strong>Imune a Armadilhas</strong> (não perde HP nem AP).<br>
+                        • Carrega a Relíquia sem custo extra de movimento (Custa 1 AP).<br>
+                        • Não tem penalidade extra de descanso ao carregar a relíquia (continua com 10 segundos).
+                    </p>
+                </div>
+
+                <div style="background: #2a2a2a; padding: 8px; border-radius: 4px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #2196f3;">Oráculo (Vidente)</strong>
+                    <p style="margin: 2px 0; font-size: 0.85em; color: #ccc;">
+                        • Começa com <strong>22 AP</strong> (Máximo aumentado).<br>
+                        • Ação <strong>"Sondar" é Gratuita</strong> (0 AP). Essencial para achar a Relíquia rápido.
+                    </p>
+                </div>
+
+                <div style="background: #2a2a2a; padding: 8px; border-radius: 4px; border-left: 4px solid #9e9e9e;">
+                    <strong style="color: #9e9e9e;">Guardião (Tanque)</strong>
+                    <p style="margin: 2px 0; font-size: 0.85em; color: #ccc;">
+                        • Começa com apenas <strong>15 AP</strong>.<br>
+                        • Recebe <strong>50% menos dano</strong> de Monstros.<br>
+                        • Recebe <strong>25% menos dano</strong> de Jogadores.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. INTERFACE -->
+        <div style="margin-bottom: 10px;">
+            <h4 style="color: #fff; margin-bottom: 5px; border-left: 3px solid #fff; padding-left: 10px;">8. Interface de Jogo</h4>
+            <ul style="padding-left: 20px; color: #ccc; font-size: 0.9em;">
+                <li><strong>Log Esquerdo:</strong> Mostra exclusivamente eventos da Relíquia (quem pegou, onde caiu, quem roubou).</li>
+                <li><strong>Log Direito:</strong> Mostra combates, itens encontrados e mortes gerais.</li>
+                <li><strong>Poções:</strong> Se você tiver poções de cura no inventário, elas aparecerão automaticamente na tela de "Descanso" para uso rápido.</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin-top: 25px; padding-top: 10px; border-top: 1px solid #444;">
+            <button class="action-btn" onclick="document.getElementById('tutorialModal').style.display='none'" style="width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold;">ENTENDI</button>
+        </div>
+    </div>
+    </div>
+
+    <div id="google_translate_element"></div>
+    <script src="auto_translate.js"></script>
+    <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
+    <script>
+    (function() {
+        const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+        const isGloballyMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+        const BGM_URL_FRAGMENTS = [
+            '/assets/music_loop_02.mp3',
+            '/assets/idlesong.mp3',
+            '/assets/combat_afk_bg.mp3',
+            '/assets/mina.mp3',
+            '/assets/desolation_tower.mp3',
+            '/assets/arena.mp3'
+        ];
+        const OriginalAudio = window.Audio;
+        if (!isGloballyMuted || OriginalAudio.__isPatched) return;
+
+        window.Audio = function(src) {
+            const audioInstance = new OriginalAudio(src);
+            const isBGM = src && BGM_URL_FRAGMENTS.some(fragment => src.includes(fragment));
+            if (isBGM) {
+                audioInstance.volume = 0;
+                Object.defineProperty(audioInstance, 'volume', {
+                    get() { return 0; },
+                    set(newValue) {}
+                });
+            }
+            return audioInstance;
+        };
+        window.Audio.__isPatched = true;
+    })();
+    </script>
+
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "ruins.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+
+
+    <script type="module" src="ruins.js"></script>
+    <script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.1em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.2em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${15 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+<script src="security.js"></script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

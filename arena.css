@@ -1,0 +1,1468 @@
+/* arena.css */
+
+/* --- Estilos Globais e TopBar (Baseado em mitrar.html e mines.css) --- */
+body, html {
+    background-color: #121212;
+    color: #e0dccc;
+    font-family: 'Cinzel', serif;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #1a1a1a;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg { width: 30px; height: 30px; }
+#pageTitle {
+    color: #e0dccc;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+/* --- Container Principal da Arena --- */
+#arenaContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/arena.webp');
+  background-size: cover;
+  background-position: center;
+  border: none;
+    border-radius: 10px;
+    color: #e0dccc;
+    position: relative;
+    margin-top: 50px; 
+    min-height: calc(100vh - 50px);
+    width: 100%;
+    overflow-y: auto;
+    text-align: center;
+    padding: 2px; 
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+    box-sizing: border-box; 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+#arenaContainer h2 {
+    color: gold;
+    font-size: 1.6em;
+    margin-top: 90px;
+}
+#arenaContainer p {
+    font-size: 1.1em;
+    color: #ccc;
+    margin-bottom: 25px;
+}
+#attemptsInfo {
+    margin-top: 15px;
+    font-size: 1.1em;
+    color: #FFC107;
+    border: 1px solid gold;
+    border-radius: 10px;
+    background: #333;
+    padding: 0 9px;
+}
+
+/* Botão de Desafio (baseado em style.css) */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 40px; 
+    font-size: 1.1em;
+    text-shadow: none!important;
+    transition: filter 0.3s;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+.action-btn:disabled {
+    filter: grayscale(1);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* --- Estilos de Overlay e Modais (Baseado em mines.css) --- */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+.spinner { /* (Adicione seu CSS de spinner aqui) */
+    width: 50px;
+    height: 50px;
+    border: 5px solid #555;
+    border-top-color: #e0dccc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: none;
+    background: linear-gradient(to bottom, #000, #222);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background-color: none;
+    background: linear-gradient(to bottom, #333, #444);
+    padding: 20px;
+    border-radius: 10px;
+    width: 95vw;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0,0,0,0.7);
+    border: 3px solid #c9a94a;
+    position: relative;
+}
+
+/* --- Modal de Combate PvP (Correção para tela cheia) --- */
+/* 1. Aplica o fundo à tela inteira (#pvpCombatModal é o .modal-overlay) */
+#pvpCombatModal {
+    background-color: transparent; 
+    background: none; 
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/arena.webp');
+    background-size: cover;
+    background-position: center;
+    border: none;
+}
+
+/* 2. Aplica o estilo de quadrado semi-transparente apenas ao conteúdo do duelo */
+#pvpCombatModal .modal-content {
+    /* Remove o fundo de imagem anterior */
+    background-image: none; 
+    /* Define o fundo semi-transparente para o quadrado do duelo */
+    border: none;
+}
+
+/* Reposiciona o timer acima da caixa de arena para não sobrepor o conteúdo */
+#pvpCombatModal #turnTimerContainer {
+    top: 5% !important;
+    z-index: 110;
+}
+/* Garante que o skip button fique acima de tudo */
+#pvpCombatModal > div:first-child {
+    z-index: 120;
+}
+
+#pvpArena {
+    display: flex;
+    justify-content: space-around;
+    align-items: center; /* Centraliza VS com os lados */
+    width: 100%;
+    margin-top: 30px;
+    gap: 4px;
+}
+.player-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 42%;
+    min-width: 0; /* Permite encolher se necessário */
+}
+.player-name-pvp {
+    font-size: 1em;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    width: 100%;
+    text-align: center;
+}
+.avatar-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+.player-avatar-pvp {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 14px rgba(255,215,0,0.35), 0 0 30px rgba(255,150,0,0.12);
+}
+.vs-separator {
+    font-size: 2em;
+    font-weight: bold;
+    color: gold;
+    padding-top: 0;
+    margin: 0 4px;
+    align-self: center;
+    flex-shrink: 0;
+}
+.player-hp-bar {
+    position: relative;
+    width: 100%;
+    max-width: 140px;
+    height: 24px;
+    background: linear-gradient(180deg,#0f0f0f 0%,#1e1e1e 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.65);
+}
+.player-hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #127a22, #1ec938);
+    transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+    position: relative;
+}
+.hp-text-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 98%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000,-1px -1px 2px #000,0 0 5px rgba(0,0,0,0.9);
+    font-size: 0.62em;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+}
+
+/* --- Animação de Dano (Baseado em mines.css) --- */
+/* Legacy damage classes kept for compatibility */
+.damage-number, .crit-damage-number, .evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    font-weight: bold;
+    white-space: nowrap;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: none;
+}
+.damage-number {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.6em;
+    color: #fff;
+    text-shadow: 2px 2px 4px #000, 0 0 12px rgba(255,120,0,0.5);
+    animation: floating-damage 3.4s ease-out forwards;
+}
+.crit-damage-number {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 2.2em;
+    color: #ffdd00;
+    text-shadow: -1px -1px 0 #900, 1px -1px 0 #900, -1px 1px 0 #900, 1px 1px 0 #900,
+                 0 0 14px #ff8800, 0 0 28px #ff4400;
+    animation: floating-damage-crit 3.7s ease-out forwards;
+}
+@keyframes floating-damage {
+    0%   { opacity:0; transform:translate(-50%,-50%) scale(0.4); }
+    8%   { opacity:1; transform:translate(-50%,-62px) scale(1.35); }
+    20%  { opacity:1; transform:translate(-50%,-72px) scale(1.0); }
+    75%  { opacity:1; transform:translate(-50%,-135px) scale(1.0); }
+    100% { opacity:0; transform:translate(-50%,-165px) scale(0.92); }
+}
+@keyframes floating-damage-crit {
+    0%   { opacity:0; transform:translate(-50%,-50%) scale(0.25) rotate(-8deg); }
+    7%   { opacity:1; transform:translate(-50%,-70px) scale(1.6) rotate(6deg); }
+    18%  { opacity:1; transform:translate(-50%,-85px) scale(1.05) rotate(-2deg); }
+    75%  { opacity:1; transform:translate(-50%,-155px) scale(1.0) rotate(0); }
+    100% { opacity:0; transform:translate(-50%,-190px) scale(0.9) rotate(0); }
+}
+
+/* --- Modal de Ranking (padrão AAA) --- */
+.ranking-modal-content {
+    width: 95vw;
+    max-width: 460px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, #1c1710 0%, #12100c 45%, #1c1710 100%);
+    border: 1px solid rgba(201,169,74,0.55);
+    border-radius: 16px;
+    box-shadow:
+        0 0 0 1px rgba(0,0,0,0.6),
+        0 0 30px rgba(201,169,74,0.18),
+        0 20px 45px rgba(0,0,0,0.75),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+}
+.ranking-modal-content::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255,224,130,0.7), rgba(201,169,74,0.05) 30%, rgba(201,169,74,0.05) 70%, rgba(255,224,130,0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+}
+.ranking-modal-content > h2 {
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 0.06em;
+    font-size: 1.25em;
+    margin: 4px 0 14px;
+    background: linear-gradient(180deg, #fff3c4, #d9b23f 55%, #a9821f);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    text-transform: uppercase;
+}
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+}
+#seasonInfo {
+    display: block;
+    font-size: 1em;
+    color: #FFC107;
+    margin-bottom: 15px;
+}
+#rankingListContainer {
+  width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background: none;
+
+}
+#rankingList {
+    list-style: none;
+    padding: 2px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+#rankingList li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-bottom: 1px solid #777;
+}
+#rankingList li:last-child {
+    border-bottom: none;
+}
+.rank-position {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #FFC107;
+    width: 40px;
+    flex-shrink: 0;
+}
+.rank-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 2px solid #888;
+    flex-shrink: 0;
+}
+.rank-player-info {
+    flex-grow: 1;
+    min-width: 0;
+    text-align: left;
+}
+.rank-player-name {
+    display: block;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #e0dccc;
+    white-space: nowrap; 
+    overflow: hidden;
+    text-overflow: ellipsis; 
+    max-width: 100%;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+.rank-guild-name {
+    display: block;
+    font-size: 0.8em;
+    color: lightblue;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+.rank-points {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: gold;
+    flex-shrink: 0;
+    white-space: nowrap;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+.ranking-tabs {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  margin-bottom: 10px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.ranking-tab {
+  background: none;
+  border: 1px solid #c9a94a !important;
+  color: #e0dccc;
+  font-weight: bold !important;
+  padding: 8px 0 !important;
+  border-radius: 8px !important;
+  cursor: pointer;
+  flex: 1 1 0px !important; 
+  text-align: center !important;
+  white-space: nowrap !important; 
+  overflow: visible !important; 
+  text-overflow: clip !important; 
+  font-size: clamp(11px, 3.5vw, 15px) !important; 
+  letter-spacing: -0.3px !important;
+}
+.ranking-tab.active {
+  background-color: #c9a94a!important;
+  color: #000;
+}
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+#rankingHistoryList {
+  list-style: none;
+  padding: 0;
+  color: #ddd;
+}
+#rankingHistoryList li {
+  padding: 6px;
+  border-bottom: 1px solid #777!important;
+  font-size: 0.95em;
+}
+.ranking-tab.active {
+  background-color: #c9a94a!important;
+  color: #000;
+  box-shadow: 0 0 8px #c9a94a!important;
+}
+/* --- Top 3 da Arena agora é renderizado como pódio (ver bloco .ar-podium) --- */
+
+/* ================================================================
+   PÓDIO TOP 3 (padrão AAA) — usado nas abas "Atual" e "Passada"
+   ================================================================ */
+.ar-podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 26px 4px 14px;
+    margin-bottom: 10px;
+    position: relative;
+}
+.ar-podium::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(60% 70% at 50% 15%, rgba(255,215,0,0.14), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.35));
+    border-radius: 14px;
+    pointer-events: none;
+}
+.ar-podium-place {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1 1 0;
+    max-width: 130px;
+    z-index: 1;
+}
+.ar-podium-1 { order: 2; z-index: 2; }
+.ar-podium-2 { order: 1; }
+.ar-podium-3 { order: 3; }
+
+.ar-podium-crown {
+    font-size: 1.6em;
+    margin-bottom: -6px;
+    filter: drop-shadow(0 0 6px rgba(255,215,0,0.9));
+    animation: ar-podium-float 2.4s ease-in-out infinite;
+}
+@keyframes ar-podium-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+.ar-podium-avatar-wrap {
+    position: relative;
+    margin-bottom: 6px;
+}
+.ar-podium-avatar {
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #222;
+}
+.ar-podium-1 .ar-podium-avatar { width: 78px; height: 78px; border: 4px solid #FFD700; box-shadow: 0 0 16px rgba(255,215,0,0.85), 0 0 34px rgba(255,215,0,0.4); animation: pulse 2s infinite; will-change: box-shadow; transform: translateZ(0); }
+.ar-podium-2 .ar-podium-avatar { width: 62px; height: 62px; border: 4px solid #C7CCD6; box-shadow: 0 0 12px rgba(199,204,214,0.7); }
+.ar-podium-3 .ar-podium-avatar { width: 62px; height: 62px; border: 4px solid #CD7F32; box-shadow: 0 0 12px rgba(205,127,50,0.7); }
+
+.ar-podium-badge {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: bold;
+    font-size: 0.85em;
+    color: #1a1204;
+    border: 2px solid rgba(0,0,0,0.5);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+.ar-podium-1 .ar-podium-badge { background: linear-gradient(180deg, #fff3b0, #FFD700 45%, #b8860b); width: 30px; height: 30px; font-size: 0.95em; }
+.ar-podium-2 .ar-podium-badge { background: linear-gradient(180deg, #f2f4f8, #C7CCD6 45%, #8a90a0); }
+.ar-podium-3 .ar-podium-badge { background: linear-gradient(180deg, #f0b784, #CD7F32 45%, #8a5322); }
+
+.ar-podium-name {
+    font-size: 0.88em;
+    font-weight: bold;
+    color: #f2ecd8;
+    text-align: center;
+    max-width: 118px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000, 0 0 6px rgba(0,0,0,0.7);
+    margin-top: 6px;
+}
+.ar-podium-guild {
+    font-size: 0.68em;
+    color: lightblue;
+    font-weight: bold;
+    max-width: 118px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000;
+}
+.ar-podium-value {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: gold;
+    margin-top: 2px;
+    text-shadow: 1px 1px 2px #000, 0 0 6px rgba(255,215,0,0.5);
+    white-space: nowrap;
+}
+
+.ar-podium-step {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 4px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: bold;
+    font-size: 1.3em;
+    box-shadow: inset 0 3px 6px rgba(255,255,255,0.25), 0 -2px 10px rgba(0,0,0,0.4);
+}
+.ar-podium-1 .ar-podium-step { height: 58px; background: linear-gradient(180deg, #ffdf6b, #c9a227 55%, #8a6d10); color: #3a2c02; text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+.ar-podium-2 .ar-podium-step { height: 42px; background: linear-gradient(180deg, #e4e8f0, #a9afbd 55%, #6d7280); color: #23252b; }
+.ar-podium-3 .ar-podium-step { height: 30px; background: linear-gradient(180deg, #e8a465, #b06a2e 55%, #6e3f16); color: #2a1502; }
+
+/* Lista "4º ao 10º" abaixo do pódio — visual mais discreto/uniforme */
+#rankingList li, #rankingListPast li {
+    border-radius: 8px;
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.03);
+}
+
+
+/* ================================
+   AJUSTE ABA "PASSADA" - ARENA
+   ================================ */
+
+/* Estrutura geral da lista passada */
+#rankingListPast {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#rankingListPast li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #777;
+  background: rgba(20, 20, 20, 0.4);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+#rankingListPast li:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.01);
+}
+
+/* Alinhamento dos elementos internos */
+#rankingListPast .rank-position {
+  width: 40px;
+  font-weight: bold;
+  color: #FFC107;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+#rankingListPast .rank-avatar {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 2px solid #888;
+  flex-shrink: 0;
+}
+
+#rankingListPast .rank-player-info {
+  flex-grow: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+#rankingListPast .rank-player-name {
+  font-weight: bold;
+  color: #e0dccc;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+#rankingListPast .rank-guild-name {
+  font-size: 0.8em;
+  color: #aaa;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+#rankingListPast .rank-points {
+  font-weight: bold;
+  color: #fff;
+  font-size: 0.85em;
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 80px;
+}
+
+/* Top 3 da temporada passada também usa o pódio (.ar-podium) */
+
+/* Fim da lista */
+#rankingListPast li:last-child {
+  border-bottom: none;
+}
+#potionSlotsContainer {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    margin-bottom: 20px;
+    background: rgba(0,0,0,0.3);
+    padding: 10px 12px;
+    border-radius: 8px;
+    gap: 8px;
+}
+.potion-group { 
+  text-align: center;
+  background: linear-gradient(180deg, rgba(0,0,0,0.42), rgba(0,0,11,0.52), rgba(0,0,0,0.42));
+  border-radius: 10px;
+  border: 2px solid rgba(255,215,0,0.35);
+  padding: 0 18px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.4), inset 0 0 15px rgba(0,0,0,0.3);
+}
+.potion-group h3 { font-size: 0.9em; color: #fff; margin-bottom: 5px; }
+.potion-group small { font-size: 0.7em; color: #fff; }
+.slots-row { display: flex; gap: 10px; justify-content: center; }
+.potion-slot {
+    width: 50px; height: 50px;
+    background: #222; border: 1px dashed #555;
+    display: flex; justify-content: center; align-items: center;
+    cursor: pointer; position: relative;
+}
+.potion-slot img { width: 100%; height: 100%; object-fit: contain; }
+.potion-slot span { position: absolute; bottom: 0; right: 0; font-size: 0.7em; background: rgba(0,0,0,0.7); padding: 1px 3px; }
+
+.potion-popup {
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5em;
+    font-weight: bold;
+    text-shadow: 0 0 5px black;
+    animation: floatUpPotion 1.5s ease-out forwards;
+    z-index: 20;
+}
+
+@keyframes floatUpPotion {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(1); }
+}
+/* Correções para Poções e Buffs na Arena */
+
+/* Garante que os elementos flutuantes fora da div principal apareçam */
+.player-side {
+    overflow: visible !important; 
+    position: relative;
+    z-index: 5;
+}
+
+/* Container de Buffs (abaixo do HP) */
+.buff-container {
+    position: absolute;
+    top: 100px!important; /* Ajustado para não ficar em cima do HP */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.active-buff-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 2px gold);
+    animation: blinkPotion 1s infinite alternate;
+}
+
+@keyframes blinkPotion {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.6; transform: scale(0.9); }
+}
+
+/* Container das Poções Laterais com Cooldown */
+.battle-potions-container {
+    position: absolute;
+    top: 19%!important;
+    
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100; /* Z-index alto para ficar acima de tudo */
+    background: rgba(0,0,0,0.6);
+    padding: 5px;
+    border-radius: 6px;
+}
+
+/* Slots de batalha */
+.battle-potion-slot {
+    width: 40px;
+    height: 40px;
+    position: relative;
+    border: 1px solid rgba(255,215,0,0.35);
+    background: rgba(0,0,0,0.7);
+    border-radius: 6px;
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+}
+.battle-potion-slot.potion-clickable:hover {
+    transform: scale(1.15) !important;
+    border-color: gold !important;
+    box-shadow: 0 0 10px rgba(255,215,0,0.45) !important;
+}
+
+.cooldown-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 0%;
+    background-color: rgba(0, 0, 0, 0.85);
+    transition: height 1s linear;
+}
+
+/* Animação do texto flutuante */
+@keyframes floatUpPotion {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+    20% { opacity: 3; transform: translate(-50%, -30px) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -80px) scale(1); }
+}
+
+/*
+ * Novos estilos para o Modal de Seleção de Poções na Arena
+ * (Baseado em estilos de inventory.css para consistência)
+ */
+
+/* Ajusta o contêiner do modal para um visual mais premium */
+#potionSelectModal .modal-content {
+    max-width: 90%;
+    width: 400px; /* Largura definida para o modal */
+    background: linear-gradient(to bottom, #333, #1a1a1a);
+    padding: 20px;
+    border: 3px solid #c9a94a; /* Borda de destaque */
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+/* Estilo para a grade de poções */
+#potionListGrid {
+    display: grid;
+    /* Colunas responsivas que se ajustam, permitindo 3 a 4 itens por linha */
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+    gap: 10px;
+    padding: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    margin-top: 15px;
+}
+
+/* Estilização de cada slot de poção (Mais estiloso) */
+.inventory-item {
+    background-color: #2e2e2e;
+    border: 2px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column; /* Empilha imagem e nome */
+    align-items: center;
+    justify-content: center; /* Distribui imagem no topo e nome no rodapé */
+    height: 120px; /* Altura fixa para manter a grade uniforme */
+    text-align: center;
+    cursor: pointer;
+    position: relative; /* ESSENCIAL para a posição absoluta da quantidade */
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.inventory-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+    border-color: gold;
+}
+
+.inventory-item img {
+    max-width: 100%;
+    max-height: 50px; 
+    object-fit: contain;
+    margin-bottom: 5px;
+}
+
+/* 2. Quantidade no canto inferior direito (como no inventário) */
+.item-quantity {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 4px;
+    color: #ffcc00; /* Destaque em amarelo/ouro */
+    font-family: 'Cinzel', serif;
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 4px;
+}
+
+/* 3. Nome da poção mais alinhado e bonito no modal */
+/* O nome é o último 'div' dentro de '.inventory-item' em arena.js */
+.inventory-item > div:last-child {
+    font-size: 0.9em !important; 
+    color: #e0dccc !important;
+    font-weight: 500;
+    text-shadow: 1px 1px 1px #000;
+    margin-top: auto; /* Garante alinhamento na parte inferior */
+    width: 100%;
+    padding: 0 2px;
+    box-sizing: border-box;
+    line-height: 1.1;
+}
+
+/* 3. Nome da poção mais alinhado, bonito e com ellipsis */
+.inventory-item > div:last-child {
+    font-size: 0.8em !important; 
+    color: #e0dccc !important;
+    font-weight: 500;
+    text-shadow: 1px 1px 1px #000;
+    margin-top: auto;
+    width: 100%;
+    padding: 0 2px;
+    box-sizing: border-box;
+    
+    overflow: hidden; 
+    text-overflow: ellipsis;
+}
+
+#attackBtnContainer:active { transform: scale(0.95); }
+.attack-anim { animation: attack-pulse 0.2s ease-in-out; }
+@keyframes attack-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+#skip {
+  color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+    text-align: center;
+    background: linear-gradient(to bottom, red 20%, orange 100%);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 0 12px;
+}
+
+/* =======================================================================
+   REMOÇÃO FORÇADA DA BARRA DO GOOGLE (FIX DEFINITIVO)
+   ======================================================================= */
+
+/* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+/* 2. Garante que o body nunca desça */
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; /* Previne deslocamento relativo */
+}
+
+/* 3. Esconde tooltips de tradução (popups ao passar o mouse no texto) */
+#goog-gt-tt, 
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 4. Esconde o elemento original do widget se ele tentar aparecer */
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* 5. Previne que o Google injete texto 'Translated by Google' */
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+}
+
+/* Remove destaque e bordas de todos os elementos clicáveis */
+a,
+button,
+img,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+label,
+select,
+textarea {
+    outline: none !important;
+    border: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-focus-ring-color: transparent !important;
+    touch-action: manipulation;
+}
+a:focus, a:active,
+button:focus, button:active,
+img:focus, img:active,
+input:focus, input:active,
+select:focus, select:active,
+textarea:focus, textarea:active {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+/* --- EFEITO PULSE DO RANKING CP (INSERIDO) --- */
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse {
+    0%   { box-shadow: 0 0 8px rgba(255,215,0,0.55); }
+    50%  { box-shadow: 0 0 26px rgba(255,215,0,1), 0 0 46px rgba(255,215,0,0.55); }
+    100% { box-shadow: 0 0 8px rgba(255,215,0,0.55); }
+}
+
+/* O pulse do 1º lugar agora vive em .ar-podium-1 .ar-podium-avatar (ver bloco do pódio) */
+
+/* === BARRA FIXA DE RANKING DO JOGADOR (ARENA) === */
+#fixedArenaRank {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 2100; /* Acima do modal (z-index 1000/2000) */
+    background: linear-gradient(to top, #141414, #2a2a2a);
+    border-top: 3px solid #c9a94a;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.9);
+}
+
+.fixed-rank-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    width: 100%;
+    max-width: 95vw; /* Mesma largura do modal content */
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Tipografia da barra fixa */
+.fixed-rank-pos { 
+    color: #fff; 
+    font-size: 1.3em; 
+    font-weight: bold; 
+    width: 40px; 
+    text-align: center; 
+}
+.fixed-rank-avatar { 
+    width: 45px; height: 45px; 
+    border-radius: 50%; 
+    border: 2px solid #fff; 
+    box-shadow: 0 0 5px gold; 
+    margin-right: 10px;
+}
+.fixed-rank-info { flex-grow: 1; text-align: left; }
+.fixed-rank-name { 
+    color: #fff; font-size: 1.1em; font-weight: bold; display: block;
+    text-shadow: 1px 1px 2px #000;
+}
+.fixed-rank-guild { color: #ddd; font-size: 0.8em; font-weight: bold; }
+.fixed-rank-points { 
+    color: gold; 
+    text-shadow: 0 0 3px black; 
+    font-size: 1.2em; 
+    font-weight: bold; 
+    min-width: 80px; text-align: right;
+}
+
+/* Ajuste para não cobrir o último item da lista no modal */
+#rankingListContainer, #rankingListContainerPast {
+    padding-bottom: 70px; /* Espaço para a barra fixa */
+}
+/* ═══════════════════════════════════════════════════════════════
+   MOLDURA DE SKIN — Arena PvP
+   ═══════════════════════════════════════════════════════════════
+   Avatar PvP: avatar-container 80×80px, player-avatar-pvp 100% (80px) + borda 3px
+   Ratio inventário: frame 195px / imagem 100px = 1,95
+   Frame arena: 80 × 1,95 = 156px
+   Centralização: top = (80 − 156) / 2 = −38px
+
+   Para ajustar futuramente:
+     • Tamanho do frame → mude width/height em .arena-frame-overlay e .arena-frame-sheen
+     • Recalcule top = (containerPx − framePx) / 2
+     • containerPx está em .avatar-container (atualmente 80px)
+   ═══════════════════════════════════════════════════════════════ */
+
+.arena-frame-overlay {
+    position: absolute;
+    top: -41px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 154px;
+    height: 154px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+    display: none;
+}
+
+.arena-frame-sheen {
+    position: absolute;
+    top: -42px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 156px;
+    height: 156px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
+}
+.arena-frame-sheen::after {
+    content: '';
+    position: absolute;
+    top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg,
+        transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _arenafs 6s ease-in-out infinite;
+}
+@keyframes _arenafs {
+    0%   { left:-130%; opacity:0; }
+    2%   { opacity:1; }
+    98%  { left:155%; opacity:1; }
+    99%  { opacity:0; left:155%; }
+    100% { left:155%; opacity:0; }
+}
+
+/* ── Espaçamento PvP — escopado ao modal para não afetar outros elementos ──
+   Frame se estende 38px acima/abaixo do avatar-container (80px).
+   44px = 38px + 6px de folga visual.
+   Para ajustar: mude os valores abaixo. ──────────────────────────────────── */
+#pvpCombatModal .player-name-pvp {
+    margin-bottom: 44px;
+}
+#pvpCombatModal .player-hp-bar {
+    margin-top: 44px;
+}
+
+/* =======================================================================
+   RANKING BUTTON / TAB — Border-following spinner (Recompensa de Temporada)
+   Uma faísca curta que percorre a borda seguindo o contorno do elemento.
+   Técnica: conic-gradient com arco estreito girando num ::before;
+   ::after mascara o centro deixando exposta só a faixa da borda.
+   ======================================================================= */
+
+@keyframes arenaRewardBorderSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Botão de ranking (quadrado 40×40px) ── */
+#rankingBtnWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 6px;
+}
+
+/* Camada giratória com a faísca */
+#rankingBtnWrap.has-reward::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 7px;
+    /* Arco de ~30° dourado sobre fundo transparente — é a "faísca" */
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(255, 215, 0, 0.18) 10deg,
+        #ffd700 22deg,
+        #fff8a0 30deg,
+        #ffd700 38deg,
+        rgba(255, 215, 0, 0.18) 50deg,
+        transparent 60deg,
+        transparent 360deg
+    );
+    animation: arenaRewardBorderSpin 1.6s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Máscara do centro — expõe apenas a borda */
+#rankingBtnWrap.has-reward::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    background: #1a1a1a;
+    border-radius: 5px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#rankingBtnWrap img {
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Aba "Passada" (retângulo) — perimeter-travel ──
+   Uma faísca curta que percorre cada lado linearmente e
+   faz snap instantâneo nas esquinas com steps(1, end).
+   Funciona para qualquer tamanho de retângulo. ── */
+.ranking-tab[data-tab="past"].has-reward {
+    position: relative;
+    overflow: visible !important;
+    z-index: 1;
+}
+
+.ranking-tab[data-tab="past"].has-reward::before {
+    content: '';
+    position: absolute;
+    /* Faísca com glow dourado */
+    background: linear-gradient(90deg, transparent, #ffd700 30%, #fff8a0 50%, #ffd700 70%, transparent);
+    box-shadow: 0 0 5px 1px rgba(255, 215, 0, 0.8), 0 0 10px rgba(255, 180, 0, 0.5);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 2;
+    animation: arenaTabSparkTravel 2s linear infinite;
+}
+
+@keyframes arenaTabSparkTravel {
+    /* TOPO: esquerda → direita */
+    0%     { top: -2px; left: 0;                    width: 28px; height: 3px; }
+    24.99% { top: -2px; left: calc(100% - 28px);    width: 28px; height: 3px;
+             animation-timing-function: steps(1, end); }
+
+    /* DIREITA: cima → baixo */
+    25%    { top: 0;                    left: calc(100% - 3px); width: 3px; height: 28px; }
+    49.99% { top: calc(100% - 28px);   left: calc(100% - 3px); width: 3px; height: 28px;
+             animation-timing-function: steps(1, end); }
+
+    /* BASE: direita → esquerda */
+    50%    { top: calc(100% - 3px); left: calc(100% - 28px);    width: 28px; height: 3px; }
+    74.99% { top: calc(100% - 3px); left: 0;                    width: 28px; height: 3px;
+             animation-timing-function: steps(1, end); }
+
+    /* ESQUERDA: baixo → cima */
+    75%    { top: calc(100% - 28px); left: -2px; width: 3px; height: 28px; }
+    99.99% { top: 0;                 left: -2px; width: 3px; height: 28px;
+             animation-timing-function: steps(1, end); }
+
+    100%   { top: -2px; left: 0; width: 28px; height: 3px; }
+}
+
+/* =======================================================================
+   MODAL DE RECOMPENSA DE TEMPORADA DA ARENA
+   ======================================================================= */
+#arenaRewardModal {
+    z-index: 1500;
+    background: rgba(0, 0, 0, 0.9) !important;
+}
+
+/* O modal de alerta/erro (#confirmModal) precisa SEMPRE aparecer por cima
+   de qualquer outro modal (incluindo o de recompensa de temporada, z-index
+   1500). Sem isso, um erro no resgate ficava escondido atrás do modal de
+   recompensa e parecia que "nada acontecia" ao clicar em Resgatar. */
+#confirmModal {
+    z-index: 2200;
+}
+
+.arena-reward-modal-content {
+    background: linear-gradient(160deg, #1c0f00, #2a1a00, #1a0a00) !important;
+    border: 3px solid #ffd700 !important;
+    box-shadow:
+        0 0 30px rgba(255, 215, 0, 0.4),
+        0 0 60px rgba(255, 120, 0, 0.15),
+        inset 0 0 30px rgba(255, 150, 0, 0.05) !important;
+    text-align: center;
+    padding: 28px 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.arena-reward-crown-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 6px;
+    animation: arenaRewardCrownPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes arenaRewardCrownPulse {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5));
+    }
+    50% {
+        transform: scale(1.12);
+        filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 32px rgba(255, 140, 0, 0.5));
+    }
+}
+
+.arena-reward-title {
+    color: #ffd700 !important;
+    font-size: 1.4em;
+    font-weight: bold;
+    text-shadow: 0 0 14px rgba(255, 180, 0, 0.7), 1px 1px 3px #000 !important;
+    margin: 4px 0 10px;
+}
+
+.arena-reward-subtitle {
+    color: #e0dccc;
+    font-size: 1.05em;
+    margin-bottom: 20px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.arena-reward-items {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+}
+
+.arena-reward-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 215, 0, 0.07);
+    border: 1px solid rgba(255, 215, 0, 0.35) !important;
+    border-radius: 10px;
+    padding: 14px 12px 10px;
+    min-width: 82px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.arena-reward-item:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
+.arena-reward-item img {
+    width: 62px !important;
+    height: 62px !important;
+    object-fit: contain;
+    margin-bottom: 8px;
+    border: none !important;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.4));
+}
+
+.arena-reward-item-qty {
+    color: #ffd700;
+    font-weight: bold;
+    font-size: 1.1em;
+    text-shadow: 0 0 6px rgba(255, 215, 0, 0.6), 1px 1px 2px #000;
+    margin-bottom: 4px;
+}
+
+.arena-reward-item-name {
+    color: #c8c0a8;
+    font-size: 0.68em;
+    text-align: center;
+    line-height: 1.3;
+    font-weight: normal;
+}
+
+.arena-reward-claim-btn {
+    background: linear-gradient(135deg, #b8922a, #f0d070, #c9a94a, #f0d070, #b8922a) !important;
+    background-size: 200% 100% !important;
+    background-image: none !important;
+    color: white !important;
+    font-weight: bold !important;
+    padding: 14px 36px !important;
+    font-size: 1.15em !important;
+    text-shadow: none!important;
+    border-radius: 8px !important;
+    border: none !important;
+    transition: transform 0.2s, box-shadow 0.2s, background-position 0.4s;
+    box-shadow: 0 4px 16px rgba(255, 200, 0, 0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+    cursor: pointer;
+    animation: arenaClaimBtnShimmer 2.5s linear infinite;
+}
+
+@keyframes arenaClaimBtnShimmer {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+.arena-reward-claim-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 22px rgba(255, 200, 0, 0.65), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.arena-reward-claim-btn:disabled {
+    filter: grayscale(0.6) !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+    animation: none !important;
+}

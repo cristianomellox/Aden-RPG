@@ -1,0 +1,1940 @@
+import { supabase } from './supabaseClient.js';
+
+// ═══════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (Ruínas PvP)
+// Cache compartilhado: skin_modal_v1_${pid} (24h)
+// ═══════════════════════════════════════════════════════════════════
+
+function _rnGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+
+function _rnSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+function _rnApplyFrame(containerEl, frameUrl) {
+    if (!containerEl) return;
+    const frameImg  = containerEl.querySelector('.ruins-frame-overlay');
+    const sheenEl   = containerEl.querySelector('.ruins-frame-sheen');
+    const avatarImg = containerEl.querySelector('.combat-avatar');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '3px solid #555';
+    }
+}
+
+async function _rnFetchAndApplyFrame(pid, containerEl) {
+    if (!pid || !containerEl) return;
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { _rnApplyFrame(containerEl, null); return; }
+        _rnApplyFrame(containerEl, data?.frame_url || null);
+    } catch(e) { _rnApplyFrame(containerEl, null); }
+}
+
+
+const GLOBAL_DB_NAME    = 'aden_global_db';
+const GLOBAL_DB_VERSION = 7;
+const OWNERS_STORE      = 'owners_store';
+
+const GlobalDB = {
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('auth_store'))   db.createObjectStore('auth_store',   { keyPath: 'key' });
+                if (!db.objectStoreNames.contains('player_store')) db.createObjectStore('player_store', { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(OWNERS_STORE))   db.createObjectStore(OWNERS_STORE,   { keyPath: 'id'  });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror   = () => reject(req.error);
+        });
+    },
+    async getAllOwners() {
+        try {
+            const db = await this.open();
+            return new Promise(resolve => {
+                const req = db.transaction(OWNERS_STORE, 'readonly').objectStore(OWNERS_STORE).getAll();
+                req.onsuccess = () => {
+                    const map = {};
+                    (req.result || []).forEach(o => { map[o.id] = o; });
+                    resolve(map);
+                };
+                req.onerror = () => resolve({});
+            });
+        } catch(e) { return {}; }
+    },
+    async saveOwners(list) {
+        if (!list || list.length === 0) return;
+        try {
+            const db  = await this.open();
+            const tx  = db.transaction(OWNERS_STORE, 'readwrite');
+            const st  = tx.objectStore(OWNERS_STORE);
+            const now = Date.now();
+            list.forEach(o => {
+                if (!o.id) return;
+                // Salva todos os campos que o IndexedDB das outras telas espera:
+                // id, name, avatar_url, guild_id, guild_name e timestamp.
+                st.put({
+                    id:         o.id,
+                    name:       o.name       || o.n,
+                    avatar_url: o.avatar_url || o.avatar || o.a,
+                    guild_id:   o.guild_id   || o.g   || null,
+                    guild_name: o.guild_name || null,
+                    timestamp:  now
+                });
+            });
+            return new Promise(r => { tx.oncomplete = () => r(); tx.onerror = () => r(); });
+        } catch(e) { console.warn('[Ruins] GlobalDB.saveOwners:', e); }
+    }
+};
+
+// Hidrata lista de esqueletos { id, ...campos } com nome+avatar+guild do
+// GlobalDB, baixando apenas os perfis ausentes via get_missing_profiles.
+// Idêntico ao padrão de arena.js para reuso do cache cross-tela.
+async function hydrateProfiles(skeletonList) {
+    if (!skeletonList || skeletonList.length === 0) return [];
+    const cacheMap            = await GlobalDB.getAllOwners();
+    const missingIds          = [];
+    const idsToRenewTimestamp = []; // entradas encontradas no cache — renova TTL
+    const result              = [];
+
+    skeletonList.forEach(item => {
+        const tid = item.id;
+        if (!tid) { result.push(item); return; }
+        const cached = cacheMap[tid];
+        if (cached && cached.name) {
+            // Cache hit: propaga nome, avatar E guild_id (necessário para outras telas)
+            result.push({
+                ...item,
+                name:       cached.name,
+                avatar_url: cached.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp',
+                guild_id:   item.guild_id || cached.guild_id,
+                guild_name: cached.guild_name || null
+            });
+            idsToRenewTimestamp.push(cached); // renova TTL depois
+        } else {
+            missingIds.push(tid);
+            result.push({ ...item, _needsFetch: true });
+        }
+    });
+
+    if (missingIds.length > 0) {
+        try {
+            const { data: fresh } = await supabase.rpc('get_missing_profiles', { p_user_ids: missingIds });
+            if (fresh) {
+                await GlobalDB.saveOwners(fresh); // salva com guild_id, nome, avatar e timestamp
+                fresh.forEach(fp => {
+                    result.forEach(hItem => {
+                        if (hItem.id === fp.id && hItem._needsFetch) {
+                            hItem.name       = fp.name       || 'Desconhecido';
+                            hItem.avatar_url = fp.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+                            hItem.guild_id   = hItem.guild_id || fp.guild_id;
+                            hItem.guild_name = fp.guild_name || null;
+                            delete hItem._needsFetch;
+                        }
+                    });
+                });
+            }
+        } catch(e) { console.warn('[Ruins] hydrateProfiles fetch:', e); }
+    }
+
+    // Fallback de segurança — perfis que falharam no fetch
+    result.forEach(h => {
+        if (h._needsFetch) {
+            h.name       = 'Desconhecido';
+            h.avatar_url = 'https://aden-rpg.pages.dev/avatar01.webp';
+            delete h._needsFetch;
+        }
+    });
+
+    // Renova TTL dos perfis que vieram do cache (keep-alive de 24h, igual à arena)
+    if (idsToRenewTimestamp.length > 0) {
+        await GlobalDB.saveOwners(idsToRenewTimestamp);
+    }
+
+    return result;
+}
+
+// Minutos até a próxima meia-noite UTC (para TTL do cache do ranking)
+function getMinutesToMidnightUTC() {
+    const now      = new Date();
+    const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    return Math.max(1, Math.floor((midnight - now) / 60000));
+}
+
+// --- Configurações ---
+const POLLING_INTERVAL_ACTIVE   = 30000; // 30s — jogador ativo
+const POLLING_INTERVAL_SPECTATE = 60000; // 60s — espectador (metade das chamadas)
+
+// --- Estado Local ---
+let state = {
+    sessionId: null,
+    playerId: null,
+    status: 'loading', 
+    selectedClass: null,
+    myPlayer: null,
+    lastEventTs: 0,
+    registrationEndsAt: null,
+    battleEndsAt: null,
+    nextOpenAt: null,
+    collapseStartAt: null,
+    isProcessing: false,
+    cooldownInterval: null,
+    spectatorSyncInterval: null,
+    relicHolderId: null,
+    relicRoomId: null,
+    matchWinnerId: null,
+    isSpectating: false,
+    destroyedCount: 0,
+    destroyedRooms: [],
+
+    // Cache de participantes (avatar + nome por player_id)
+    // Populado na entrada do jogo, nunca re-baixado enquanto a sessão existe.
+    participantCache: {},   // { [playerId]: { name, avatar, is_bot } }
+    participantDeadCount: -1, // versão local: só re-renderiza sidebar quando muda
+
+    // Cache de poções durante o descanso
+    // Invalidado ao usar uma poção; reutilizado nos ciclos seguintes.
+    potionCache: null,      // null = inválido, array = dado válido
+
+    // Estados para o Menu Lateral
+    logHistory: [], 
+    isSidebarOpen: false,
+
+    // Estatísticas da partida atual (acumuladas localmente)
+    matchKills:    0,
+    matchCrystals: 0,
+    matchCoins:    0,
+    participantKillsByName: {} // { [nome]: count } — para ranking da partida
+};
+
+// Controle de morte local para evitar sobrescrita do heartbeat
+let ignoreHeartbeatDeath = false;
+
+// --- Sistema de Áudio ---
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const audioBuffers = {};
+const audioFiles = {
+    normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
+    critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
+    evade: "https://aden-rpg.pages.dev/assets/evade.mp3",
+    win: "https://aden-rpg.pages.dev/assets/win.mp3",
+    loss: "https://aden-rpg.pages.dev/assets/loss.mp3",
+    chest: "https://aden-rpg.pages.dev/assets/pot_dex.mp3", 
+    trap: "https://aden-rpg.pages.dev/assets/normal_hit.mp3", // Corrigido: normal_hit
+    monster: "https://aden-rpg.pages.dev/assets/pot_furia.mp3", // Corrigido: pot_furia
+    heal: "https://aden-rpg.pages.dev/assets/pot_cura.mp3",
+    relic: "https://aden-rpg.pages.dev/assets/pot_cura.mp3" 
+};
+
+async function preloadAudio() {
+    for (const [key, url] of Object.entries(audioFiles)) {
+        try {
+            const res = await fetch(url);
+            const ab = await res.arrayBuffer();
+            audioBuffers[key] = await audioContext.decodeAudioData(ab);
+        } catch(e) {
+            console.warn("Erro ao carregar audio:", key);
+        }
+    }
+}
+
+function playSound(name, volume = 1.0) {
+    if (audioContext.state === 'suspended') audioContext.resume().catch(()=>{});
+    const buf = audioBuffers[name];
+    if (buf) {
+        try {
+            const src  = audioContext.createBufferSource();
+            const gain = audioContext.createGain();
+            src.buffer = buf;
+            gain.gain.value = Math.min(1, Math.max(0, volume));
+            src.connect(gain).connect(audioContext.destination);
+            src.start(0);
+        } catch(e) {}
+    }
+}
+
+// --- Elementos DOM ---
+const els = {
+    lobby: document.getElementById('lobbyScreen'),
+    game: document.getElementById('gameScreen'),
+    timer: document.getElementById('lobbyTimer'),
+    status: document.getElementById('lobbyStatus'),
+    tickets: document.getElementById('ticketCount'),
+    classArea: document.getElementById('classSelectionArea'),
+    waitingArea: document.getElementById('waitingArea'),
+    
+    // Game HUD
+    hpFill: document.getElementById('hudHpFill'),
+    hpText: document.getElementById('hudHpText'),
+    apText: document.getElementById('hudApText'),
+    gameTimer: document.getElementById('gameTimer'),
+    collapseTimer: document.getElementById('collapseTimer'),
+    relicStatus: document.getElementById('relicStatus'),
+    roomInfo: document.getElementById('roomInfo'),
+    
+    // Logs Divididos (Atualizado)
+    logLeft: document.getElementById('eventLogLeft'),
+    logRight: document.getElementById('eventLogRight'),
+    
+    // Room View
+    roomView: document.getElementById('roomView'),
+    roomContent: document.getElementById('roomContent'),
+    entityImg: document.getElementById('entityImg'),
+    entityName: document.getElementById('entityName'),
+    collapseOverlay: document.getElementById('collapseOverlay'),
+    
+    // Controls
+    navMsg: document.getElementById('navMessage'),
+    actionButtons: document.querySelector('.action-buttons'),
+    probeGrid: document.getElementById('probeOptions'),
+    btnMove: document.getElementById('btnMoveBlind'),
+    btnProbe: document.getElementById('btnProbe'),
+    
+    // Cooldown & Potions
+    cooldownContainer: document.getElementById('cooldownTimerContainer'),
+    cooldownText: document.getElementById('cooldownText'),
+    decisionBar: document.getElementById('decisionTimerBar'),
+    restPotionArea: document.getElementById('restPotionArea'),
+    restPotionList: document.getElementById('restPotionList'),
+
+    // Combat UI Elements
+    combatMyName: document.getElementById('combatMyName'),
+    combatMyClass: document.getElementById('combatMyClass'),
+    combatOppName: document.getElementById('combatOppName'),
+    combatOppClass: document.getElementById('combatOppClass')
+};
+
+// --- Funções Auxiliares Globais ---
+function getClassName(classId) {
+    const map = {
+        'vanguard': 'Vanguarda',
+        'scout': 'Batedor',
+        'oracle': 'Oráculo',
+        'guardian': 'Guardião',
+        'monster': 'Criatura',
+        'trap': 'Armadilha'
+    };
+    return map[classId] || classId || 'Desconhecido';
+}
+
+// --- Funções do Menu Lateral ---
+
+window.toggleSidebar = () => {
+    const sb = document.getElementById('ruinsSidebar');
+    const btn = document.getElementById('toggleLogBtn');
+    if (!sb || !btn) return;
+
+    state.isSidebarOpen = !state.isSidebarOpen;
+    
+    if (state.isSidebarOpen) {
+        sb.classList.add('open');
+        btn.style.right = "300px"; 
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2"><path d="M9 19l7-7-7-7"/></svg>`;
+    } else {
+        sb.classList.remove('open');
+        btn.style.right = "0";
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>`;
+    }
+};
+
+function updateLogSidebar() {
+    const container = document.getElementById('sidebarLogsArea');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    state.logHistory.slice().reverse().forEach(entry => {
+        const div = document.createElement('div');
+        div.className = 'sidebar-log-entry';
+        const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        div.innerHTML = `<span class="time">[${time}]</span> ${entry}`;
+        container.appendChild(div);
+    });
+}
+
+function renderRoomsPanel() {
+    const scroll = document.getElementById('sidebarRoomsScroll');
+    if (!scroll) return;
+    scroll.innerHTML = '';
+    const destroyed = new Set(state.destroyedRooms || []);
+    const myRoom = state.myPlayer ? state.myPlayer.current_room_id : null;
+    const relicRoom = state.relicHolderId ? null : state.relicRoomId; // só mostra se relíquia estiver no chão
+    for (let i = 1; i <= 50; i++) {
+        if (destroyed.has(i)) continue;
+        const chip = document.createElement('div');
+        chip.className = 'room-chip';
+        chip.textContent = i;
+        chip.title = 'Sala ' + i;
+        if (i === myRoom) chip.classList.add('current-room');
+        else if (i === relicRoom) chip.classList.add('relic-room');
+        scroll.appendChild(chip);
+    }
+}
+
+function updateParticipantsSidebar(list, relicHolderId, relicRoomId) {
+    const container = document.getElementById('sidebarParticipantsArea');
+    if (!container || !list) return;
+
+    container.innerHTML = '';
+    
+    list.sort((a, b) => (a.is_dead === b.is_dead) ? 0 : a.is_dead ? 1 : -1);
+
+    list.forEach(p => {
+        // Enriquece com dados do cache local (avatar + nome nunca vêm mais no heartbeat)
+        const cached = state.participantCache[p.id] || {};
+        const avatar = cached.avatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        const name   = cached.name   || p.name || 'Jogador';
+        const is_bot = p.is_bot !== undefined ? p.is_bot : (cached.is_bot || false);
+
+        const div = document.createElement('div');
+        let classes = 'sb-participant-card';
+        if (p.is_dead) classes += ' dead';
+        if (p.id === relicHolderId) classes += ' relic';
+        
+        div.className = classes;
+        
+        let statusText = p.is_dead ? "(MORTO)" : "Vivo";
+        let statusColor = p.is_dead ? "red" : "lime";
+        
+        if (p.id === relicHolderId) {
+            statusText = "PORTADOR";
+            statusColor = "cyan";
+            if (relicRoomId) {
+                statusText += ` [Sala ${relicRoomId}]`;
+            }
+        }
+
+        let hpBarHtml = '';
+        if (!p.is_dead && p.hp !== undefined && p.max_hp !== undefined) {
+            const pct = Math.max(0, Math.min(100, (p.hp / p.max_hp) * 100));
+            let barColor = '#4caf50'; 
+            if (pct < 50) barColor = '#ffeb3b'; 
+            if (pct < 25) barColor = '#f44336'; 
+            
+            hpBarHtml = `
+                <div style="width: 100%; background: #333; height: 4px; margin-top: 4px; border-radius: 2px;">
+                    <div style="width: ${pct}%; background: ${barColor}; height: 100%; border-radius: 2px; transition: width 0.3s;"></div>
+                </div>
+            `;
+        }
+
+        div.innerHTML = `
+            <img src="${avatar}" class="sb-p-avatar">
+            <div class="sb-p-info">
+                <span class="sb-p-name">${name} ${is_bot ? '[Bot]' : ''}</span>
+                <span class="sb-p-status" style="color:${statusColor}">${statusText}</span>
+                ${hpBarHtml}
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// --- Inicialização ---
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    state.playerId = session.user.id;
+
+    const btn = document.getElementById('toggleLogBtn');
+    if(btn) btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>`;
+
+    preloadAudio();
+    document.body.addEventListener('click', () => { 
+        if(audioContext.state === 'suspended') audioContext.resume(); 
+    }, {once:true});
+
+    const tutBtn = document.getElementById('tutorialBtn');
+    const tutModal = document.getElementById('tutorialModal');
+    const closeTut = document.getElementsByClassName('close-btn')[0]; 
+    
+    if (tutBtn && tutModal) {
+        tutBtn.onclick = () => { tutModal.style.display = 'flex'; };
+        if (closeTut) { closeTut.onclick = () => tutModal.style.display = 'none'; }
+        window.onclick = (event) => { if (event.target == tutModal) tutModal.style.display = 'none'; };
+        const closeActionBtn = tutModal.querySelector('.action-btn');
+        if(closeActionBtn) { closeActionBtn.onclick = () => tutModal.style.display = 'none'; }
+    }
+    
+    await checkMenuStatus();
+    setInterval(updateTimers, 1000);
+});
+
+// --- Lógica do Lobby ---
+async function checkMenuStatus() {
+    const { data, error } = await supabase.rpc('get_ruins_menu_info');
+    
+    if (error || !data) {
+        els.status.textContent = "Erro ao conectar.";
+        return;
+    }
+
+    state.status = data.status;
+    state.sessionId = data.session_id;
+    state.registrationEndsAt = data.registration_ends_at ? new Date(data.registration_ends_at) : null;
+    state.battleEndsAt = data.battle_ends_at ? new Date(data.battle_ends_at) : null;
+    state.nextOpenAt = data.next_open_at ? new Date(data.next_open_at) : null;
+    
+    // Restaura a classe se o servidor retornou (Persistência)
+    if (data.class_id) {
+        state.selectedClass = data.class_id;
+    }
+    
+    if (data.collapse_start) {
+        state.collapseStartAt = new Date(data.collapse_start);
+    }
+    
+    const used = data.tickets_used || 0;
+    els.tickets.textContent = Math.max(0, 3 - used);
+
+    // Caso 1: Jogo Ativo e usuário registrado -> Entrar direto
+    if (data.is_registered && data.status === 'active') {
+        // Se a classe não estava no state (ex: refresh), atualiza UI
+        if(state.selectedClass) {
+            document.getElementById('selectedClassName').textContent = getClassName(state.selectedClass);
+        }
+        enterGame();
+        return;
+    }
+
+    // Caso 2: Usuário Registrado aguardando início
+    if (data.is_registered) {
+        showWaitingScreen();
+        // Inicia o polling para verificar se o tempo acabou e iniciar o jogo automaticamente
+        pollLobbyStart(); 
+    } 
+    // Caso 3: Inscrições Abertas (usuário não registrado)
+    else if (data.status === 'registering') {
+        els.status.textContent = "Inscrições Abertas";
+        els.status.style.color = "gold";
+        els.classArea.style.display = 'block';
+        els.waitingArea.style.display = 'none';
+        hideRuinsKillsRanking(); // não aparece durante a seleção de classe
+        updateTimers();
+    }
+    // Caso 4: Fechado
+    else if (data.status === 'closed') {
+        els.status.textContent = "Inscrições abrem em:";
+        els.status.style.color = "#aaa";
+        els.classArea.style.display = 'none';
+        els.waitingArea.style.display = 'none';
+        showRuinsKillsRanking();
+        loadRuinsKillsRanking();
+        updateTimers();
+    }
+}
+
+window.selectClass = (classId) => {
+    // Abre o modal de confirmação sem selecionar a classe imediatamente
+    const modal = document.getElementById('classConfirmModal');
+    const nameEl = document.getElementById('classConfirmName');
+    if (!modal || !nameEl) return;
+
+    nameEl.textContent = getClassName(classId);
+
+    document.getElementById('classConfirmYes').onclick = async () => {
+        modal.style.display = 'none';
+        // Seleciona visualmente e inscreve
+        state.selectedClass = classId;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+        document.querySelector(`.class-card[data-class="${classId}"]`).classList.add('selected');
+        await register();
+    };
+
+    document.getElementById('classConfirmNo').onclick = () => {
+        modal.style.display = 'none';
+        // Desseleciona qualquer card previamente selecionado
+        state.selectedClass = null;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+    };
+
+    modal.style.display = 'flex';
+};
+
+function showInfoModal(message, title = 'Aviso') {
+    const modal = document.getElementById('resultModal');
+    const content = modal.querySelector('.modal-content');
+    content.style.cssText = '';
+    content.innerHTML = `
+        <h2 style="color:gold; margin-bottom:14px; text-align:center;">${title}</h2>
+        <p style="color:#ddd; text-align:center; margin-bottom:24px;">${message}</p>
+        <button class="action-btn" style="width:100%;" onclick="document.getElementById('resultModal').style.display='none'">OK</button>
+    `;
+    modal.style.display = 'flex';
+}
+
+async function register() {
+    if (!state.selectedClass) return;
+
+    const { data, error } = await supabase.rpc('register_for_ruins', {
+        p_session_id: state.sessionId,
+        p_class_id: state.selectedClass
+    });
+
+    if (error || !data.success) {
+        showInfoModal(data?.message || error?.message || "Erro ao inscrever.", "Inscrição Negada");
+        // Desseleciona o card em caso de erro
+        state.selectedClass = null;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+        return;
+    }
+
+    showWaitingScreen();
+    pollLobbyStart();
+}
+
+function showWaitingScreen() {
+    els.classArea.style.display = 'none';
+    els.waitingArea.style.display = 'block';
+    document.getElementById('selectedClassName').textContent = state.selectedClass ? getClassName(state.selectedClass) : "REGISTRADO";
+    els.status.textContent = "Aguardando Início...";
+    els.status.style.color = "cyan";
+    // Mostra ranking abaixo do spinner após escolha de classe
+    showRuinsKillsRanking();
+    loadRuinsKillsRanking();
+}
+
+async function pollLobbyStart() {
+    const now = new Date();
+    if (state.registrationEndsAt && now >= state.registrationEndsAt) {
+        enterGame(); 
+    } else {
+        setTimeout(pollLobbyStart, 2000);
+    }
+}
+
+// --- Lógica da Intro ---
+async function showMatchIntro(participants) {
+    const overlay = document.getElementById('matchIntroOverlay');
+    const list = document.getElementById('participantsList');
+    const countEl = document.getElementById('introCountdown');
+    
+    list.innerHTML = '';
+    
+    if(participants && participants.length > 0) {
+        participants.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'participant-card';
+            const avatar = p.avatar || "https://aden-rpg.pages.dev/assets/monstromina1.webp";
+            div.innerHTML = `<img src="${avatar}"><span>${p.name}</span>`;
+            list.appendChild(div);
+        });
+    }
+
+    overlay.style.display = 'flex';
+    
+    for(let i = 15; i > 0; i--) {
+        countEl.textContent = i;
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.5s';
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        overlay.style.opacity = '1';
+    }, 500);
+}
+
+// --- Lógica do Jogo ---
+async function enterGame() {
+    const { data, error } = await supabase.rpc('enter_ruins_match', { p_session_id: state.sessionId });
+    
+    if (error || !data.success) {
+        if (data?.message === 'Aguarde o início.') {
+            setTimeout(pollLobbyStart, 2000);
+            return;
+        }
+        showInfoModal("Erro ao entrar na partida: " + (data?.message || error?.message), "Erro");
+        return;
+    }
+
+    state.status = 'active';
+    state.myPlayer = data.my_state;
+    state.battleEndsAt = new Date(data.battle_ends_at);
+    state.logHistory = []; 
+    state.participantDeadCount = -1; // força 1ª renderização completa da sidebar
+    state.destroyedRooms = []; // reseta salas destruídas
+    renderRoomsPanel(); // popula painel com todas as 50 salas
+    state.potionCache = null;        // invalida cache de poções ao iniciar nova partida
+    
+    // Reseta estatísticas da partida
+    state.matchKills    = 0;
+    state.matchCrystals = 0;
+    state.matchCoins    = 0;
+    state.participantKillsByName = {};
+    
+    if (data.collapse_start) {
+        state.collapseStartAt = new Date(data.collapse_start);
+    }
+
+    ignoreHeartbeatDeath = false;
+    state.isSpectating = false;
+    
+    els.lobby.style.display = 'none';
+    els.game.style.display = 'flex';
+    
+    updateHUD();
+    updateTimers();
+    
+    if(data.participants_list) {
+        // Popula cache local de avatar+nome uma única vez.
+        // O heartbeat não retorna mais esses campos — economiza
+        // ~1.5 KB de URLs por chamada (10 avatares × ~150 chars cada).
+        data.participants_list.forEach(p => {
+            const id = p.id || p.player_id;
+            if (id) {
+                state.participantCache[id] = {
+                    id,                              // Bug 3 fix: necessário para isWinner no modal de resultado
+                    name:     p.name,
+                    avatar:   p.avatar || p.avatar_url,
+                    is_bot:   p.is_bot,
+                    class_id: p.class_id
+                };
+            }
+        });
+        // Persiste no GlobalDB (shared com mines.js e arena.js) —
+        // apenas perfis humanos (bots não têm perfis reais)
+        const humanParticipants = data.participants_list.filter(p => !p.is_bot);
+        if (humanParticipants.length > 0) GlobalDB.saveOwners(humanParticipants.map(p => ({
+            id: p.id || p.player_id, name: p.name, avatar_url: p.avatar || p.avatar_url
+        })));
+        updateParticipantsSidebar(data.participants_list, data.relic_holder, null);
+        await showMatchIntro(data.participants_list);
+    }
+
+    renderRoom(null);
+    startTurnPhase();
+    startHeartbeat();
+}
+
+function startTurnPhase() {
+    if (state.isSpectating) {
+        els.navMsg.textContent = "Modo Espectador";
+        els.actionButtons.style.display = 'none';
+        els.probeGrid.style.display = 'none';
+        return;
+    }
+
+    state.isProcessing = false;
+    els.navMsg.textContent = "Escolha seu caminho...";
+    els.navMsg.style.color = "#e0dccc";
+    
+    els.actionButtons.style.display = 'flex';
+    els.probeGrid.style.display = 'none';
+    els.cooldownContainer.style.display = 'none';
+    
+    els.btnMove.disabled = false;
+    els.btnProbe.disabled = false;
+
+    const isRelicHolder = (state.relicHolderId === state.playerId);
+    const roomsLeft = 50 - (state.destroyedCount || 0);
+    
+    if (isRelicHolder || roomsLeft < 3) {
+        els.btnProbe.style.display = 'none';
+    } else {
+        els.btnProbe.style.display = 'block';
+    }
+
+    const isOracle = (state.myPlayer && state.myPlayer.class_id === 'oracle');
+    if (isOracle) {
+        els.btnProbe.textContent = "Sondar (0 AP)";
+    } else {
+        els.btnProbe.textContent = "Sondar (5 AP)";
+    }
+}
+
+window.moveBlind = async () => {
+    if (state.isProcessing) return;
+    
+    const isRelicHolder = (state.relicHolderId === state.playerId);
+    const isScout = (state.myPlayer && state.myPlayer.class_id === 'scout');
+    const cost = (isRelicHolder && !isScout) ? 2 : 1;
+
+    if (state.myPlayer.ap < cost) { 
+        logEvent(`Sem AP! Necessário: ${cost}`, "empty"); 
+        return; 
+    }
+    
+    executeMove(null);
+};
+
+window.probeRooms = async () => {
+    if (state.isProcessing) return;
+    const cost = state.myPlayer.class_id === 'oracle' ? 0 : 5; 
+    if (state.myPlayer.ap < cost) { logEvent(`Sem AP para sondar! (Custa ${cost})`, "empty"); return; }
+
+    state.isProcessing = true;
+    const { data, error } = await supabase.rpc('probe_ruins_rooms');
+    
+    if (error || !data.success) {
+        showInfoModal(data?.message || "Erro ao sondar.", "Erro");
+        state.isProcessing = false;
+        return;
+    }
+
+    els.actionButtons.style.display = 'none';
+    els.probeGrid.style.display = 'flex';
+    els.probeGrid.innerHTML = '';
+    
+    data.options.forEach(roomId => {
+        const btn = document.createElement('button');
+        btn.className = 'room-opt-btn';
+        btn.textContent = `Sala ${roomId}`;
+        btn.onclick = () => executeMove(roomId);
+        els.probeGrid.appendChild(btn);
+    });
+    
+    state.myPlayer.ap = data.new_ap;
+    updateHUD();
+    els.navMsg.textContent = "Caminhos revelados. Escolha um:";
+};
+
+async function executeMove(roomId) {
+    state.isProcessing = true;
+    els.btnMove.disabled = true;
+    els.btnProbe.disabled = true;
+    els.probeGrid.style.display = 'none';
+    els.actionButtons.style.display = 'none';
+
+    const { data, error } = await supabase.rpc('move_ruins_player', { p_target_room_id: roomId });
+    
+    if (error || !data.success) {
+        logEvent(data?.message || "Erro no movimento.", "empty");
+        state.isProcessing = false;
+        startTurnPhase();
+        return;
+    }
+
+    state.myPlayer.ap = data.ap;
+    state.myPlayer.current_room_id = data.room_id;
+    updateHUD();
+    renderRoomsPanel(); // atualiza destaque da sala atual
+    
+    renderRoom(data);
+
+    if (data.combat_type === 'trap') {
+        playSound('trap');
+        logEvent(data.message, "trap");
+        state.myPlayer.hp = data.hp;
+        updateHUD();
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    else if (data.combat_type === 'pve') {
+        playSound('monster'); // Som de monstro
+        const startHP = data.hp + (data.combat_log.reduce((acc, t) => acc + t.opp_dmg, 0));
+        state.myPlayer.hp = startHP; 
+        updateHUD();
+        await runCombatSequence(data);
+        state.myPlayer.hp = data.hp;
+        updateHUD();
+    }
+    else if (data.combat_type === 'pvp') {
+        const startHP = data.hp + (data.combat_log.reduce((acc, t) => acc + t.opp_dmg, 0));
+        state.myPlayer.hp = startHP; 
+        updateHUD();
+
+        // Monta a mensagem final da notificação com bônus de kill
+        let pvpFinalMsg = data.message;
+        const isKill = data.message && (
+            data.message.includes('eliminou') ||
+            data.message.includes('TOMOU A RELÍQUIA') ||
+            data.message.includes('VOCÊ TOMOU')
+        );
+        if (isKill) {
+            state.matchKills++;
+            state.matchCoins += 5;
+            state.participantKillsByName[state.myPlayer.name] = (state.participantKillsByName[state.myPlayer.name] || 0) + 1;
+            const coinIcon = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:30px;height:30px;vertical-align:middle;margin:0 2px;">`;
+            pvpFinalMsg = `Você eliminou ${data.opponent_name}! ${coinIcon} <strong style="color:gold;">+5</strong>`;
+            if (data.message.includes('RELÍQUIA')) pvpFinalMsg += ' — RELÍQUIA CAPTURADA!';
+        }
+
+        await runCombatSequence(data, pvpFinalMsg);
+        state.myPlayer.hp = data.hp;
+        updateHUD();
+    } 
+    else if (data.combat_type === 'relic_event') {
+        playSound('relic');
+        logEvent(data.message, "relic");
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    else if (data.rewards && (data.rewards.crystals > 0 || data.rewards.coins > 0)) {
+        playSound('chest');
+        logEvent("Baú encontrado!", "chest");
+        state.matchCrystals += data.rewards.crystals || 0;
+        state.matchCoins    += data.rewards.coins    || 0;
+        showChestRewards(data.rewards);
+        await new Promise(r => setTimeout(r, 2000));
+    } 
+    else {
+        logEvent("Sala Vazia.", "empty");
+        els.navMsg.textContent = "Sala Vazia...";
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (data.dead) {
+        ignoreHeartbeatDeath = true; 
+        setTimeout(() => {
+            let msg = "Você morreu.";
+            if (data.combat_type === 'trap') msg = "Eliminado por uma Armadilha.";
+            if (data.combat_type === 'pve') msg = "Morto por um Monstro.";
+            if (data.combat_type === 'pvp') msg = "Derrotado em combate PvP.";
+            
+            logEvent(msg, "kill");
+            
+            setTimeout(() => {
+                endGame({ win: false, message: msg });
+            }, 1000);
+        }, 1500);
+        return;
+    }
+
+    // --- LÓGICA DE COOLDOWN ---
+    let cooldownTime = 10; 
+    
+    const gotRelic = data.message && (data.message.includes("PEGOU A RELÍQUIA") || data.message.includes("TOMOU A RELÍQUIA") || data.message.includes("ROUBOU A RELÍQUIA"));
+    const _isScout = (state.myPlayer && state.myPlayer.class_id === 'scout');
+    
+    // Batedor (scout) nunca sofre a punição de 30s com a relíquia — continua 10s
+    if (!_isScout && (gotRelic || state.relicHolderId === state.playerId)) {
+        cooldownTime = 30;
+        if(gotRelic) showCenterNotification("PENALIDADE DA RELÍQUIA: 30s DE DESCANSO!");
+    }
+
+    startCooldownTimer(cooldownTime);
+}
+
+// --- Timer do Modo Espectador ---
+function startSpectatorSyncTimer(totalSeconds) {
+    // Cancela ciclo anterior se existir
+    if (state.spectatorSyncInterval) {
+        clearInterval(state.spectatorSyncInterval);
+        state.spectatorSyncInterval = null;
+    }
+
+    const container = document.getElementById('spectatorSyncContainer');
+    const fill      = document.getElementById('spectatorSyncFill');
+    const text      = document.getElementById('spectatorSyncText');
+    if (!container) return;
+
+    let timeLeft = totalSeconds;
+    text.textContent = `Próxima atualização: ${timeLeft}s`;
+    container.style.display = 'block';
+
+    // Barra desliza de 100% → 0% ao longo de totalSeconds (direita para esquerda)
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    void fill.offsetWidth; // força reflow para reiniciar a transição
+    fill.style.transition = `width ${totalSeconds}s linear`;
+    fill.style.width = '0%';
+
+    state.spectatorSyncInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            text.textContent = `Próxima atualização: ${timeLeft}s`;
+        } else {
+            text.textContent = 'Atualizando...';
+            clearInterval(state.spectatorSyncInterval);
+            state.spectatorSyncInterval = null;
+        }
+    }, 1000);
+}
+
+// --- Lógica de Descanso e Poções ---
+async function startCooldownTimer(seconds) {
+    els.cooldownContainer.style.display = 'block';
+    els.navMsg.textContent = "Descansando...";
+    let timeLeft = seconds;
+    
+    els.cooldownText.textContent = `Recuperando fôlego: ${timeLeft}s`;
+    els.decisionBar.style.width = '100%';
+    els.decisionBar.style.transition = `width ${seconds}s linear`;
+    
+    void els.decisionBar.offsetWidth;
+    els.decisionBar.style.width = '0%';
+
+    els.restPotionArea.style.display = 'block';
+    await loadRestPotions();
+
+    if (state.cooldownInterval) clearInterval(state.cooldownInterval);
+    
+    state.cooldownInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            els.cooldownText.textContent = `Recuperando fôlego: ${timeLeft}s`;
+        } else {
+            clearInterval(state.cooldownInterval);
+            els.cooldownContainer.style.display = 'none';
+            els.restPotionArea.style.display = 'none'; 
+            startTurnPhase();
+        }
+    }, 1000);
+}
+
+async function loadRestPotions() {
+    // Cache de poções: evita um RPC a cada jogada.
+    // O cache é invalidado apenas quando o jogador usa uma poção
+    // (ver usePotion) ou ao iniciar nova partida (enterGame).
+    if (state.potionCache !== null) {
+        renderPotionList(state.potionCache);
+        return;
+    }
+
+    els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#aaa;">Carregando...</span>';
+    const { data, error } = await supabase.rpc('get_ruins_potions');
+    els.restPotionList.innerHTML = '';
+
+    if (error || !data || data.length === 0) {
+        state.potionCache = []; // armazena lista vazia para não re-buscar
+        els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#555;">Nenhuma poção disponível</span>';
+        return;
+    }
+
+    state.potionCache = data;
+    renderPotionList(data);
+}
+
+function renderPotionList(data) {
+    els.restPotionList.innerHTML = '';
+    if (!data || data.length === 0) {
+        els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#555;">Nenhuma poção disponível</span>';
+        return;
+    }
+    data.forEach(pot => {
+        const div = document.createElement('div');
+        div.style.cssText = "position: relative; width: 80px; height: 80px; background: #222; border: 4px solid #777; border-radius: 8px; cursor: pointer; display: flex; gap: 100px;";
+        
+        const imgUrl = pot.id === 43 
+            ? "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp" 
+            : "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_sr.webp";
+            
+        div.innerHTML = `
+            <img src="${imgUrl}" style="width:100%; height:100%; object-fit:contain;">
+            <span style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.8); color:white; font-size:0.8em; padding:1px 3px; border-radius:4px;">${pot.qty}</span>
+        `;
+        
+        div.onclick = () => usePotion(pot.id);
+        els.restPotionList.appendChild(div);
+    });
+}
+
+async function usePotion(itemId) {
+    const { data, error } = await supabase.rpc('use_ruins_potion', { p_item_id: itemId });
+    if (error || !data.success) {
+        logEvent(data?.message || "Erro ao usar poção", "error");
+        return;
+    }
+    
+    playSound('heal');
+    logEvent(`Curou ${data.healed} HP!`, "chest");
+    
+    state.myPlayer.hp = data.new_hp;
+    updateHUD();
+    
+    // Invalida cache: quantidade mudou, precisa re-buscar do servidor
+    state.potionCache = null;
+    await loadRestPotions();
+}
+
+async function runCombatSequence(data, finalMessage) {
+    const overlay = document.getElementById('combatOverlay');
+    const myAvatar = document.getElementById('combatMyAvatar');
+    const oppAvatar = document.getElementById('combatOppAvatar');
+    const countdownEl = document.getElementById('combatCountdown');
+    const arenaEl = document.getElementById('combatArena');
+    
+    els.navMsg.textContent = "Inimigo à vista!";
+    await new Promise(r => setTimeout(r, 2000));
+
+    myAvatar.src = (state.myPlayer && state.myPlayer.avatar_url) ? state.myPlayer.avatar_url : "https://aden-rpg.pages.dev/avatar01.webp"; 
+    els.combatMyName.textContent = state.myPlayer.name || "Eu";
+    els.combatMyClass.textContent = getClassName(state.myPlayer.class_id);
+
+    // Aplica moldura do próprio jogador
+    const _rnMyContainer  = document.getElementById('ruinsMyAvatarContainer');
+    const _rnOppContainer = document.getElementById('ruinsOppAvatarContainer');
+    _rnApplyFrame(_rnMyContainer,  null); // reset
+    _rnApplyFrame(_rnOppContainer, null); // reset
+    if (state.playerId && _rnMyContainer)
+        _rnFetchAndApplyFrame(state.playerId, _rnMyContainer);
+
+    if (data.combat_type === 'pve') {
+        oppAvatar.src = "https://aden-rpg.pages.dev/assets/monstromina1.webp";
+        els.combatOppName.textContent = "Monstro";
+        els.combatOppClass.textContent = "Criatura";
+        // PvE: sem moldura no monstro
+    }
+    else {
+        oppAvatar.src = data.opponent_avatar || "https://aden-rpg.pages.dev/avatar01.webp";
+        els.combatOppName.textContent = data.opponent_name || "Inimigo";
+        // Busca ID do oponente no participantCache pelo nome
+        if (_rnOppContainer && data.opponent_name) {
+            const oppEntry = Object.values(state.participantCache).find(p => p.name === data.opponent_name);
+            if (oppEntry && oppEntry.id) _rnFetchAndApplyFrame(oppEntry.id, _rnOppContainer);
+        }
+
+        // Bug 1 fix: se opponent_class vier vazio/nulo do servidor, busca no cache de participantes pelo nome
+        let resolvedClass = data.opponent_class;
+        if (!resolvedClass || resolvedClass === '') {
+            const cacheEntry = Object.values(state.participantCache).find(p => p.name === data.opponent_name);
+            if (cacheEntry) resolvedClass = cacheEntry.class_id;
+        }
+        els.combatOppClass.textContent = getClassName(resolvedClass);
+    }
+
+    overlay.style.display = 'flex';
+    countdownEl.style.display = 'block';
+    arenaEl.style.display = 'none';
+
+    els.navMsg.textContent = "Preparando para combate...";
+    for (let i = 2; i > 0; i--) {
+        countdownEl.textContent = i;
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    countdownEl.style.display = 'none';
+    arenaEl.style.display = 'flex';
+
+    // Intro slide-in para os dois lados
+    _injectRuinsEpicStyles();
+    const _mySide  = document.querySelector('.combat-side.left');
+    const _oppSide = document.querySelector('.combat-side.right');
+    if (_mySide)  { _mySide.classList.remove('ru-intro-l','ru-intro-r','ru-winner-av','ru-loser-side');  void _mySide.offsetWidth;  _mySide.classList.add('ru-intro-l'); }
+    if (_oppSide) { _oppSide.classList.remove('ru-intro-l','ru-intro-r','ru-winner-av','ru-loser-side'); void _oppSide.offsetWidth; _oppSide.classList.add('ru-intro-r'); }
+    await new Promise(r => setTimeout(r, 600));
+
+    const logs = data.combat_log || [];
+    let playerDealtDamage = false;
+    let oppDealtDamage = false;
+    for (const turn of logs) {
+        if (turn.player_dmg > 0) {
+            playerDealtDamage = true;
+            animateHit(oppAvatar, turn.player_dmg, turn.is_crit);
+            await new Promise(r => setTimeout(r, 1100));
+        }
+        
+        if (turn.opp_dmg > 0) {
+            oppDealtDamage = true;
+            animateHit(myAvatar, turn.opp_dmg, false);
+            state.myPlayer.hp = Math.max(0, state.myPlayer.hp - turn.opp_dmg);
+            updateHUD();
+            await new Promise(r => setTimeout(r, 1100));
+        }
+    }
+
+    // Winner / Loser final state
+    await new Promise(r => setTimeout(r, 600));
+    const _playerWon = data.dead === false || (data.hp > 0);
+    if (_mySide && _oppSide) {
+        const myAv  = _mySide.querySelector('.combat-avatar');
+        const oppAv = _oppSide.querySelector('.combat-avatar');
+        if (_playerWon) {
+            if (myAv)  myAv.classList.add('ru-winner-av');
+            _oppSide.classList.add('ru-loser-side');
+            // Victory particles
+            const _vcols = ['#ffd700','#ffaa00','#fff','#ffcc44'];
+            for (let _vi = 0; _vi < 16; _vi++) setTimeout(() => {
+                const vp = document.createElement('div'); const _vsz = 4 + Math.random() * 5;
+                vp.style.cssText = `position:absolute;width:${_vsz}px;height:${_vsz}px;border-radius:50%;background:${_vcols[Math.floor(Math.random()*_vcols.length)]};top:${10+Math.random()*70}%;left:${10+Math.random()*70}%;pointer-events:none;z-index:64;animation:ru-sp 0.9s ease-out forwards;`;
+                vp.style.setProperty('--a', Math.random()*360+'deg'); vp.style.setProperty('--d', 40+Math.random()*55+'px');
+                _mySide.appendChild(vp); vp.addEventListener('animationend', () => vp.remove(), { once: true });
+            }, _vi * 55);
+        } else {
+            if (oppAv) oppAv.classList.add('ru-winner-av');
+            _mySide.classList.add('ru-loser-side');
+        }
+    }
+    await new Promise(r => setTimeout(r, 900));
+
+    overlay.style.display = 'none';
+    // Limpa classes de winner/loser
+    if (_mySide)  { const av = _mySide.querySelector('.combat-avatar');  if (av) av.classList.remove('ru-winner-av'); _mySide.classList.remove('ru-loser-side','ru-intro-l'); }
+    if (_oppSide) { const av = _oppSide.querySelector('.combat-avatar'); if (av) av.classList.remove('ru-winner-av'); _oppSide.classList.remove('ru-loser-side','ru-intro-r'); }
+    
+    const entityDiv = document.querySelector('.room-entity');
+    if(entityDiv) {
+        entityDiv.classList.remove('visible');
+        entityDiv.classList.add('fading-out');
+    }
+    await new Promise(r => setTimeout(r, 1000));
+
+    showCenterNotification(finalMessage || data.message);
+}
+
+function showCenterNotification(msg) {
+    const div = document.createElement('div');
+    div.className = 'center-notification';
+    div.innerHTML = msg; // innerHTML para suportar ícones inline
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+}
+
+let _ruinsStylesInjected = false;
+function _injectRuinsEpicStyles() {
+    if (_ruinsStylesInjected) return;
+    _ruinsStylesInjected = true;
+    const s = document.createElement('style');
+    s.id = 'ruins-epic-styles';
+    s.textContent = `
+        /* ── Floating damage ── */
+        @keyframes ru-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-10px) scale(1.2);} 100%{opacity:0;transform:translateX(-50%) translateY(-65px) scale(0.95);} }
+        @keyframes ru-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.3) rotate(-5deg);} 10%{transform:translateX(-50%) translateY(-14px) scale(1.45) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-24px) scale(1.2) rotate(-1deg);} 100%{opacity:0;transform:translateX(-50%) translateY(-85px) scale(0.9) rotate(0);} }
+        @keyframes ru-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 18%{opacity:1;transform:translateX(-50%) scale(1.3);} 65%{opacity:1;transform:translateX(-50%) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+
+        .ru-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:1.6em;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55);position:absolute;left:50%;top:26%;transform:translateX(-50%);z-index:65;white-space:nowrap;pointer-events:none;animation:ru-float-dmg 1.35s ease-out forwards; }
+        .ru-crit-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#ffdd00;text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:65;white-space:nowrap;pointer-events:none;animation:ru-float-crit 1.6s ease-out forwards; }
+        .ru-crit-lbl { font-family:'Cinzel',serif;font-size:0.72em;font-weight:bold;color:#ffdd00;text-shadow:0 0 8px #f80,1px 1px 2px #000;position:absolute;left:50%;top:6%;transform:translateX(-50%);z-index:66;white-space:nowrap;pointer-events:none;animation:ru-crit-lbl 0.95s ease-out forwards; }
+
+        /* ── Avatar flash ── */
+        @keyframes ru-hit-f  { 0%,100%{filter:brightness(1) saturate(1);}22%{filter:brightness(3.2) saturate(0.1);}50%{filter:brightness(1.9) saturate(0.5);} }
+        @keyframes ru-crit-f { 0%{filter:brightness(1);}12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);}32%{filter:brightness(2.8) saturate(0.3) sepia(0.4);}100%{filter:brightness(1);} }
+        @keyframes ru-shake  { 0%,100%{transform:translate(0,0);}20%{transform:translate(-8px,0) rotate(-3deg);}40%{transform:translate(8px,0) rotate(3deg);}60%{transform:translate(-5px,0);}80%{transform:translate(5px,0);} }
+
+        /* ── Lunge ── */
+        @keyframes ru-lunge-l { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(36px) scale(1.14) rotate(4deg);}70%{transform:translateX(14px) scale(1.06);}100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes ru-lunge-r { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(-36px) scale(1.14) rotate(-4deg);}70%{transform:translateX(-14px) scale(1.06);}100%{transform:translateX(0) scale(1) rotate(0);} }
+
+        /* ── Shockwave + sparks ── */
+        @keyframes ru-sw  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.9;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;border-width:1px;} }
+        @keyframes ru-sw2 { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.55;border-width:3px;}100%{transform:translate(-50%,-50%) scale(2.1);opacity:0;border-width:1px;} }
+        @keyframes ru-sp  { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+        .ru-ring  { position:absolute;width:70px;height:70px;border-radius:50%;border:3px solid rgba(255,175,50,0.88);top:30%;left:50%;pointer-events:none;z-index:62;animation:ru-sw 0.5s ease-out forwards; }
+        .ru-ring2 { position:absolute;width:70px;height:70px;border-radius:50%;border:2px solid rgba(255,220,100,0.48);top:30%;left:50%;pointer-events:none;z-index:62;animation:ru-sw2 0.68s ease-out 0.07s forwards; }
+        .ru-ring.crit  { border-color:rgba(255,220,0,0.95);box-shadow:0 0 10px rgba(255,200,0,0.55); }
+        .ru-ring2.crit { border-color:rgba(255,180,0,0.62); }
+        .ru-spark { position:absolute;border-radius:50%;top:35%;left:50%;pointer-events:none;animation:ru-sp 0.44s ease-out forwards;z-index:63; }
+
+        /* ── Screen edge flash ── */
+        #ruins-screen-flash { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:8888;opacity:0;transition:opacity 0.06s; }
+
+        /* ── Intro slide ── */
+        @keyframes ru-sl-l { 0%{transform:translateX(-90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+        @keyframes ru-sl-r { 0%{transform:translateX(90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+        .ru-intro-l { animation:ru-sl-l 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+        .ru-intro-r { animation:ru-sl-r 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+        /* ── Winner / Loser ── */
+        @keyframes ru-w-pulse { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,0.9),0 0 40px rgba(255,150,0,0.5);}50%{box-shadow:0 0 36px rgba(255,215,0,1),0 0 70px rgba(255,150,0,0.7);} }
+        .ru-winner-av { border-color:#ffd700 !important; animation:ru-w-pulse 1.0s ease-in-out infinite !important; }
+        .ru-loser-side { filter:grayscale(85%) brightness(0.4) !important; transform:scale(0.88) !important; opacity:0.45 !important; transition:all 0.5s ease !important; }
+
+        /* ── VS pulse ── */
+        .combat-vs { animation:ru-vs-pulse 1.9s ease-in-out infinite !important; }
+        @keyframes ru-vs-pulse { 0%,100%{transform:scale(1);}50%{transform:scale(1.22);text-shadow:0 0 22px gold,0 0 48px rgba(255,200,0,0.5);} }
+
+        /* ── Countdown ── */
+        .combat-countdown { animation:ru-cntdn 0.9s ease-in-out infinite !important; }
+        @keyframes ru-cntdn { 0%,100%{transform:scale(1) rotate(-1deg);}50%{transform:scale(1.12) rotate(1deg);} }
+    `;
+    document.head.appendChild(s);
+
+    // Screen flash div
+    if (!document.getElementById('ruins-screen-flash')) {
+        const f = document.createElement('div');
+        f.id = 'ruins-screen-flash';
+        document.body.appendChild(f);
+    }
+}
+
+function animateHit(targetEl, dmg, isCrit) {
+    _injectRuinsEpicStyles();
+
+    // Volume 0.3 para crítico conforme solicitado
+    if (isCrit) playSound('critical', 0.15); else playSound('normal', 0.8);
+
+    const parent = targetEl.parentElement; // .combat-side
+
+    // Lunge do atacante (o oposto de quem leva o dano)
+    const mySide  = document.querySelector('.combat-side.left');
+    const oppSide = document.querySelector('.combat-side.right');
+    const attackerSide = (targetEl === document.getElementById('combatMyAvatar')) ? oppSide : mySide;
+    const isAttackerLeft = attackerSide && attackerSide.classList.contains('left');
+    if (attackerSide) {
+        // Anima o container inteiro para moldura acompanhar o avatar no lunge
+        const attContainer = attackerSide.querySelector('.ruins-avatar-container');
+        const attTarget = attContainer || attackerSide.querySelector('.combat-avatar');
+        if (attTarget) {
+            attTarget.style.animation = isAttackerLeft ? 'ru-lunge-l 0.46s ease-out' : 'ru-lunge-r 0.46s ease-out';
+            setTimeout(() => { attTarget.style.animation = ''; }, 480);
+        }
+    }
+
+    // Flash no avatar atingido
+    targetEl.style.animation = isCrit ? 'ru-crit-f 0.55s ease-out' : 'ru-hit-f 0.38s ease-out';
+    setTimeout(() => { targetEl.style.animation = ''; }, isCrit ? 560 : 400);
+
+    // Screen edge flash
+    const _sf = document.getElementById('ruins-screen-flash');
+    if (_sf) {
+        _sf.style.boxShadow = isCrit ? 'inset 0 0 90px rgba(255,200,0,0.38)' : 'inset 0 0 70px rgba(200,20,20,0.28)';
+        _sf.style.opacity = '1';
+        setTimeout(() => { _sf.style.opacity = '0'; }, isCrit ? 420 : 260);
+    }
+
+    // Shake do lado atingido
+    if (isCrit) {
+        parent.style.animation = 'ru-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+        setTimeout(() => { parent.style.animation = ''; }, 460);
+    } else {
+        targetEl.classList.remove('shake-hit');
+        void targetEl.offsetWidth;
+        targetEl.classList.add('shake-hit');
+    }
+
+    // Shockwave rings
+    const r1 = document.createElement('div'); r1.className = 'ru-ring' + (isCrit ? ' crit' : ''); parent.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div'); r2.className = 'ru-ring2' + (isCrit ? ' crit' : ''); parent.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+
+    // Sparks
+    const spN = isCrit ? 12 : 6;
+    const spCols = isCrit ? ['#ffdd00','#ff8800','#fff','#ffcc44'] : ['#fff','#ff8888','#ffbb55'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div'); sp.className = 'ru-spark';
+        const ang = (i / spN) * 360 + Math.random() * 28, dist = 26 + Math.random() * 42, sz = (isCrit ? 5 : 3) + Math.random() * 3;
+        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+        parent.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    // Damage number
+    const dmgEl = document.createElement('div');
+    if (isCrit) {
+        dmgEl.className = 'ru-crit-num';
+        dmgEl.innerHTML = '⚡ ' + dmg + ' ⚡';
+        const lbl = document.createElement('div');
+        lbl.className = 'ru-crit-lbl'; lbl.textContent = '✦ CRÍTICO! ✦';
+        parent.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        dmgEl.className = 'ru-dmg-num';
+        dmgEl.textContent = dmg;
+    }
+    parent.appendChild(dmgEl);
+    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2200);
+}
+
+function renderRoom(data) {
+    els.roomContent.style.display = 'none';
+    els.roomContent.classList.remove('visible', 'fading-out'); 
+
+    if (!data) { els.roomInfo.textContent = `Sala: ${state.myPlayer.current_room_id || '?'}`; return; }
+
+    els.roomInfo.textContent = `Sala: ${data.room_id}`;
+    let imgSrc = "", name = "", show = false;
+
+    if (data.combat_type === 'pve') { imgSrc = "https://aden-rpg.pages.dev/assets/monstromina1.webp"; name = "Monstro"; show = true; }
+    else if (data.combat_type === 'trap') { imgSrc = "https://aden-rpg.pages.dev/assets/armadilha.webp"; name = "Armadilha"; show = true; }
+    else if (data.combat_type === 'pvp') { imgSrc = data.opponent_avatar; name = data.opponent_name; show = true; }
+    else if (data.combat_type === 'relic_event') { imgSrc = "https://aden-rpg.pages.dev/assets/relic.webp"; name = "Relíquia Ancestral"; show = true; }
+    else if (data.rewards && (data.rewards.crystals > 0 || data.rewards.coins > 0)) { imgSrc = "https://aden-rpg.pages.dev/assets/mbau.webp"; name = "Baú"; show = true; }
+
+    if (show) {
+        els.entityImg.src = imgSrc;
+        els.entityName.textContent = name;
+        els.roomContent.style.display = 'flex';
+        requestAnimationFrame(() => els.roomContent.classList.add('visible'));
+    }
+}
+
+function showChestRewards(rewards) {
+    const overlay = document.getElementById('chestOverlay');
+    const list = document.getElementById('chestRewards');
+    list.innerHTML = '';
+    if (rewards.crystals > 0) list.innerHTML += `<div class="chest-reward-item"><img src="https://aden-rpg.pages.dev/assets/cristais.webp"><span>${rewards.crystals} Cristais</span></div>`;
+    if (rewards.coins > 0) list.innerHTML += `<div class="chest-reward-item"><img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp"><span>${rewards.coins} Moedas</span></div>`;
+    overlay.style.display = 'block';
+    setTimeout(() => { overlay.style.display = 'none'; }, 2500);
+}
+
+function updateHUD() {
+    if (!state.myPlayer) return;
+    const { hp, max_hp, ap } = state.myPlayer;
+    const hpPct = (hp / max_hp) * 100;
+    els.hpFill.style.width = `${hpPct}%`;
+    els.hpText.textContent = `${hp}/${max_hp}`;
+    els.apText.textContent = ap;
+
+    const isRelicHolder = (state.relicHolderId === state.playerId);
+    const isScout = (state.myPlayer.class_id === 'scout');
+    
+    const moveCost = (isRelicHolder && !isScout) ? 2 : 1;
+
+    if (moveCost > 1) {
+        els.btnMove.innerHTML = `Avançar Pesado <span style="color:green">(${moveCost} AP)</span>`;
+        els.btnMove.style.borderColor = "red";
+        els.btnMove.style.color = "gold"; 
+    } else {
+        els.btnMove.innerHTML = `Avançar na Névoa (${moveCost} AP)`;
+        els.btnMove.style.borderColor = "#555";
+        els.btnMove.style.color = "white";
+    }
+}
+
+// --- Log System com Memória e Animação ---
+function logEvent(msg, type) {
+    const div = document.createElement('div');
+    div.className = `log-entry ${type}`;
+    
+    let formattedMsg = msg.replace(/(eliminou|eliminado)/gi, '<span style="color:gold; font-weight:bold;">$1</span>');
+    div.innerHTML = formattedMsg;
+    
+    // Lógica de Divisão de Logs com Atraso
+    if (type === 'relic' || msg.includes('Relíquia') || msg.includes('relíquia')) {
+        // LOG ESQUERDO (RELÍQUIA) - ATRASO DE 4 SEGUNDOS
+        setTimeout(() => {
+            if (els.logLeft) {
+                els.logLeft.appendChild(div);
+                // Remove após 6 segundos (fica um pouco mais de tempo na tela)
+                setTimeout(() => {
+                    div.style.opacity = '0'; 
+                    setTimeout(() => div.remove(), 1000); 
+                }, 6000);
+                
+                // Adiciona ao histórico apenas quando aparece
+                state.logHistory.push(formattedMsg);
+                updateLogSidebar();
+            }
+        }, 4000); // <--- Atraso solicitado
+    } else {
+        // LOG DIREITO (GERAL) - IMEDIATO
+        if (els.logRight) els.logRight.appendChild(div);
+        
+        setTimeout(() => {
+            div.style.opacity = '0'; 
+            setTimeout(() => div.remove(), 1000); 
+        }, 5000);
+
+        state.logHistory.push(formattedMsg);
+        updateLogSidebar();
+    }
+}
+
+function updateTimers() {
+    const now = new Date();
+    
+    if (state.status === 'closed' && state.nextOpenAt) {
+        const diff = Math.floor((state.nextOpenAt - now) / 1000);
+        if (diff > 0) {
+            const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+            const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+            const s = (diff % 60).toString().padStart(2, '0');
+            els.timer.textContent = `${h}:${m}:${s}`;
+        } else {
+            els.timer.textContent = "00:00:00";
+            setTimeout(checkMenuStatus, 1000);
+        }
+        return;
+    }
+
+    if (state.status === 'registering' && state.registrationEndsAt) {
+        const diff = Math.floor((state.registrationEndsAt - now) / 1000);
+        if (diff > 0) {
+            const m = Math.floor(diff / 60).toString().padStart(2, '0');
+            const s = (diff % 60).toString().padStart(2, '0');
+            els.timer.textContent = `${m}:${s}`;
+        } else {
+            els.timer.textContent = "Iniciando...";
+        }
+    }
+
+    if ((state.status === 'active' || els.game.style.display === 'flex') && state.collapseStartAt) {
+        const diff = Math.floor((state.collapseStartAt - now) / 1000);
+        
+        if (diff > 0) {
+            const m = Math.floor(diff / 60).toString().padStart(2, '0');
+            const s = (diff % 60).toString().padStart(2, '0');
+            els.collapseTimer.textContent = `Colapso em: ${m}:${s}`;
+            els.collapseTimer.style.color = "white";
+            els.collapseTimer.classList.remove('pulse-text');
+            
+            if(els.collapseOverlay) els.collapseOverlay.style.display = 'none';
+        } else {
+            els.collapseTimer.textContent = "COLAPSO IMINENTE!";
+            els.collapseTimer.style.color = "silver";
+            els.collapseTimer.classList.add('pulse-text');
+            
+            if(els.collapseOverlay) els.collapseOverlay.style.display = 'block';
+        }
+    }
+}
+
+// =====================================================================
+// RANKING DE ELIMINAÇÕES DAS RUÍNAS
+// =====================================================================
+
+function showRuinsKillsRanking() {
+    const el = document.getElementById('ruinsKillsRanking');
+    if (el) el.style.display = 'block';
+}
+
+function hideRuinsKillsRanking() {
+    const el = document.getElementById('ruinsKillsRanking');
+    if (el) el.style.display = 'none';
+}
+
+async function loadRuinsKillsRanking() {
+    const widget = document.getElementById('ruinsKillsRanking');
+    if (!widget) return;
+
+    // v3: força re-fetch limpo após fix de avatar/guilda com 0 kills
+    const CACHE_KEY = 'ruins_kills_ranking_v3';
+    const cached = (() => {
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            if (!raw) return null;
+            const { data, expires } = JSON.parse(raw);
+            return Date.now() < expires ? data : null;
+        } catch { return null; }
+    })();
+
+    if (cached) { renderRuinsKillsRanking(cached); return; }
+
+    widget.querySelector('.rk-list').innerHTML = '<li class="rk-loading">Carregando...</li>';
+
+    try {
+        const { data, error } = await supabase.rpc('get_ruins_kills_ranking');
+        if (error || !data) throw new Error('rpc failed');
+
+        const top10 = data.top10 || [];
+
+        // Salva top10 no GlobalDB para beneficiar outras telas
+        if (top10.length > 0) {
+            GlobalDB.saveOwners(top10.map(p => ({
+                id:         p.id,
+                name:       p.name,
+                avatar_url: p.avatar_url,
+                guild_name: p.guild_name || null
+            })));
+        }
+
+        // Dados pessoais: servidor é a fonte primária.
+        // Fallback para GlobalDB caso o servidor retorne null
+        // (ex: jogador sem linha na tabela de kills ainda).
+        let myName   = data.my_name;
+        let myAvatar = data.my_avatar;
+        let myGuild  = data.my_guild;
+
+        if (!myName || !myAvatar) {
+            const globalCache = await GlobalDB.getAllOwners();
+            const me = globalCache[state.playerId];
+            if (me) {
+                myName   = myName   || me.name;
+                myAvatar = myAvatar || me.avatar_url;
+                myGuild  = myGuild  || me.guild_name;
+            }
+        }
+
+        const result = {
+            top10:     top10,
+            my_rank:   data.my_rank,
+            my_kills:  data.my_kills,
+            my_id:     state.playerId,
+            my_name:   myName   || 'Você',
+            my_avatar: myAvatar || 'https://aden-rpg.pages.dev/avatar01.webp',
+            my_guild:  myGuild  || null
+        };
+
+        // Cache com TTL até meia-noite UTC
+        const expiresAt = Date.now() + getMinutesToMidnightUTC() * 60000;
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: result, expires: expiresAt }));
+
+        renderRuinsKillsRanking(result);
+    } catch(e) {
+        widget.querySelector('.rk-list').innerHTML = '<li class="rk-loading" style="color:#555;">Não foi possível carregar.</li>';
+    }
+}
+
+function renderRuinsKillsRanking(data) {
+    const widget = document.getElementById('ruinsKillsRanking');
+    if (!widget || !data) return;
+
+    const DEF_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
+    const top10      = data.top10 || [];
+    const esc        = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // --- Pódio (Top 3) no padrão AAA ---
+    const podiumEl = widget.querySelector('.rk-podium');
+    if (podiumEl) {
+        const top3 = top10.slice(0, 3);
+        if (!top3.length) {
+            podiumEl.innerHTML = '';
+        } else {
+            const order = [2, 1, 3];
+            let podiumHtml = '';
+            for (const rank of order) {
+                const p = top3[rank - 1];
+                if (!p) continue;
+                const avatar = p.avatar_url || DEF_AVATAR;
+                const name   = esc(p.name || 'Desconhecido');
+                const guild  = esc(p.guild_name || '');
+                const kills  = Number(p.kills || 0);
+                podiumHtml += `
+                <div class="rk-podium-place rk-podium-${rank}">
+                    ${rank === 1 ? '<div class="rk-podium-crown">👑</div>' : ''}
+                    <div class="rk-podium-avatar-wrap">
+                        <img class="rk-podium-avatar${rank === 1 ? ' rk-pulse' : ''}" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
+                        <div class="rk-podium-badge">${rank}</div>
+                    </div>
+                    <div class="rk-podium-name">${name}</div>
+                    ${guild ? `<div class="rk-podium-guild">${guild}</div>` : ''}
+                    <div class="rk-podium-kills">${kills} ☠</div>
+                    <div class="rk-podium-step">${rank}</div>
+                </div>`;
+            }
+            podiumEl.innerHTML = podiumHtml;
+        }
+    }
+
+    // --- Lista (4º ao 10º) ---
+    const rest = top10.slice(3);
+    let listHtml = '';
+    if (top10.length === 0) {
+        listHtml = '<li class="rk-loading">Nenhuma eliminação ainda este mês.</li>';
+    } else {
+        rest.forEach((p, idx) => {
+            const pos       = idx + 4;
+            const avatar    = p.avatar_url || DEF_AVATAR;
+            const name      = esc(p.name       || 'Desconhecido');
+            const guild     = esc(p.guild_name || '');
+            const kills     = Number(p.kills   || 0);
+            const isMe      = p.id === data.my_id;
+            const guildHtml = guild
+                ? `<span class="rk-guild">${guild}</span>`
+                : '';
+            listHtml += `
+            <li class="rk-item${isMe ? ' rk-me' : ''}">
+                <span class="rk-pos">${pos}.</span>
+                <img class="rk-avatar" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
+                <div class="rk-info">
+                    <span class="rk-name">${name}</span>
+                    ${guildHtml}
+                </div>
+                <span class="rk-kills">${kills} ☠</span>
+            </li>`;
+        });
+    }
+
+    // Rodapé pessoal — só aparece se jogador não está no top10
+    const inTop10 = top10.some(p => p.id === data.my_id);
+    let footerHtml = '';
+    if (!inTop10) {
+        const myAvatar = data.my_avatar || DEF_AVATAR;
+        const myName   = esc(data.my_name   || 'Você');
+        const myGuild  = esc(data.my_guild  || '');
+        const myGuildHtml = myGuild ? `<span class="rk-guild">${myGuild}</span>` : '';
+        footerHtml = `
+        <li class="rk-item rk-footer-personal rk-me">
+            <span class="rk-pos">${data.my_rank}º</span>
+            <img class="rk-avatar" src="${myAvatar}" onerror="this.src='${DEF_AVATAR}'">
+            <div class="rk-info">
+                <span class="rk-name">${myName}</span>
+                ${myGuildHtml}
+            </div>
+            <span class="rk-kills">${data.my_kills} ☠</span>
+        </li>`;
+    }
+
+    widget.querySelector('.rk-list').innerHTML = listHtml + footerHtml;
+}
+
+// --- Heartbeat e Sincronização ---
+let heartbeatInterval = null;
+
+function startHeartbeat() {
+    if (heartbeatInterval) clearTimeout(heartbeatInterval);
+    scheduleNextHeartbeat();
+}
+
+function scheduleNextHeartbeat() {
+    // Espectadores recebem metade das chamadas — mesmos dados com o dobro do intervalo.
+    const interval = state.isSpectating ? POLLING_INTERVAL_SPECTATE : POLLING_INTERVAL_ACTIVE;
+    heartbeatInterval = setTimeout(runHeartbeat, interval);
+    if (state.isSpectating) startSpectatorSyncTimer(interval / 1000);
+}
+
+async function runHeartbeat() {
+    const { data, error } = await supabase.rpc('sync_ruins_state', {
+        p_session_id:    state.sessionId,
+        p_last_event_ts: state.lastEventTs,
+        p_dead_count:    state.participantDeadCount   // NOVO: envia versão local
+    });
+
+    if (error) { scheduleNextHeartbeat(); return; }
+
+    // Sidebar de Participantes: só re-renderiza quando o servidor retorna
+    // participants_summary, ou seja, quando alguém morreu desde a última chamada.
+    // Quando não há mudanças, o servidor retorna null e economizamos ~3-5 KB.
+    if (data.participants_summary) {
+        state.participantDeadCount = data.dead_count;
+        updateParticipantsSidebar(data.participants_summary, data.relic_holder, data.relic_room_id);
+    } else if (data.dead_count !== undefined && data.dead_count !== state.participantDeadCount) {
+        // Sincronização de fallback: atualiza contador mesmo sem summary
+        state.participantDeadCount = data.dead_count;
+    }
+
+    if (state.myPlayer) {
+        if (data.ap !== undefined) state.myPlayer.ap = data.ap;
+        if (data.hp !== undefined) state.myPlayer.hp = data.hp;
+        updateHUD();
+    }
+
+    if (data.destroyed_count !== undefined) {
+        state.destroyedCount = data.destroyed_count;
+    }
+    if (data.destroyed_rooms !== undefined) {
+        state.destroyedRooms = data.destroyed_rooms;
+        renderRoomsPanel();
+    }
+
+    if (data.status === 'finished') {
+        if (data.winner_id) state.matchWinnerId = data.winner_id;
+        if (data.winner) {
+            endGame({ win: true, message: "VITÓRIA! Você é o último sobrevivente.\n+50 Moedas Rúnicas!" });
+        } else {
+            endGame({ win: false, message: "A partida terminou. Não restaram sobreviventes." });
+        }
+        return; // não reagenda
+    }
+    
+    if (data.is_dead && !ignoreHeartbeatDeath && !state.isSpectating) {
+        if (data.killed_by_collapse) {
+            endGame({ win: false, message: "Você foi eliminado pelo colapso." });
+        } else {
+            endGame({ win: false, message: "Você foi eliminado em combate." });
+        }
+        return; // não reagenda
+    }
+
+    if (data.events && data.events.length > 0) {
+        data.events.forEach(evt => {
+            if (evt.msg.includes(`atacou ${state.myPlayer.name}`)) {
+                logEvent("Você foi atacado!", "kill");
+                playSound('loss'); 
+            }
+            // Rastreia kills de outros participantes pelo log de eventos
+            if (evt.type === 'kill' && evt.msg) {
+                const m = evt.msg.match(/^(.+?) eliminou .+/);
+                if (m) {
+                    const killerName = m[1];
+                    // Só incrementa se não foi contado em executeMove (evita dupla contagem do próprio jogador)
+                    if (killerName !== state.myPlayer.name) {
+                        state.participantKillsByName[killerName] = (state.participantKillsByName[killerName] || 0) + 1;
+                    }
+                }
+            }
+            logEvent(evt.msg, evt.type);
+            state.lastEventTs = Math.max(state.lastEventTs, evt.t);
+        });
+    }
+    
+    if (data.relic_holder) {
+        const holderChanged = data.relic_holder !== state.relicHolderId;
+        const roomChanged   = data.relic_room_id != null && data.relic_room_id !== state.relicRoomId;
+
+        state.relicHolderId = data.relic_holder;
+        state.relicRoomId   = data.relic_room_id ?? null;
+
+        els.relicStatus.textContent = "Relíquia: TOMADA!";
+        els.relicStatus.style.color = "silver";
+
+        // Só loga quando o portador ou a sala realmente mudarem,
+        // evitando a repetição a cada heartbeat (bug: "Sala 26" em loop)
+        if (data.relic_room_id && (holderChanged || roomChanged)) {
+            logEvent(`O Portador da Relíquia está na Sala ${data.relic_room_id}`, "relic");
+        }
+    } else {
+        if (state.relicHolderId !== null) {
+            state.relicHolderId = null;
+            state.relicRoomId   = null;
+        }
+        els.relicStatus.textContent = "Relíquia: Livre";
+        els.relicStatus.style.color = "gold";
+    }
+
+    scheduleNextHeartbeat(); // agenda próximo ciclo
+}
+
+// --- Fim de Jogo ---
+function endGame(data) {
+    const isGameOver = data.message.includes("terminou") || data.message.includes("VITÓRIA");
+
+    if (state.isSpectating && !isGameOver) return;
+
+    if (data.win) playSound('win');
+    else playSound('loss');
+
+    // Jogador morreu no meio da partida → oferece espectador (sem ranking detalhado)
+    if (!data.win && !isGameOver) {
+        if(heartbeatInterval) clearTimeout(heartbeatInterval);
+        if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+
+        const modal = document.getElementById('resultModal');
+        const content = modal.querySelector('.modal-content');
+        content.innerHTML = `
+            <h2 style="color:red; margin-bottom:8px;">FIM DE JOGO</h2>
+            <p style="color:#ccc; margin-bottom:20px;">${data.message}</p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="action-btn" onclick="window.location.reload()">Sair da Masmorra</button>
+                <button class="action-btn" id="btnSpectate" style="background:#1a1a1a; border:1px solid #555; color:#aaa;">
+                    Continuar Assistindo
+                </button>
+            </div>
+        `;
+        document.getElementById('btnSpectate').onclick = () => {
+            state.isSpectating = true;
+            modal.style.display = 'none';
+            els.navMsg.textContent = "Modo Espectador";
+            els.actionButtons.style.display = 'none';
+            els.probeGrid.style.display = 'none';
+            startSpectatorSyncTimer(POLLING_INTERVAL_SPECTATE / 1000);
+            scheduleNextHeartbeat();
+        };
+        modal.style.display = 'flex';
+        return;
+    }
+
+    // Partida encerrada (vitória ou fim com espectador) → modal detalhado
+    if(heartbeatInterval) clearTimeout(heartbeatInterval);
+    if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+    if(state.spectatorSyncInterval) { clearInterval(state.spectatorSyncInterval); state.spectatorSyncInterval = null; }
+    document.getElementById('spectatorSyncContainer').style.display = 'none';
+    showDetailedEndModal(data);
+}
+
+function showDetailedEndModal(data) {
+    const isWin = !!data.win;
+    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:30px;height:30px;vertical-align:middle;margin:0 2px;">`;
+    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:20px;height:23px;vertical-align:middle;margin:0 2px;">`;
+
+    // Bônus de vitória
+    const winBonus = isWin ? 50 : 0;
+    const totalCoins = state.matchCoins + winBonus;
+
+    // Monta lista de participantes para o ranking da partida
+    const participants = Object.values(state.participantCache).map(p => {
+        const kills = state.participantKillsByName[p.name] || 0;
+        const isMe      = (p.name === state.myPlayer?.name);
+        // O vencedor recebe +50: pode ser eu (isWin) ou outro jogador identificado pelo winner_id
+        const isWinner  = isMe ? isWin : (!!(state.matchWinnerId && p.id === state.matchWinnerId));
+        const coins     = kills * 5 + (isWinner ? 50 : 0);
+        return { ...p, kills: isMe ? state.matchKills : kills, coins: isMe ? totalCoins : coins };
+    });
+
+    // Ordena por eliminações (maior primeiro), desempate por nome
+    participants.sort((a, b) => b.kills - a.kills || a.name.localeCompare(b.name));
+
+    // Linhas do ranking
+    let rankingRows = '';
+    participants.forEach((p, i) => {
+        const pos      = i + 1;
+        const DEF_AVT  = 'https://aden-rpg.pages.dev/avatar01.webp';
+        const avatar   = p.avatar || p.avatar_url || DEF_AVT;
+        const isMe     = (p.name === state.myPlayer?.name);
+        const botLabel = p.is_bot ? ' <span style="color:#666; font-size:0.75em;">[Bot]</span>' : '';
+        const rowBg    = isMe ? 'background:rgba(255,215,0,0.08); border:1px solid rgba(255,215,0,0.3);' : 'background:rgba(255,255,255,0.03);';
+        rankingRows += `
+            <div style="display:grid; grid-template-columns:28px 36px 1fr 60px 60px; gap:6px; align-items:center;
+                        padding:6px 8px; border-radius:6px; margin-bottom:4px; ${rowBg}">
+                <span style="color:#888; font-size:0.85em; text-align:center;">${pos}º</span>
+                <img src="${avatar}" onerror="this.src='${DEF_AVT}'" 
+                     style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid #444;">
+                <span style="font-size:0.85em; color:${isMe ? 'gold' : '#ddd'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${p.name}${botLabel}
+                </span>
+                <span style="text-align:center; font-size:0.9em; color:#f44;">☠ ${p.kills}</span>
+                <span style="text-align:center; font-size:0.85em; color:#ccc;">${COIN_ICON}${p.coins}</span>
+            </div>`;
+    });
+
+    // Banner de vitória (bônus 50 moedas)
+    let winBannerHtml = '';
+    if (isWin) {
+        winBannerHtml = `
+            <div style="background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,140,0,0.1)); 
+                        border:1px solid gold; border-radius:10px; padding:14px 12px; margin-bottom:16px; text-align:center;">
+                <div style="font-size:1.4em; font-weight:bold; color:gold; margin-bottom:4px;">🏆 ÚLTIMO SOBREVIVENTE</div>
+                <div style="color:#e0dccc; font-size:0.95em;">Bônus de vitória</div>
+                <div style="font-size:1.3em; font-weight:bold; color:gold; margin-top:6px;">
+                    ${COIN_ICON} <span style="color:gold;">+50 Moedas Rúnicas</span>
+                </div>
+            </div>`;
+    }
+
+    // Resumo pessoal
+    const summaryHtml = `
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;">
+            <div style="background:rgba(244,67,54,0.12); border:1px solid rgba(244,67,54,0.3); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.5em; font-weight:bold; color:#f44;">☠</div>
+                <div style="font-size:1.3em; font-weight:bold; color:#fff;">${state.matchKills}</div>
+                <div style="font-size:0.75em; color:#888;">Eliminações</div>
+            </div>
+            <div style="background:rgba(255,215,0,0.10); border:1px solid rgba(255,215,0,0.25); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.1em;">${COIN_ICON}</div>
+                <div style="font-size:1.3em; font-weight:bold; color:gold;">${totalCoins}</div>
+                <div style="font-size:0.75em; color:#888;">Moedas Rúnicas</div>
+            </div>
+            <div style="background:rgba(33,150,243,0.10); border:1px solid rgba(33,150,243,0.25); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.1em;">${CRYSTAL_ICON}</div>
+                <div style="font-size:1.3em; font-weight:bold; color:#64b5f6;">${state.matchCrystals}</div>
+                <div style="font-size:0.75em; color:#888;">Cristais</div>
+            </div>
+        </div>`;
+
+    // Header de ranking
+    const rankHeaderHtml = `
+        <div style="display:grid; grid-template-columns:28px 36px 1fr 60px 60px; gap:6px;
+                    padding:4px 8px; margin-bottom:4px;">
+            <span></span><span></span>
+            <span style="font-size:0.75em; color:#666;">Jogador</span>
+            <span style="font-size:0.75em; color:#666; text-align:center;">Abates</span>
+            <span style="font-size:0.75em; color:#666; text-align:center;">Moedas</span>
+        </div>`;
+
+    const modal = document.getElementById('resultModal');
+    const content = modal.querySelector('.modal-content');
+    content.style.cssText = 'max-width:420px; width:92vw; max-height:88vh; overflow-y:auto; padding:20px;';
+    content.innerHTML = `
+        <h2 style="text-align:center; color:${isWin ? 'gold' : '#f44'}; margin-bottom:4px; font-size:1.4em;">
+            ${isWin ? '⚔ VITÓRIA!' : '💀 FIM DE JOGO'}
+        </h2>
+        <p style="text-align:center; color:#888; font-size:0.85em; margin-bottom:16px;">
+            ${isWin ? 'Você dominou as Ruínas Ancestrais.' : 'A partida chegou ao fim.'}
+        </p>
+        ${winBannerHtml}
+        <div style="font-size:0.8em; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Suas Recompensas</div>
+        ${summaryHtml}
+        <div style="font-size:0.8em; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Ranking da Partida</div>
+        ${rankHeaderHtml}
+        <div style="margin-bottom:16px;">${rankingRows}</div>
+        <button class="action-btn" onclick="window.location.reload()" style="width:100%; margin-top:4px;">
+            Sair da Masmorra
+        </button>
+    `;
+    modal.style.display = 'flex';
+}

@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+    <title>Tutorial - Aden RPG</title>
+    <style>
+        /* Estilos base para garantir que o layout ocupe 100% da tela - Copiados de sobre.html */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            
+            /* Background Cover: Cuidado: O URL é fixo para manter o estilo do sobre.html */
+            background: url('https://aden-rpg.pages.dev/assets/credits.webp') no-repeat center center fixed; 
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            background-size: cover;
+        }
+        
+        /* Estilos da Top Bar (Cabeçalho) - Mantido */
+        #playerTopBar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+            background: linear-gradient(to bottom, #444, #222);
+            color: white;
+            min-height: 44px; 
+            flex-shrink: 0; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        #pageTitle {
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        /* Estilos para links e ícones da Top Bar - Mantido */
+        .top-bar-link {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Estilo do Ícone de Retorno (SVG) - Mantido */
+        .lucide-chevron-left {
+            width: 24px;
+            height: 24px;
+            margin-right: 5px;
+        }
+        
+        /* Seletor de Idioma - Mantido por consistência */
+        #lang-selector {
+            display: flex;
+            gap: 5px;
+        }
+        .lang-button {
+            background: #555;
+            color: white;
+            border: 1px solid #777;
+            padding: 5px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .lang-button.active {
+            background: #c9a94a;
+            border-color: gold;
+            color: #000;
+            font-weight: bold;
+        }
+        .lang-button:hover {
+            background: #666;
+        }
+
+        /* Estilos do Conteúdo Principal - Mantido */
+        #mainContainer {
+            flex-grow: 1; 
+            padding: 20px 10px; 
+            display: flex;
+            justify-content: center;
+        }
+        
+        .content-card {
+            background-color: rgba(0, 0, 0, 0.8); 
+            color: #e0dccc;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            width: 100%;
+            margin: 0;
+            text-align: justify; 
+        }
+
+        .content-card h1, .content-card h2 {
+            color: #c9a94a;
+            border-bottom: 2px solid rgba(201, 169, 74, 0.4);
+            padding-bottom: 5px;
+            margin-top: 25px;
+            text-align: center;
+        }
+        .content-card h1 {
+             font-size: 1.8em;
+        }
+        .content-card h2 {
+            font-size: 1.5em;
+        }
+        .content-card p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        /* Estilos de lista */
+        .content-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin-bottom: 20px;
+        }
+        .content-card li {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #c9a94a;
+            border-radius: 4px;
+        }
+        .content-card li strong {
+            color: gold;
+        }
+        
+        /* Ajustes Responsivos - Mantido */
+        @media (max-width: 600px) {
+            .content-card {
+                padding: 15px;
+            }
+            .content-card h1 {
+                font-size: 1.5em;
+            }
+            .content-card h2 {
+                font-size: 1.3em;
+            }
+            #mainContainer {
+                padding: 10px;
+            }
+        }
+        
+        /* ================================================= */
+        /* ESTILOS COPIADOS DE 'sobre.html' PARA CORRIGIR O DISCORD */
+        /* ================================================= */
+        
+         #discord-link-container {
+            margin-top: 30px; /* Espaço acima */
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            text-align: center; /* Centraliza o botão */
+        }
+        
+        /* Estilo base para botões de política/links importantes (Faltava) */
+        .policy-button {
+            background-color: rgba(201, 169, 74, 0.1);
+            border: 1px solid rgba(201, 169, 74, 0.4);
+            padding: 10px 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.95em;
+            color: #e0dccc; 
+            text-decoration: none; 
+            transition: background-color 0.2s, border-color 0.2s;
+            display: block; /* Garante que o link funcione como um bloco para o padding */
+        }
+        
+        /* Estilo específico para o botão Discord (Faltava) */
+        .policy-button.discord-button {
+            max-width: 400px; /* Limite de largura */
+            margin: 0 auto; /* Centraliza o bloco */
+            display: flex; /* Habilita flexbox para alinhar ícone e texto */
+            align-items: center; /* Alinha verticalmente */
+            justify-content: center; /* Centraliza o conteúdo (ícone + texto) */
+        }
+        
+        .policy-button:hover {
+            background-color: rgba(201, 169, 74, 0.25);
+            border-color: #c9a94a;
+        }
+        
+        /* Estilo da Imagem do Ícone */
+        .discord-icon-img {
+            width: 30px; /* Tamanho do ícone */
+            height: 30px;
+            margin-right: 10px; /* Espaço entre o ícone e o texto */
+            object-fit: contain;
+        }
+        /* ================================================= */
+        
+        /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; 
+}
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+}
+/* O Menu em si (ID alterado para não conflitar com o da direita) */
+#leftSideMenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px; /* Largura um pouco maior para acomodar ícones */
+    height: 100%;
+    background: #1a1a1a; /* Fundo escuro */
+    border-right: 2px solid #444;
+    z-index: 9999;
+    transform: translateX(-100%); /* Começa escondido à esquerda */
+    transition: transform 2s ease;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+}
+
+/* Classe para abrir o menu via JS */
+#leftSideMenu.open {
+    transform: translateX(0);
+}
+
+/* Cabeçalho do Menu */
+.menu-header {
+    padding: 15px;
+    background: #111;
+    display: flex;
+    justify-content: space-between; /* Botão e título afastados */
+    align-items: center;
+    border-bottom: 1px solid #333;
+    height: 60px; /* Altura fixa */
+    box-sizing: border-box;
+}
+
+.menu-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.5rem;
+    flex-grow: 1;
+    text-align: center; /* Título centralizado */
+}
+
+/* Botão de Fechar (Hambúrguer) */
+.close-menu-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lista e Itens */
+.menu-list {
+    list-style: none;
+    padding: 0; /* Remove padding padrão da UL */
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-item {
+    width: 100%;
+}
+
+.menu-link {
+    display: flex; /* Flexbox para alinhar ícone e texto */
+    align-items: center;
+    justify-content: flex-start; /* Alinha tudo à esquerda */
+    padding: 15px 15px; /* Padding reduzido na esquerda */
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 1.4rem;
+    transition: background 0.4s, color 0.4s;
+    border-bottom: 1px solid #252525;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.menu-link:hover {
+    background: #333;
+    color: #fff;
+}
+
+/* Estilo do Ícone no Menu */
+.menu-icon {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    margin-right: 15px; /* Espaço entre ícone e texto */
+}
+
+/* Item Ativo (Página atual) */
+.menu-item.active .menu-link {
+    background: #555;
+    color: #ffd700;
+    font-weight: bold;
+    border-left: 4px solid #ffd700;
+    padding-left: 11px; /* Compensa a borda para manter alinhamento */
+}
+
+/* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */
+#menuToggleBtn svg {
+    /* Garante que a transição ocorra suavemente */
+    transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+}
+
+/* Classe para deixar o ícone "Em Pé" (Vertical) */
+/* Usamos -90deg para girar à esquerda como pediu */
+.icon-vertical {
+    transform: rotate(-90deg);
+}
+
+/* --- BOTÃO DE FECHAR (DENTRO DO MENU) --- */
+/* Força o SVG do botão de fechar a ser idêntico ao botão aberto (Vertical) */
+#closeMenuBtn svg {
+    transform: rotate(-90deg); 
+    transition: transform 3s ease;
+    cursor: pointer;
+}
+
+/* Opcional: Ao passar o mouse no fechar, ele gira um pouco */
+#closeMenuBtn:hover svg {
+    transform: rotate(0deg); /* Gira para deitado ao passar o mouse */
+    color: #ff4500;
+}
+
+/* --- BOLINHAS DE NOTIFICAÇÃO (AJUSTE FINO) --- */
+.menu-notification-dot {
+    position: absolute;
+    /* Ajuste de posição para não ficar em cima do ícone */
+    left: 45px; 
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 15;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.9);
+    pointer-events: none;
+    animation: pulseSideDot 2s infinite;
+}
+
+@keyframes pulseSideDot {
+    0% { transform: translateY(-50%) scale(1); opacity: 1; }
+    50% { transform: translateY(-50%) scale(1.3); opacity: 0.8; }
+    100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}
+    </style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+       <div> <span id="pageTitle">Tutorial</span></div>
+         <div id="lang-selector">
+            
+        </div>
+    </div>
+
+    <div id="mainContainer">
+        <div class="content-card">
+            <h1 style="color: #c9a94a;">O Guia Definitivo do Aventureiro de Aden!</h1>
+            <p style="font-style: italic;">
+                Bem-vindo, bravo aventureiro! O mundo de Aden é vasto e repleto de perigos, mas também de glórias incalculáveis.
+                Para que você forje sua lenda e alcance o ápice do Poder de Combate, apresentamos este tomo de conhecimento.
+                Prepare-se para dominar as mecânicas essenciais e se tornar uma força imbatível neste RPG inativo de proporções épicas.
+            </p>
+
+            <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: gold;">O Que Fazer Primeiro? 🗡️</h2>
+            <p>
+                Sua jornada começa com um ato de poder! A primeira coisa que você deve fazer é <strong>resgatar seu Pacote Inicial de Aventureiro</strong>,
+                que provavelmente você já resgatou ao criar a conta.
+            </p>
+            <div style="background-color: #1a1a1a; padding: 10px; border-radius: 5px; margin: 15px 0; border: 1px solid #c9a94a; text-align: center;">
+                <strong style="color: #4CAF50; font-size: 1.1em; word-break: break-all;">Vá até sua Bolsa e equipe <br>sua nova arma!</strong>
+            </div>
+            <p>
+                Após garantir seu arsenal inicial, você deve embarcar em sua <strong>Aventura AFK</strong> (menu Iniciar > Aventura AFK). Em seguida, escolha uma <strong>Área de Caça</strong> para começar sua caçada por xp e materiais.
+                Este é o cerne de sua evolução, pois é onde você ganhará a experiência (XP) vital para o seu crescimento.
+                A seguir, desvendaremos os segredos das principais funções do jogo.
+            </p>
+
+            <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: #00bfff;">O Arsenal do Herói: Dominando o Inventário 🛡️</h2>
+            <p>
+                O Inventário é o seu cofre de guerra, onde cada peça de equipamento e artefato é armazenada com cuidado. Dominá-lo é essencial para otimizar seu Poder de Combate e enfrentar ameaças cada vez maiores, garantindo que seu herói esteja sempre no auge de sua força.
+            </p>
+            <h3 style="color: #c9a94a; margin-top: 15px;">Componentes Essenciais</h3>
+            <ul>
+                <li>
+                    <strong>Status do Jogador:</strong> No topo, observe seu Nível e o implacável <strong>Poder de Combate (CP)</strong>, a métrica de sua força bruta e potencial de batalha.
+                </li>
+                <li>
+                    <strong>Equipamento Atual:</strong> No centro, está a armadura de seu herói. É a tela de onde você supervisiona os equipamentos equipados em cada slot (arma, armadura, acessórios, etc.).
+                </li>
+                <li>
+                    <strong>Lista de Itens:</strong> Seu arsenal completo, que pode ser filtrado por tipo, permitindo que você encontre rapidamente o artefato perfeito para a batalha iminente.
+                </li>
+            </ul>
+            <h3 style="color: #c9a94a; margin-top: 15px;">A Arte de Equipar</h3>
+            <p>
+                Para empunhar um novo artefato, selecione-o na lista e crave o botão de equipar! Lembre-se: apenas <strong>um item por slot</strong> é permitido. Para retirar o poder de um item, basta um toque no equipamento já vestido, preparando-o para a próxima melhoria ou troca.
+            </p>
+
+            <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: #9933ff;">A Guerra pelo Tesouro: O Domínio das Minas de Cristal 💎</h2>
+            <p>
+                As Minas de Cristal são os poços da riqueza de Aden. Estes recursos inestimáveis são a chave para uma renda passiva de <strong>Cristais</strong>, o tesouro dos deuses, e a competição por sua posse é feroz. Aventureiros se enfrentam em um ciclo constante de captura e defesa.
+            </p>
+            <h3 style="color: #c9a94a; margin-top: 15px;">A Conquista da Riqueza</h3>
+            <p>
+                A mina possui um guardião <strong>HP completo</strong>. O aventureiro que causar o maior dano em dez minutos reivindica a posse e se torna o novo proprietário! A honra é instantânea: o ranking de dano é zerado e a mina é declarada "<strong>ocupada</strong>". Se o campo estiver vazio e sem desafiantes dignos, a mina aguarda o próximo ciclo (é resetada).
+            </p>
+            <h3 style="color: #c9a94a; margin-top: 15px;">O Combate PvP de Captura</h3>
+            <p>
+                A lei da selva prevalece. Uma vez que um herói toma posse, ele se torna um alvo. Outros podem atacar a mina em um <strong>Combate PvP</strong> direto. A vitória esmagadora sobre o defensor garante a você a posse imediata da mina e o direito de colher  Cristais!
+            </p>
+
+            <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: #ff4500;">O Desafio Épico da Guilda: A Torre da Desolação (Raid) ⚔️</h2>
+            <p>
+                Una-se a seus irmãos de armas! A <strong>Torre da Desolação (Raid)</strong> é a prova máxima de cooperação e força coletiva. Sua Guilda deve avançar por andares de monstros cada vez mais temíveis para alcançar glória e recompensas lendárias.
+            </p>
+            <h3 style="color: #c9a94a; margin-top: 15px;">Táticas de Batalha na Torre</h3>
+            <ul>
+                <li>
+                    <strong>Ataque Poderoso:</strong> Seu dano é uma manifestação direta do seu <strong>Poder de Combate (CP)</strong>. Cada herói tem <strong>Ataques</strong> para desferir nos monstros por andar. O dano é registrado no ranking antes de impactar o HP do monstro.
+                </li>
+                <li>
+                    <strong>Recompensas e Glória:</strong> A aniquilação do Boss do andar garante recompensas valiosas: <strong>Pedras, Cristais, XP</strong> para você e para a guilda.
+                </li>
+                <li>
+                    <strong>Avanço Triunfal:</strong> Após derrotar o monstro, o ranking de dano é zerado e a Guilda avança para o próximo andar, rumo ao topo.
+                </li>
+                <li>
+                    <strong>O Fim da Jornada:</strong> A Raid é considerada concluída quando a Guilda triunfa sobre o terror do <strong>Andar 40</strong>.
+                </li>
+            </ul>
+
+            <hr style="border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <h2 style="color: lightblue;">A Estratégia da Guerra: As Batalhas Territoriais da Guilda 🚩</h2>
+            <p>
+                A Batalha de Guilda é um conflito tático pela supremacia de territórios. O sucesso depende do uso estratégico das suas Ações e da coordenação impecável entre os membros.
+            </p>
+            <h3 style="color: #c9a94a; margin-top: 15px;">Comandos de Batalha (Custo: 1 Ação)</h3>
+            <ul>
+                <li>
+                    <strong>ATACAR:</strong> Desfira o golpe em um Objetivo inimigo. Seu dano é registrado no ranking e, em seguida, diminui o HP principal do alvo.
+                </li>
+                <li>
+                    <strong>MOVER:</strong> Permite o reposicionamento tático para um Objetivo adjacente, essencial para concentrar o ataque ou a defesa onde a guilda mais precisa.
+                </li>
+                <li>
+                    <strong>GUARNECER:</strong> Junte-se à Guarnição de um Objetivo dominado pela sua guilda. Este ato de bravura aumenta o <strong>HP de defesa</strong> do ponto, fortalecendo sua posição e dificultando a captura inimiga.
+                </li>
+            </ul>
+            <h3 style="color: #c9a94a; margin-top: 15px;">Captura e Pontuação</h3>
+            <p>
+                A glória da captura pertence à guilda que infligir o <strong>maior dano total</strong> no Objetivo, uma vez que seu HP principal é zerado. A precisão e a estratégia de dano são tudo para dominar o campo de batalha!
+            </p>
+
+            <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: #ffff00;">O Ciclo do Tempo: Atualizações e Resets dos Rankings ⏳</h2>
+            <p>
+                O fluxo do tempo governa as competições em Aden. Esteja ciente dos ciclos de atualização e reset para planejar sua ascensão e glória!
+            </p>
+            <ul>
+                <li>
+                    O <strong>Ranking de CP</strong> (Poder de Combate) é zerado todos os dias após as <strong>21:00</strong>. Prepare-se para um novo dia de dominação!
+                </li>
+                <li>
+                    O <strong>Ranking Atual da Arena</strong> é um reflexo em tempo real da força dos combatentes, atualizando todos os dias <strong>às 21:00.</strong>.
+                </li>
+                <li>
+                    O <strong>Ranking da Temporada Passada</strong> é um registro permanente de lendas e é atualizado no dia <strong>1 de cada mês</strong>.
+                </li>
+                <li>
+                    Os <strong>Desafios da Arena</strong> se renovam, oferecendo novas oportunidades de vitória todos os dias, com o reset ocorrendo às <strong>21:00</strong>.
+                </li>
+            </ul>
+             <hr style="border-top: 2px solid #c9a94a; margin: 20px 0;">
+
+            <h2 style="color: #lightgreen;">Tutoriais detalhados</h2>
+            <p>
+            Em cada tela você verá, geralmente no topo, um botão <img style="width: 28px; height: 28px;" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp"> onde poderá ver um tutorial mais detalhado das funções da respectiva tela.<br>
+Participe do nosso grupo no Discord, onde você poderá receber códigos de resgate diariamente e para interagir com outros aventureiros!</p>
+ <div id="discord-link-container"> 
+            <a 
+                href="https://discord.gg/bR83bknt" 
+                class="policy-button discord-button" 
+                data-i18n="discord_server" 
+                data-lang-en="Aden RPG Online"
+            >
+                <img 
+                    src="https://aden-rpg.pages.dev/assets/discord_icon.png" 
+                    alt="Ícone do Discord" 
+                    class="discord-icon-img"
+                />
+                Aden RPG Online
+            </a>
+        </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const pageTitle = document.getElementById('pageTitle');
+            if (pageTitle) {
+                 pageTitle.innerHTML = 'Tutorial'; // Define o título correto da página no cabeçalho
+            }
+        });
+        
+        document.addEventListener("DOMContentLoaded", () => {
+          // cria um elemento para medir o tamanho real de 1rem
+          const testEl = document.createElement("div");
+          testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+          testEl.textContent = "M";
+          document.body.appendChild(testEl);
+
+          const actualRem = testEl.getBoundingClientRect().height;
+          document.body.removeChild(testEl);
+
+          // queremos sempre 16px como base (modo padrão)
+          const targetRem = 16;
+          const correction = targetRem / actualRem;
+
+          const style = document.createElement("style");
+          style.textContent = `
+            html { font-size: ${16 * correction}px !important; }
+            body { font-size: 1rem !important; }
+          `;
+          document.head.appendChild(style);
+        });
+    </script>
+     <script>
+        // Função para alternar o idioma do conteúdo
+        function setLanguage(lang) {
+            const isEnglish = lang === 'en';
+            
+            // 1. Atualizar o Título da Página (dentro da playerTopBar) e <title>
+            const pageTitle = document.getElementById('pageTitle');
+            if (isEnglish) {
+                pageTitle.textContent = 'About the Game';
+                document.title = 'About the Game - Aden RPG';
+            } else {
+                pageTitle.textContent = 'Tutorial';
+                document.title = 'Sobre o Jogo - Aden RPG';
+            }
+            
+            // 2. Atualizar todos os elementos traduzíveis (data-i18n)
+            const translatableElements = document.querySelectorAll('[data-i18n]');
+            translatableElements.forEach(el => {
+                let textToUse;
+                
+                if (isEnglish) {
+                    textToUse = el.getAttribute('data-lang-en');
+                } else {
+                    // Use o texto original em Português
+                    textToUse = el.getAttribute('data-lang-pt-original') || el.textContent.trim();
+                }
+                
+                if (el.classList.contains('udio-credit')) {
+                    // Caso especial para o bloco Udio que tem a tag <strong> fixa
+                    el.innerHTML = textToUse + '<br><strong>Made with Udio</strong>';
+                } else {
+                    // Se for o link do Discord, só atualiza o texto, mantendo o ícone.
+                    if (el.classList.contains('discord-button')) {
+                        const iconImg = el.querySelector('.discord-icon-img'); // Busca pela nova classe
+                        el.innerHTML = ''; // Limpa o conteúdo
+                        if(iconImg) el.appendChild(iconImg.cloneNode(true)); // Adiciona a imagem de volta (cloneNode(true) para incluir atributos)
+                        el.appendChild(document.createTextNode(textToUse)); // Adiciona o texto
+                    }
+                    // Se for um link de política/termo, o texto é o próprio elemento
+                    else if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                        el.textContent = textToUse;
+                    } else {
+                        el.textContent = textToUse;
+                    }
+                }
+            });
+
+            // 3. Atualizar a lista de músicas do Udio (a lista de Agradecimentos não muda)
+            // Esta seção foi mantida, mas não tem efeito neste arquivo, pois o arquivo não tem #musicList.
+            const musicListItems = document.querySelectorAll('#musicList li');
+            musicListItems.forEach(li => {
+                if (isEnglish && li.hasAttribute('data-en')) {
+                    li.textContent = li.getAttribute('data-en');
+                } else {
+                    // Volta para o texto original (Português)
+                    li.textContent = li.getAttribute('data-pt-original');
+                }
+            });
+            
+            // 4. Atualizar o Rodapé de Copyright
+            // Esta seção foi mantida, mas não tem efeito neste arquivo, pois o arquivo não tem #copyright-text.
+            const copyrightText = document.getElementById('copyright-text');
+            if (copyrightText) {
+                if (isEnglish) {
+                    copyrightText.innerHTML = copyrightText.getAttribute('data-lang-en');
+                } else {
+                    copyrightText.innerHTML = copyrightText.getAttribute('data-lang-pt');
+                }
+            }
+            
+            // 5. Atualizar botões de bandeira
+            // Esta seção foi mantida, mas não tem efeito neste arquivo, pois o arquivo não tem lang-pt/lang-en.
+            document.querySelectorAll('.lang-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            const activeLangButton = document.getElementById(`lang-${lang}`);
+            if (activeLangButton) {
+                activeLangButton.classList.add('active');
+            }
+            
+            // 6. Atualizar a tag HTML lang
+            document.documentElement.lang = isEnglish ? 'en' : 'pt-br';
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Pré-processamento: Armazena o texto original em Português
+            const translatableElements = document.querySelectorAll('[data-i18n]');
+            translatableElements.forEach(el => {
+                // Adiciona exceção para elementos que não são o .udio-credit
+                if (el.classList.contains('udio-credit')) {
+                    const originalText = el.textContent.split('Made with Udio')[0].trim();
+                    el.setAttribute('data-lang-pt-original', originalText);
+                } else {
+                    el.setAttribute('data-lang-pt-original', el.textContent.trim());
+                }
+            });
+            
+            // Ajuste para o botão Discord, garantindo que o texto inicial seja apenas "Aden RPG Online"
+            const discordButton = document.querySelector('.discord-button');
+            if (discordButton) {
+                // Certifica-se de que o texto base (português) é apenas "Aden RPG Online"
+                discordButton.setAttribute('data-lang-pt-original', 'Aden RPG Online');
+                
+                // IMPORTANTE: Remove o elemento .discord-icon antigo se ainda estiver no DOM 
+                const oldIconSpan = discordButton.querySelector('.discord-icon');
+                if (oldIconSpan) {
+                    oldIconSpan.remove();
+                }
+                
+                // Garante que o texto está após a imagem, se houver:
+                const iconImg = discordButton.querySelector('.discord-icon-img');
+                const currentText = discordButton.textContent.trim();
+                
+                // Se o texto não for o desejado, corrigimos
+                if (currentText !== 'Aden RPG Online') {
+                    discordButton.textContent = ''; // Limpa tudo
+                    if (iconImg) {
+                        discordButton.appendChild(iconImg); // Adiciona a imagem
+                    }
+                    discordButton.appendChild(document.createTextNode('Aden RPG Online')); // Adiciona o texto
+                }
+            }
+
+            // Pré-processamento: Armazena o texto original em Português para a lista de músicas do Udio
+            const musicListItems = document.querySelectorAll('#musicList li');
+            musicListItems.forEach(li => {
+                li.setAttribute('data-pt-original', li.textContent.trim());
+            });
+
+            // Event Listeners para os botões de idioma
+            const langPt = document.getElementById('lang-pt');
+            const langEn = document.getElementById('lang-en');
+            
+            if (langPt) langPt.addEventListener('click', () => setLanguage('pt'));
+            if (langEn) langEn.addEventListener('click', () => setLanguage('en'));
+
+            // Define o idioma padrão (Português) no carregamento
+            setLanguage('pt'); 
+
+            // ====================================================================
+            // Lógica de Música e Modal (Início da Música) - Seções removidas pois não existem neste arquivo
+            // ====================================================================
+            /*
+            const modalOverlay = document.getElementById('music-modal-overlay');
+            const okButton = document.getElementById('music-modal-ok-btn');
+            const musicUrl = "https://aden-rpg.pages.dev/assets/credits.mp3";
+            let backgroundMusic = new Audio(musicUrl);
+            backgroundMusic.loop = true;
+            backgroundMusic.volume = 0.5; // Volume de fundo
+
+            // Tenta iniciar a música (necessita de interação do usuário)
+            function startMusic() {
+                const playPromise = backgroundMusic.play();
+
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('Música de créditos iniciada.');
+                    }).catch(error => {
+                        // Captura falha de autoplay silenciosamente (esperado)
+                        console.warn('Falha ao iniciar a música, mas o áudio está carregado.');
+                    });
+                }
+            }
+
+            function handleOkClick() {
+                // 1. Iniciar a música, aproveitando o clique do usuário
+                startMusic();
+                
+                // 2. Esconder o modal
+                if (modalOverlay) modalOverlay.style.display = 'none';
+                
+                // 3. Remover o listener
+                if (okButton) okButton.removeEventListener('click', handleOkClick);
+            }
+
+            // Adiciona o evento de clique ao botão OK do modal
+            if (okButton) okButton.addEventListener('click', handleOkClick);
+            */
+        });
+    </script>
+    <div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // URL base para as imagens
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    // Definição dos itens com chaves de notificação
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    // SVG Padrão (Hambúrguer)
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+
+    // Insere o SVG no botão de fechar interno
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // Identifica a página atual
+    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+
+    // --- GERA O MENU ---
+    if (menuList) {
+        menuList.innerHTML = menuItems.map(item => {
+            const isActive = currentPage.includes(item.url);
+            return `
+                <li class="menu-item ${isActive ? 'active' : ''}">
+                    <a style="font-size: 1em;" class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
+                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                        <span>${item.name}</span>
+                    </a>
+                </li>
+            `;
+        }).join('');
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) {
+                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
+            } else {
+                svg.classList.remove('icon-vertical'); // Volta ao normal
+            }
+        }
+    };
+
+    const openMenu = () => {
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        
+        // Anima o ícone do topo
+        toggleMenuRotation(true);
+
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+
+        // Retorna a animação do ícone do topo
+        toggleMenuRotation(false);
+
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try {
+            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+        } catch(e) {}
+
+        // Lógica de Guilda (Fim de semana)
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.getAttribute('data-menu-key');
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            // Limpa bolinha antiga
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            // Adiciona nova
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    // Executa ao carregar
+    renderSideMenuNotifications();
+});
+</script>
+</body>
+</html>

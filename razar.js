@@ -1,0 +1,3524 @@
+import { supabase } from './supabaseClient.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight, updateNpcGroundShadowCamera } from './postfx.js';
+import * as TWEEN from '@tweenjs/tween.js';
+
+// ══════════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (Áreas de Caça)
+// Cache: skin_modal_v1_${pid} (24h).
+// Frame/sheen são <div> (não <img>) para evitar .pvp-fighter img rules.
+// ══════════════════════════════════════════════════════════════════════
+
+function _huntGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+function _huntSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+function _huntAddFrame(parentEl, frameW) {
+    parentEl.querySelectorAll('.h-frame-ol,.h-frame-sh').forEach(e => e.remove());
+    const fr = document.createElement('div');
+    fr.className = 'h-frame-ol';
+    fr.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:20;background-size:contain;background-repeat:no-repeat;background-position:center;display:none;top:0;`;
+    const sh = document.createElement('div');
+    sh.className = 'h-frame-sh';
+    sh.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:21;display:none;top:0;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;`;
+    parentEl.appendChild(fr);
+    parentEl.appendChild(sh);
+    return { fr, sh };
+}
+
+function _huntPositionFrameOffset(fr, sh, avatarEl, frameW, avatarPx) {
+    if (!fr||!sh||!avatarEl||!fr.isConnected) return;
+    const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2) - 3;
+    fr.style.top = t + 'px'; sh.style.top = t + 'px';
+}
+
+function _huntPositionFrameRect(fr, sh, parentEl, avatarEl, frameW) {
+    if (!fr||!sh||!parentEl||!avatarEl||!fr.isConnected) return;
+    const pRect = parentEl.getBoundingClientRect();
+    const aRect = avatarEl.getBoundingClientRect();
+    const aCenter = aRect.top + aRect.height / 2 - pRect.top;
+    const t = Math.round(aCenter - frameW / 2);
+    fr.style.top = t + 'px'; sh.style.top = t + 'px';
+}
+
+function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
+    if (!fr||!sh) return;
+    if (frameUrl) {
+        fr.style.backgroundImage = `url('${frameUrl}')`;
+        fr.style.display = 'block';
+        if (avatarEl) avatarEl.style.border = 'none';
+        sh.style.webkitMaskImage = `url('${frameUrl}')`;
+        sh.style.maskImage       = `url('${frameUrl}')`;
+        sh.style.display = 'block';
+    } else {
+        fr.style.backgroundImage = ''; fr.style.display = 'none';
+        sh.style.display = 'none';
+        if (avatarEl && defaultBorder) avatarEl.style.border = defaultBorder;
+    }
+}
+
+async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
+    if (!pid) return;
+    const apply = url => _huntApplyFrame(fr, sh, url, avatarEl, defaultBorder);
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { apply(null); return; }
+        apply(data?.frame_url || null);
+    } catch(e) { apply(null); }
+}
+
+(function(){
+    if (document.getElementById('_hunt-sheen-style')) return;
+    const s = document.createElement('style'); s.id = '_hunt-sheen-style';
+    s.textContent = `.h-frame-sh::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);animation:_huntfs 6s ease-in-out infinite;}@keyframes _huntfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}`;
+    document.head.appendChild(s);
+})();
+
+
+// ═══════════════════════════════════════════════════════════
+// CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
+// ═══════════════════════════════════════════════════════════
+const REGION_ID = 'razar';
+const REGION_NAME = 'Razar';
+
+// Catálogo de TODAS as regiões (para o modal de recompensas)
+// Adicione aqui as outras regiões conforme criar as páginas
+const ALL_REGIONS = {
+    floresta_mistica: { name:'Floresta Mística' },
+    vale_arcano: { name:'Vale Arcano' },
+    penumbra_uivante: { name:'Penumbra Uivante' },
+    razar: { name:'Razar' },
+    queda_fontana: { name:'Queda Fontana' },
+    covil_de_kelts: { name:'Covil de Kelts' },
+    enclave_etereo: { name:'Enclave Etéreo' },
+    desfiladeiro: { name:'Desfiladeiro do Sol Poente' },
+    pantano: { name:'Pântano de Molinar' },
+    erbaria: { name:'Erbária' },
+};
+
+// Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
+const ALL_DROPS = {
+    84: { name:'Chifre de Unicórnio', img:'https://aden-rpg.pages.dev/assets/itens/chifre_de_unicornio.webp' },
+    71: { name:'Lágrima de Fênix',    img:'https://aden-rpg.pages.dev/assets/itens/lagrima_de_fenix.webp'    },
+    74: { name:'Galho Espiritual',    img:'https://aden-rpg.pages.dev/assets/itens/galho_espiritual.webp'    },
+    67: { name:'Pele Animal',               img:'https://aden-rpg.pages.dev/assets/itens/pele_animal.webp'               },
+    58: { name:'Verniz',               img:'https://aden-rpg.pages.dev/assets/itens/verniz.webp'               },
+    63: { name:'Lubrificante',               img:'https://aden-rpg.pages.dev/assets/itens/lubrificante.webp'               },
+    72: { name:'Pedaço de Freixo',               img:'https://aden-rpg.pages.dev/assets/itens/pedaco_de_freixo.webp'               },
+    69: { name:'Lã',               img:'https://aden-rpg.pages.dev/assets/itens/la.webp'               },
+    76: { name:'Pó Ósseo',               img:'https://aden-rpg.pages.dev/assets/itens/po_osseo.webp'               },
+    70: { name:'Sal de Cobalto',               img:'https://aden-rpg.pages.dev/assets/itens/sal_de_cobalto.webp'               },
+    86: { name:'Asa de Morcego',               img:'https://aden-rpg.pages.dev/assets/itens/asa_de_morcego.webp'               },
+    87: { name:'Emblema Vampírico',               img:'https://aden-rpg.pages.dev/assets/itens/emblema_vampirico.webp'               },
+    75: { name:'Minério de Mithril',               img:'https://aden-rpg.pages.dev/assets/itens/minerio_de_mithril.webp'               },
+    79: { name:'Mithril Temperado',               img:'https://aden-rpg.pages.dev/assets/itens/mithril_temperado.webp'               },
+    81: { name:'Minério de Ferro',               img:'https://aden-rpg.pages.dev/assets/itens/minerio_de_ferro.webp'               },
+    80: { name:'Carvão',               img:'https://aden-rpg.pages.dev/assets/itens/carvao.webp'               },
+    61: { name:'Lápis-Lazúli',               img:'https://aden-rpg.pages.dev/assets/itens/lapis_lazuli.webp'               },
+    56: { name:'Porífero',               img:'https://aden-rpg.pages.dev/assets/itens/porifero.webp'               },
+    60: { name:'Pétala Orium',               img:'https://aden-rpg.pages.dev/assets/itens/petala_orium.webp'               },
+    68: { name:'Pena de Harpia',               img:'https://aden-rpg.pages.dev/assets/itens/pena_de_harpia.webp'               },
+    65: { name:'Reagente Ômega',               img:'https://aden-rpg.pages.dev/assets/itens/reagente_omega.webp'               },
+    73: { name:'Presa de Kelts',               img:'https://aden-rpg.pages.dev/assets/itens/presa_de_kelts.webp'               },
+    82: { name:'Fios de Fibra',               img:'https://aden-rpg.pages.dev/assets/itens/fios_de_fibra.webp'               },
+    60: { name:'Quitina',               img:'https://aden-rpg.pages.dev/assets/itens/quitina.webp'               },
+    57: { name:'Tecido Alfa',               img:'https://aden-rpg.pages.dev/assets/itens/tecido_alfa.webp'               },
+    59: { name:'Safira',               img:'https://aden-rpg.pages.dev/assets/itens/safira.webp'               },
+    62: { name:'Essência de Anjo',               img:'https://aden-rpg.pages.dev/assets/itens/essencia_de_anjo.webp'               },
+    78: { name:'Linha Mágica',               img:'https://aden-rpg.pages.dev/assets/itens/linha_magica.webp'               },
+    64: { name:'Garra de Dragão',               img:'https://aden-rpg.pages.dev/assets/itens/garra_de_dragao.webp'               },
+    83: { name:'Escama de Drgão',               img:'https://aden-rpg.pages.dev/assets/itens/escama_de_dragao.webp'               },
+    66: { name:'Núcleo de Dragão',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_dragao.webp'               },
+    89: { name:'Pedra Âmbar',               img:'https://aden-rpg.pages.dev/assets/itens/pedra_ambar.webp'               },
+    77: { name:'Couro Animal',               img:'https://aden-rpg.pages.dev/assets/itens/couro_animal.webp'               },
+    90: { name:'Lodo Mágico',               img:'https://aden-rpg.pages.dev/assets/itens/lodo_magico.webp'               },
+    92: { name:'Totem Reptiliano',               img:'https://aden-rpg.pages.dev/assets/itens/totem_reptiliano.webp'               },
+    91: { name:'Núcleo de Vinha',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_vinha.webp'               },
+    51: { name:'Elora',               img:'https://aden-rpg.pages.dev/assets/itens/elora.webp'               },
+    52: { name:'Lumina',               img:'https://aden-rpg.pages.dev/assets/itens/lumina.webp'               },
+    54: { name:'Galdra',               img:'https://aden-rpg.pages.dev/assets/itens/galdra.webp'               },
+    53: { name:'Rutus',               img:'https://aden-rpg.pages.dev/assets/itens/rutus.webp'               },
+    // adicione outros drops aqui
+};
+
+// ═══════════════════════════════════════════════════════════
+// SKYBOX 360° — imagem panorâmica equiretangular (mesmo arquivo,
+// você vai substituir o PNG atual pela versão 360 no repositório).
+// ═══════════════════════════════════════════════════════════
+const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/razar.png';
+
+// SPOTS agora usam coordenadas ESFÉRICAS em vez de px num mapa plano:
+//   yaw   → ângulo horizontal em graus (-180 a 180, "para onde olhar")
+//   pitch → ângulo vertical em graus (-89 a 89, negativo = olhar para baixo)
+//   width/height → tamanho BASE em px na tela do "hitbox" do spot (igual
+//                  antes: é dentro dessa caixa que mobs/avatares/labels
+//                  são posicionados — essa lógica não mudou em nada).
+// ⚠️ Os valores de yaw/pitch abaixo são um CHUTE inicial (distribuídos
+// ao redor do horizonte) — eles vão precisar de calibração visual.
+// Abra a página com ?debugSpots=1 na URL: isso mostra a borda verde de
+// cada spot e faz um clique no céu logar (e mostrar na tela) o yaw/pitch
+// exato daquele ponto, pra você copiar aqui.
+const SPOTS = [
+    { id:'golem_de_gelo', name:'Golem de Gelo', yaw:-59, pitch:23, width:550, height:350,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/golem_de_gelo.webp', labelColor:'silver' },
+    { id:'aranha_artica', name:'Aranha Ártica', yaw:-127, pitch:15, width:470, height:380,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/aranha_artica.webp', labelColor:'lightgreen' },
+    { id:'fenrir_montanhes', name:'Fenrir Montanhês', yaw:20, pitch:-23, width:600, height:430,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/fenrir_montanhes.webp', labelColor:'orange' },
+    { id:'yeti', name:'Yeti', yaw:168, pitch:-31, width:480, height:390,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/yeti.webp', labelColor:'gray' },
+];
+
+const SHIELD_ITEM_ID = 85;
+const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
+const HOURGLASS_ITEM_ID = 99;
+const HOURGLASS_IMG     = 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp';
+const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
+const DAILY_LIMIT    = 10800; // 3h globais — mesmo valor do SQL
+const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
+
+// ── ADAPTIVE POLLING ───────────────────────────────────────────
+const POLL_BASE = {
+    hunting_with_others : 60_000,
+    hunting_alone       : 90_000,
+    paused_with_others  : 120_000,
+    paused_alone        : 300_000,
+    pvp_only            : 60_000,
+};
+const POLL_STEP     = 30_000;
+const POLL_MAX_3MIN = 180_000;
+const POLL_MAX_5MIN = 300_000;
+
+// ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
+const HUNT_CACHE_KEY  = () => `hunt_state_${userId}_${REGION_ID}`;
+const HUNT_CACHE_TTL  = 120_000;
+
+// ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────
+const STATS_CACHE_KEY       = () => `player_combat_stats_${userId}`;
+const STATS_CACHE_DURATION  = 72 * 60 * 60 * 1000; // 72h
+
+// ── GLOBAL IDB (mesmo banco do mines.js — owners_store) ───────
+const _GDBNAME    = 'aden_global_db';
+const _GDBVER     = 6;
+const _OWN_STORE  = 'owners_store';
+const _OWNERS_TTL = 24 * 60 * 60 * 1000; // 24h
+
+let _gdb = null;
+async function _openGlobalDb(){
+    if(_gdb) return _gdb;
+    return new Promise((res,rej)=>{
+        const req=indexedDB.open(_GDBNAME,_GDBVER);
+        req.onerror=()=>rej(req.error);
+        req.onsuccess=e=>{_gdb=e.target.result;res(_gdb);};
+        req.onupgradeneeded=e=>{
+            const db=e.target.result;
+            if(!db.objectStoreNames.contains(_OWN_STORE))
+                db.createObjectStore(_OWN_STORE,{keyPath:'id'});
+        };
+    });
+}
+async function _idbGetAllOwners(){
+    try{
+        const db=await _openGlobalDb();
+        return new Promise(res=>{
+            const tx=db.transaction(_OWN_STORE,'readonly');
+            const req=tx.objectStore(_OWN_STORE).getAll();
+            req.onsuccess=()=>{
+                const now=Date.now(),map={};
+                (req.result||[]).forEach(o=>{
+                    if(o.id&&o.timestamp&&(now-o.timestamp)<_OWNERS_TTL)map[o.id]=o;
+                });
+                res(map);
+            };
+            req.onerror=()=>res({});
+        });
+    }catch{return{};}
+}
+async function _idbSaveOwners(list){
+    if(!list||!list.length)return;
+    try{
+        const db=await _openGlobalDb();
+        // Faz merge: lê o registro existente antes de sobrescrever
+        // para nunca destruir guild_id que a mina já gravou.
+        const now=Date.now();
+        for(const o of list){
+            const id=o.id||o.i;
+            if(!id)continue;
+            await new Promise(res=>{
+                const txR=db.transaction(_OWN_STORE,'readonly');
+                const req=txR.objectStore(_OWN_STORE).get(id);
+                req.onsuccess=()=>{
+                    const existing=req.result||{};
+                    const merged={
+                        id,
+                        name       : o.name||o.n||existing.name||'',
+                        avatar_url : o.avatar_url||o.a||existing.avatar_url||'',
+                        // Preserva guild_id existente se o novo não trouxer
+                        // FIX: usa "in" para distinguir "campo ausente" (preserva existente) de
+                        // "null explícito" (jogador saiu de guilda → deve sobrescrever o cache).
+                        // O operador || fazia null || existing.guild_id = old_guild, imortalizado pelo timestamp renovado.
+                        guild_id   : (('guild_id' in o)||('g' in o)) ? (o.guild_id??o.g??null) : (existing.guild_id??null),
+                        timestamp  : now,
+                    };
+                    const txW=db.transaction(_OWN_STORE,'readwrite');
+                    txW.objectStore(_OWN_STORE).put(merged);
+                    txW.oncomplete=()=>res();
+                    txW.onerror=()=>res();
+                };
+                req.onerror=()=>res();
+            });
+        }
+    }catch(e){console.warn('[floresta] idb save',e);}
+}
+const ACTIVITY_KEY   = 'aden_activity_state';
+// Chave dedicada ao lock de 15 min do spot — independente do ACTIVITY_KEY para
+// sobreviver a navegações que sobrescrevem ACTIVITY_KEY (mercador, cidade, mina, etc.)
+const SPOT_LOCK_KEY  = () => `hunt_spot_lock_${userId}`;
+
+// ── ACTIVITY STATE (cache local compartilhado com mines.js) ─
+function getActivity(){
+    try{
+        const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
+        if(!a)return null;
+        // Penalidade de morte expirada: limpa automaticamente para não bloquear mineração
+        // (cobre o caso de fechar o browser durante os 3 min de penalidade)
+        if(a.pvp_dead&&a.dead_until&&Date.now()>a.dead_until){
+            localStorage.removeItem(ACTIVITY_KEY);
+            try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
+            return null;
+        }
+        // Mineração: expira quando a sessão termina (hora ímpar UTC + 110 min).
+        // session_ends_at é gravado explicitamente por mines.js; se ausente (entradas antigas),
+        // usa fallback de 2h (máximo teórico de uma sessão de mina).
+        if(a.type==='mining'){
+            const miningEndsAt=a.session_ends_at||null;
+            if(miningEndsAt&&Date.now()>miningEndsAt){localStorage.removeItem(ACTIVITY_KEY);return null;}
+            if(!miningEndsAt&&a.started_at&&(Date.now()-a.started_at)>2*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        }
+        // Caça: usa hunt_ends_at se disponível (atualizado a cada ampulheta ativada).
+        // Fallback para entradas antigas sem hunt_ends_at: 9h (máximo com 2 ampulhetas).
+        if(a.type==='hunting'){
+            if(a.hunt_ends_at&&Date.now()>a.hunt_ends_at){localStorage.removeItem(ACTIVITY_KEY);return null;}
+            if(!a.hunt_ends_at&&a.started_at&&(Date.now()-a.started_at)>9*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        }
+        return a;
+    }catch{return null;}
+}
+function setActivityHunting(spotId, forceResetLock = false, pvpOnly = false){
+    const cur=getActivity()||{};
+    const keepTimer = !forceResetLock && cur.type==='hunting' && cur.spot_id===spotId;
+    // Fallback: chave dedicada, sobrevive a ACTIVITY_KEY ser sobrescrita por outra página
+    const savedLockTs = (!forceResetLock && !keepTimer) ? _getSpotLockTs(spotId) : null;
+    const lockTs = keepTimer ? cur.spot_started_at : (savedLockTs ?? Date.now());
+    // Persiste na chave dedicada apenas quando o lock é novo (não sobrescreve um válido)
+    if(!keepTimer && !savedLockTs){
+        try{localStorage.setItem(SPOT_LOCK_KEY(),JSON.stringify({spot_id:spotId,locked_at:lockTs}));}catch{}
+    } else if(forceResetLock){
+        // Reset explícito (vitória em PvP) → grava novo timestamp
+        try{localStorage.setItem(SPOT_LOCK_KEY(),JSON.stringify({spot_id:spotId,locked_at:Date.now()}));}catch{}
+    }
+    // Timestamps precisos de expiração — permitem que mines.js libere o lock
+    // sem precisar que o jogador retorne à página de caça.
+    // hunt_ends_at:        quando as 3h diárias se esgotam (caça normal)
+    // pvp_only_expires_at: quando os 15 min de PvP puro expiram
+    const hunt_ends_at         = pvpOnly ? null : Date.now() + (localSecondsLeft * 1000);
+    const pvp_only_expires_at  = pvpOnly ? Date.now() + (pvpOnlySecondsLeft * 1000) : null;
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
+        type:'hunting',region:REGION_NAME,spot_id:spotId,
+        pvp_only: pvpOnly,
+        spot_started_at: lockTs,
+        started_at: Date.now(),
+        hunt_ends_at,
+        pvp_only_expires_at
+    }));
+}
+function clearActivity(){
+    // Não remove atividade de mineração — pode ter sido gravada pela página de minas
+    // enquanto as recompensas de caça ainda estavam pendentes de coleta.
+    try{const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));if(!a||a.type!=='mining')localStorage.removeItem(ACTIVITY_KEY);}catch{localStorage.removeItem(ACTIVITY_KEY);}
+    try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
+}
+function _getSpotLockTs(spotId){
+    try{
+        const raw=localStorage.getItem(SPOT_LOCK_KEY());
+        if(!raw)return null;
+        const o=JSON.parse(raw);
+        return(o.spot_id===spotId&&o.locked_at)?o.locked_at:null;
+    }catch{return null;}
+}
+function canSwitchSpot(){
+    const a=getActivity();
+    // Fonte primária: ACTIVITY_KEY (mais atualizado quando o jogador está na floresta)
+    if(a&&a.type==='hunting'&&a.spot_started_at)return(Date.now()-a.spot_started_at)>=SPOT_LOCK_MS;
+    // Fallback: chave dedicada (sobrevive quando ACTIVITY_KEY foi sobrescrito por outra página)
+    try{
+        const raw=localStorage.getItem(SPOT_LOCK_KEY());
+        if(raw){const o=JSON.parse(raw);if(o.locked_at)return(Date.now()-o.locked_at)>=SPOT_LOCK_MS;}
+    }catch{}
+    return true;
+}
+function fmtLockTime(){
+    const a=getActivity();
+    let lockedAt=null;
+    if(a&&a.type==='hunting'&&a.spot_started_at)lockedAt=a.spot_started_at;
+    if(!lockedAt){
+        try{
+            const raw=localStorage.getItem(SPOT_LOCK_KEY());
+            if(raw){const o=JSON.parse(raw);if(o.locked_at)lockedAt=o.locked_at;}
+        }catch{}
+    }
+    if(!lockedAt)return'0:00';
+    const ms=Math.max(0,SPOT_LOCK_MS-(Date.now()-lockedAt));
+    const total=Math.ceil(ms/1000);
+    const m=Math.floor(total/60),s=total%60;
+    return`${m}:${String(s).padStart(2,'0')}`;
+}
+
+// ── ESTADO ─────────────────────────────────────────────────
+let userId=null, playerData=null, currentSession=null;
+let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
+let isHuntingElsewhere=false; // sessão ativa em outra região — timer roda, mas sem animações/RPC locais
+let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
+let eliminationModalShown=false;
+function _elimAckKey(huntDate){return `elim_ack_${userId}_${huntDate||'today'}`;}
+function isEliminationAcknowledged(huntDate){try{return localStorage.getItem(_elimAckKey(huntDate))==='1';}catch{return eliminationModalShown;}}
+function setEliminationAcknowledged(huntDate){try{localStorage.setItem(_elimAckKey(huntDate),'1');}catch{}eliminationModalShown=true;}
+function clearEliminationAcknowledged(huntDate){try{localStorage.removeItem(_elimAckKey(huntDate));}catch{}eliminationModalShown=false;}
+let shieldUntil=null, cachedShieldQty=0;
+let hourglassesUsed=0, cachedHourglassQty=0;
+let huntTimerInterval=null, shieldTimerInterval=null;
+let otherPlayers=[], wanderTimers=[];
+
+// ── GUILD NAME CACHE (localStorage, TTL 48h) ──────────────────
+// Resolve guild_id (UUID) → guild name sem RPC repetida.
+// Chave separada para não misturar com owners_store (que só tem UUID).
+const _GUILD_CACHE_KEY = 'aden_guild_names_cache';
+const _GUILD_CACHE_TTL = 48 * 60 * 60 * 1000; // 48h
+
+function _guildCacheLoad(){
+    try{
+        const raw=localStorage.getItem(_GUILD_CACHE_KEY);
+        if(!raw)return{};
+        const obj=JSON.parse(raw);
+        const now=Date.now();
+        // Filtra entradas expiradas ao carregar
+        const valid={};
+        Object.entries(obj).forEach(([id,entry])=>{
+            if(entry.ts&&(now-entry.ts)<_GUILD_CACHE_TTL)valid[id]=entry;
+        });
+        return valid;
+    }catch{return{};}
+}
+function _guildCacheSave(map){
+    try{localStorage.setItem(_GUILD_CACHE_KEY,JSON.stringify(map));}catch{}
+}
+function _guildCacheGet(guildId){
+    return _guildNamesCache[guildId]?.name||null;
+}
+
+let _guildNamesCache = _guildCacheLoad(); // { [guildId]: {name, ts} }
+
+// Resolve em batch os guild_ids que ainda não têm nome em cache.
+// Chamado de forma lazy após render — não bloqueia UI.
+async function _resolveGuildNames(guildIds){
+    if(!guildIds||!guildIds.length)return;
+    const missing=guildIds.filter(id=>id&&!_guildNamesCache[id]);
+    if(!missing.length)return;
+    try{
+        const{data,error}=await supabase.from('guilds').select('id,name').in('id',missing);
+        if(error||!data)return;
+        const now=Date.now();
+        data.forEach(g=>{_guildNamesCache[g.id]={name:g.name,ts:now};});
+        _guildCacheSave(_guildNamesCache);
+        // Re-renderiza apenas se houver jogadores visíveis com essas guilds
+        const affected=otherPlayers.filter(p=>_ownersMap[p.id]?.guild_id&&missing.includes(_ownersMap[p.id].guild_id));
+        if(affected.length)renderOtherPlayers(otherPlayers);
+    }catch(e){console.warn('[floresta] guild resolve',e);}
+}
+
+// Busca guild_id de jogadores que ainda não têm no _ownersMap
+// (ex: nunca foram donos de mina). Atualiza IDB + cache em memória.
+async function _fetchMissingGuildIds(playerIds){
+    if(!playerIds||!playerIds.length)return;
+    // Filtra apenas quem não tem guild_id no mapa
+    // Busca para qualquer jogador sem guild_id — inclusive os que ainda não estão no _ownersMap
+    const missing=playerIds.filter(id=>id&&(!_ownersMap[id]||!_ownersMap[id].guild_id));
+    if(!missing.length)return;
+    try{
+        const{data,error}=await supabase.from('players').select('id,guild_id').in('id',missing);
+        if(error||!data)return;
+        let needsRerender=false;
+        const toSave=[];
+        data.forEach(row=>{
+            if(!row.guild_id)return; // sem guilda, não há o que salvar
+            if(!_ownersMap[row.id])_ownersMap[row.id]={id:row.id};
+            _ownersMap[row.id].guild_id=row.guild_id;
+            toSave.push({id:row.id,guild_id:row.guild_id});
+            needsRerender=true;
+        });
+        // Persiste no IDB com merge (preserva name/avatar)
+        if(toSave.length)_idbSaveOwners(toSave).catch(()=>{});
+        // Dispara _resolveGuildNames para os UUIDs recém obtidos
+        const newGuildIds=[...new Set(toSave.map(o=>o.guild_id))];
+        if(newGuildIds.length)await _resolveGuildNames(newGuildIds);
+        // Re-render já é chamado dentro de _resolveGuildNames se houver nomes novos.
+        // Mas se nenhum guild_id foi encontrado (todos sem guilda), needsRerender=false. Correto.
+    }catch(e){console.warn('[floresta] fetch guild_ids',e);}
+}
+let _ownersMap = {}; // { [playerId]: {name, avatar_url, guild_id} }
+
+// ── ADAPTIVE POLLING STATE ────────────────────────────────────
+let _syncTimeout     = null;
+let _currentPollMs   = 30_000;
+let _lastPlayersHash = '';
+
+// ── INACTIVITY GUARD ─────────────────────────────────────────
+let _lastActivityMs    = Date.now();
+let _inactivityCheckId = null;
+let _inactivityPaused  = false;
+
+// ── DEAD STATE (derrota em PvP — 3 minutos) ──────────────
+let deadUntil=null; // timestamp ms
+let deadTimer=null;
+let deadOverlayInterval=null;
+function isPlayerDead(){return deadUntil&&Date.now()<deadUntil;}
+
+function _startDeadOverlay(){
+    const overlay=document.getElementById('deadPenaltyOverlay');
+    if(!overlay)return;
+    const avImg=document.getElementById('deadPenaltyAvatar');
+    if(avImg&&playerData)avImg.src=playerData.avatar_url||DEFAULT_AVATAR;
+    overlay.style.display='flex';
+    overlay.classList.add('active');
+    const timerEl=document.getElementById('deadPenaltyTimer');
+    clearInterval(deadOverlayInterval);
+    const tick=()=>{
+        const remaining=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+        const m=Math.floor(remaining/60),s=remaining%60;
+        if(timerEl)timerEl.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        if(remaining<=0){
+            clearInterval(deadOverlayInterval);deadOverlayInterval=null;
+            overlay.style.display='none';overlay.classList.remove('active');
+        }
+    };
+    tick();
+    deadOverlayInterval=setInterval(tick,1000);
+}
+
+function setPlayerDead(){
+    deadUntil=Date.now()+3*60*1000;
+    // Morte zera o lock de spot — limpa chave dedicada antes de sobrescrever ACTIVITY_KEY
+    try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
+        type:'hunting',region:REGION_NAME,spot_id:currentSpotId||'__dead__',
+        pvp_dead:true,dead_until:deadUntil,started_at:Date.now()
+    }));
+    clearTimeout(deadTimer);
+    deadTimer=setTimeout(()=>{
+        deadUntil=null;
+        // Não interrompe se o jogador já re-entrou em modo pvp puro durante os 3 min
+        if(!isPvpOnly){
+            if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
+            clearTimeout(pvpOnlyExitTimer);
+            clearActivity(); // já limpa SPOT_LOCK_KEY via clearActivity
+        }
+        updateHuntingHUD();
+    },3*60*1000);
+    _startDeadOverlay();
+}
+function clearDeadState(){
+    deadUntil=null;clearTimeout(deadTimer);deadTimer=null;
+    clearInterval(deadOverlayInterval);deadOverlayInterval=null;
+    const overlay=document.getElementById('deadPenaltyOverlay');
+    if(overlay){overlay.style.display='none';overlay.classList.remove('active');}
+}
+
+// ── KILL BANNER QUEUE ─────────────────────────────────────
+let _killBannerQueue=[];
+let _killBannerShowing=false;
+function createKillBannerUI(){
+    let el=document.getElementById('huntKillBanner');
+    if(!el){el=document.createElement('div');el.id='huntKillBanner';document.body.appendChild(el);}
+}
+function pushKillNotif(html){
+    _killBannerQueue.push(html);
+    if(!_killBannerShowing)_processKillQueue();
+}
+function _processKillQueue(){
+    if(_killBannerShowing||_killBannerQueue.length===0)return;
+    _killBannerShowing=true;
+    const el=document.getElementById('huntKillBanner');
+    if(!el){_killBannerShowing=false;return;}
+    el.innerHTML=_killBannerQueue.shift();
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    const done=()=>{
+        el.classList.remove('show');
+        el.removeEventListener('animationend',done);
+        _killBannerShowing=false;
+        setTimeout(_processKillQueue,400);
+    };
+    el.addEventListener('animationend',done,{once:true});
+}
+
+// ── INDEXEDDB (mesmo do mercador.js) ───────────────────────
+const IDB_NAME='aden_inventory_db',IDB_STORE='inventory_store',IDB_VERSION=47;
+function openIdb(){return new Promise((res,rej)=>{const req=indexedDB.open(IDB_NAME,IDB_VERSION);req.onerror=()=>rej(req.error);req.onsuccess=e=>res(e.target.result);req.onupgradeneeded=()=>{};});}
+async function getItemQtyFromCache(id){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return 0;const tx=db.transaction(IDB_STORE,'readonly');const all=await new Promise((res,rej)=>{const r=tx.objectStore(IDB_STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return all.filter(i=>(i.items?.item_id===id)||(i.item_id===id)).reduce((s,i)=>s+(i.quantity||0),0);}catch{return 0;}}
+async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return;const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);const all=await new Promise((res,rej)=>{const r=store.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});const m=all.filter(i=>(i.items?.item_id===id)||(i.item_id===id&&!i.items));if(!m.length){if(delta>0){store.put({id:`hunt_drop_${id}_${Date.now()}`,item_id:id,quantity:delta,items:{item_id:id}});}return;}let rem=Math.abs(delta);if(delta<0){for(const item of m){if(rem<=0)break;if(item.quantity>=rem){item.quantity-=rem;rem=0;if(item.quantity<=0)store.delete(item.id);else store.put(item);}else{rem-=item.quantity;store.delete(item.id);}}}else{const item=m[0];item.quantity=(item.quantity||0)+delta;store.put(item);}}catch(e){console.warn('[floresta] IDB fail',e);}}
+
+// ── ÁUDIO ───────────────────────────────────────────────────
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+const audioBufs={};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/razar.mp3'};
+async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
+function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
+
+// ── MOB HIT SOUNDS ───────────────────────────────────────────
+const MOB_SOUND_URLS = {
+    golem_de_gelo: 'https://aden-rpg.pages.dev/assets/quar.mp3',
+    aranha_artica:    'https://aden-rpg.pages.dev/assets/morcego.mp3',
+    yeti:     'https://aden-rpg.pages.dev/assets/limut.mp3',
+    fenrir_montanhes:  'https://aden-rpg.pages.dev/assets/tigre.mp3',
+};
+async function preloadUrl(name, url) {
+    try {
+        const r = await fetch(url, {cache:'force-cache'});
+        if (!r.ok) return;
+        const ab = await r.arrayBuffer();
+        audioBufs[name] = await new Promise((res, rej) => audioCtx.decodeAudioData(ab, res, rej));
+    } catch {}
+}
+
+// ── VOLUME ADAPTATIVO — baseado para onde a câmera 360 está olhando ──────────
+// Antes: distância em px entre o centro da tela (no mapa 2D) e o spot.
+// Agora: distância ANGULAR (graus) entre a direção da câmera e o spot,
+// lida direto do dataset do #map (gravado pelo skybox a cada frame).
+function _getViewportCenter() {
+    const map = document.getElementById('map');
+    if (!map || !map.dataset.yaw) return null;
+    return { yaw: parseFloat(map.dataset.yaw), pitch: parseFloat(map.dataset.pitch) };
+}
+function _angularDist(yaw1, pitch1, yaw2, pitch2) {
+    // distância angular esférica aproximada (graus), suficiente para o falloff de volume
+    const y1 = THREE.MathUtils.degToRad(yaw1), p1 = THREE.MathUtils.degToRad(pitch1);
+    const y2 = THREE.MathUtils.degToRad(yaw2), p2 = THREE.MathUtils.degToRad(pitch2);
+    const d1 = new THREE.Vector3(Math.sin(y1)*Math.cos(p1), Math.sin(p1), Math.cos(y1)*Math.cos(p1));
+    const d2 = new THREE.Vector3(Math.sin(y2)*Math.cos(p2), Math.sin(p2), Math.cos(y2)*Math.cos(p2));
+    return THREE.MathUtils.radToDeg(d1.angleTo(d2));
+}
+function _spotVolume(spotId) {
+    const vc   = _getViewportCenter();
+    const spot = SPOTS.find(s => s.id === spotId);
+    if (!vc || !spot) return 0.8;
+    const distDeg = _angularDist(vc.yaw, vc.pitch, spot.yaw, spot.pitch);
+    // Falloff em graus (equivalente ao antigo Math.exp(-dist/300) em px).
+    // Ajuste ANGULAR_FALLOFF se o som cair rápido/devagar demais ao girar a câmera.
+    const ANGULAR_FALLOFF = 55; // graus — quanto maior, mais "abrangente" o som
+    return Math.max(0.08, Math.exp(-distDeg / ANGULAR_FALLOFF));
+}
+
+const amb=new Audio(SRC.ambient);amb.volume=0.08;amb.loop=true;
+document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
+
+// ── AUTH ────────────────────────────────────────────────────
+async function getUserId(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('sb-')&&k.endsWith('-auth-token')){const s=JSON.parse(localStorage.getItem(k));if(s?.user?.id)return s.user.id;}}}catch{}try{const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data?.id)return p.data.id;}}catch{}try{const{data}=await supabase.auth.getSession();return data?.session?.user?.id||null;}catch{return null;}}
+async function getPlayerData(){
+    // 1. Contexto global (index.html popula)
+    try{if(window.currentPlayerData?.id)return window.currentPlayerData;}catch{}
+    // 2. player_data_cache
+    try{const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data)return p.data;}}catch{}
+    // 3. Fallback: combat stats cache (mesma chave do mines.js/afk) — tem name + avatar_url
+    try{
+        if(userId){
+            const raw=localStorage.getItem(STATS_CACHE_KEY());
+            if(raw){const parsed=JSON.parse(raw);if(parsed?.data?.name)return parsed.data;}
+        }
+    }catch{}
+    return null;
+}
+
+// ── HELPERS ─────────────────────────────────────────────────
+function fmtTime(s){s=Math.max(0,Math.floor(s));return`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
+function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+function showAlert(msg){return new Promise(r=>{const m=document.getElementById('alertModal'),el=document.getElementById('alertMessage'),btn=document.getElementById('alertOkBtn');el.innerHTML=msg;m.style.display='flex';const close=()=>{m.style.display='none';btn.onclick=null;r();};btn.onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();},{once:true});});}
+function showConfirm(title,msg){return new Promise(r=>{const m=document.getElementById('confirmModal');document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMsg').innerHTML=msg;m.style.display='flex';const yes=document.getElementById('confirmYesBtn'),no=document.getElementById('confirmNoBtn');const done=v=>{m.style.display='none';yes.onclick=null;no.onclick=null;r(v);};yes.onclick=()=>done(true);no.onclick=()=>done(false);m.addEventListener('click',e=>{if(e.target===m)done(false);},{once:true});});}
+
+// Modal com cronômetro regressivo em tempo real (atualiza a cada segundo)
+function showLiveCountdownAlert(msgFn){
+    return new Promise(r=>{
+        const m=document.getElementById('alertModal'),el=document.getElementById('alertMessage'),btn=document.getElementById('alertOkBtn');
+        const tick=()=>{el.innerHTML=msgFn();};
+        tick();
+        m.style.display='flex';
+        const iv=setInterval(tick,1000);
+        const close=()=>{clearInterval(iv);m.style.display='none';btn.onclick=null;r();};
+        btn.onclick=close;
+        m.addEventListener('click',e=>{if(e.target===m)close();},{once:true});
+    });
+}
+
+// ── ESCUDO (global — sem region_id) ─────────────────────────
+async function initShieldFromCache(){cachedShieldQty=await getItemQtyFromCache(SHIELD_ITEM_ID);updateShieldBtn();}
+function updateShieldBtn(){const btn=document.getElementById('activateShieldBtn');if(!btn)return;btn.textContent=`🛡 Escudo (x${cachedShieldQty})`;btn.disabled=cachedShieldQty<=0;}
+function isShieldActive(){return shieldUntil&&shieldUntil>new Date();}
+function startShieldTimer(){clearInterval(shieldTimerInterval);const row=document.getElementById('shieldHudRow'),txt=document.getElementById('shieldHudText');if(!row||!txt)return;const tick=()=>{const diff=Math.max(0,Math.floor((shieldUntil-new Date())/1000));if(diff<=0){clearInterval(shieldTimerInterval);row.style.display='none';updateMyShieldIcon(false);return;}row.style.display='flex';txt.textContent=`Protegido por ${fmtTime(diff)}`;};tick();shieldTimerInterval=setInterval(tick,1000);}
+async function handleActivateShield(){
+    if(cachedShieldQty<=0){await showAlert('Você não tem <strong>Escudo de Caça</strong> no inventário!');return;}
+    const ok=await showConfirm('🛡 Escudo de Caça',`Ativar Escudo de Caça?<br><small style="color:#aab;">Protege de PvP por 1h. Máx. 3h acumuladas. Você tem <strong>${cachedShieldQty}</strong>.</small>`);
+    if(!ok)return;
+    cachedShieldQty--;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,-1);
+    showLoading();
+    try{
+        // RPC activate_hunt_shield agora não precisa de p_region_id
+        const{data,error}=await supabase.rpc('activate_hunt_shield',{p_player_id:userId});
+        if(error)throw error;
+        if(!data?.success){cachedShieldQty++;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,1);await showAlert(data?.message||'Erro.');return;}
+        shieldUntil=new Date(data.shield_until);startShieldTimer();updateMyShieldIcon(true);
+        await showAlert('🛡 <strong>Escudo ativado!</strong>');
+    }catch(e){cachedShieldQty++;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,1);await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
+function updateMyShieldIcon(active){const el=document.getElementById('myShieldIcon');if(el)el.style.display=active?'block':'none';}
+// ── AMPULHETA (global — sem region_id) ──────────────────────────────────────
+async function initHourglassFromCache(){cachedHourglassQty=await getItemQtyFromCache(HOURGLASS_ITEM_ID);updateHourglassBtn();}
+function updateHourglassBtn(){const btn=document.getElementById('activateHourglassBtn');if(!btn)return;btn.textContent=`⏳ Ampulheta (x${cachedHourglassQty})`;btn.disabled=cachedHourglassQty<=0;}
+async function handleActivateHourglass(){
+    if(cachedHourglassQty<=0){await showAlert('Você não tem <strong>Ampulheta de Caça</strong> no inventário!');return;}
+    const ok=await showConfirm('⏳ Ampulheta de Caça',`Usar Ampulheta de Caça?<br><small style="color:#aab;">Acrescenta <strong>+3h</strong> à sessão atual. Você tem <strong>${cachedHourglassQty}</strong>.</small>`);
+    if(!ok)return;
+    cachedHourglassQty--;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,-1);
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('activate_hunt_hourglass',{p_player_id:userId});
+        if(error)throw error;
+        if(!data?.success){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert(data?.message||'Erro.');return;}
+        hourglassesUsed=data.hourglasses_used;
+        updateHourglassBtn();
+        if(data.was_reset){
+            // Sessão anterior já coletada — ampulheta inicia nova sessão limpa de 3h
+            if(currentSession){currentSession.rewards_claimed=false;currentSession.total_seconds=0;}
+            isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
+            clearTimeout(pvpOnlyExitTimer);removePlayerFromSpot();currentSpotId=null;clearActivity();
+            localSecondsLeft=DAILY_LIMIT; // nova sessão de 3h base
+        } else {
+            // Mid-session: acrescenta exatamente +3h ao tempo restante atual
+            localSecondsLeft=Math.min(localSecondsLeft+DAILY_LIMIT, effectiveLimit());
+            // FIX: regrava hunt_ends_at no localStorage com o novo tempo restante,
+            // garantindo que o badge do mapa (map_hotspots.js) não expire prematuramente.
+            if(currentSpotId) setActivityHunting(currentSpotId, false, isPvpOnly);
+        }
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
+        updateTimerDisplay();updateHuntingHUD();
+        const extraMsg=data.was_reset?'Nova sessão de <strong>3h</strong> liberada! Clique em um spot para começar.':'Sessão estendida em <strong>+3h</strong>.';
+        await showAlert(`⏳ <strong>Ampulheta ativada!</strong><br>${extraMsg}`);
+    }catch(e){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SKYBOX 360° (Three.js) ──────────────────────────────────────────────
+// Substitui o antigo mapa plano 1500x1500 (background-image + transform:
+// translate/scale). Agora existe uma câmera dentro de uma esfera com a
+// imagem panorâmica projetada por dentro. Arrastar = girar a câmera
+// (yaw/pitch). "Zoom" = estreitar/alargar o FOV. Como é uma esfera
+// fechada, é IMPOSSÍVEL ver área preta nas bordas em qualquer zoom —
+// o problema de "black bars" deixa de existir estruturalmente.
+//
+// IMPORTANTE: os .hunt-spot (e tudo dentro deles — mobs, avatares de
+// jogadores, PvP, wander, animações de respiração) continuam sendo
+// elementos DOM comuns, criados exatamente como antes por renderSpots().
+// A ÚNICA coisa nova é que a posição na tela (left/top) e a escala
+// (transform:scale) de cada .hunt-spot são recalculadas a cada frame,
+// projetando sua coordenada esférica (yaw/pitch) para pixels de tela.
+// Ou seja: NENHUMA lógica de jogo (cliques, PvP, drops, timers, mobs)
+// foi tocada — só a camada visual/posicional do mapa.
+// ═══════════════════════════════════════════════════════════════════════
+
+let _sky = null; // { scene, camera, renderer, canvas, cont }
+let _lightDir = { yaw: 200, pitch: 55 }; // atualizado quando o skybox termina de carregar (ver initSkybox) — usado pra orientar a sombra 3D dos mobs
+let camYaw = 0, camPitch = -6, camFov = 120;
+const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
+const FOV_MIN = 120, FOV_MAX = 120;     // limites de zoom (menor FOV = mais zoom)
+const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
+const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
+
+// Converte yaw/pitch (graus) num vetor direção unitário (ou escalado por radius).
+// yaw=0,pitch=0 aponta para +Z — usado tanto pela câmera quanto pelos spots,
+// então os dois sistemas ficam sempre consistentes entre si.
+function yawPitchToVector(yawDeg, pitchDeg, radius = 1) {
+    const yaw = THREE.MathUtils.degToRad(yawDeg);
+    const pitch = THREE.MathUtils.degToRad(pitchDeg);
+    return new THREE.Vector3(
+        radius * Math.sin(yaw) * Math.cos(pitch),
+        radius * Math.sin(pitch),
+        radius * Math.cos(yaw) * Math.cos(pitch)
+    );
+}
+
+function initSkybox() {
+    const cont   = document.getElementById('mapContainer');
+    const canvas = document.getElementById('skyboxCanvas');
+    const map    = document.getElementById('map');
+    if (!cont || !canvas || !map || _sky) return;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(camFov, cont.clientWidth / cont.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(cont.clientWidth, cont.clientHeight);
+
+    // Esfera "por dentro": normais invertidas (scale.x = -1) para a textura
+    // ficar visível de dentro, como um skybox tradicional.
+    const geometry = new THREE.SphereGeometry(500, 60, 40);
+    geometry.scale(-1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x0d1a0d });
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    new THREE.TextureLoader().load(
+        MAP_IMAGE_URL,
+        (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            material.map = tex;
+            material.color.set(0xffffff);
+            material.needsUpdate = true;
+
+            // Detecta o ponto mais claro do skybox pra orientar a sombra dos
+            // mobs (mesma técnica do NPC do Mestre de Poções — ver
+            // estimateLightDirectionFromEquirect em postfx.js). Se algum mob
+            // já tiver sombra criada antes disso, reaplica a direção nela.
+            const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
+            _lightDir = estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            for (const el of _mobVisualRegistry) {
+                if (el.__mobVisual && el.__mobVisual.shadow) {
+                    updateNpcGroundShadowLight(el.__mobVisual.shadow, _lightDir.yaw, _lightDir.pitch, camYaw);
+                }
+            }
+        },
+        undefined,
+        (err) => console.error('[Vale Arcano] Falha ao carregar a imagem 360 do mapa:', err)
+    );
+
+    _sky = { scene, camera, renderer, canvas, cont };
+
+    // Pós-processamento (bloom, iluminação ambiente/contraste/saturação, motion blur).
+    // Envolvido em try/catch: se algo falhar (navegador sem suporte, erro de rede no
+    // módulo, etc.), o jogo continua funcionando normalmente sem os efeitos extras.
+    try {
+        _sky.pfx = initPostFX({ scene, camera, renderer, cont });
+    } catch (e) {
+        console.error('[PostFX] Falha ao iniciar pós-processamento, usando renderização padrão:', e);
+        _sky.pfx = null;
+    }
+
+    updateCameraLook();
+
+    function onResize() {
+        const w = cont.clientWidth, h = cont.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+        if (_sky.pfx) {
+            try { _sky.pfx.resize(w, h); } catch (e) { console.error('[PostFX] Erro no resize:', e); }
+        }
+    }
+    window.addEventListener('resize', onResize);
+
+    let _lastLoopTs = performance.now();
+    (function loop(ts) {
+        const dt = Math.min(ts - _lastLoopTs, 100);
+        _lastLoopTs = ts;
+
+        TWEEN.update(ts); // avança a caminhada dos mobs (ver _mobWalkPath) — mesmo relógio do render, nunca dessincroniza
+        _updateMobSeparation(dt); // rede de segurança física — nunca deixa dois mobs se sobreporem visualmente
+        updateAllMobVisuals(); // reprojeta cada mob individualmente no mundo 3D (billboard, nunca inclina/flutua)
+
+        if (_sky.pfx) {
+            try {
+                _sky.pfx.render(scene, camera);
+            } catch (e) {
+                console.error('[PostFX] Erro ao renderizar, desativando pós-processamento:', e);
+                _sky.pfx = null;
+                renderer.render(scene, camera);
+            }
+        } else {
+            renderer.render(scene, camera);
+        }
+        updateAllSpotProjections();
+        requestAnimationFrame(loop);
+    })(_lastLoopTs);
+}
+
+// Aplica camYaw/camPitch/camFov na câmera real e publica o estado atual
+// no dataset do #map (lido por _getViewportCenter, sem acoplar módulos).
+function updateCameraLook() {
+    if (!_sky) return;
+    camPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, camPitch));
+    camFov   = Math.max(FOV_MIN, Math.min(FOV_MAX, camFov));
+    _sky.camera.fov = camFov;
+    _sky.camera.updateProjectionMatrix();
+    const dir = yawPitchToVector(camYaw, camPitch, 1);
+    _sky.camera.lookAt(dir.x, dir.y, dir.z);
+    const map = document.getElementById('map');
+    if (map) { map.dataset.yaw = camYaw; map.dataset.pitch = camPitch; map.dataset.fov = camFov; }
+}
+
+// ── Projeção dos spots (yaw/pitch → posição/escala na tela) ─────────────
+const registeredSpots = []; // { spot, el, dirVec, unitDir }
+
+function clearRegisteredSpots() { registeredSpots.length = 0; }
+
+function registerSpotForProjection(spot, el) {
+    const dirVec  = yawPitchToVector(spot.yaw, spot.pitch, SPOT_SPHERE_RADIUS);
+    const unitDir = dirVec.clone().normalize();
+    registeredSpots.push({ spot, el, dirVec, unitDir });
+    updateAllSpotProjections(); // posiciona imediatamente, sem esperar o próximo frame
+}
+
+function updateAllSpotProjections() {
+    if (!_sky || !registeredSpots.length) return;
+    const { camera, cont } = _sky;
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    const camDir = camera.getWorldDirection(new THREE.Vector3());
+    const baseK  = Math.tan(THREE.MathUtils.degToRad(INITIAL_FOV / 2));
+    const curK   = Math.tan(THREE.MathUtils.degToRad(camFov / 2));
+    const zoomScale = baseK / curK; // >1 quando dá zoom (fov menor que o inicial)
+
+    for (const rs of registeredSpots) {
+        if (rs.dot === undefined) rs.dot = 0;
+        rs.dot = camDir.dot(rs.unitDir);
+        if (rs.dot <= 0.05) { rs.el.style.display = 'none'; continue; }
+        rs.el.style.display = '';
+        const proj = rs.dirVec.clone().project(camera);
+        const sx = (proj.x * 0.5 + 0.5) * cw;
+        const sy = (1 - (proj.y * 0.5 + 0.5)) * ch;
+        rs.el.style.left = sx + 'px';
+        rs.el.style.top  = sy + 'px';
+        rs.el.style.transform = `translate(-50%, -50%) scale(${zoomScale.toFixed(3)})`;
+    }
+}
+
+// ── Ferramenta de calibração (?debugSpots=1) ─────────────────────────────
+// Mostra a borda verde dos spots e, ao clicar em qualquer ponto do céu,
+// loga (e exibe na tela) o yaw/pitch daquele ponto — cole os números no
+// SPOTS lá em cima para realinhar depois de trocar a imagem por uma 360.
+function initSpotDebugTool() {
+    let enabled = false;
+    try { enabled = new URLSearchParams(location.search).get('debugSpots') === '1'; } catch {}
+    if (!enabled) return;
+    document.body.classList.add('debug-align');
+
+    const raycaster = new THREE.Raycaster();
+    document.getElementById('mapContainer').addEventListener('click', (e) => {
+        if (!_sky || e.target.closest('.hunt-spot')) return; // não atrapalha clique em spot
+        const rect = _sky.cont.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+        );
+        raycaster.setFromCamera(ndc, _sky.camera);
+        const dir = raycaster.ray.direction.clone().normalize();
+        const yaw   = THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z));
+        const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)));
+        const txt = `yaw: ${yaw.toFixed(1)}, pitch: ${pitch.toFixed(1)}`;
+        console.log('[debugSpots]', txt);
+
+        const tip = document.createElement('div');
+        tip.textContent = txt;
+        tip.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;transform:translate(-50%,-130%);
+            background:rgba(0,0,0,.85);color:#7f7;font:bold 12px monospace;padding:4px 8px;border:1px solid #0f0;
+            border-radius:4px;z-index:99999;pointer-events:none;white-space:nowrap;`;
+        document.body.appendChild(tip);
+        setTimeout(() => tip.remove(), 2500);
+    });
+}
+
+// ── DRAG / PINCH / WHEEL DO MAPA ─────────────────────────────────────
+// Mesmo padrão de eventos de antes (mouse + touch + inércia), só que
+// em vez de mover translate/scale de um <div>, agora gira a câmera
+// (camYaw/camPitch) e ajusta o FOV (camFov).
+function enableMapInteraction() {
+    const cont   = document.getElementById('mapContainer');
+    const canvas = document.getElementById('skyboxCanvas');
+    if (!canvas || !cont) return;
+
+    // Guard contra dupla inicialização
+    if (cont._interactionEnabled) return;
+    cont._interactionEnabled = true;
+
+    // ── Inércia ─────────────────────────────────────────────────────────
+    let vx = 0, vy = 0, lt = 0, aId = null;
+    const FRICTION = 0.94;
+    const DRAG_SENS = 1.0; // sensibilidade do arraste — ajuste fino se necessário
+
+    // ── Drag ────────────────────────────────────────────────────────────
+    let drag = false, sx = 0, sy = 0;
+
+    // ── Pinch ───────────────────────────────────────────────────────────
+    let isPinching = false;
+    let pinchStartDist = 0, pinchStartFov = camFov;
+
+    canvas.style.touchAction = 'none';
+    canvas.style.userSelect  = 'none';
+
+    function degPerPx() {
+        // graus por pixel arrastado, proporcional ao FOV atual (mesma
+        // sensação de arraste em qualquer nível de zoom)
+        return camFov / (cont.clientHeight || window.innerHeight);
+    }
+
+    function applyDelta(dx, dy) {
+        const dpp = degPerPx();
+        // Navegação sempre na direção OPOSTA ao arraste (nos dois eixos).
+        camYaw   += dx * dpp * DRAG_SENS;
+        camPitch += dy * dpp * DRAG_SENS;
+        updateCameraLook();
+    }
+
+    // ── Inércia ─────────────────────────────────────────────────────────
+    function inertia() {
+        cancelAnimationFrame(aId);
+        if (drag) return;
+        vx *= FRICTION; vy *= FRICTION;
+        applyDelta(vx, vy);
+        if (Math.abs(vx) > 0.02 || Math.abs(vy) > 0.02)
+            aId = requestAnimationFrame(inertia);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+    function touchDist(e) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // ── Drag handlers ───────────────────────────────────────────────────
+    function startDrag(e) {
+        drag = true;
+        // Resume áudio (mantém lógica original)
+        try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
+        amb.play().catch(() => {});
+        canvas.classList.add('dragging');
+        sx = e.clientX ?? e.touches[0].clientX;
+        sy = e.clientY ?? e.touches[0].clientY;
+        vx = vy = 0;
+        lt = performance.now();
+        cancelAnimationFrame(aId);
+    }
+
+    function onDrag(e) {
+        if (!drag) return;
+        e.preventDefault();
+        const nx = e.clientX ?? e.touches[0].clientX;
+        const ny = e.clientY ?? e.touches[0].clientY;
+        const dt = performance.now() - lt;
+        const dx = nx - sx, dy = ny - sy;
+        if (dt > 0) { vx = dx / dt * 16; vy = dy / dt * 16; } // normaliza p/ ~1 frame (16ms)
+        applyDelta(dx, dy);
+        sx = nx; sy = ny;
+        lt = performance.now();
+    }
+
+    function endDrag() {
+        drag = false;
+        canvas.classList.remove('dragging');
+        if (Math.abs(vx) > 0.05 || Math.abs(vy) > 0.05) inertia();
+    }
+
+    // ── Touch unificado (drag + pinch) ──────────────────────────────────
+    function onTouchStart(e) {
+        if (e.touches.length >= 2) {
+            isPinching = true;
+            drag = false;
+            cancelAnimationFrame(aId);
+            pinchStartDist = touchDist(e);
+            pinchStartFov  = camFov;
+        } else if (e.touches.length === 1 && !isPinching) {
+            startDrag(e);
+        }
+    }
+
+    function onTouchMove(e) {
+        if (e.touches.length >= 2 && isPinching) {
+            e.preventDefault();
+            const ratio = touchDist(e) / pinchStartDist;
+            camFov = pinchStartFov / ratio; // afastar dedos (ratio>1) = zoom in = fov menor
+            updateCameraLook();
+        } else if (e.touches.length === 1 && !isPinching) {
+            onDrag(e);
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (isPinching && e.touches.length < 2) {
+            isPinching = false;
+            vx = vy = 0;
+        }
+        if (e.touches.length === 0) endDrag();
+    }
+
+    // ── Wheel (zoom no desktop — bônus: antes não existia zoom no mouse) ──
+    function onWheel(e) {
+        e.preventDefault();
+        camFov += e.deltaY * 0.05;
+        updateCameraLook();
+    }
+
+    // ── Mouse (desktop) ─────────────────────────────────────────────────
+    // Anexado ao mapContainer (não só ao canvas): os .hunt-spot ficam numa
+    // camada irmã (#map) por cima do canvas, então um mousedown que começa
+    // em cima de um spot/mob nunca chegaria ao canvas — precisa ser
+    // capturado no ancestral comum a ambos.
+    cont.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag,    { passive: false });
+    window.addEventListener('mouseup',   endDrag,   { passive: true });
+    cont.addEventListener('wheel', onWheel, { passive: false });
+
+    // ── Touch (mobile) ──────────────────────────────────────────────────
+    cont.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
+
+    initSpotDebugTool();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MOBS COMO SPRITES 3D (billboard) — mesma técnica do NPC do Mestre de
+// Poções: cada mob é um THREE.Sprite (sempre de frente pra câmera,
+// nunca deforma/inclina) ancorado numa posição real do mundo 3D.
+//
+// Antes, os mobs eram <img> posicionados via CSS dentro de uma caixa
+// (.hunt-spot) que só era transladada/escalada como um bloco só — ao
+// girar a câmera, essa aproximação não acompanhava a perspectiva real
+// do ponto onde cada mob estava, dando a sensação de flutuar/inclinar.
+// Agora cada mob tem seu próprio ponto no mundo, projetado
+// individualmente a cada frame (updateAllMobVisuals), exatamente como
+// o NPC — então nunca destoa da câmera.
+//
+// A caminhada (wander) e o desvio entre mobs CONTINUAM em coordenadas
+// "locais" (px dentro da caixa do spot, 0..spot.width/height) — só a
+// CAMADA VISUAL mudou. Isso preserva quase 100% da lógica de
+// posicionamento/desvio/combate já existente, que lê e escreve em
+// el.style.left/top normalmente.
+//
+// O QUE REALMENTE MUDOU: a animação da caminhada, que antes usava CSS
+// `transition: left/top` (o navegador anima "por fora" — o JS não sabe
+// o valor exato durante o trajeto, por isso o desvio usava
+// __wanderPos, o DESTINO, em vez da posição real do mob), agora usa
+// tween.js. Como o tween atualiza el.style.left/top a cada frame de
+// verdade, o cálculo de desvio passa a enxergar a posição REAL de cada
+// mob a qualquer instante — não mais só o destino — corrigindo o
+// "atravessar" inconsistente. Além disso, _updateMobSeparation aplica
+// uma leve repulsão contínua (só visual, nunca escrita de volta em
+// style.left/top) como última rede de segurança física: mesmo que o
+// planejamento de rota falhe, dois mobs nunca chegam a se sobrepor.
+// ═══════════════════════════════════════════════════════════════════
+
+const _mobTexCache = new Map(); // key -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
+// IMPORTANTE: THREE.Sprite ignora o SINAL da escala — o renderer extrai a
+// escala a partir do comprimento (sempre positivo) das colunas da matriz do
+// mundo, então `sprite.scale.x = -1` não espelha nada (silenciosamente vira
+// o mesmo que 1). Por isso o espelhamento (mob virando pra esquerda) precisa
+// ser feito trocando a TEXTURA por uma cópia espelhada (repeat.x=-1), não a
+// escala — ver `flip` abaixo.
+function _mobGetTexture(url, flip, onReady) {
+    const key = url + (flip ? '#flip' : '');
+    let entry = _mobTexCache.get(key);
+    if (entry) { if (entry.tex) onReady(entry.tex); else entry.waiters.push(onReady); return; }
+    entry = { tex: null, waiters: [onReady] };
+    _mobTexCache.set(key, entry);
+    if (flip) {
+        // Reaproveita a textura normal (já em cache ou carregada agora) e cria uma
+        // CÓPIA espelhada via repeat/offset — sem baixar a imagem de novo.
+        _mobGetTexture(url, false, (baseTex) => {
+            const flipped = baseTex.clone();
+            flipped.wrapS = THREE.RepeatWrapping;
+            flipped.repeat.x = -1;
+            flipped.offset.x = 1;
+            flipped.needsUpdate = true;
+            entry.tex = flipped;
+            entry.waiters.forEach(fn => fn(flipped));
+            entry.waiters.length = 0;
+        });
+        return;
+    }
+    new THREE.TextureLoader().load(
+        url,
+        (tex) => { tex.colorSpace = THREE.SRGBColorSpace; entry.tex = tex; entry.waiters.forEach(fn => fn(tex)); entry.waiters.length = 0; },
+        undefined,
+        (err) => { console.error('[Mobs3D] Falha ao carregar textura', url, err); _mobTexCache.delete(key); }
+    );
+}
+
+// Base tangente (right/up) no ponto onde o spot "vive" na esfera — usada pra
+// converter a posição local (px dentro da caixa) numa posição real do mundo,
+// como se fosse um "chão" plano ancorado naquele trecho do céu.
+const _spotTangentCache = new Map();
+function _spotTangent(spot) {
+    let t = _spotTangentCache.get(spot.id);
+    if (t) return t;
+    const center = yawPitchToVector(spot.yaw, spot.pitch, SPOT_SPHERE_RADIUS);
+    const dir = center.clone().normalize();
+    let right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), dir);
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0); // spot quase no zênite/nadir
+    right.normalize();
+    const up = new THREE.Vector3().crossVectors(dir, right).normalize();
+    t = { center, right, up };
+    _spotTangentCache.set(spot.id, t);
+    return t;
+}
+
+const MOB_WORLD_PER_PX = 1; // 1 unidade de mundo por px local — mesma escala do resto da cena (raio da esfera, distâncias etc.)
+function _mobLocalToWorld(spot, leftPx, topPx) {
+    const t = _spotTangent(spot);
+    const dx = (leftPx + MOB_HITBOX_W / 2) - spot.width / 2;
+    const dy = (topPx + MOB_HITBOX_H) - spot.height / 2; // pés = base da hitbox
+    return t.center.clone()
+        .addScaledVector(t.right, dx * MOB_WORLD_PER_PX)
+        .addScaledVector(t.up, -dy * MOB_WORLD_PER_PX);
+}
+
+// Posição "LÓGICA" do mob (px dentro da caixa do spot) — é o que o wander, o
+// desvio e o combate leem/escrevem, exatamente como antes. Antes ela vivia em
+// el.style.left/top; agora mora aqui, separada, porque style.left/top do wrap
+// passou a ser a posição em TELA (ver updateAllMobVisuals) — a mesma projeção
+// 3D usada pelo sprite. Antes as duas coisas eram a mesma (a caixa do spot
+// inteira só transladava/escalava), então o nome ficava sempre grudado no
+// mob "de graça"; com o sprite agora projetado individualmente (pra corrigir
+// o inclinar/flutuar), se o nome continuasse preso à caixa antiga ele iria
+// se descolando do sprite ao andar — por isso o nome também passou a usar
+// esta mesma projeção, e não mais style.left/top como posição lógica.
+function _mobGetLogical(el) {
+    return el.__logicalPos || (el.__logicalPos = { left: 0, top: 0 });
+}
+
+// Fração da altura da tela ocupada pelo mob (no FOV fixo deste mapa) — ajuste
+// aqui se o tamanho visual dos mobs precisar mudar depois de calibrar ao vivo.
+const MOB_HEIGHT_FRAC = 0.09;
+
+function _mobCreateVisual(spot, baseImgUrl) {
+    const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };
+    _mobGetTexture(baseImgUrl, false, (tex) => {
+        if (!_sky) return;
+        const aspect = tex.image.width / tex.image.height;
+        const fovRad = THREE.MathUtils.degToRad(camFov);
+        const worldHeight = 2 * SPOT_SPHERE_RADIUS * Math.tan(fovRad / 2) * MOB_HEIGHT_FRAC;
+        const worldWidth = worldHeight * aspect;
+        const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+        const sprite = new THREE.Sprite(material);
+        sprite.center.set(0.5, 0); // pivô nos "pés" — igual ao NPC do Mestre de Poções
+        sprite.scale.set(worldWidth, worldHeight, 1);
+        sprite.renderOrder = 5;
+        _sky.scene.add(sprite);
+        state.sprite = sprite;
+        state.material = material;
+        state.baseW = worldWidth;
+        state.baseH = worldHeight;
+        try {
+            state.shadow = createNpcGroundShadow({
+                scene: _sky.scene,
+                npcTexture: tex,
+                worldWidth,
+                worldHeight,
+                feetPosition: sprite.position,
+                lightYaw: _lightDir.yaw,
+                lightPitch: _lightDir.pitch,
+                cameraYaw: camYaw,
+            });
+        } catch (e) { console.error('[Mobs3D] Falha ao criar sombra do mob:', e); }
+        state.ready = true;
+    });
+    return state;
+}
+
+function _mobSetTexture(state, url, flip) {
+    if (!state || !state.material) return;
+    _mobGetTexture(url, !!flip, (tex) => { if (state.material) { state.material.map = tex; state.material.needsUpdate = true; } });
+}
+
+function _mobDestroyVisual(state) {
+    if (!state) return;
+    if (state.sprite && _sky) _sky.scene.remove(state.sprite);
+    if (state.shadow && state.shadow.mesh && _sky) _sky.scene.remove(state.shadow.mesh);
+}
+
+// Todos os mobs vivos na página (reprojetados a cada frame) e todos os grupos
+// (um por spot) usados pela repulsão contínua (ver _updateMobSeparation).
+const _mobVisualRegistry = [];
+const _allMobGroups = [];
+
+function _mobProjectScreen(world) {
+    if (!_sky) return null;
+    const { camera, cont } = _sky;
+    const camDir = camera.getWorldDirection(_mobProjDirScratch);
+    const toPoint = world.clone().sub(camera.position).normalize();
+    if (camDir.dot(toPoint) <= 0.05) return null; // atrás da câmera — some, igual aos spots
+    const proj = world.clone().project(camera);
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    return { x: (proj.x * 0.5 + 0.5) * cw, y: (1 - (proj.y * 0.5 + 0.5)) * ch };
+}
+const _mobProjDirScratch = new THREE.Vector3();
+const _mobCamUpScratch = new THREE.Vector3();
+
+function updateAllMobVisuals() {
+    if (!_sky) return;
+    for (const el of _mobVisualRegistry) {
+        const state = el.__mobVisual;
+        if (!state || !state.ready || !el.isConnected) continue;
+        const spot = el.__mobSpot;
+        const { left, top } = _mobGetLogical(el);
+        const sep = el.__mobSepOffset || { x: 0, y: 0 };
+        const fx = el.__mobFx || { swayX: 0, bobY: 0 };
+        const world = _mobLocalToWorld(spot, left + sep.x, top + sep.y);
+        const t = _spotTangent(spot);
+        world.addScaledVector(t.right, fx.swayX * MOB_WORLD_PER_PX);
+        world.addScaledVector(t.up, -fx.bobY * MOB_WORLD_PER_PX);
+        state.sprite.position.copy(world);
+        if (state.shadow) {
+            updateNpcGroundShadowCamera(state.shadow, camYaw);
+            state.shadow.mesh.position.copy(world);
+        }
+        // Nome do mob: uso o "up" REAL da câmera (extraído da matriz de mundo —
+        // exatamente o mesmo vetor que o THREE.Sprite usa por baixo dos panos
+        // pra se orientar) e projeto o ponto com a perspectiva completa da
+        // câmera, sem fórmula aproximada. A tentativa anterior (converter
+        // px-por-unidade-de-mundo com uma fórmula linear) só era exata perto
+        // do centro da tela — perto das bordas (câmera bem aberta, 120° de
+        // FOV) o erro crescia, exatamente onde o problema ainda aparecia.
+        _mobCamUpScratch.setFromMatrixColumn(_sky.camera.matrixWorld, 1).normalize();
+        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * 1.05);
+        const screenHead = _mobProjectScreen(headWorld);
+        if (screenHead) {
+            el.style.display = '';
+            el.style.left = screenHead.x + 'px';
+            el.style.top = screenHead.y + 'px';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+}
+
+// Repulsão contínua entre mobs do mesmo spot — só ajusta a posição
+// RENDERIZADA (nunca escreve na posição lógica, que continua sendo a
+// verdade usada pelo planejamento de rota). É a última rede de segurança:
+// se o desvio planejado falhar e dois mobs chegarem perto demais, isso
+// evita que fiquem visualmente sobrepostos.
+//
+// A direção do empurrão é TRAVADA no instante em que o contato começa (a
+// partir da posição relativa NAQUELE momento) e mantida reta enquanto durar
+// o contato — só a magnitude (que segue a proximidade atual) varia. Antes eu
+// tentava suavizar a direção continuamente a cada frame, mas como o alvo
+// (a direção crua entre os dois mobs) muda o tempo todo enquanto eles se
+// cruzam, suavizar a direção só fazia o empurrão "varrer" um arco enquanto
+// perseguia esse alvo em movimento — visualmente um giro. Travando a
+// direção uma vez, o empurrão vira sempre um simples empurrão reto, nunca
+// uma curva.
+const MOB_SEP_PUSH_MAX = 18; // px máx. de empurrão visual
+function _updateMobSeparation(dt) {
+    for (const group of _allMobGroups) {
+        for (const el of group) {
+            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; el.__mobPushDir = null; continue; }
+            // Viés fixo por mob (sorteado uma vez) — desempata casos quase perfeitamente
+            // simétricos (dois mobs exatamente sobrepostos), onde a direção "certa" do
+            // empurrão é ambígua.
+            const bias = el.__mobAvoidBias || (el.__mobAvoidBias = { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 });
+            const { left, top } = _mobGetLogical(el);
+            const cx = left + MOB_HITBOX_W / 2, cy = top + MOB_HITBOX_H / 2;
+            let pushX = 0, pushY = 0;
+            for (const other of group) {
+                if (other === el || other.classList.contains('mob-dying')) continue;
+                const ol = _mobGetLogical(other).left, ot = _mobGetLogical(other).top;
+                const ocx = ol + MOB_HITBOX_W / 2, ocy = ot + MOB_HITBOX_H / 2;
+                let dx = cx - ocx, dy = cy - ocy;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1) { dx = bias.x || 1; dy = bias.y; dist = Math.sqrt(dx * dx + dy * dy) || 1; }
+                if (dist < MOB_MIN_DIST_PX) {
+                    const strength = (MOB_MIN_DIST_PX - dist) / MOB_MIN_DIST_PX;
+                    pushX += (dx / dist) * strength + bias.x * 0.15 * strength;
+                    pushY += (dy / dist) * strength + bias.y * 0.15 * strength;
+                }
+            }
+            const rawMag = Math.sqrt(pushX * pushX + pushY * pushY);
+            let targetX = 0, targetY = 0;
+            if (rawMag > 0.001) {
+                if (!el.__mobPushDir) {
+                    // Início de um novo contato — trava a direção agora (reta), não recalcula depois.
+                    el.__mobPushDir = { x: pushX / rawMag, y: pushY / rawMag };
+                }
+                const mag = Math.min(1, rawMag);
+                targetX = el.__mobPushDir.x * MOB_SEP_PUSH_MAX * mag;
+                targetY = el.__mobPushDir.y * MOB_SEP_PUSH_MAX * mag;
+            } else {
+                el.__mobPushDir = null; // saiu do contato — próxima vez trava uma direção nova
+            }
+            const prev = el.__mobSepOffset || { x: 0, y: 0 };
+            const rate = Math.min(1, dt * 0.02); // pode reagir mais rápido agora — a direção já não muda de repente
+            el.__mobSepOffset = { x: prev.x + (targetX - prev.x) * rate, y: prev.y + (targetY - prev.y) * rate };
+        }
+    }
+}
+
+// ── Efeitos de combate portados pra o sprite 3D (flash de impacto, tremor,
+// morte e respawn) — antes eram só @keyframes CSS no <img>; como o visual
+// agora é o sprite Three.js, essas mesmas sensações são recriadas com tween.js.
+function _mobVisualFlash(el) {
+    const state = el.__mobVisual;
+    if (!state || !state.material) return;
+    const c = state.material.color;
+    c.setRGB(1, 1, 1);
+    new TWEEN.Tween(c).to({ r: 2.2, g: 2.2, b: 1.5 }, 90).easing(TWEEN.Easing.Quadratic.Out)
+        .chain(new TWEEN.Tween(c).to({ r: 1, g: 1, b: 1 }, 190).easing(TWEEN.Easing.Quadratic.In))
+        .start();
+}
+
+function _mobVisualShake(el) {
+    el.__mobShake = { x: 0, rot: 0 };
+    const obj = { t: 0 };
+    new TWEEN.Tween(obj).to({ t: 1 }, 350)
+        .onUpdate(() => {
+            const decay = 1 - obj.t;
+            const wob = Math.sin(obj.t * Math.PI * 5);
+            el.__mobShake = { x: wob * 6 * decay, rot: wob * 3 * decay };
+        })
+        .onComplete(() => { el.__mobShake = { x: 0, rot: 0 }; })
+        .start();
+}
+
+function _mobVisualDie(el) {
+    const state = el.__mobVisual;
+    if (el.__walkTween) { el.__walkTween.stop(); el.__walkTween = null; }
+    if (!state || !state.material) return;
+    const obj = { scale: 1, opacity: 1 };
+    new TWEEN.Tween(obj).to({ scale: 0.4, opacity: 0 }, 850).easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+            state.material.opacity = obj.opacity;
+            state.sprite.scale.set(state.baseW * obj.scale, state.baseH * obj.scale, 1);
+            if (state.shadow) state.shadow.mesh.material.opacity = obj.opacity * 0.8;
+        })
+        .start();
+}
+
+function _mobVisualRespawn(el) {
+    const state = el.__mobVisual;
+    if (!state || !state.material) return;
+    const obj = { scale: 0.3, opacity: 0 };
+    state.material.opacity = 0;
+    new TWEEN.Tween(obj).to({ scale: 1, opacity: 1 }, 700).easing(TWEEN.Easing.Back.Out)
+        .onUpdate(() => {
+            const op = Math.min(1, obj.opacity);
+            state.material.opacity = op;
+            state.sprite.scale.set(state.baseW * obj.scale, state.baseH * obj.scale, 1);
+            if (state.shadow) state.shadow.mesh.material.opacity = op * 0.8;
+        })
+        .start();
+}
+
+// ── WANDER ───────────────────────────────────────────────────
+// Velocidade de caminhada constante (px/s) — a duração do deslocamento
+// agora é calculada pela distância, então perto ou longe o mob sempre
+// parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
+const MOB_WALK_SPEED_PX_S = 30;
+const MOB_WALK_MIN_MS = 900;
+const MOB_WALK_MAX_MS = 15000;
+const MOB_MIN_DIST_PX = 60; // distância mínima entre mobs para evitar que se esbarrem
+const MOB_HITBOX_W = 70, MOB_HITBOX_H = 90;
+const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se um trecho do caminho passa perto demais de outro mob
+const MOB_MAX_DETOURS = 4; // limite de waypoints de desvio numa mesma caminhada (evita ficar recalculando pra sempre num spot muito cheio)
+function _mobDistSq(aLeft,aTop,bLeft,bTop){const acx=aLeft+MOB_HITBOX_W/2,acy=aTop+MOB_HITBOX_H/2;const bcx=bLeft+MOB_HITBOX_W/2,bcy=bTop+MOB_HITBOX_H/2;const dx=acx-bcx,dy=acy-bcy;return dx*dx+dy*dy;}
+// IMPORTANTE: usa sempre a posição REAL e atual do outro mob (style.left/top,
+// que agora é atualizado a cada frame pelo tween.js — ver _mobWalkPath), nunca
+// o destino planejado. Antes, durante uma transição CSS, style.left/top já
+// valia o destino final mesmo com o mob ainda no meio do caminho, então o
+// desvio comparava contra um ponto onde o outro mob nem estava ainda — essa
+// era a causa do "atravessar" inconsistente.
+function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
+function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);let best=null,bestScore=-1;for(let tries=0;tries<24;tries++){const left=Math.random()*maxLeft,top=Math.random()*maxTop;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>=MOB_MIN_DIST_PX)return{left,top};if(minDist>bestScore){bestScore=minDist;best={left,top};}}if(best)return best;const cols=6,rows=6;let gLeft=0,gTop=0,gScore=-1;for(let r=0;r<=rows;r++){for(let c=0;c<=cols;c++){const left=(maxLeft*c)/cols,top=(maxTop*r)/rows;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>gScore){gScore=minDist;gLeft=left;gTop=top;}}}return{left:gLeft,top:gTop};}
+// Distância do ponto (px,py) até o segmento AB — usada pra saber se um trecho do caminho passa perto demais de outro mob.
+function _mobPointSegDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((px-ax)*dx+(py-ay)*dy)/lenSq:0;t=Math.max(0,Math.min(1,t));const cx=ax+dx*t,cy=ay+dy*t;return Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));}
+// Menor distância de um único trecho AB até qualquer outro mob do grupo.
+function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
+// Menor distância ao longo do caminho INTEIRO (origem passando por cada waypoint até o destino).
+function _mobFullPathClearance(oldLeft,oldTop,path,group,self){let curLeft=oldLeft,curTop=oldTop,min=Infinity;for(const p of path){const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;const c=_mobSegMinClearance(ax,ay,bx,by,group,self);if(c<min)min=c;curLeft=p.left;curTop=p.top;}return min;}
+// Acha, ao longo do caminho inteiro, o trecho que passa mais perto de algum outro mob (abaixo da folga mínima).
+// Retorna o índice do trecho (no array "path") e o obstáculo responsável, ou null se o caminho já está livre.
+function _mobFindWorstSegment(oldLeft,oldTop,path,group,self){
+    let worstIdx=-1,worstObstacle=null,worstDist=MOB_AVOID_MARGIN_PX;
+    let curLeft=oldLeft,curTop=oldTop;
+    for(let i=0;i<path.length;i++){
+        const p=path[i];
+        const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;
+        const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;
+        for(const other of group){
+            if(other===self)continue;
+            const ot=_mobGetLogical(other);
+            const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
+            const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
+            if(d<worstDist){worstDist=d;worstIdx=i;worstObstacle={ox,oy};}
+        }
+        curLeft=p.left;curTop=p.top;
+    }
+    return worstIdx===-1?null:{idx:worstIdx,obstacle:worstObstacle};
+}
+// Gera os dois pontos de desvio possíveis (um pra cada lado do trajeto), contornando o obstáculo (ox,oy).
+function _mobDetourCandidates(ax,ay,bx,by,ox,oy,margin){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((ox-ax)*dx+(oy-ay)*dy)/lenSq:0.5;t=Math.max(0.2,Math.min(0.8,t));const cx=ax+dx*t,cy=ay+dy*t;const len=Math.sqrt(lenSq)||1;const px=-dy/len,py=dx/len;const distToObs=Math.sqrt((ox-cx)*(ox-cx)+(oy-cy)*(oy-cy));const basePush=Math.max(margin-distToObs,0)+margin*0.55;const out=[];for(const m of[1,1.8,2.8]){const push=basePush*m;out.push({left:cx+px*push-MOB_HITBOX_W/2,top:cy+py*push-MOB_HITBOX_H/2});out.push({left:cx-px*push-MOB_HITBOX_W/2,top:cy-py*push-MOB_HITBOX_H/2});}return out;}
+// Monta o caminho de "self" até (newLeft,newTop) desviando de outros mobs. Funciona em rodadas: acha o
+// trecho que mais se aproxima de algum mob, insere um waypoint de desvio ali (testando os dois lados e
+// ficando com o que deixa mais espaço livre no caminho INTEIRO), e repete — assim, se o desvio escolhido
+// esbarrar em OUTRO mob mais adiante, a próxima rodada detecta e ajusta esse novo trecho também.
+// Só aceita cada novo waypoint se ele realmente melhorar a folga total; nunca deixa o caminho pior que
+// a rota anterior, e para depois de MOB_MAX_DETOURS tentativas pra não recalcular pra sempre.
+function _mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,self){
+    let path=[{left:newLeft,top:newTop}];
+    if(!group||!group.length)return path;
+    const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);
+    for(let iter=0;iter<MOB_MAX_DETOURS;iter++){
+        const worst=_mobFindWorstSegment(oldLeft,oldTop,path,group,self);
+        if(!worst)break; // caminho inteiro já está livre, com folga suficiente de todos os mobs
+        const segFrom=worst.idx===0?{left:oldLeft,top:oldTop}:path[worst.idx-1];
+        const segTo=path[worst.idx];
+        const ax=segFrom.left+MOB_HITBOX_W/2,ay=segFrom.top+MOB_HITBOX_H/2;
+        const bx=segTo.left+MOB_HITBOX_W/2,by=segTo.top+MOB_HITBOX_H/2;
+        const candidates=_mobDetourCandidates(ax,ay,bx,by,worst.obstacle.ox,worst.obstacle.oy,MOB_AVOID_MARGIN_PX)
+            .map(c=>({left:Math.min(maxLeft,Math.max(0,c.left)),top:Math.min(maxTop,Math.max(0,c.top))}));
+        const currentClearance=_mobFullPathClearance(oldLeft,oldTop,path,group,self);
+        let bestCandidate=null,bestClearance=currentClearance;
+        for(const cand of candidates){
+            const trialPath=path.slice(0,worst.idx).concat([cand],path.slice(worst.idx));
+            const clearance=_mobFullPathClearance(oldLeft,oldTop,trialPath,group,self);
+            if(clearance>bestClearance){bestClearance=clearance;bestCandidate=cand;}
+        }
+        if(!bestCandidate)break; // nenhum dos dois lados melhora a situação — mantém o caminho como está
+        path=path.slice(0,worst.idx).concat([bestCandidate],path.slice(worst.idx));
+    }
+    return path;
+}
+// Anda por um ou mais pontos em sequência (waypoints de desvio + destino final), respeitando a
+// velocidade constante do mob e disparando o bounce de passada a cada trecho. Retorna a duração total (ms).
+//
+// Antes disso era feito com `el.style.transition` (CSS) + setTimeout por trecho: o navegador
+// animava o movimento "por fora" do JS, então style.left/top já valia o DESTINO do trecho assim
+// que era escrito, mesmo com o mob ainda a caminho — daí o desvio (_mobMinDistTo/_mobSegMinClearance)
+// enxergar só o destino, nunca a posição real durante o trajeto. Com tween.js, cada frame de verdade
+// atualiza style.left/top (onUpdate), então a posição real fica sempre disponível pra quem precisar dela.
+function _mobWalkPath(el,img,startLeft,startTop,points){
+    if(el.__walkTween){el.__walkTween.stop();el.__walkTween=null;}
+    let curLeft=startLeft,curTop=startTop,totalDist=0;
+    const segs=points.map(p=>{const dx=p.left-curLeft,dy=p.top-curTop;const dist=Math.sqrt(dx*dx+dy*dy);const seg={from:{left:curLeft,top:curTop},to:p,dist};curLeft=p.left;curTop=p.top;return seg;});
+    totalDist=segs.reduce((sum,s)=>sum+s.dist,0);
+    const totalDurationMs=Math.min(MOB_WALK_MAX_MS,Math.max(MOB_WALK_MIN_MS,(totalDist/MOB_WALK_SPEED_PX_S)*1000));
+    const pos={left:startLeft,top:startTop};
+    let first=null,chain=null;
+    segs.forEach((seg,idx)=>{
+        const isLast=idx===segs.length-1;
+        const segDurationMs=totalDist>0?Math.max(60,(seg.dist/totalDist)*totalDurationMs):totalDurationMs/segs.length;
+        const tw=new TWEEN.Tween(pos)
+            .to({left:seg.to.left,top:seg.to.top},segDurationMs)
+            .easing(TWEEN.Easing.Quadratic.InOut)
+            .onStart(()=>{if(img)_mobWalkOnMoveStart(el,img,seg.to.left-seg.from.left,seg.to.top-seg.from.top);})
+            .onUpdate(()=>{const lp=_mobGetLogical(el);lp.left=pos.left;lp.top=pos.top;})
+            .onComplete(()=>{if(isLast&&img)_mobWalkOnMoveEnd(img);});
+        if(chain)chain.chain(tw);else first=tw;
+        chain=tw;
+    });
+    el.__walkTween=first;
+    if(first)first.start();
+    return totalDurationMs;
+}
+function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group&&!group.includes(el))group.push(el);const move=()=>{const lp=_mobGetLogical(el);const oldLeft=lp.left;const oldTop=lp.top;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+
+// ── SPOTS + MOBS ─────────────────────────────────────────────
+// Cada mob continua sendo um <div class="mob-wrapper"> comum (mesma lógica de
+// posição/desvio/combate de sempre), só que agora fica invisível (opacity:0
+// via CSS) e serve só de "cérebro": guarda a posição lógica (style.left/top),
+// o estado de respiração/passo e os nomes/números de dano. O visual de
+// verdade é o THREE.Sprite criado em _mobCreateVisual, reprojetado a cada
+// frame em updateAllMobVisuals — nunca inclina/flutua ao girar a câmera.
+function renderSpots(){
+    const map=document.getElementById('map');
+    map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());
+    clearRegisteredSpots();
+    // Destrói sprites/sombras de uma renderização anterior (evita vazamento de memória e mobs duplicados no céu).
+    for(const el of _mobVisualRegistry)_mobDestroyVisual(el.__mobVisual);
+    _mobVisualRegistry.length=0;
+    _allMobGroups.length=0;
+    SPOTS.forEach(spot=>{
+        const el=document.createElement('div');
+        el.className='hunt-spot';
+        el.id=`spot-${spot.id}`;
+        Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});
+        const lbl=document.createElement('div');
+        lbl.className='spot-label';
+        lbl.textContent=spot.name;
+        lbl.style.color=spot.labelColor||'#fff';
+        el.appendChild(lbl);
+        const mobGroup=[];
+        _allMobGroups.push(mobGroup);
+        for(let i=0;i<5;i++){
+            const wrap=document.createElement('div');
+            wrap.className='mob-wrapper';
+            const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);
+            Object.assign(_mobGetLogical(wrap),_initPos);
+            wrap.style.transform='translate(-50%, 0)'; // centraliza o nome no ponto projetado (ver updateAllMobVisuals)
+            const nm=document.createElement('div');
+            nm.className='mob-name';
+            nm.textContent=spot.name;
+            const shadow=document.createElement('div');
+            shadow.className='mob-shadow';
+            const av=document.createElement('img');
+            av.className='mob-avatar';
+            av.dataset.baseSrc=spot.mobImg;
+            av.src=spot.mobImg;
+            av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};
+            av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;
+            wrap.appendChild(shadow);
+            wrap.appendChild(nm);
+            wrap.appendChild(av);
+            // IMPORTANTE: o wrap vai direto pro #map (não pra dentro da .hunt-spot),
+            // porque a .hunt-spot ainda tem seu próprio transform:scale/translate (a
+            // mesma caixa aproximada de antes). Se o nome ficasse dentro dela, as
+            // coordenadas de tela calculadas em updateAllMobVisuals (que já são px
+            // reais da viewport) seriam escaladas/deslocadas de novo por cima —
+            // exatamente o desalinhamento que estava acontecendo.
+            map.appendChild(wrap);
+            wrap.__mobSpot=spot;
+            wrap.__mobVisual=_mobCreateVisual(spot,spot.mobImg);
+            _mobVisualRegistry.push(wrap);
+            startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);
+        }
+        el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});
+        map.appendChild(el);
+        registerSpotForProjection(spot,el);
+    });
+}
+
+// ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
+function renderPlayerOnSpot(spotId){
+    document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());
+    if(!spotId||!playerData)return;
+    const spotEl=document.getElementById(`spot-${spotId}`);if(!spotEl)return;
+    const spot=SPOTS.find(s=>s.id===spotId);
+    const wrap=document.createElement('div');wrap.className='player-avatar-wrapper';
+    Object.assign(wrap.style,{right:'10px',bottom:'10px',left:'auto',top:'auto'});
+    const si=document.createElement('img');si.id='myShieldIcon';si.className='player-shield-icon';si.src=SHIELD_IMG;si.style.display=isShieldActive()?'block':'none';wrap.appendChild(si);
+    const nm=document.createElement('div');nm.className='player-name-label';nm.textContent=playerData.name||'Você';wrap.appendChild(nm);
+    // Guild do próprio jogador (silver, 0.65em)
+    const myGuildId=_ownersMap[userId]?.guild_id||null;
+    const myGuildName=myGuildId?_guildCacheGet(myGuildId):null;
+    if(myGuildName){
+        const gb=document.createElement('div');
+        gb.className='player-name-label';
+        gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
+        gb.textContent=esc(myGuildName);
+        wrap.appendChild(gb);
+        gb.style.marginBottom='30px';
+    } else { nm.style.marginBottom='30px'; }
+    const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};
+    const avWrap=document.createElement('div');avWrap.className='avatar-frame-wrap';avWrap.appendChild(av);wrap.appendChild(avWrap);
+    spotEl.appendChild(wrap);
+    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(avWrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_sFr,_sSh,av,117,60);});_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
+    if(spot)startWander(wrap,spot.width,spot.height,800);
+}
+function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
+
+// ── OUTROS JOGADORES ─────────────────────────────────────────
+// Estado "morto" (perdeu PvP, penalidade 3 min):
+//   is_hunting === false  AND  current_spot SET  AND  pvp_only_entered_at NULL  AND  NOT is_eliminated
+// Estado "PvP puro":  is_hunting === false AND pvp_only_entered_at SET
+// Estado "pausado":   current_spot === null
+function _isDeadPenalty(p){
+    return !p.is_hunting && p.current_spot && !p.pvp_only_entered_at && !p.is_eliminated;
+}
+function renderOtherPlayers(players){
+    stopAllOtherCombatLoops();
+    _otherCombatBusy.clear();
+    document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());
+
+    const guildIdsToResolve=[];
+    const playerIdsWithoutGuild=[];
+
+    players.forEach(p=>{
+        if(!p.current_spot)return;
+        const spotEl=document.getElementById(`spot-${p.current_spot}`);
+        if(!spotEl)return;
+        const spot=SPOTS.find(s=>s.id===p.current_spot);
+
+        const cached      = _ownersMap[p.id];
+        const displayName = p.name       || cached?.name       || '?';
+        const displayAvatar= p.avatar_url|| cached?.avatar_url || DEFAULT_AVATAR;
+        const guildId     = cached?.guild_id || null;
+        const guildName   = guildId ? _guildCacheGet(guildId) : null;
+        const isDead      = _isDeadPenalty(p);
+
+        // Agenda resoluções lazy
+        if(guildId && !guildName)          guildIdsToResolve.push(guildId);
+        if(cached && !cached.guild_id)     playerIdsWithoutGuild.push(p.id);
+        if(!cached)                        playerIdsWithoutGuild.push(p.id);
+
+        const wrap=document.createElement('div');
+        wrap.className='other-player-wrapper';
+        wrap.dataset.playerId=p.id;
+        Object.assign(wrap.style,{
+            left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',
+            top :(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px',
+        });
+
+        // Escudo
+        const shActive=p.shield_until&&new Date(p.shield_until)>new Date();
+        if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}
+
+        // Nome — 0.75em  ← TAMANHO DO NOME: altere aqui
+        const nm=document.createElement('div');
+        nm.className='other-player-name';
+        nm.style.fontSize='0.75em';
+        nm.textContent=esc(displayName);
+        wrap.appendChild(nm);
+
+        // Nome da guilda — 0.65em, silver, sem colchetes  ← TAMANHO DA GUILDA: altere aqui
+        if(guildName){
+            const gb=document.createElement('div');
+            gb.className='other-player-name';
+            gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;';
+            gb.textContent=esc(guildName);
+            wrap.appendChild(gb);
+            gb.style.marginBottom='30px';
+        } else { nm.style.marginBottom='30px'; }
+
+        // Avatar
+        const av=document.createElement('img');
+        av.className='other-player-avatar';
+        if(p.is_eliminated||isDead) av.classList.add('eliminated');
+        av.src=displayAvatar;
+        av.onerror=()=>{av.src=DEFAULT_AVATAR;};
+        const avWrap=document.createElement('div');avWrap.className='avatar-frame-wrap';avWrap.appendChild(av);wrap.appendChild(avWrap);
+        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(avWrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_oFr,_oSh,av,117,60);});_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
+
+        if(p.is_eliminated){
+            // Eliminado permanentemente hoje
+            const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);
+        } else if(isDead){
+            // Penalidade de derrota: mostra caveira, sem clique de ataque
+            const lbl=document.createElement('div');lbl.className='other-eliminated-label';
+            lbl.textContent='💀 Derrota';lbl.style.color='#f88';wrap.appendChild(lbl);
+        } else {
+            wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});
+            if(spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);
+        }
+
+        spotEl.appendChild(wrap);
+    });
+
+    if(players.some(p=>!p.is_eliminated&&!_isDeadPenalty(p)&&p.current_spot)){_ensureOtherCombatInterval();}
+
+    // Resoluções lazy (não bloqueiam o render)
+    if(guildIdsToResolve.length)_resolveGuildNames([...new Set(guildIdsToResolve)]).catch(()=>{});
+    if(playerIdsWithoutGuild.length)_fetchMissingGuildIds([...new Set(playerIdsWithoutGuild)]).catch(()=>{});
+}
+
+// ── TIMER GLOBAL ─────────────────────────────────────────────
+function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
+function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting&&!isHuntingElsewhere)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();if(isHunting)onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);if(isHunting)startCombatLoop();}
+function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;stopCombatLoop();}
+function effectiveLimit(){return DAILY_LIMIT*(1+hourglassesUsed);}
+
+// ── TIMER PvP PURO (15 min) ───────────────────────────────
+function startPvpOnlyTimer(resetToFull=true){
+    clearInterval(pvpOnlyTimerInterval);
+    if(resetToFull)pvpOnlySecondsLeft=900;
+    updateTimerDisplay();
+    pvpOnlyTimerInterval=setInterval(()=>{
+        if(!isPvpOnly){clearInterval(pvpOnlyTimerInterval);return;}
+        if(pvpOnlySecondsLeft<=0){clearInterval(pvpOnlyTimerInterval);exitPvpOnlyMode();return;}
+        pvpOnlySecondsLeft--;updateTimerDisplay();
+    },1000);
+}
+function stopPvpOnlyTimer(){clearInterval(pvpOnlyTimerInterval);pvpOnlyTimerInterval=null;}
+function resetPvpOnlyTimer(){
+    // Chamado após vitória em PvP — renova os 15 min
+    pvpOnlySecondsLeft=900; // garante que o valor está no topo antes dos timeouts
+    clearTimeout(pvpOnlyExitTimer);
+    pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,pvpOnlySecondsLeft*1000);
+    startPvpOnlyTimer(); // resetToFull=true implicitamente (já setamos acima)
+    // Atualiza pvp_only_entered_at no servidor (fire and forget)
+    supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:currentSpotId}).catch(()=>{});
+}
+
+function updateHuntingHUD(){
+    const hud=document.getElementById('huntingHud'),status=document.getElementById('huntStatus'),pauseBtn=document.getElementById('pauseHuntBtn');
+    updateSpotStyles();
+    if(currentSession?.rewards_claimed){hud.style.display='flex';status.textContent='✅ Recompensas coletadas hoje!';pauseBtn.style.display='none';return;}
+
+    // Modo PvP puro (tempo esgotado, entrou só para pvp)
+    if(isPvpOnly&&currentSpotId){
+        hud.style.display='flex';pauseBtn.style.display='block';
+        updateTimerDisplay();
+        const spotName=SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId;
+        status.textContent=`⚔️ Modo PvP: ${spotName}`;
+        pauseBtn.textContent='Sair';pauseBtn.disabled=false;
+        return;
+    }
+
+    // Tempo esgotado com recompensas pendentes — mostra botão explícito.
+    // O click dispara handlePauseHunt que detecta esse estado e chama onHuntComplete.
+    if(localSecondsLeft<=0&&!isHunting){
+        if(currentSession&&!currentSession.rewards_claimed){
+            hud.style.display='flex';
+            status.textContent='🎁 Caçada concluída! Colete suas recompensas.';
+            pauseBtn.style.display='block';
+            pauseBtn.textContent='Coletar Recompensas';
+            pauseBtn.disabled=false;
+        } else {
+            hud.style.display='none';
+        }
+        return;
+    }
+    hud.style.display='flex';pauseBtn.style.display='block';updateTimerDisplay();
+    if(isHunting&&currentSpotId){status.textContent=`⚔️ Caçando: ${SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId}`;pauseBtn.textContent='Pausar';pauseBtn.disabled=false;}
+    else{status.textContent='⏸️ Pausado — clique num spot para continuar';pauseBtn.textContent='Pausado';pauseBtn.disabled=true;}
+}
+function updateSpotStyles(){
+    SPOTS.forEach(s=>{
+        const el=document.getElementById(`spot-${s.id}`);
+        if(!el)return;
+        if((isHunting||isPvpOnly)&&currentSpotId===s.id)el.classList.add('active-spot');
+        else el.classList.remove('active-spot');
+    });
+}
+
+// ── CONCLUSÃO DO DIA (timer global zera) ─────────────────────
+async function onHuntComplete(){
+    isHunting=false;stopLocalTimer();
+    // Libera a atividade imediatamente — o jogador não está mais caçando,
+    // independentemente do resultado da RPC de recompensas.
+    clearActivity();
+    updateHuntingHUD();showLoading();
+    try{
+        const{data,error}=await supabase.rpc('finish_daily_hunt',{p_player_id:userId});
+        if(error)throw error;
+        if(data?.success){
+            // Invalida cache de 15min do index para refletir XP/level up
+            localStorage.removeItem('aden_player_last_fetch_ts');
+            showRewardsModal(data);if(data.leveled_up)showLevelUpBalloon(data.new_level);} // showRewardsModal também chama clearActivity (redundante mas seguro)
+        else await showAlert(data?.message||'Erro ao finalizar.');
+    }catch(e){await showAlert('Erro ao finalizar. Tente novamente.');}
+    finally{hideLoading();}
+}
+
+// ── CLICK NO SPOT ────────────────────────────────────────────
+async function handleSpotClick(spot){
+
+    // Guard de mineração — deve ser o PRIMEIRO check, antes de qualquer entrada em spot.
+    // Cobre: caça normal, PvP puro por tempo esgotado, troca de spot em PvP.
+    // (a mina seta type:'mining' ao conquistar via PvP também)
+    const activity=getActivity();
+    if(activity?.type==='mining'){
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está com uma mina ativa.<br>Aguarde o término da sessão de mineração.');
+        return;
+    }
+
+    // Bloqueado por morte em PvP
+    if(isPlayerDead()){
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão após a derrota.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
+        return;
+    }
+
+    // Tempo de caça esgotado — oferece modo PvP puro (independente de rewards_claimed,
+    // pois PvP é atividade separada das recompensas de caça)
+    if(localSecondsLeft<=0&&!isPvpOnly){
+        // Lock de 15 min vale mesmo vindo de outra região — SPOT_LOCK_KEY persiste no localStorage
+        if(!canSwitchSpot()){
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
+            return;
+        }
+        const ok=await showConfirm('⚔️ Modo PvP Puro',
+            `Seu tempo de caçada terminou, mas você pode entrar no spot de <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
+        if(!ok)return;
+        // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
+        showLoading();
+        try{
+            const{data:pvpData,error:pvpErr}=await supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
+            if(pvpErr)throw pvpErr;
+            if(!pvpData?.success){await showAlert(pvpData?.message||'Erro ao entrar no modo PvP.');return;}
+            clearEliminationAcknowledged(currentSession?.hunt_date); // libera ack para próxima eliminação
+            clearTimeout(pvpOnlyExitTimer);
+            isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
+            clearTimeout(deadTimer);deadTimer=null;
+            // Invalida boot cache para reloads dentro do TTL não carregarem estado desatualizado
+            try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
+            setActivityHunting(spot.id, false, true); // pvpOnly=true — mina não limpa como stale
+            renderPlayerOnSpot(spot.id);
+            startPvpOnlyTimer();
+            pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+            updateHuntingHUD();
+            _resetPollInterval();scheduleNextSync();
+        }catch(e){await showAlert('Erro: '+(e.message||''));}
+        finally{hideLoading();}
+        return;
+    }
+
+    // Já no mesmo spot (caça normal ou pvp puro) — nada a fazer
+    if(currentSpotId===spot.id)return;
+
+    // Tentativa de trocar de spot enquanto em modo pvp puro
+    if(isPvpOnly){
+        if(!canSwitchSpot()){
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);return;
+        }
+        clearTimeout(pvpOnlyExitTimer);
+        currentSpotId=spot.id;
+        setActivityHunting(spot.id, false, true); // pvpOnly=true
+        renderPlayerOnSpot(spot.id);updateHuntingHUD();
+        startPvpOnlyTimer();
+        pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+        supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
+        updateHuntingHUD();
+        return;
+    }
+
+    // Regra: lock de 15 minutos antes de trocar de spot
+    // (inclui vir de outra região — SPOT_LOCK_KEY persiste no localStorage entre páginas)
+    if(!canSwitchSpot()){
+        await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
+        return;
+    }
+
+    const ok=await showConfirm('Área de Caça',`Caçar na área de <strong>${esc(spot.name)}</strong>?`);
+    if(!ok)return;
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('start_hunt',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
+        if(error)throw error;
+        if(!data?.success){await showAlert(data?.message||'Erro ao iniciar.');return;}
+        localSecondsLeft=Math.max(0,effectiveLimit()-(data.total_seconds||0));
+        clearEliminationAcknowledged(data.hunt_date); // ao entrar no spot, libera ack para próxima eliminação
+        currentSpotId=spot.id;isHunting=true;isPvpOnly=false;
+        if(!currentSession)currentSession={};
+        currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
+        // Invalida boot cache — garante que reloads dentro de 180s não restaurem estado pré-caçada
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
+        setActivityHunting(spot.id);
+        renderPlayerOnSpot(spot.id);updateHuntingHUD();startLocalTimer();amb.play().catch(()=>{});
+        _resetPollInterval();scheduleNextSync();
+    }catch(e){await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
+
+function exitPvpOnlyMode(){
+    isPvpOnly=false;currentSpotId=null;
+    clearTimeout(pvpOnlyExitTimer);
+    stopPvpOnlyTimer();
+    clearActivity();removePlayerFromSpot();
+    // updateHuntingHUD vai mostrar o botão "Coletar Recompensas" se localSecondsLeft=0
+    // e rewards ainda pendentes — o player clica explicitamente, evitando fire-and-forget
+    // que marcava rewards_claimed no banco sem o player ver o modal.
+    updateHuntingHUD();
+}
+
+// ── PAUSAR / SAIR ────────────────────────────────────────────
+async function handlePauseHunt(){
+    // Recompensas pendentes — botão "Coletar Recompensas" usa este mesmo handler
+    if(localSecondsLeft<=0&&!isHunting&&!isPvpOnly&&currentSession&&!currentSession.rewards_claimed){
+        await onHuntComplete();
+        return;
+    }
+    // Modo PvP puro — "Sair" é apenas local
+    if(isPvpOnly){
+        if(!canSwitchSpot()){
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de sair.`);return;
+        }
+        exitPvpOnlyMode();
+        return;
+    }
+    if(!isHunting)return;
+    // Penalidade de morte ativa?
+    if(isPlayerDead()){
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão após a derrota.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
+        return;
+    }
+    if(!canSwitchSpot()){
+        await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de pausar.`);
+        return;
+    }
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('pause_hunt',{p_player_id:userId});
+        if(error)throw error;
+        isHunting=false;stopLocalTimer();
+        if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,effectiveLimit()-data.total_seconds);updateTimerDisplay();}
+        currentSpotId=null; // permite re-entrar no mesmo spot após pausar
+        // Invalida boot cache para reloads dentro do TTL não restaurarem sessão ativa erroneamente
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
+        clearActivity();
+        removePlayerFromSpot();updateHuntingHUD();
+        _resetPollInterval();scheduleNextSync();
+    }catch(e){await showAlert('Erro ao pausar.');}
+    finally{hideLoading();}
+}
+
+// ── PVP ──────────────────────────────────────────────────────
+async function handleAttackPlayer(target){
+    // Verifica se está morto (derrota recente)
+    if(isPlayerDead()){
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
+        return;
+    }
+    // Bloqueia ataque em jogador que está em penalidade de derrota
+    if(_isDeadPenalty(target)){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> está derrotado. Aguarde ele se recuperar.`);return;
+    }
+    // Verifica mineração em outra aba
+    const activity=getActivity();
+    if(activity?.type==='mining'){
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');return;
+    }
+    // Só pode atacar se estiver caçando OU em modo PvP puro no mesmo spot
+    if(!isHunting&&!isPvpOnly){
+        await showAlert('⚔️ Você precisa estar em um spot para atacar outros jogadores.');return;
+    }
+    if(currentSpotId!==target.current_spot){
+        await showAlert('⚔️ Você só pode atacar jogadores no mesmo spot que você.');return;
+    }
+    // Já eliminado localmente?
+    if(target.is_eliminated){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> já foi eliminado.`);return;
+    }
+    // ── Sync pré-ataque (fix: evita falso "não está caçando" por last_seen stale) ──
+    // Atualiza nossa lista local antes de confirmar o ataque.
+    await syncOtherPlayers().catch(()=>{});
+    // Reavalia alvo após sync — pode ter saído do spot entre o clique e agora
+    const freshTarget = otherPlayers.find(p=>p.id===target.id);
+    if(!freshTarget){
+        await showAlert(`⚔️ <strong>${esc(target.name)}</strong> não está mais neste spot.`);return;
+    }
+    if(_isDeadPenalty(freshTarget)){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> está derrotado. Aguarde ele se recuperar.`);return;
+    }
+    // Usa objeto atualizado daqui em diante
+    target = freshTarget;
+    // Calcula aliados de guilda do defensor no mesmo spot (para aviso pré-ataque)
+    const targetGuildId = _ownersMap[target.id]?.guild_id || null;
+    let guildAlliesCount = 0;
+    if(targetGuildId && target.current_spot){
+        guildAlliesCount = otherPlayers.filter(p =>
+            p.id !== target.id &&
+            !p.is_eliminated &&
+            p.current_spot === target.current_spot &&
+            (_ownersMap[p.id]?.guild_id === targetGuildId)
+        ).length;
+    }
+    const guildReductionPct = Math.min(20, guildAlliesCount * 5);
+    const guildWarning = guildAlliesCount > 0
+        ? `<br><small style="color:#adf;">🛡️ <strong>${esc(target.name)}</strong> está acompanhado de <strong>${guildAlliesCount}</strong> companheiro(s) de guilda — isso reduzirá <strong>${guildReductionPct}%</strong> do seu dano. Atacar mesmo assim?</small>`
+        : '';
+    // Escudo do atacante: avisar que perderá proteção
+    if(isShieldActive()){
+        const okShield=await showConfirm('⚠️ Escudo Ativo',
+            `Tem certeza que deseja atacar <strong>${esc(target.name)}</strong>?<br><small style="color:#f88;">Essa ação fará você perder o Escudo de Caça.</small>${guildWarning}`);
+        if(!okShield)return;
+        // Remove escudo localmente
+        shieldUntil=null;
+        clearInterval(shieldTimerInterval);
+        document.getElementById('shieldHudRow').style.display='none';
+        updateMyShieldIcon(false);
+    } else {
+        const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?${guildWarning}`);if(!ok)return;
+    }
+    showLoading();
+    let pvpData=null;
+    try{
+        const{data,error}=await supabase.rpc('attack_hunting_player',{p_attacker_id:userId,p_defender_id:target.id,p_region_id:REGION_ID});
+        if(error)throw error;
+        if(!data?.success){
+            // Banco confirmou que defensor já estava morto — atualiza UI local
+            if(data?.already_eliminated){
+                otherPlayers=otherPlayers.map(p=>p.id===target.id
+                    ?{...p,is_eliminated:true,eliminated_by_name:data.eliminated_by_name||'alguém'}
+                    :p);
+                renderOtherPlayers(otherPlayers);
+                await showAlert(`💀 <strong>${esc(target.name)}</strong> já havia sido eliminado por <strong>${esc(data.eliminated_by_name||'alguém')}</strong>.`);
+                return;
+            }
+            // [FIX 1] Jogador não está mais no spot — remove do mapa imediatamente
+            if(data?.remove_from_map){
+                otherPlayers=otherPlayers.filter(p=>p.id!==target.id);
+                renderOtherPlayers(otherPlayers);
+            }
+            await showAlert(data?.message||'Erro no PvP.');return;
+        }
+        pvpData=data;
+    }catch(e){await showAlert('Erro no PvP: '+(e.message||''));return;}
+    finally{hideLoading();}
+
+    // Anima com loading já escondido
+    await runPvpAnimation(pvpData);
+
+    const myName=playerData?.name||'Você';
+    const regionNameDisplay=REGION_NAME;
+    // [FIX 3] Exibe buff de guilda ativo na defesa, se houver
+    if(pvpData.guild_allies_in_spot>0){
+        const reduction=Math.round((pvpData.guild_damage_reduction||0)*100);
+        pushKillNotif(`🛡️ <span style="color:#adf">${esc(pvpData.defender_name)}</span> tinha <strong>${pvpData.guild_allies_in_spot}</strong> aliado(s) de guilda no spot — bônus de defesa de <strong>${reduction}%</strong> aplicado!`);
+    }
+    if(pvpData.combat?.winner_id===userId){
+        // VITÓRIA — banner otimista imediato (não espera o sync global)
+        const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';
+        pushKillNotif(
+            `<span style="color:#ff8">${esc(myName)}</span> eliminou `+
+            `<span style="color:#f88">${esc(pvpData.defender_name)}</span> em `+
+            `<span style="color:#8ff">${esc(regionNameDisplay)}</span>${kTxt}`
+        );
+        // Pré-marca o evento como visto para o syncGlobal não duplicar
+        if(pvpData.pvp_event_id){
+            const seenKey=`hunt_pvp_seen_${userId}`;
+            try{const seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));seen.add(pvpData.pvp_event_id);localStorage.setItem(seenKey,JSON.stringify([...seen].slice(-200)));}catch{}
+        }
+        otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
+        renderOtherPlayers(otherPlayers);
+        // Garante pvpOnlySecondsLeft=900 ANTES de gravar o pvp_only_expires_at na activity
+        if(isPvpOnly)resetPvpOnlyTimer();
+        // Reseta lock de 15 min — preserva pvp_only se estiver nesse modo
+        if(currentSpotId)setActivityHunting(currentSpotId, true, isPvpOnly);
+    } else {
+        // DERROTA — fica morto 3 min
+        isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();removePlayerFromSpot();
+        clearTimeout(pvpOnlyExitTimer);
+        if(currentSpotId)setActivityHunting(currentSpotId, true);
+        currentSpotId=null;
+        clearActivity();updateHuntingHUD();
+        setPlayerDead();
+    }
+    // Sincroniza evento global imediatamente para todos verem
+    syncGlobalPvpEvents();
+    syncOtherPlayers();
+}
+
+// ── EPIC PVP SYSTEM ─────────────────────────────────────────────────────────
+
+let _pvpCssInjected = false;
+function _injectPvpStyles() {
+    if (_pvpCssInjected) return;
+    _pvpCssInjected = true;
+    const s = document.createElement('style');
+    s.id = 'epic-pvp-styles';
+    s.textContent = `
+        #pvpModal .modal-content {
+            background: radial-gradient(ellipse at 50% 20%, #1e0a35 0%, #0e0620 55%, #060310 100%) !important;
+            border: 1px solid rgba(150,70,255,0.4) !important;
+            box-shadow: 0 0 60px rgba(120,0,255,0.35), 0 0 120px rgba(80,0,200,0.15), inset 0 0 80px rgba(0,0,0,0.7) !important;
+            overflow: hidden !important;
+            position: relative !important;
+        }
+        #pvpModal .modal-content::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(100,0,200,0.05) 100%);
+            animation: pvp-bg-pulse 4s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        #pvpModal .modal-content > * { position: relative; z-index: 1; }
+        @keyframes pvp-bg-pulse {
+            0%,100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+        }
+        .pvp-arena { align-items: center !important; }
+        .pvp-fighter { position: relative !important; max-width: 150px !important; transition: filter 0.7s ease, transform 0.7s ease, opacity 0.7s ease !important; }
+        .pvp-fighter-name { font-size: 0.68em !important; color: #e0d0ff !important; text-shadow: 0 0 10px rgba(180,100,255,0.8) !important; letter-spacing: 0.5px !important; }
+        .pvp-fighter img {
+            width: 90px !important; height: 90px !important;
+            border: 2px solid rgba(160,80,255,0.75) !important;
+            box-shadow: 0 0 18px rgba(120,0,255,0.45), 0 0 36px rgba(100,0,200,0.2) !important;
+        }
+        .pvp-vs {
+            font-size: 2em !important;
+            color: #ff8800 !important;
+            text-shadow: 0 0 12px #ff4400, 0 0 28px #ff2200, 0 0 4px #ffaa00 !important;
+            animation: pvp-vs-pulse 1.8s ease-in-out infinite !important;
+        }
+        @keyframes pvp-vs-pulse {
+            0%,100% { transform: scale(1); }
+            50% { transform: scale(1.18); text-shadow: 0 0 22px #ff6600, 0 0 50px #ff3300, 0 0 80px #ff1100; }
+        }
+        .pvp-hp-bg {
+            height: 24px !important;
+            position: relative !important;
+            border-radius: 5px !important;
+            border: 1px solid rgba(255,255,255,0.13) !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.55) !important;
+            overflow: hidden !important;
+        }
+        .pvp-hp-fill {
+            border-radius: 4px !important;
+            transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease !important;
+            position: relative !important;
+            height: 100% !important;
+        }
+        .pvp-hp-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 45%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%);
+            border-radius: 4px 4px 0 0;
+            pointer-events: none;
+        }
+        .pvp-hp-txt {
+            position: absolute !important;
+            top: 50% !important; left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            color: #fff !important;
+            font-size: 0.62em !important;
+            font-weight: bold !important;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 0 0 5px rgba(0,0,0,0.9) !important;
+            white-space: nowrap !important;
+            z-index: 3 !important;
+            pointer-events: none !important;
+            letter-spacing: 0.3px !important;
+        }
+        #pvpCountdown {
+            font-size: 1.05em !important; color: #ffcc44 !important;
+            text-shadow: 0 0 10px #ff8800, 0 0 22px #ff4400 !important;
+            animation: pvp-cntdn-pulse 0.9s ease-in-out infinite !important;
+        }
+        @keyframes pvp-cntdn-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+        @keyframes pvp-lunge-left  { 0%{transform:translateX(0) scale(1);} 30%{transform:translateX(32px) scale(1.12) rotate(4deg);} 65%{transform:translateX(14px) scale(1.05) rotate(1deg);} 100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes pvp-lunge-right { 0%{transform:translateX(0) scale(1);} 30%{transform:translateX(-32px) scale(1.12) rotate(-4deg);} 65%{transform:translateX(-14px) scale(1.05) rotate(-1deg);} 100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes pvp-dodge-right { 0%{transform:translateX(0) rotate(0);} 25%{transform:translateX(20px) rotate(8deg);} 60%{transform:translateX(10px) rotate(3deg);} 100%{transform:translateX(0) rotate(0);} }
+        @keyframes pvp-dodge-left  { 0%{transform:translateX(0) rotate(0);} 25%{transform:translateX(-20px) rotate(-8deg);} 60%{transform:translateX(-10px) rotate(-3deg);} 100%{transform:translateX(0) rotate(0);} }
+
+        @keyframes pvp-hit-flash  { 0%,100%{filter:brightness(1) saturate(1);} 20%{filter:brightness(3.2) saturate(0.1);} 45%{filter:brightness(1.9) saturate(0.5);} }
+        @keyframes pvp-crit-flash { 0%{filter:brightness(1);} 12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);} 30%{filter:brightness(2.8) saturate(0.3) sepia(0.4);} 100%{filter:brightness(1);} }
+
+        #pvp-screen-flash { position:fixed; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:19999; opacity:0; transition:opacity 0.08s; }
+
+        @keyframes pvp-shockwave { 0%{transform:translate(-50%,-50%) scale(0); opacity:0.95; border-width:4px;} 100%{transform:translate(-50%,-50%) scale(3.2); opacity:0; border-width:1px;} }
+        @keyframes pvp-shockwave2 { 0%{transform:translate(-50%,-50%) scale(0); opacity:0.6; border-width:3px;} 100%{transform:translate(-50%,-50%) scale(2.2); opacity:0; border-width:1px;} }
+        .pvp-shockwave       { position:absolute; width:80px; height:80px; border-radius:50%; border:3px solid rgba(255,180,80,0.85); top:42%; left:50%; pointer-events:none; animation:pvp-shockwave 0.52s ease-out forwards; z-index:10; }
+        .pvp-shockwave2      { position:absolute; width:80px; height:80px; border-radius:50%; border:2px solid rgba(255,220,100,0.5); top:42%; left:50%; pointer-events:none; animation:pvp-shockwave2 0.7s ease-out 0.08s forwards; z-index:10; }
+        .pvp-shockwave-crit  { border-color:rgba(255,230,0,0.95); box-shadow:0 0 12px rgba(255,200,0,0.6); }
+        .pvp-shockwave2-crit { border-color:rgba(255,180,0,0.65); }
+
+        @keyframes pvp-spark { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1); opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1); opacity:0;} }
+        .pvp-spark { position:absolute; border-radius:50%; top:42%; left:50%; pointer-events:none; animation:pvp-spark 0.45s ease-out forwards; z-index:11; }
+
+        @keyframes pvp-float-dmg  { 0%{opacity:1; transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-6px) scale(1.15);} 100%{opacity:0; transform:translateX(-50%) translateY(-55px) scale(0.9);} }
+        @keyframes pvp-float-crit { 0%{opacity:1; transform:translateX(-50%) translateY(0) scale(0.3) rotate(-6deg);} 10%{transform:translateX(-50%) translateY(-10px) scale(1.35) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-20px) scale(1.15) rotate(-1deg);} 100%{opacity:0; transform:translateX(-50%) translateY(-70px) scale(0.95) rotate(0);} }
+
+        .pvp-damage-number      { font-family:'Cinzel',Georgia,serif; font-size:1.6em; font-weight:bold; color:#fff; text-shadow:2px 2px 4px #000, 0 0 12px rgba(255,100,0,0.6); position:absolute; left:50%; top:28%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-dmg 1.4s ease-out forwards; }
+        .pvp-crit-damage-number { font-family:'Cinzel',Georgia,serif; font-size:2.2em; font-weight:bold; color:#ffdd00; text-shadow:-1px -1px 0 #b30000,1px -1px 0 #b30000,-1px 1px 0 #b30000,1px 1px 0 #b30000, 0 0 12px #ff8800, 0 0 24px #ff4400; position:absolute; left:50%; top:18%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-crit 1.6s ease-out forwards; }
+        .pvp-evade-text         { font-family:'Cinzel',Georgia,serif; font-size:1.15em; font-weight:bold; color:#88ddff; text-shadow:0 0 10px #0088ff, 1px 1px 2px #000; position:absolute; left:50%; top:28%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-dmg 1.4s ease-out forwards; }
+
+        @keyframes pvp-crit-label { 0%{opacity:0; transform:translateX(-50%) scale(0.4);} 18%{opacity:1; transform:translateX(-50%) scale(1.25);} 65%{opacity:1; transform:translateX(-50%) scale(1.0);} 100%{opacity:0; transform:translateX(-50%) scale(0.85);} }
+        .pvp-crit-label { position:absolute; top:4px; left:50%; transform:translateX(-50%); font-family:'Cinzel',serif; font-size:0.7em; font-weight:bold; color:#ffdd00; text-shadow:0 0 8px #ff8800, 1px 1px 2px #000; z-index:16; pointer-events:none; white-space:nowrap; animation:pvp-crit-label 0.95s ease-out forwards; }
+
+        .pvp-fighter-winner img { border-color:#ffd700 !important; box-shadow:0 0 22px rgba(255,215,0,0.9), 0 0 44px rgba(255,150,0,0.55), 0 0 70px rgba(255,100,0,0.3) !important; animation:pvp-winner-pulse 1.1s ease-in-out infinite !important; }
+        @keyframes pvp-winner-pulse { 0%,100%{box-shadow:0 0 22px rgba(255,215,0,0.9),0 0 44px rgba(255,150,0,0.55);} 50%{box-shadow:0 0 38px rgba(255,215,0,1),0 0 75px rgba(255,150,0,0.75),0 0 110px rgba(255,100,0,0.45);} }
+        .pvp-fighter-loser  { filter:grayscale(88%) brightness(0.38) !important; transform:scale(0.86) translateY(8px) !important; opacity:0.48 !important; }
+
+        @keyframes pvp-slide-in-left  { 0%{transform:translateX(-90px); opacity:0;} 100%{transform:translateX(0); opacity:1;} }
+        @keyframes pvp-slide-in-right { 0%{transform:translateX(90px); opacity:0;} 100%{transform:translateX(0); opacity:1;} }
+        #pvpAttackerSide.pvp-intro { animation:pvp-slide-in-left  0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+        #pvpDefenderSide.pvp-intro { animation:pvp-slide-in-right 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+    `;
+    document.head.appendChild(s);
+}
+
+async function runPvpAnimation(data) {
+    _injectPvpStyles();
+
+    const modal      = document.getElementById('pvpModal');
+    const combat     = data.combat || {};
+    const log        = combat.battle_log || [];
+    const pvpBgMusic = document.getElementById('pvpBgMusic');
+
+    document.getElementById('pvpAttackerName').textContent = data.attacker_name || 'Atacante';
+    document.getElementById('pvpDefenderName').textContent = data.defender_name || 'Defensor';
+
+    const atkAv  = document.getElementById('pvpAttackerAvatar');
+    const defAv  = document.getElementById('pvpDefenderAvatar');
+    atkAv.src    = data.attacker_avatar || playerData?.avatar_url || DEFAULT_AVATAR;
+    defAv.src    = data.defender_avatar || DEFAULT_AVATAR;
+    atkAv.onerror = () => { atkAv.src = DEFAULT_AVATAR; };
+    defAv.onerror = () => { defAv.src = DEFAULT_AVATAR; };
+
+    const atkFill = document.getElementById('pvpAttackerHpFill');
+    const defFill = document.getElementById('pvpDefenderHpFill');
+    const atkTxt  = document.getElementById('pvpAttackerHpText');
+    const defTxt  = document.getElementById('pvpDefenderHpText');
+    const atkSide = document.getElementById('pvpAttackerSide');
+    const defSide = document.getElementById('pvpDefenderSide');
+    const cntdn   = document.getElementById('pvpCountdown');
+    const atkId   = combat.attacker_id;
+    const defId   = combat.defender_id;
+
+    // Frames PvP — <div> para não ser afetado por .pvp-fighter img rules
+    atkSide.style.position = 'relative'; defSide.style.position = 'relative';
+    const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,175);
+    const{fr:_dpFr,sh:_dpSh}=_huntAddFrame(defSide,175);
+    if(atkId)_huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');
+    if(defId)_huntFetchFrame(defId,_dpFr,_dpSh,defAv,'2px solid rgba(160,80,255,0.75)');
+
+    // ── FIX: Move texto do HP para dentro da barra ──────────────
+    const atkBg = atkFill.parentElement;
+    const defBg = defFill.parentElement;
+    if (!atkBg.contains(atkTxt)) atkBg.appendChild(atkTxt);
+    if (!defBg.contains(defTxt)) defBg.appendChild(defTxt);
+
+    // ── Screen flash element ────────────────────────────────────
+    let screenFlash = document.getElementById('pvp-screen-flash');
+    if (!screenFlash) {
+        screenFlash = document.createElement('div');
+        screenFlash.id = 'pvp-screen-flash';
+        document.body.appendChild(screenFlash);
+    }
+
+    // ── HP Calculations ─────────────────────────────────────────
+    const dmgToDef = log.filter(t => t.attacker_id === atkId).reduce((s, t) => s + (t.damage || 0), 0);
+    const dmgToAtk = log.filter(t => t.attacker_id === defId).reduce((s, t) => s + (t.damage || 0), 0);
+    const defMaxHp = Math.max(1, (combat.defender_health_left || 0) + dmgToDef);
+    const atkMaxHp = Math.max(1, (combat.attacker_health_left || 0) + dmgToAtk);
+    let curAtk = atkMaxHp, curDef = defMaxHp;
+
+    function getHpColor(pct) {
+        if (pct > 0.6) return 'linear-gradient(90deg,#127a22,#1ec938)';
+        if (pct > 0.3) return 'linear-gradient(90deg,#a05e00,#e08800)';
+        return 'linear-gradient(90deg,#7a1212,#cc2828)';
+    }
+    function updBars() {
+        const ap = Math.max(0, curAtk / atkMaxHp);
+        const dp = Math.max(0, curDef / defMaxHp);
+        atkFill.style.width      = (ap * 100) + '%';
+        defFill.style.width      = (dp * 100) + '%';
+        atkFill.style.background = getHpColor(ap);
+        defFill.style.background = getHpColor(dp);
+        atkTxt.textContent       = Math.max(0, curAtk) + '/' + atkMaxHp;
+        defTxt.textContent       = Math.max(0, curDef) + '/' + defMaxHp;
+    }
+
+    // ── Reset from previous battle ──────────────────────────────
+    atkSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    defSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    atkSide.style.filter = defSide.style.filter = '';
+    atkSide.style.transform = defSide.style.transform = '';
+    atkSide.style.opacity   = defSide.style.opacity   = '';
+
+    updBars();
+    modal.style.display = 'flex';
+    cntdn.style.display = 'block';
+
+    // ── Intro slide-in ─────────────────────────────────────────
+    void atkSide.offsetWidth;
+    void defSide.offsetWidth;
+    _huntPositionFrameRect(_apFr,_apSh,atkSide,atkAv,175);
+    _huntPositionFrameRect(_dpFr,_dpSh,defSide,defAv,175);
+    atkSide.classList.add('pvp-intro');
+    defSide.classList.add('pvp-intro');
+
+    // ── Music ────────────────────────────────────────────────────
+    try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
+    if (pvpBgMusic) { pvpBgMusic.currentTime = 0; pvpBgMusic.volume = 0.15; pvpBgMusic.play().catch(() => {}); }
+
+    // ── Countdown ───────────────────────────────────────────────
+    for (let i = 3; i > 0; i--) {
+        cntdn.textContent = 'A batalha começa em ' + i + '...';
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    cntdn.style.display = 'none';
+
+    // ── Battle Loop ─────────────────────────────────────────────
+    for (const turn of log) {
+        const isAtk  = turn.attacker_id === atkId;
+        const srcSide = isAtk ? atkSide : defSide;
+        const tgtSide = isAtk ? defSide : atkSide;
+        const srcAv   = isAtk ? atkAv   : defAv;
+        const tgtAv   = isAtk ? defAv   : atkAv;
+
+        if (isAtk) curDef = Math.max(0, curDef - (turn.damage || 0));
+        else        curAtk = Math.max(0, curAtk - (turn.damage || 0));
+
+        if (turn.evaded) {
+            // Esquiva
+            tgtAv.style.animation = isAtk ? 'pvp-dodge-right 0.4s ease-out' : 'pvp-dodge-left 0.4s ease-out';
+            setTimeout(() => { tgtAv.style.animation = ''; }, 420);
+            await new Promise(r => setTimeout(r, 200));
+            _showDmgOnSide(0, false, true, tgtSide);
+            playSound('evade');
+        } else {
+            // Lunge do atacante
+            srcAv.style.animation = isAtk ? 'pvp-lunge-left 0.48s ease-out' : 'pvp-lunge-right 0.48s ease-out';
+            setTimeout(() => { srcAv.style.animation = ''; }, 480);
+
+            // Impacto após 200ms
+            await new Promise(r => setTimeout(r, 200));
+
+            // Flash no alvo
+            tgtAv.style.animation = turn.critical ? 'pvp-crit-flash 0.55s ease-out' : 'pvp-hit-flash 0.38s ease-out';
+            setTimeout(() => { tgtAv.style.animation = ''; }, turn.critical ? 560 : 400);
+
+            // Screen edge glow
+            screenFlash.style.boxShadow = turn.critical
+                ? 'inset 0 0 90px rgba(255,200,0,0.45)'
+                : 'inset 0 0 70px rgba(210,25,25,0.32)';
+            screenFlash.style.opacity = '1';
+            setTimeout(() => { screenFlash.style.opacity = '0'; }, turn.critical ? 420 : 270);
+
+            // Shockwave ring(s)
+            _pvpSpawnShockwave(tgtSide, turn.critical);
+
+            // Sparks
+            _pvpSpawnSparks(tgtSide, turn.critical ? 14 : 7, turn.critical);
+
+            // Damage number
+            _showDmgOnSide(turn.damage, turn.critical, false, tgtSide);
+
+            // Sound
+            if (turn.critical) playSound('critical');
+            else playSound('normal');
+
+            updBars();
+
+            // Shake
+            if (turn.critical) {
+                tgtSide.style.animation = 'shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                setTimeout(() => { tgtSide.style.animation = ''; }, 450);
+            } else {
+                tgtAv.classList.remove('shake-animation');
+                void tgtAv.offsetWidth;
+                tgtAv.classList.add('shake-animation');
+                setTimeout(() => tgtAv.classList.remove('shake-animation'), 400);
+            }
+        }
+
+        await new Promise(r => setTimeout(r, 950));
+    }
+
+    // ── End State ────────────────────────────────────────────────
+    await new Promise(r => setTimeout(r, 350));
+
+    const winnerId   = combat.winner_id;
+    const atkIsWinner = winnerId === atkId;
+
+    if (atkIsWinner) {
+        atkSide.classList.add('pvp-fighter-winner');
+        defSide.classList.add('pvp-fighter-loser');
+        _pvpSpawnVictoryParticles(atkSide);
+    } else {
+        defSide.classList.add('pvp-fighter-winner');
+        atkSide.classList.add('pvp-fighter-loser');
+        _pvpSpawnVictoryParticles(defSide);
+    }
+
+    await new Promise(r => setTimeout(r, 1300));
+    if (pvpBgMusic) { pvpBgMusic.pause(); pvpBgMusic.currentTime = 0; }
+    modal.style.display = 'none';
+
+    // Cleanup
+    atkSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    defSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+
+    if (combat.winner_id === userId) await showAlert('⚔️ <strong>VITÓRIA!</strong><br>' + esc(data.defender_name) + ' foi eliminado!');
+    else await showAlert('⚔️ <strong>DERROTA.</strong><br>' + esc(data.defender_name) + ' sobreviveu!');
+}
+
+function _pvpSpawnShockwave(sideEl, isCrit) {
+    const r1 = document.createElement('div');
+    r1.className = 'pvp-shockwave' + (isCrit ? ' pvp-shockwave-crit' : '');
+    sideEl.appendChild(r1);
+    r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div');
+    r2.className = 'pvp-shockwave2' + (isCrit ? ' pvp-shockwave2-crit' : '');
+    sideEl.appendChild(r2);
+    r2.addEventListener('animationend', () => r2.remove(), { once: true });
+}
+
+function _pvpSpawnSparks(sideEl, count, isCrit) {
+    const colors = isCrit
+        ? ['#ffdd00','#ff8800','#ffffff','#ffaa00','#ffcc44']
+        : ['#ffffff','#ff7777','#ffbb55'];
+    for (let i = 0; i < count; i++) {
+        const spark = document.createElement('div');
+        spark.className = 'pvp-spark';
+        const angle = (i / count) * 360 + Math.random() * 28;
+        const dist  = 28 + Math.random() * 44;
+        const sz    = (isCrit ? 5 : 3) + Math.random() * 3;
+        spark.style.setProperty('--a', angle + 'deg');
+        spark.style.setProperty('--d', dist + 'px');
+        spark.style.width  = sz + 'px';
+        spark.style.height = sz + 'px';
+        spark.style.background = colors[Math.floor(Math.random() * colors.length)];
+        spark.style.animationDelay = (Math.random() * 0.08) + 's';
+        sideEl.appendChild(spark);
+        spark.addEventListener('animationend', () => spark.remove(), { once: true });
+    }
+}
+
+function _pvpSpawnVictoryParticles(sideEl) {
+    const cols = ['#ffd700','#ffaa00','#ffffff','#ffcc44','#ffe066'];
+    for (let i = 0; i < 22; i++) {
+        setTimeout(() => {
+            const p = document.createElement('div');
+            const sz = 4 + Math.random() * 5;
+            p.style.cssText = `
+                position:absolute; width:${sz}px; height:${sz}px; border-radius:50%;
+                background:${cols[Math.floor(Math.random() * cols.length)]};
+                top:${15 + Math.random() * 65}%; left:${15 + Math.random() * 65}%;
+                pointer-events:none; z-index:12;
+                animation:pvp-spark 0.9s ease-out forwards;
+            `;
+            const angle = Math.random() * 360;
+            const dist  = 45 + Math.random() * 65;
+            p.style.setProperty('--a', angle + 'deg');
+            p.style.setProperty('--d', dist + 'px');
+            sideEl.appendChild(p);
+            p.addEventListener('animationend', () => p.remove(), { once: true });
+        }, i * 55);
+    }
+}
+
+function _showDmgOnSide(dmg, crit, evaded, sideEl) {
+    const el = document.createElement('div');
+    if (evaded) {
+        el.textContent = 'Desviou!';
+        el.className   = 'pvp-evade-text';
+    } else if (crit) {
+        el.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
+        el.className = 'pvp-crit-damage-number';
+        const lbl = document.createElement('div');
+        lbl.textContent = '✦ CRÍTICO! ✦';
+        lbl.className   = 'pvp-crit-label';
+        sideEl.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        el.textContent = Number(dmg).toLocaleString();
+        el.className   = 'pvp-damage-number';
+    }
+    sideEl.appendChild(el);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+}
+
+// ── MODAL DE RECOMPENSAS — agrupa por região ─────────────────
+function showRewardsModal(data){
+    const modal=document.getElementById('rewardsModal'),content=document.getElementById('rewardsContent');
+    const rewards=data.rewards||[]; // [{region_id, item_id, quantity}]
+    const xpGained=data.xp_gained||0;
+    // Atualiza o IDB com os itens coletados para que a Oficina leia sem precisar passar pelo inventário
+    rewards.forEach(r=>updateCacheQty(r.item_id,r.quantity).catch(()=>{}));
+
+    // Agrupa por região
+    const byRegion={};
+    rewards.forEach(r=>{if(!byRegion[r.region_id])byRegion[r.region_id]=[];byRegion[r.region_id].push(r);});
+
+    let html=`<div class="reward-xp-row"><span>✨ XP Total Ganho:</span><strong>+${xpGained}</strong></div>`;
+
+    if(Object.keys(byRegion).length===0){
+        html+='<p style="color:#aab;font-size:.82em;">Nenhuma recompensa (tempo insuficiente em qualquer região).</p>';
+    } else {
+        Object.entries(byRegion).forEach(([rid,items])=>{
+            const regionName=ALL_REGIONS[rid]?.name||rid;
+            html+=`<div class="region-rewards-block"><div class="region-rewards-title">📍 ${esc(regionName)}</div>`;
+            items.forEach(g=>{
+                const drop=ALL_DROPS[g.item_id];
+                const img=drop?.img||DEFAULT_AVATAR;
+                const name=drop?.name||`Item #${g.item_id}`;
+                html+=`<div class="reward-item-row"><img src="${img}" alt="${esc(name)}" onerror="this.src='${DEFAULT_AVATAR}'"><div class="reward-item-info"><div class="reward-item-name">${esc(name)}</div><div class="reward-item-qty">x${g.quantity}</div></div></div>`;
+            });
+            html+='</div>';
+        });
+    }
+
+    content.innerHTML=html;modal.style.display='flex';
+    if(currentSession)currentSession.rewards_claimed=true;
+    clearActivity();
+    updateHuntingHUD();
+}
+
+// ── BANNERS GLOBAIS DE PVP ────────────────────────────────────
+async function syncGlobalPvpEvents(){
+    if(!userId)return false;
+    let changed=false;
+    try{
+        const{data,error}=await supabase.rpc('get_hunt_pvp_events',{p_since_minutes:18});
+        if(error||!data)return false;
+        const seenKey=`hunt_pvp_seen_${userId}`;
+        let seen;try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{seen=new Set();}
+        (data||[]).forEach(ev=>{
+            if(seen.has(ev.id))return;
+            seen.add(ev.id);changed=true;
+            const regionLabel=`<span style="color:#8ff">${esc(ev.region_name)}</span>`;
+            if(ev.attacker_won){
+                const kTxt=ev.attacker_kills>0?`, eliminando um total de <span style="color:#ff8">${ev.attacker_kills}</span> hoje!`:'!';
+                pushKillNotif(`<span style="color:#ff8">${esc(ev.attacker_name)}</span> eliminou <span style="color:#f88">${esc(ev.defender_name)}</span> em ${regionLabel}${kTxt}`);
+            }else{
+                const dkTxt=ev.defender_kills>0?`. <span style="color:#8ff">${esc(ev.defender_name)}</span> já eliminou <span style="color:#ff8">${ev.defender_kills}</span> hoje!`:'.';
+                pushKillNotif(`<span style="color:#f88">${esc(ev.attacker_name)}</span> tentou atacar <span style="color:#ff8">${esc(ev.defender_name)}</span> em ${regionLabel} e perdeu${dkTxt}`);
+            }
+        });
+        if(changed){try{localStorage.setItem(seenKey,JSON.stringify([...seen].slice(-200)));}catch{}}
+    }catch(e){console.warn('[floresta] pvp events error',e);}
+    return changed;
+}
+
+// ── ADAPTIVE POLL SCHEDULER ───────────────────────────────────
+function _getBaseInterval(){
+    const hasOthers=otherPlayers.some(p=>!p.is_eliminated&&
+        (p.is_hunting||(p.pvp_only_entered_at&&new Date(p.pvp_only_entered_at)>new Date(Date.now()-15*60*1000))));
+    if(isPvpOnly)              return POLL_BASE.pvp_only;
+    if(isHunting&&hasOthers)   return POLL_BASE.hunting_with_others;
+    if(isHunting&&!hasOthers)  return POLL_BASE.hunting_alone;
+    if(!isHunting&&hasOthers)  return POLL_BASE.paused_with_others;
+    return POLL_BASE.paused_alone;
+}
+function _getMaxInterval(){
+    if(isPvpOnly)return POLL_MAX_3MIN;
+    if(isHunting&&otherPlayers.some(p=>!p.is_eliminated))return POLL_MAX_3MIN;
+    return POLL_MAX_5MIN;
+}
+function _resetPollInterval(){_currentPollMs=_getBaseInterval();}
+function _stepBackoff(changed){
+    if(changed){_currentPollMs=_getBaseInterval();}
+    else{_currentPollMs=Math.min(_currentPollMs+POLL_STEP,_getMaxInterval());}
+}
+
+function scheduleNextSync(){
+    clearTimeout(_syncTimeout);
+    if(_inactivityPaused||document.visibilityState==='hidden')return;
+    _syncTimeout=setTimeout(async()=>{
+        const[playersChanged,pvpChanged]=await Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]);
+        _stepBackoff(playersChanged||pvpChanged);
+        scheduleNextSync();
+    },_currentPollMs);
+}
+function stopAllPolling(){clearTimeout(_syncTimeout);_syncTimeout=null;}
+
+// ── PAGE VISIBILITY ───────────────────────────────────────────
+document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'){stopAllPolling();}
+    else if(!_inactivityPaused&&userId){
+        // Relê inventário — pode ter mudado em outra aba (ex: compra no mercador).
+        // Se o IDB retornar 0, consulta o servidor como fallback (garante que compras
+        // no mercador aparecem sem precisar visitar o inventário).
+        (async()=>{
+            await initShieldFromCache();
+            await initHourglassFromCache();
+            if(cachedShieldQty===0){
+                try{
+                    const{data}=await supabase.from('inventory_items')
+                        .select('quantity')
+                        .eq('player_id',userId)
+                        .eq('item_id',SHIELD_ITEM_ID)
+                        .is('equipped_slot',null);
+                    const srvQty=(data||[]).reduce((s,i)=>s+(i.quantity||0),0);
+                    if(srvQty>0){cachedShieldQty=srvQty;updateShieldBtn();}
+                }catch{}
+            }
+        })();
+        _currentPollMs=_getBaseInterval();
+        Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]).then(()=>scheduleNextSync()).catch(()=>scheduleNextSync());
+    }
+});
+
+// ── INACTIVITY GUARD ──────────────────────────────────────────
+const _INACTIVITY_MS       = 3 * 60 * 1000;
+const _INACTIVITY_CHECK_MS = 20_000;
+function _resetActivity(){_lastActivityMs=Date.now();}
+['touchstart','click','mousemove','keydown','scroll','pointerdown'].forEach(ev=>{
+    document.addEventListener(ev,_resetActivity,{passive:true,capture:true});
+});
+function _startInactivityGuard(){
+    clearInterval(_inactivityCheckId);
+    _inactivityCheckId=setInterval(()=>{
+        if(_inactivityPaused)return;
+        if(Date.now()-_lastActivityMs>=_INACTIVITY_MS)_showInactivityModal();
+    },_INACTIVITY_CHECK_MS);
+}
+function _showInactivityModal(){
+    _inactivityPaused=true;stopAllPolling();
+    const m=document.getElementById('inactivityModal');if(m)m.style.display='flex';
+}
+
+// ── SYNC ─────────────────────────────────────────────────────
+// get_hunting_state faz UPDATE last_seen (heartbeat) + retorna estado completo.
+// Retorna true se houve mudança (para o backoff saber que deve resetar).
+async function syncOtherPlayers(){
+    if(!userId)return false;
+    let changed=false;
+    try{
+        const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
+        if(error||!data)return false;
+        const own=data.own_session||{};
+        if(own.hourglasses_used!==undefined){hourglassesUsed=own.hourglasses_used;updateHourglassBtn();}
+        const newPlayers=data.other_players||[];
+
+        // Detecta mudança
+        const newHash=newPlayers.map(p=>`${p.id}:${p.current_spot}:${p.is_hunting?1:0}:${p.is_eliminated?1:0}`).sort().join('|');
+        if(newHash!==_lastPlayersHash){changed=true;_lastPlayersHash=newHash;}
+
+        // Persiste jogadores no IDB owners (beneficia mines.js e outras páginas)
+        const toSave=newPlayers.filter(p=>p.id&&p.name).map(p=>({id:p.id,name:p.name,avatar_url:p.avatar_url||''}));
+        if(toSave.length){
+            _idbSaveOwners(toSave).catch(()=>{});
+            toSave.forEach(o=>{if(!_ownersMap[o.id]||changed)_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
+        }
+
+        // Resolve guild names para todos os jogadores presentes (lazy, post-render)
+        const guildIds=newPlayers.map(p=>_ownersMap[p.id]?.guild_id).filter(Boolean);
+        if(guildIds.length)_resolveGuildNames([...new Set(guildIds)]).catch(()=>{});
+        // Busca guild_id de jogadores que não têm no IDB (ex: nunca mineraram)
+        const needsGuild=newPlayers.filter(p=>p.id&&(!_ownersMap[p.id]||!_ownersMap[p.id]?.guild_id)).map(p=>p.id);
+        if(needsGuild.length)_fetchMissingGuildIds(needsGuild).catch(()=>{});
+
+        // Banners de saída de spot
+        otherPlayers.forEach(old=>{
+            if(old.is_eliminated)return;
+            const stillHere=newPlayers.find(np=>np.id===old.id);
+            if(!stillHere&&old.is_hunting)
+                pushKillNotif(`<span style="color:#ff8">${esc(old.name||_ownersMap[old.id]?.name||'?')}</span> deixou o spot em <span style="color:#8ff">${esc(REGION_NAME)}</span>.`);
+        });
+        otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
+
+        // Eliminação detectada via own_session
+        if(own.is_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date||own.hunt_date)){
+            isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
+            clearTimeout(pvpOnlyExitTimer);
+            removePlayerFromSpot();currentSpotId=null;
+            // Limpa atividade imediatamente — não espera o clique no modal.
+            // Garante que a mina não fica bloqueada se o jogador navegar sem fechar o modal.
+            clearActivity();
+            updateHuntingHUD();
+            document.getElementById('eliminatedByName').textContent=own.eliminated_by_name||'alguém';
+            document.getElementById('eliminatedModal').style.display='flex';
+        }
+
+        // Atualiza escudo se mudou no servidor
+        if(own.shield_until){
+            const srv=new Date(own.shield_until);
+            if(!shieldUntil||Math.abs(srv.getTime()-shieldUntil.getTime())>2000){shieldUntil=srv;if(isShieldActive())startShieldTimer();}
+        }
+
+        // Persiste snapshot no boot cache
+        try{localStorage.setItem(HUNT_CACHE_KEY(),JSON.stringify({ts:Date.now(),data}));}catch{}
+
+        // Resync do timer se o jogador não estiver caçando — corrige drift de
+        // sessões pausadas/finalizadas em outro dispositivo ou aba
+        if(!isHunting&&!isPvpOnly&&own.total_seconds!==undefined){
+            let _srvTotal=own.total_seconds||0;
+            if(own.is_hunting&&own.hunt_started_at){
+                const _el=Math.floor((Date.now()-new Date(own.hunt_started_at).getTime())/1000);
+                _srvTotal=Math.min(effectiveLimit(),_srvTotal+_el);
+            }
+            const srvLeft=Math.max(0,effectiveLimit()-_srvTotal);
+            if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
+            if(srvLeft<=0&&!own.rewards_claimed&&!isPvpOnly){updateHuntingHUD();}
+            // [FIX] Mantém isHuntingElsewhere sincronizado com o estado real do servidor
+            const _newElsewhere=!!(own.is_hunting&&own.current_region!==REGION_ID&&!own.is_eliminated&&!own.rewards_claimed&&srvLeft>0);
+            if(_newElsewhere!==isHuntingElsewhere){
+                isHuntingElsewhere=_newElsewhere;
+                if(isHuntingElsewhere&&!huntTimerInterval)startLocalTimer();
+                else if(!isHuntingElsewhere&&huntTimerInterval){clearInterval(huntTimerInterval);huntTimerInterval=null;}
+            }
+        }
+    }catch(e){console.warn('[floresta] sync error',e);}
+    return changed;
+}
+
+// ── BOOT ─────────────────────────────────────────────────────
+async function boot(){
+    showLoading();
+    createKillBannerUI();
+    try{
+        userId=await getUserId();if(!userId){location.href='index.html';return;}
+
+        // ── Pré-carrega IDB owners (zero egress, melhora render imediato) ──
+        _idbGetAllOwners().then(async map=>{
+            _ownersMap=map;
+            // Resolve guild names em batch para quem já está no IDB
+            const gIds=[...new Set(Object.values(map).map(o=>o.guild_id).filter(Boolean))];
+            if(gIds.length)_resolveGuildNames(gIds).catch(()=>{});
+            // Garante que o próprio jogador está no mapa (para guild no próprio avatar)
+            if(userId&&!_ownersMap[userId]?.guild_id){
+                supabase.from('players').select('id,guild_id').eq('id',userId).single()
+                    .then(({data})=>{
+                        if(data?.guild_id){
+                            if(!_ownersMap[userId])_ownersMap[userId]={id:userId};
+                            _ownersMap[userId].guild_id=data.guild_id;
+                            _idbSaveOwners([{id:userId,guild_id:data.guild_id}]).catch(()=>{});
+                            _resolveGuildNames([data.guild_id]).then(()=>{
+                                // Re-renderiza o próprio avatar com a guilda
+                                if(currentSpotId)renderPlayerOnSpot(currentSpotId);
+                            }).catch(()=>{});
+                        }
+                    }).catch(()=>{});
+            }
+        }).catch(()=>{});
+
+        playerData=await getPlayerData();
+
+        // Se ainda sem dados (primeiríssima sessão), tenta combat stats cache como last resort
+        if(!playerData){
+            try{
+                const raw=localStorage.getItem(STATS_CACHE_KEY());
+                if(raw){const p=JSON.parse(raw);if(p?.data?.name)playerData=p.data;}
+            }catch{}
+        }
+
+        preload('normal');preload('critical');preload('evade');
+        Object.entries(MOB_SOUND_URLS).forEach(([id, url]) => preloadUrl('mob_' + id, url));
+        await initShieldFromCache();
+        // Fallback servidor para o escudo: se IDB retornar 0 (ex: compra recente no mercador
+        // que ainda não propagou para o IDB desta aba), consulta o banco uma vez.
+        if(cachedShieldQty===0){
+            try{
+                const{data}=await supabase.from('inventory_items')
+                    .select('quantity')
+                    .eq('player_id',userId)
+                    .eq('item_id',SHIELD_ITEM_ID)
+                    .is('equipped_slot',null);
+                const srvQty=(data||[]).reduce((s,i)=>s+(i.quantity||0),0);
+                if(srvQty>0){cachedShieldQty=srvQty;updateShieldBtn();}
+            }catch{}
+        }
+
+        await initHourglassFromCache();
+        if(cachedHourglassQty===0){try{const{data:hd}=await supabase.from('inventory_items').select('quantity').eq('player_id',userId).eq('item_id',HOURGLASS_ITEM_ID).is('equipped_slot',null);const hQty=(hd||[]).reduce((s,i)=>s+(i.quantity||0),0);if(hQty>0){cachedHourglassQty=hQty;updateHourglassBtn();}}catch{}}
+        // Restaura dead state
+        const savedAct=getActivity();
+        if(savedAct?.pvp_dead&&savedAct?.dead_until&&savedAct.dead_until>Date.now()){
+            deadUntil=savedAct.dead_until;
+            const remaining=deadUntil-Date.now();
+            clearTimeout(deadTimer);
+            deadTimer=setTimeout(()=>{
+                deadUntil=null;if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
+                clearActivity();updateHuntingHUD();
+            },remaining);
+            _startDeadOverlay();
+        }
+
+        // Lazy cleanup
+        (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
+        renderSpots();
+
+        // ── Boot cache (180s TTL) — restaura UI sem RPC após reloads frequentes ──
+        let huntData=null;
+        let bootFromCache=false;
+        try{
+            const raw=localStorage.getItem(HUNT_CACHE_KEY());
+            if(raw){const cached=JSON.parse(raw);if(cached?.ts&&(Date.now()-cached.ts)<HUNT_CACHE_TTL&&cached.data){huntData=cached.data;bootFromCache=true;}}
+        }catch{}
+
+        if(!bootFromCache){
+            const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
+            if(error)throw error;
+            huntData=data;
+            try{localStorage.setItem(HUNT_CACHE_KEY(),JSON.stringify({ts:Date.now(),data:huntData}));}catch{}
+        }
+
+        currentSession=huntData?.own_session||null;
+        otherPlayers=huntData?.other_players||[];
+
+        // Salva outros jogadores no IDB (enrichment cross-page)
+        const playersToCache=(otherPlayers||[]).filter(p=>p.id&&p.name).map(p=>({id:p.id,name:p.name,avatar_url:p.avatar_url||''}));
+        if(playersToCache.length){
+            _idbSaveOwners(playersToCache).catch(()=>{});
+            playersToCache.forEach(o=>{_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
+            // Resolve guild names em batch (fire-and-forget, re-renderiza se necessário)
+            const gIds=[...new Set(playersToCache.map(o=>_ownersMap[o.id]?.guild_id).filter(Boolean))];
+            if(gIds.length)_resolveGuildNames(gIds).catch(()=>{});
+        }
+
+        if(currentSession){
+            hourglassesUsed=currentSession.hourglasses_used||0;
+            const srvTotal=currentSession.total_seconds||0;
+            let localTotal=srvTotal;
+            if(currentSession.is_hunting&&currentSession.hunt_started_at){
+                const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
+                localTotal=Math.min(effectiveLimit(),srvTotal+elapsed);
+            }
+            localSecondsLeft=Math.max(0,effectiveLimit()-localTotal);
+            // currentSpotId só é restaurado se o jogador estiver ativamente caçando ou em PvP.
+            // Caso contrário (ex: morreu no PvP e recarregou), spot fica null para permitir re-entrada.
+            const _restoredSpot=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
+            if(currentSession.is_eliminated)currentSpotId=null;
+            isHunting=currentSession.is_hunting
+                &&currentSession.current_region===REGION_ID
+                &&localSecondsLeft>0
+                &&!currentSession.is_eliminated
+                &&!currentSession.rewards_claimed;
+
+            // [FIX] Timer conta regressivamente mesmo quando a sessão ativa é em outra região
+            isHuntingElsewhere=!isHunting
+                &&currentSession.is_hunting===true
+                &&currentSession.current_region!==REGION_ID
+                &&localSecondsLeft>0
+                &&!currentSession.is_eliminated
+                &&!currentSession.rewards_claimed;
+
+            if(!isHunting&&currentSession.pvp_only_entered_at&&currentSession.current_region===REGION_ID&&!currentSession.is_eliminated){
+                const pvpEnteredAt=new Date(currentSession.pvp_only_entered_at);
+                const pvpElapsed=Math.floor((Date.now()-pvpEnteredAt.getTime())/1000);
+                const pvpRemaining=900-pvpElapsed;
+                if(pvpRemaining>0){isPvpOnly=true;pvpOnlySecondsLeft=pvpRemaining;}
+            }
+
+            // Só aplica currentSpotId se realmente vai usar o spot — evita "spot fantasma"
+            // quando jogador está morto (is_hunting=false, pvp_only=null, mas current_spot ainda setado no DB)
+            currentSpotId=(isHunting||isPvpOnly)?_restoredSpot:null;
+
+            if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
+            if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
+            if(isPvpOnly&&currentSpotId){
+                renderPlayerOnSpot(currentSpotId);
+                // pvpOnly=true — mina e outras páginas não limpam como stale
+                setActivityHunting(currentSpotId, false, true);
+                startPvpOnlyTimer(false);
+                // Restaura o setTimeout de saída com o tempo restante real (evita reset para 15 min após kill)
+                clearTimeout(pvpOnlyExitTimer);
+                pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,pvpOnlySecondsLeft*1000);
+            }
+            // [FIX] Sessão ativa em outra região: timer decrementando (sem animações nesta página)
+            if(!isHunting&&!isPvpOnly&&isHuntingElsewhere)startLocalTimer();
+            // ── Limpeza de atividade obsoleta no boot ──────────────────────────────────
+            // Se o servidor confirma que não está caçando nem em PvP puro E não está na
+            // penalidade de morte (deadUntil ainda ativo), o ACTIVITY_KEY deve ser limpo
+            // para não bloquear a mineração. Cobre: pausa/fim de sessão feitos em outro
+            // dispositivo, aba fechada sem pausar, sessão expirada naturalmente, etc.
+            // IMPORTANTE: NÃO apaga SPOT_LOCK_KEY se o lock ainda está dentro dos 15 min
+            // — o jogador pode ter vindo de outra região e o lock precisa sobreviver à navegação.
+            // [FIX] isHuntingElsewhere adicionado: não apagar ACTIVITY_KEY quando há sessão ativa em outra região
+            if(!isHunting&&!isPvpOnly&&!isHuntingElsewhere&&!isPlayerDead()&&!currentSession.pvp_only_entered_at){
+                const _staleAct=getActivity();
+                if(_staleAct&&_staleAct.type==='hunting'){
+                    let _lockStillActive=false;
+                    try{
+                        const _lockRaw=localStorage.getItem(SPOT_LOCK_KEY());
+                        if(_lockRaw){const _lo=JSON.parse(_lockRaw);if(_lo.locked_at&&(Date.now()-_lo.locked_at)<SPOT_LOCK_MS)_lockStillActive=true;}
+                    }catch{}
+                    localStorage.removeItem(ACTIVITY_KEY);
+                    if(!_lockStillActive){try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}}
+                }
+            }
+
+            // Usa localTotal (srvTotal + elapsed) porque o servidor só persiste total_seconds
+            // no pause/finish — se o jogador saiu enquanto caçava, srvTotal ainda está abaixo
+            // de DAILY_LIMIT mesmo que o tempo real já tenha esgotado.
+            // Não chama onHuntComplete em PvP-only — recompensas são disparadas ao SAIR do
+            // modo PvP (exitPvpOnlyMode), não enquanto o jogador ainda está nele.
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=effectiveLimit()&&!isPvpOnly&&!currentSession.pvp_only_entered_at){isHunting=false;await onHuntComplete();}
+            if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
+                document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
+                document.getElementById('eliminatedModal').style.display='flex';
+            }
+        }
+
+        updateHuntingHUD();renderOtherPlayers(otherPlayers);
+        await syncGlobalPvpEvents();
+
+        // Inicia polling adaptativo + inactivity guard
+        _currentPollMs=_getBaseInterval();
+        // [FIX] Boot do cache: sync imediato em background para não mostrar jogadores obsoletos.
+        // Cobre o caso em que outro jogador trocou de spot dentro do TTL de 120s do cache.
+        if(bootFromCache)syncOtherPlayers().catch(()=>{});
+        scheduleNextSync();
+        _startInactivityGuard();
+
+    }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}
+    finally{hideLoading();}
+}
+
+// ── COMBAT LOOP (mob attack animation — apenas caça normal, não pvp puro) ──────
+
+// Own-player loop state
+let _combatLoopActive = false;
+let _combatLoopTimeout = null;
+
+// ── Sound with controllable volume (uses GainNode) ────────────
+function playSoundAt(name, volume){
+    try{ if(audioCtx.state==='suspended') audioCtx.resume(); }catch{}
+    const buf = audioBufs[name];
+    if(!buf) return;
+    try{
+        const gain = audioCtx.createGain();
+        gain.gain.value = volume;
+        gain.connect(audioCtx.destination);
+        const s = audioCtx.createBufferSource();
+        s.buffer = buf;
+        s.connect(gain);
+        s.start(0);
+        s.onended = ()=>{ try{ s.disconnect(); gain.disconnect(); }catch{} };
+    }catch{}
+}
+
+// ── Own-player loop (full volume) ─────────────────────────────
+function startCombatLoop(){
+    if(_combatLoopActive) return;
+    _combatLoopActive = true;
+    _combatLoopTimeout = setTimeout(()=>_combatTick_own(), 2800 + Math.random()*1800);
+}
+
+function stopCombatLoop(){
+    _combatLoopActive = false;
+    clearTimeout(_combatLoopTimeout);
+    _combatLoopTimeout = null;
+    const pw = document.querySelector('.player-avatar-wrapper');
+    if(pw){
+        pw.classList.remove('player-lunging');
+        pw.style.transition = 'left 0.7s ease, top 0.7s ease, right 0.5s, bottom 0.5s';
+        pw.style.right = '10px'; pw.style.bottom = '10px';
+        pw.style.left = 'auto'; pw.style.top = 'auto';
+    }
+}
+
+async function _combatTick_own(){
+    if(!_combatLoopActive || !isHunting || isPvpOnly || !currentSpotId){ _combatLoopActive=false; return; }
+    const spotEl = document.getElementById(`spot-${currentSpotId}`);
+    const playerWrap = spotEl?.querySelector('.player-avatar-wrapper');
+    if(!spotEl || !playerWrap){ _scheduleOwn(); return; }
+    const spot = SPOTS.find(s=>s.id===currentSpotId);
+    if(!spot){ _scheduleOwn(); return; }
+
+    const done = await _runAttackSequence(playerWrap, spotEl, spot, null, ()=>_combatLoopActive && isHunting && !isPvpOnly);
+    if(!done) return;
+    _scheduleOwn();
+}
+
+function _scheduleOwn(){
+    if(!_combatLoopActive) return;
+    _combatLoopTimeout = setTimeout(()=>_combatTick_own(), 2500 + Math.random()*1000);
+}
+
+// ── Other-players global combat interval ──────────────────────
+let _otherCombatInterval = null;
+
+function startOtherCombatLoop(playerId, spotId){
+    // No-op per-player: global interval handles everything
+}
+function stopOtherCombatLoop(playerId){
+    // No-op per-player
+}
+function stopAllOtherCombatLoops(){
+    clearInterval(_otherCombatInterval);
+    _otherCombatInterval = null;
+}
+
+// Kick global interval whenever renderOtherPlayers runs
+function _ensureOtherCombatInterval(){
+    if(_otherCombatInterval) return;
+    _otherCombatInterval = setInterval(_otherCombatGlobalTick, 4000 + Math.random()*1000);
+}
+
+// One tick: pick a random non-busy other-player-wrapper and run one attack
+let _otherCombatBusy = new Set(); // player-ids currently mid-animation
+
+async function _otherCombatGlobalTick(){
+    // Collect all visible, non-eliminated, non-busy other-player wrappers
+    const allWrappers = [...document.querySelectorAll('.other-player-wrapper')]
+        .filter(w => !w.querySelector('.other-eliminated-label') && !_otherCombatBusy.has(w.dataset.playerId));
+
+    if(allWrappers.length === 0) return;
+
+    // Pick one at random
+    const playerWrap = allWrappers[Math.floor(Math.random() * allWrappers.length)];
+    const spotEl = playerWrap.closest('.hunt-spot');
+    if(!spotEl) return;
+
+    const spotId = spotEl.id.replace('spot-', '');
+    const spot = SPOTS.find(s => s.id === spotId);
+    if(!spot) return;
+
+    const pid = playerWrap.dataset.playerId;
+    _otherCombatBusy.add(pid);
+
+    await _runAttackSequence(playerWrap, spotEl, spot, 0.10, () => !!playerWrap.parentElement);
+
+    // Rest period before this player can be picked again (2.5–5s)
+    setTimeout(() => _otherCombatBusy.delete(pid), 100 + Math.random() * 500);
+}
+
+// ── Generic attack sequence (shared by own + others) ──────────
+// soundVolume: null = full volume (own player), number = specific volume (others)
+// isAlive: function returning bool — gates the await checkpoints
+async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive){
+    const isOwn = soundVolume === null; // own player uses null volume
+    // O wrap não é mais filho de spotEl (agora vai direto pro #map — ver
+    // renderSpots), então filtramos pelo spot guardado em wrap.__mobSpot
+    // em vez de spotEl.querySelectorAll.
+    const mobs = _mobVisualRegistry.filter(m=>m.__mobSpot===spot && !m.classList.contains('mob-dying'));
+    if(mobs.length === 0) return true;
+
+    const targetMob = mobs[Math.floor(Math.random() * mobs.length)];
+    const _mlp = _mobGetLogical(targetMob);
+    const mobL = _mlp.left;
+    const mobT = _mlp.top;
+    const pW = 70, pH = 90;
+
+    const rawLeft  = mobL - pW - 4 + (Math.random()*16 - 8);
+    const rawTop   = mobT + (Math.random()*18 - 9);
+    const destLeft = Math.max(4, Math.min(spot.width  - pW - 4, rawLeft));
+    const destTop  = Math.max(4, Math.min(spot.height - pH - 4, rawTop));
+
+    playerWrap.style.transition = 'left 0.55s cubic-bezier(0.22,1,0.36,1), top 0.55s cubic-bezier(0.22,1,0.36,1), right 0.1s, bottom 0.1s';
+    playerWrap.style.right  = 'auto';
+    playerWrap.style.bottom = 'auto';
+    playerWrap.style.left   = destLeft + 'px';
+    playerWrap.style.top    = destTop  + 'px';
+
+    await _delay(580);
+    if(!isAlive()) return false;
+
+    // Lunge
+    playerWrap.classList.remove('player-lunging');
+    void playerWrap.offsetWidth;
+    playerWrap.classList.add('player-lunging');
+    setTimeout(()=>playerWrap.classList.remove('player-lunging'), 500);
+
+    // Hit stats
+    const isCrit  = Math.random() < 0.18;
+    const isEvade = !isCrit && Math.random() < 0.10;
+    const dmg     = isEvade ? 0 : Math.floor(isCrit ? 4000+Math.random()*4000 : 2000+Math.random()*2000);
+
+    // Flash mob
+    targetMob.classList.remove('mob-impact-flash');
+    void targetMob.offsetWidth;
+    targetMob.classList.add('mob-impact-flash');
+    setTimeout(()=>targetMob.classList.remove('mob-impact-flash'), 320);
+    _mobVisualFlash(targetMob); // mesmo flash, só que no sprite 3D (o <img> agora é invisível)
+
+    // Damage number suppressed in spot animation — sounds and shake only
+    // _showMobDmgNumber(targetMob, dmg, isCrit, isEvade);
+
+    // Som de ataque primeiro, depois som do mob com delay
+    const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
+    const _vf = _spotVolume(spot.id);
+    playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 1 * _vf), 300); }
+
+    // Shake mob avatar
+    const mobAv = targetMob.querySelector('.mob-avatar');
+    if(mobAv && !isEvade){
+        mobAv.classList.remove('shake-animation');
+        void mobAv.offsetWidth;
+        mobAv.classList.add('shake-animation');
+        setTimeout(()=>mobAv.classList.remove('shake-animation'), 400);
+        _mobVisualShake(targetMob); // mesmo tremor, só que no sprite 3D
+    }
+
+    await _delay(750);
+    if(!isAlive()) return false;
+
+    // 40% chance of mob death
+    if(!isEvade && !targetMob.classList.contains('mob-dying') && Math.random() < 0.40){
+        _triggerMobDeath(targetMob, spot);
+    }
+
+    // Return to resting position — own player goes to fixed corner, others wander freely
+    await _delay(300);
+    if(!isAlive()) return false;
+
+    let returnLeft, returnTop;
+    if(isOwn){
+        // Own player also wanders to a random position within the spot
+        returnLeft = 10 + Math.random() * Math.max(10, spot.width  - pW - 20);
+        returnTop  = 10 + Math.random() * Math.max(10, spot.height - pH - 20);
+    } else {
+        // Other players wander to a new random position within the spot
+        returnLeft = 10 + Math.random() * Math.max(10, spot.width  - pW - 20);
+        returnTop  = 10 + Math.random() * Math.max(10, spot.height - pH - 20);
+    }
+    playerWrap.style.transition = 'left 1.4s ease-in-out, top 1.4s ease-in-out';
+    playerWrap.style.left = Math.max(4, Math.min(spot.width - pW - 4, returnLeft)) + 'px';
+    playerWrap.style.top  = Math.max(4, Math.min(spot.height - pH - 4, returnTop)) + 'px';
+
+    return true;
+}
+
+function _delay(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+function _showMobDmgNumber(mobEl, dmg, crit, evaded){
+    const el = document.createElement('div');
+    if(evaded){ el.textContent = 'Desviou'; el.className = 'evade-text'; }
+    else { el.textContent = Number(dmg).toLocaleString(); el.className = crit ? 'crit-damage-number' : 'damage-number'; }
+    mobEl.style.position = 'absolute';
+    el.style.position = 'absolute';
+    el.style.top  = '10px';
+    el.style.left = '50%';
+    el.style.transform = 'translateX(-50%)';
+    el.style.zIndex = '20';
+    el.style.pointerEvents = 'none';
+    mobEl.appendChild(el);
+    el.addEventListener('animationend', ()=>el.remove(), {once:true});
+}
+
+function _triggerMobDeath(mobEl, spot){
+    if(mobEl.classList.contains('mob-dying') || mobEl.classList.contains('mob-respawning')) return;
+    mobEl.classList.add('mob-dying');
+    _mobVisualDie(mobEl); // esmaece/encolhe o sprite 3D (e sua sombra) em vez do <img>, que agora é invisível
+
+    setTimeout(()=>{
+        if(!mobEl.parentElement) return;
+        const newL = 8 + Math.random() * Math.max(10, spot.width  - 80);
+        const newT = 8 + Math.random() * Math.max(10, spot.height - 95);
+        Object.assign(_mobGetLogical(mobEl), { left: newL, top: newT });
+        mobEl.classList.remove('mob-dying');
+        mobEl.classList.add('mob-respawning');
+        void mobEl.offsetWidth;
+        _mobVisualRespawn(mobEl); // sprite reaparece com um leve "estouro" (Back.Out), mesma sensação do CSS antigo
+        setTimeout(()=>{ mobEl.classList.remove('mob-respawning'); }, 800);
+    }, 9000);
+}
+
+
+// =================================================================
+// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO + DESLOCAMENTO DOS MOBS (mapa de caça)
+// -----------------------------------------------------------------
+// Substitui o @keyframes fixo (mob-breathe/mob-float, que fazia todos
+// os mobs respirarem em sincronia e sempre do mesmo jeito) por uma
+// respiração calculada quadro a quadro e independente para CADA mob:
+// velocidade e profundidade do fôlego derivam lentamente e sozinhas,
+// a curva de inspiração/expiração é assimétrica (como uma respiração
+// real) e, de tempos em tempos, cada mob dá uma respirada mais funda
+// (um "suspiro"), sempre subindo/descendo suavemente, sem saltos.
+// Há também um leve balanço de peso (rotação + deslocamento horizontal
+// mínimos) — nunca translateY, então nenhum mob flutua.
+//
+// Além da respiração, como não temos sprites de caminhada, simulamos
+// o deslocamento (startWander) com truques puramente de transform,
+// sem precisar de nenhuma imagem nova:
+//   1) Virada horizontal (espelhamento): quando o mob anda para a
+//      esquerda ele espelha (scaleX negativo) suavemente, como se
+//      virasse de fato — em vez de deslizar de lado sempre com a
+//      mesma "cara".
+//   2) Leve inclinação na direção do movimento ("lean"): um par de
+//      graus de rotação enquanto anda, voltando ao normal ao parar —
+//      dá a sensação de peso/impulso, como alguém se inclinando pra
+//      andar.
+//   3) Squash & stretch sutil no início e no fim de cada passo: um
+//      leve achatamento/alongamento (scale, nunca translateY) que
+//      simula o "impulso" de sair do lugar e o "assentar" ao parar.
+//
+// Funciona para qualquer número de mobs na tela e se adapta sozinha
+// quando eles são recriados (renderSpots): os estados ficam num
+// WeakMap por elemento, sem precisar reconectar nada.
+// Pausa automaticamente durante shake-animation (dano) e durante
+// mob-dying/mob-respawning (que já controlam o transform sozinhos).
+// =================================================================
+const _mobBreathStates = new WeakMap();
+
+function _mobBreathNewState() {
+    const st = {
+        breathPhase: Math.random() * Math.PI * 2,
+        swayPhase: Math.random() * Math.PI * 2,
+        breathSpeed: 1, breathDepth: 1, swaySpeed: 0.35,
+        targetBreathSpeed: 1, targetBreathDepth: 1, targetSwaySpeed: 0.35,
+        nextDriftChange: 0,
+        nextDeepBreath: 4000 + Math.random() * 5000,
+        deepBreathBoost: 0, deepBreathTarget: 0, deepBreathHold: 0,
+        // Estado de deslocamento (virada, inclinação e squash/stretch)
+        facing: 1, facingTarget: 1,
+        leanCurrent: 0, leanTarget: 0,
+        moveBoost: 0, moveBoostTarget: 0, moveBoostHold: 0,
+        // Passada: bounce vertical do corpo + pulso na sombra, sincronizados,
+        // pra simular passos sem precisar de sprites de perna.
+        walking: false, walkAmp: 0,
+        stepPhase: Math.random() * Math.PI * 2,
+        stepSpeed: 0.72 + Math.random() * 0.28,  // ciclos/seg (cada ciclo = 2 "passadas") — intervalo entre passadas um pouco maior (bounce menos acelerado)
+        bobAmp: 1.0 + Math.random() * 0.7,        // px de subida no meio do passo (bem sutil)
+        // Inclinação de passada: alterna de sinal a cada passo (não em módulo,
+        // como o bounce), simulando a troca de apoio entre as pernas esquerda/
+        // direita. O eixo em que ela aparece depende da direção do mob:
+        //  - andando p/ cima ou p/ baixo (sprite frontal/de costas, sem
+        //    espelhamento) → a alternância vira uma leve báscula lateral
+        //    (rotação no eixo Z, esquerda/direita), como o quadril bascula
+        //    entre um pé e outro visto de frente.
+        //  - andando p/ os lados (sprite padrão, espelhado) → a alternância
+        //    vira uma leve báscula frente/trás (rotateX com perspectiva),
+        //    como o corpo "cabeceia" a cada passada, visto de perfil.
+        stepTiltZAmp: 0.5 + Math.random() * 0.5,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
+        stepTiltXAmp: 2.2 + Math.random() * 1.0,   // graus — báscula frente/trás (andar p/ os lados)
+        // Direção vertical do passo atual: null = usa o sprite padrão
+        // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
+        // sprite dedicado (_up.webp / _down.webp), sem espelhar.
+        vertical: null, verticalApplied: undefined, flipApplied: undefined,
+        lastTime: performance.now()
+    };
+    _mobBreathPickTargets(st);
+    return st;
+}
+
+function _mobBreathPickTargets(st) {
+    st.targetBreathSpeed = 0.82 + Math.random() * 0.4;   // ~0.82x–1.22x
+    st.targetBreathDepth = 0.75 + Math.random() * 0.55;  // ~0.75x–1.3x
+    st.targetSwaySpeed = 0.25 + Math.random() * 0.25;
+    st.nextDriftChange = 3000 + Math.random() * 5000;    // novo alvo a cada 3–8s
+}
+
+function _mobBreathGetState(img) {
+    let st = _mobBreathStates.get(img);
+    if (!st) { st = _mobBreathNewState(); _mobBreathStates.set(img, st); }
+    return st;
+}
+
+// Remove um sufixo _up/_down que já esteja no fim do nome do arquivo
+// (antes da extensão), para sempre recalcular a partir do sprite base.
+function _mobStripDirSuffix(src) {
+    return src.replace(/_(?:up|down)(\.[a-zA-Z0-9]+)(\?.*)?$/, '$1$2');
+}
+
+// Monta a URL da variante vertical do sprite (dir = 'up' | 'down'); sem
+// direção definida, devolve o sprite base (padrão direita/esquerda).
+function _mobDirSrc(baseSrc, dir) {
+    if (dir !== 'up' && dir !== 'down') return baseSrc;
+    const m = baseSrc.match(/^(.*?)(\.[a-zA-Z0-9]+)(\?.*)?$/);
+    if (!m) return baseSrc;
+    return `${m[1]}_${dir}${m[2]}${m[3] || ''}`;
+}
+
+// Troca a textura do mob pela variante _up/_down, ou espelha a textura padrão
+// quando ele vira pra esquerda (ver nota sobre THREE.Sprite acima) — só
+// quando o estado realmente muda, nunca a cada frame.
+function _mobApplyDirSprite(el, img, st) {
+    const wantFlip = !st.vertical && st.facingTarget > 0;
+    if (st.verticalApplied === st.vertical && st.flipApplied === wantFlip) return;
+    st.verticalApplied = st.vertical;
+    st.flipApplied = wantFlip;
+    const base = img.dataset.baseSrc || _mobStripDirSuffix(img.getAttribute('src') || img.src);
+    img.dataset.baseSrc = base;
+    const url = _mobDirSrc(base, st.vertical);
+    img.src = url; // <img> continua só como "cérebro" (invisível), sem precisar espelhar via CSS
+    if (el && el.__mobVisual) _mobSetTexture(el.__mobVisual, url, wantFlip);
+}
+
+// Chamado por startWander quando o mob começa a andar até um novo ponto.
+// deltaX/deltaY = deslocamento horizontal/vertical do passo que está começando.
+function _mobWalkOnMoveStart(el, img, deltaX, deltaY) {
+    if (!img) return;
+    const st = _mobBreathGetState(img);
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY || 0);
+
+    // O eixo dominante do passo decide o "grupo" de direção:
+    //  - deslocamento vertical maior que o horizontal → passo para cima/baixo
+    //    (inclui as diagonais mais verticais) → troca para o sprite _up/_down
+    //    dedicado, sem espelhar.
+    //  - caso contrário → passo para a direita/esquerda (inclui as diagonais
+    //    mais horizontais) → mantém o sprite padrão, espelhando (scaleX
+    //    negativo) quando o passo é para a esquerda, como antes.
+    if (absY > absX && absY > 4) {
+        st.vertical = deltaY < 0 ? 'up' : 'down';
+    } else {
+        st.vertical = null;
+        if (absX > 4) st.facingTarget = deltaX < 0 ? -1 : 1;
+    }
+    _mobApplyDirSprite(el, img, st);
+
+    // A inclinação (lean) segue a componente horizontal do passo mesmo
+    // numa diagonal vertical, para preservar a noção de "para que lado".
+    st.leanTarget = absX > 4 ? (deltaX < 0 ? -1 : 1) * 1.6 : 0;
+    st.moveBoostTarget = 1;
+    st.moveBoostHold = 260; // ms de "impulso" (squash/stretch) logo no início do passo
+    st.walking = true; // liga o bounce de passada, que só desliga no fim do trecho
+}
+
+// Chamado quando o mob chega ao destino e para de andar
+function _mobWalkOnMoveEnd(img) {
+    if (!img) return;
+    const st = _mobBreathGetState(img);
+    st.leanTarget = 0;
+    st.moveBoostTarget = 1; // pequeno "assentar" ao chegar/parar
+    st.moveBoostHold = 220;
+    st.walking = false; // o bounce de passada esmaece suavemente (walkAmp) em vez de cortar seco
+}
+
+function initMobAvatarBreathing() {
+    function tick(now) {
+        if (!document.hidden) {
+            document.querySelectorAll('.mob-avatar').forEach(img => {
+                if (img.offsetParent === null) return;
+                const wrap = img.closest('.mob-wrapper');
+                if (wrap && (wrap.classList.contains('mob-dying') || wrap.classList.contains('mob-respawning'))) return;
+
+                const st = _mobBreathGetState(img);
+
+                const dt = Math.min(now - st.lastTime, 100); // evita saltos ao voltar de aba oculta/hit
+                st.lastTime = now;
+
+                st.nextDriftChange -= dt;
+                if (st.nextDriftChange <= 0) _mobBreathPickTargets(st);
+
+                st.breathSpeed += (st.targetBreathSpeed - st.breathSpeed) * 0.0015 * dt;
+                st.breathDepth += (st.targetBreathDepth - st.breathDepth) * 0.0015 * dt;
+                st.swaySpeed += (st.targetSwaySpeed - st.swaySpeed) * 0.0015 * dt;
+
+                st.nextDeepBreath -= dt;
+                if (st.nextDeepBreath <= 0) {
+                    st.deepBreathTarget = 1;
+                    st.deepBreathHold = 900; // ms segurando o pico antes de soltar o ar
+                    st.nextDeepBreath = 7000 + Math.random() * 8000;
+                }
+                if (st.deepBreathTarget > 0) {
+                    st.deepBreathHold -= dt;
+                    if (st.deepBreathHold <= 0) st.deepBreathTarget = 0;
+                }
+                // Sobe e desce suavemente (sem saltos) — simula inspirar fundo e soltar o ar aos poucos
+                st.deepBreathBoost += (st.deepBreathTarget - st.deepBreathBoost) * 0.005 * dt;
+
+                st.breathPhase += (dt / 1000) * st.breathSpeed * ((Math.PI * 2) / 4.2);
+                st.swayPhase += (dt / 1000) * st.swaySpeed * (Math.PI * 2);
+
+                // Curva assimétrica: inspiração mais rápida, expiração mais lenta
+                const raw = Math.sin(st.breathPhase);
+                const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+                const breathAmount = asym * 0.022 * st.breathDepth * (1 + st.deepBreathBoost * 0.9);
+                let scaleY = 1 + breathAmount;
+                let scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+
+                // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
+                const sway = Math.sin(st.swayPhase) * 0.6 + Math.sin(st.swayPhase * 0.47 + 1.3) * 0.3;
+                const rotateDeg = sway * 0.12;
+                const translateXpx = sway * 0.3;
+
+                // --- Deslocamento: virada suave (espelhamento), inclinação e squash/stretch ---
+                st.facing = st.facingTarget;
+
+                st.leanCurrent += (st.leanTarget - st.leanCurrent) * 0.006 * dt;
+
+                if (st.moveBoostHold > 0) {
+                    st.moveBoostHold -= dt;
+                } else {
+                    st.moveBoostTarget = 0;
+                }
+                st.moveBoost += (st.moveBoostTarget - st.moveBoost) * 0.012 * dt;
+
+                const squash = st.moveBoost * 0.045; // até ~4.5% de achatamento/alongamento no pico do passo
+                scaleY *= (1 - squash);
+                scaleX *= (1 + squash * 0.6);
+
+                // --- Bounce de passada: sobe/desce em sincronia com a sombra,
+                // simulando o alternar dos pés sem precisar de sprites de perna.
+                // walkAmp sobe suave ao começar a andar, mas cai bem mais rápido
+                // ao parar — assim o bounce não fica "quicando parado" na chegada.
+                const walkAmpRate = st.walking ? 0.006 : 0.026;
+                st.walkAmp += ((st.walking ? 1 : 0) - st.walkAmp) * walkAmpRate * dt;
+                st.stepPhase += (dt / 1000) * st.stepSpeed * (Math.PI * 2);
+                const stepRaw = Math.abs(Math.sin(st.stepPhase)); // 0 = pé no chão, 1 = meio do passo (mais alto)
+                const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
+                const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão
+                const bobY = -liftAmt * st.bobAmp;                 // px — negativo sobe na tela
+                const stepSquash = contactAmt * 0.010;             // pequeno "thump" extra a cada passada
+                scaleY *= (1 - stepSquash);
+                scaleX *= (1 + stepSquash * 0.6);
+
+                // Sinal alternado do mesmo ciclo do passo (positivo numa passada,
+                // negativo na seguinte) — é o que dá a alternância esquerda/
+                // direita (ou frente/trás) de um passo pro outro, em vez de uma
+                // inclinação sempre pro mesmo lado (o que ficava "robótico").
+                const stepSigned = Math.sin(st.stepPhase);
+                const stepTiltAmt = stepSigned * st.walkAmp;
+                const tiltZ = st.vertical ? stepTiltAmt * st.stepTiltZAmp : 0;
+                const tiltX = st.vertical ? 0 : stepTiltAmt * st.stepTiltXAmp;
+
+                // tiltX (báscula frente/trás) não tem equivalente direto num billboard
+                // (que sempre encara a câmera) — dobramos seu efeito num leve extra de
+                // squash em vez de um rotateX 3D de verdade, mantendo a sensação de peso.
+                const totalRotateDeg = rotateDeg + st.leanCurrent + tiltZ + (wrap && wrap.__mobShake ? wrap.__mobShake.rot : 0);
+                const tiltXSquash = Math.abs(tiltX) * 0.0015;
+                scaleY *= (1 - tiltXSquash);
+                // O espelhamento esquerda/direita agora é feito trocando a textura (ver
+                // _mobApplyDirSprite) — THREE.Sprite ignora o sinal da escala, então não
+                // multiplicamos mais por st.facing aqui (ficaria sem efeito).
+                const scaleXFinal = scaleX;
+
+                // Aplica no THREE.Sprite (billboard 3D) em vez do <img> — sempre de
+                // frente pra câmera, então esse mesmo transform nunca "vaza" ao girar
+                // o céu, diferente do CSS antigo que dependia da caixa pai aproximada.
+                const visual = wrap ? wrap.__mobVisual : null;
+                if (visual && visual.ready) {
+                    visual.sprite.scale.set(visual.baseW * scaleXFinal, visual.baseH * scaleY, 1);
+                    visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
+                }
+                if (wrap) {
+                    const shakeX = wrap.__mobShake ? wrap.__mobShake.x : 0;
+                    wrap.__mobFx = { swayX: translateXpx + shakeX, bobY: bobY };
+                }
+
+                // Sombra de contato: acompanha o "peso" do passo (achata/escurece
+                // no impacto, encolhe/clareia quando o corpo está no alto do
+                // bounce) e a respiração — como uma sombra real reagiria. Agora é
+                // a malha 3D criada por createNpcGroundShadow (mesma técnica do
+                // NPC do Mestre de Poções), não mais um div CSS.
+                if (visual && visual.ready && visual.shadow) {
+                    const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.16 + Math.max(0, breathAmount) * 0.12;
+                    const shadowOpacity = 0.40 + squash * 0.5 + contactAmt * 0.08 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
+visual.shadow.mesh.material.opacity = Math.min(0.9, Math.max(0.35, shadowOpacity));
+                }
+            });
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
+    initMobAvatarBreathing();
+    initSkybox();
+    enableMapInteraction();
+    document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);
+    document.getElementById('activateShieldBtn').addEventListener('click',handleActivateShield);
+    const _hbtn=document.getElementById('activateHourglassBtn');if(_hbtn)_hbtn.addEventListener('click',handleActivateHourglass);
+    document.getElementById('tutorialBtn').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='flex';});
+    document.getElementById('huntInfoClose').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='none';});
+    document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
+    document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{
+        document.getElementById('eliminatedModal').style.display='none';
+        setEliminationAcknowledged(currentSession?.hunt_date); // grava ack aqui, não ao mostrar
+        isHunting=false;isPvpOnly=false;
+        stopLocalTimer();stopPvpOnlyTimer();
+        clearTimeout(pvpOnlyExitTimer);
+        currentSpotId=null;
+        removePlayerFromSpot();
+        clearActivity();
+        updateHuntingHUD();
+    });
+    document.getElementById('rewardsCloseBtn').addEventListener('click',()=>{document.getElementById('rewardsModal').style.display='none';});
+    document.getElementById('inactivityOkBtn').addEventListener('click',()=>{location.reload();});
+    await boot();
+});
+
+function showLevelUpBalloon(newLevel) {
+    const balloon = document.getElementById('levelUpBalloon');
+    const text = document.getElementById('levelUpBalloonText');
+    if (balloon && text) {
+        text.innerText = newLevel;
+        balloon.style.display = 'flex';
+        setTimeout(() => { balloon.style.display = 'none'; }, 6000);
+    }
+}

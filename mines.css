@@ -1,0 +1,1507 @@
+/* Estilos da barra superior e layout geral (copiados do inventory.css) */
+
+/* A página de mines usa um layout full-screen (mapa fixo entre a topbar e o
+   footer). O style.css global aplica `body { padding-bottom: 100px }` para
+   páginas com rolagem normal — aqui isso sobra como uma faixa preta abaixo
+   do mapa, então zeramos só nesta página. */
+body {
+    padding-bottom: 0;
+    overflow: hidden;
+}
+
+#playerTopBar {
+    display: flex;
+    position: fixed;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #555;
+}
+
+.top-bar-link {
+    color: #e0dccc;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+
+#pageTitle {
+    font-size: 1em;
+    font-weight: bold;
+    flex-grow: 1;
+    text-align: center;
+}
+
+#mainContainer {
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    background-color: #000;
+}
+
+/* ==============================================================
+   MAPA DA MINA — ARRASTÁVEL/ZOOM (mesmo padrão UE5 do Index)
+   ============================================================== */
+#mineMapViewport {
+    width: 100vw;
+    height: calc(100vh - 120px); /* mesmo cálculo do #mapContainer do Index */
+    overflow: hidden;
+    position: relative;
+    background-color: #000;
+    touch-action: none; /* evita zoom duplo no mobile */
+}
+
+@media (max-aspect-ratio: 9/16) {
+  #mineMapViewport {
+    height: 90vh;
+  }
+}
+
+/* #minesContainer agora É a camada do mapa (equivalente ao #mapImage do Index).
+   O id foi mantido para não quebrar nenhuma referência existente em mines.js. */
+#minesContainer {
+    background-image: url('https://aden-rpg.pages.dev/assets/mapa_mina.webp');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: top left;
+    width: 1500px;   /* fallback — recalculado via JS a partir do tamanho real da imagem */
+    height: 1600px;  /* fallback — recalculado via JS a partir do tamanho real da imagem */
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: grab;
+    transform-origin: top left;
+    transition: transform 0.05s linear, filter 0.6s ease;
+    display: block;
+    gap: unset;
+    background-color: unset;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Quando todas as minas da zona estão "esgotadas" (aguardando a próxima
+   sessão), o mapa inteiro perde a cor até a nova sessão começar. */
+#minesContainer.map-desaturated {
+    filter: grayscale(100%) brightness(0.75);
+}
+
+.mine-card {
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/mina.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    
+}
+
+.mine-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.5);
+}
+
+.mine-status {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.status-idle { color: #4CAF50; } /* Verde */
+.status-occupied { color: #FFC107; } /* Amarelo */
+.status-exhausted { color: #f44336; } /* Vermelho */
+.status-disputing { color: #2196F3; } /* Azul */
+
+/* ==================================================================
+   HUD FLUTUANTE — Guilda Dominante / Timer / Seletor de Zona
+   (sobreposto ao mapa, mesmo espírito "vidro" do painel do Index)
+   ================================================================== */
+#mineHeader {
+    position: fixed; /* posição real ajustada via JS (syncMineMapOffsets), abaixo da topbar */
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: 92%;
+    max-width: 420px;
+    background: rgba(10, 10, 12, 0.62);
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    border-radius: 12px;
+    padding: 8px 14px 10px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    pointer-events: none; /* deixa o mapa arrastável por baixo */
+    text-align: center;
+    box-sizing: border-box;
+    transform-origin: top center;
+}
+
+#mineHeader p {
+    margin: 2px 0;
+    pointer-events: none;
+}
+
+#mineHeader #zoneSelector {
+    pointer-events: auto; /* os botões de zona continuam clicáveis */
+}
+
+/* ── Botão de retrair/expandir o HUD (mesmo padrão visual do sidemenu-toggle) ── */
+#mineHeaderToggleBtn {
+    display: flex;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 31;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 24px;
+    border: 4px solid #3a6c3a;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    color: #8ec88e;
+    cursor: pointer;
+    padding: 0;
+    transition: top 0.35s cubic-bezier(.4,0,.2,1), background 0.2s;
+    background: #000 !important;
+}
+#mineHeaderToggleBtn:hover { background: #1a2e1a !important; }
+#mineHeaderToggleBtn svg { width: 20px; height: 20px; }
+
+/* ── Seletor de Zonas ─────────────────────────────────────────── */
+#zoneSelector {
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    margin-top: 8px;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+}
+#zoneSelector::-webkit-scrollbar { height: 4px; }
+#zoneSelector::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.4); border-radius: 2px; }
+
+.zone-tab {
+    flex: 0 0 auto;
+    font-family: 'Cinzel', serif;
+    font-size: 0.72em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #cbb;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 7px;
+    padding: 5px 10px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.zone-tab:hover {
+    border-color: rgba(255,215,0,0.6);
+    color: #fff;
+}
+
+.zone-tab.active {
+    background: linear-gradient(135deg, #3a2e00, #1a1400);
+    border-color: #ffd700;
+    color: #ffd700;
+    box-shadow: 0 0 10px rgba(255,215,0,0.35);
+}
+
+.zone-tab.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(60%);
+}
+
+/* ==================================================================
+   HOTSPOTS DE MINA (substituem os antigos mine-card)
+   ================================================================== */
+.mine-hotspot {
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 4px 2px;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.mine-hotspot:active {
+    transform: scale(0.97);
+}
+
+.mine-hotspot.disabled-card {
+    cursor: default;
+    filter: grayscale(45%);
+    opacity: 0.85;
+}
+
+/* ─── DEBUG: mira fina no centro de cada hotspot, para reposicionar
+   sem depender de uma borda quadrada. Desligue MINE_HOTSPOT_DEBUG em
+   mines.js quando tudo estiver no lugar certo. ─────────────────────── */
+#minesContainer.debug-hotspots .mine-hotspot {
+    outline: 1px dashed rgba(255,255,255,0.35);
+}
+#minesContainer.debug-hotspots .mine-hotspot::before,
+#minesContainer.debug-hotspots .mine-hotspot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    background: rgba(255, 0, 0, 0.85);
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    pointer-events: none;
+}
+#minesContainer.debug-hotspots .mine-hotspot::before { width: 16px; height: 2px; }
+#minesContainer.debug-hotspots .mine-hotspot::after  { width: 2px; height: 16px; }
+
+.mine-hotspot-number {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 0.85em;
+    color: #ffd700;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    line-height: 1;
+    margin-top: 2px;
+    white-space: nowrap;
+    position: relative;
+    z-index: 2;
+}
+
+/* Nome do dono (quando a mina tem dono) OU texto de status (Aberta/Disputando/Esgotada) */
+.mine-hotspot-subtitle {
+    position: relative;
+    z-index: 2;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 0.68em;
+    line-height: 1.1;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mine-hotspot-subtitle.owner-name { color: #fff; }
+.mine-hotspot-subtitle.status-aberta     { color: #ffffff; }
+.mine-hotspot-subtitle.status-disputando { color: #3399ff; }
+.mine-hotspot-subtitle.status-ocupada    { color: #ffcc00; }
+.mine-hotspot-subtitle.status-esgotada   { color: #ff8c8c; }
+
+.mine-hotspot-avatar-slot {
+    position: relative;
+    flex: 0 0 auto;   /* <- era "flex: 1" e esticava até o fim do hotspot, criando o gap grande */
+    height: 64px;     /* <- controla o tamanho da área do avatar/ícone/luz (ajuste aqui se precisar) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
+}
+
+/* ── Raio de luz descendo — mesmo espírito do "sol" do mapa do Index ──────
+   Em vez de um halo/blob ao redor do avatar (cobria a entrada da mina em
+   minas do lado direito do mapa isométrico), a luz agora é um FEIXE
+   ESTREITO que nasce perto do nome/avatar (fonte) e desce em direção ao
+   chão/entrada da mina, exatamente como os raios de sol de map_effects.js:
+     1) .mine-hotspot-glow::before -> fonte (o "sol"): brilho pequeno e
+                                        estourado, perto do nome/avatar.
+     2) .mine-hotspot-glow::after  -> o feixe em si: estreito no topo,
+                                        levemente mais largo embaixo,
+                                        recortado com clip-path (cone),
+                                        caindo reto pro chão — nunca se
+                                        espalha pros lados, então não
+                                        cobre a arte da entrada vizinha.
+     3) .mine-hotspot-glow         -> poça de luz no chão, onde o feixe
+                                        "bate" — achatada, sutil.
+   "mix-blend-mode: screen" mistura tudo com o fundo escuro do mapa em vez
+   de parecer um adesivo colado por cima. Para "Aberta" é a única coisa
+   visível no slot (sem avatar/ícone). */
+.mine-hotspot-glow {
+    --glow-rgb: 255,255,255;
+    /* Ajuste estes valores para controlar o feixe: */
+    --beam-top: 4px;          /* quão acima do slot do avatar o feixe nasce (perto do nome/status) */
+    --beam-height: 80px;       /* altura total do feixe — até onde desce em direção ao chão */
+    --beam-column-width: 66px;  /* LARGURA REAL E FINAL da coluna de luz — mexa só aqui pra alargar */
+
+    position: absolute;
+    left: 50%;
+    top: var(--beam-top);
+    bottom: auto;
+    width: var(--beam-column-width);
+    height: var(--beam-height);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: screen;
+    /* poça de luz no chão, onde o feixe termina */
+    background: radial-gradient(ellipse 90% 40% at 50% 94%,
+        rgba(var(--glow-rgb), 0.55) 0%,
+        rgba(var(--glow-rgb), 0.2) 50%,
+        rgba(var(--glow-rgb), 0) 80%);
+    filter: blur(6px);
+    animation: mgl-ground-flicker 5.6s ease-in-out infinite;
+}
+
+.mine-hotspot-glow::before,
+.mine-hotspot-glow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    pointer-events: none;
+}
+
+/* Fonte da luz — pequeno brilho estourado perto do nome/avatar, de onde o feixe "nasce" */
+.mine-hotspot-glow::before {
+    top: -10%;
+    width: 55%;
+    height: 20%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.95) 0%,
+        rgba(var(--glow-rgb), 0.75) 45%,
+        rgba(var(--glow-rgb), 0) 78%);
+    filter: blur(2.5px);
+    animation: mgl-source-flicker 3.4s ease-in-out infinite;
+}
+
+/* O feixe — usa 100% de --beam-column-width (sem indireção extra: aumentar a
+   variável acima já aumenta a coluna inteira, de verdade). O clip-path só
+   arredonda as pontas (abre de 15%→85% no topo até 4%→96% na base), então
+   quase toda a largura da variável já é a coluna visível. Cai reto pra baixo
+   (nunca pros lados), então não invade a entrada da mina vizinha mesmo nas
+   posições da direita do mapa isométrico. */
+.mine-hotspot-glow::after {
+    top: 4%;
+    width: 100%;
+    height: 92%;
+    transform: translateX(-50%);
+    clip-path: polygon(15% 0%, 85% 0%, 96% 100%, 4% 100%);
+    background: linear-gradient(to bottom,
+        rgba(var(--glow-rgb), 0.75) 0%,
+        rgba(var(--glow-rgb), 0.28) 55%,
+        rgba(var(--glow-rgb), 0) 94%);
+    filter: blur(3px);
+    animation: mgl-beam-flicker 4.8s ease-in-out infinite;
+}
+
+@keyframes mgl-ground-flicker {
+    0%   { opacity: 0.65; }
+    30%  { opacity: 0.9;  }
+    55%  { opacity: 0.6;  }
+    78%  { opacity: 0.82; }
+    100% { opacity: 0.65; }
+}
+
+@keyframes mgl-source-flicker {
+    0%   { opacity: 0.7;  }
+    38%  { opacity: 1;    }
+    64%  { opacity: 0.8;  }
+    100% { opacity: 0.7;  }
+}
+
+@keyframes mgl-beam-flicker {
+    0%   { opacity: 0.55; }
+    25%  { opacity: 0.85; }
+    48%  { opacity: 0.4; }
+    70%  { opacity: 0.78; }
+    88%  { opacity: 0.5; }
+    100% { opacity: 0.55; }
+}
+
+.mine-hotspot-glow.glow-aberta {
+    --glow-rgb: 255,255,255;
+}
+.mine-hotspot-glow.glow-ocupada    { --glow-rgb: 255,204,0; }
+.mine-hotspot-glow.glow-disputando { --glow-rgb: 51,153,255; }
+.mine-hotspot-glow.glow-esgotada {
+    --glow-rgb: 255,55,55;
+    opacity: 0.45;
+    filter: blur(6px) saturate(0.7);
+    animation-duration: 8s; /* mina apagada: luz mais lenta/fraca, tipo brasa */
+}
+.mine-hotspot-glow.glow-esgotada::before { animation-duration: 5.2s; opacity: 0.7; }
+.mine-hotspot-glow.glow-esgotada::after  { animation-duration: 9.4s; opacity: 0.5; }
+
+
+/* Ícone pulsante exibido no centro enquanto a mina está "disputando" */
+.mine-hotspot-dispute-icon {
+    position: relative;
+    z-index: 2;
+    width: 46%;
+    max-width: 56px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.85));
+    animation: mine-hotspot-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes mine-hotspot-pulse {
+    0%   { transform: scale(0.88); opacity: 0.75; }
+    50%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(0.88); opacity: 0.75; }
+}
+
+.mine-hotspot-crystal {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-weight: bold;
+    font-size: 0.78em;
+    color: #fff;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    white-space: nowrap;
+    margin-bottom: 2px;
+}
+
+.mine-hotspot-crystal img {
+    width: 16px;
+    height: 16px;
+    vertical-align: -3px;
+}
+
+/* X vermelho exibido no centro do hotspot quando a mina está "Esgotada" */
+.mine-hotspot-exhausted-x {
+    position: relative;
+    z-index: 2;
+    width: 34%;
+    max-width: 40px;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
+}
+
+/* ==================================================================
+   OVERLAY DE TRANSIÇÃO DE SESSÃO
+   Bloqueia toda a tela nos ~2 minutos ao redor da virada de sessão
+   (1 min antes + 1 min de folga para o cron do Cloudflare rodar as
+   RPCs no Supabase), evitando cliques em estado desatualizado.
+   ================================================================== */
+#sessionTransitionOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+#sessionTransitionOverlay.active {
+    display: flex;
+}
+
+#sessionTransitionOverlay .sto-title {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.25em;
+    color: #ffd700;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.55), 2px 2px 4px black;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+    max-width: 90vw;
+}
+
+#sessionTransitionOverlay .sto-timer {
+    font-weight: bold;
+    font-size: 2em;
+    text-shadow: none !important;
+    background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Wrapper de avatar dentro do hotspot — reaproveita moldura de skin,
+   apenas reduzido para caber no pino do mapa */
+.mine-hotspot .mine-owner-avatar-wrapper {
+    position: relative;
+    z-index: 2;
+    width: 74px;
+    height: 74px;
+}
+.mine-hotspot .mine-owner-avatar-wrapper .owner-avatar {
+    width: 40px;
+    height: 40px;
+    border-width: 2px;
+}
+.mine-hotspot .mine-frame-overlay,
+.mine-hotspot .mine-frame-sheen {
+    width: 74px;
+    height: 74px;
+    top: -2px;
+}
+
+/* Estilos do Modal de Combate */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/minacombate.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+#confirmModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%) !important;
+  z-index: 1000;
+}
+#confirmModal .modal-content {
+  background: #2e2e2e !important;
+  background-image: none !important;
+  text-align: center;
+  margin: 15px 0;
+  white-space: normal;
+  line-height: 1.4em;
+  width: 100%;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 30px;
+    border-radius: 10px;
+    max-width: 450px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0,0,0,0.7);
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/minacombate.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+
+.action-btn {
+  background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: cover;
+        box-sizing: border-box;
+      
+    background-color: none;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 12px 24px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+    background-color: none;
+}
+
+#monsterArea {
+    margin: 20px 0;
+}
+
+#monsterImage {
+    display: block;
+    width: 380px;
+    max-width: 90%;
+    height: auto;
+    min-height: 260px;
+    margin: -40px auto 0;
+    object-fit: contain;
+    filter: none;
+    /* A respiração agora é controlada via JS (ver initMonsterBreathing em mines.js),
+       para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+       Os pés permanecem fixos: nunca usamos translateY aqui, só scale/rotate/translateX leves. */
+    transform-origin: bottom center;
+    will-change: transform;
+}
+/* --- Animação de Tremida (Shake) --- */
+@keyframes shake {
+  0% { transform: translate(1px, 1px) rotate(0deg); }
+  10% { transform: translate(-1px, -2px) rotate(-1deg); }
+  20% { transform: translate(-3px, 0px) rotate(1deg); }
+  30% { transform: translate(3px, 2px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(1deg); }
+  50% { transform: translate(-1px, 2px) rotate(-1deg); }
+  60% { transform: translate(-3px, 1px) rotate(0deg); }
+  70% { transform: translate(3px, 1px) rotate(-1deg); }
+  80% { transform: translate(-1px, -1px) rotate(1deg); }
+  90% { transform: translate(1px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+.shake-animation {
+  /* !important garante que sobrescreva outras transformações */
+  animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both !important; 
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+#monsterHpBar {
+    width: 100%;
+    height: 34px;
+    background: linear-gradient(180deg,#1a0000 0%,#2d0000 100%);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,100,0,0.5);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.7), 0 0 8px rgba(255,50,0,0.2);
+    position: relative;
+}
+
+#monsterHpFill {
+    height: 100%;
+    background: linear-gradient(90deg, #8b0000 0%, #cc2200 40%, #ff4433 80%, #ff6644 100%);
+    transition: width 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative;
+}
+#monsterHpFill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 42%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%);
+    border-radius: 10px 10px 0 0;
+    pointer-events: none;
+}
+
+#damageLog {
+    text-align: left;
+    margin-top: 20px;
+}
+
+#damageList {
+    list-style: none;
+    padding: 0;
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.1);
+    border-radius: 5px;
+    padding: 10px;
+}
+
+#damageList li {
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+p {
+  color: white;
+}
+
+
+/* ... [Restante do código CSS] ... */
+
+/* Estilos para o ranking de dano */
+#damageRankingContainer {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#damageRankingList {
+    list-style-type: none;
+    padding: 0;
+    max-height: 200px; /* Limita a altura para evitar que o modal fique muito grande */
+    overflow-y: auto;
+    text-align: left; /* Alinha o texto das entradas de volta à esquerda */
+    display: inline-block; /* Permite que o ul seja centralizado */
+}
+
+#damageRankingList li {
+    background-color: #3e3e3e;
+    border: 1px solid #555;
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 250px;
+}
+
+#damageRankingList li .player-name {
+    font-weight: bold;
+    color: #ffd700;
+}
+
+#damageRankingList li .player-damage {
+    color: #fff;
+}
+
+/* Estilos para os números de dano flutuantes */
+#monsterArea {
+    position: relative; /* Adicionado para posicionar os números de dano flutuantes corretamente */
+    margin: 20px 0;
+}
+
+.damage-number {
+  font-family: Georgia, serif;
+    position: absolute;
+    font-size: 23px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 4px #000;
+    animation: floating-damage 3.4s ease-out forwards;
+}
+
+.crit-damage-number {
+  font-family: Georgia, serif;
+  font-size: 1.5em;
+    color: red;
+    /* Contorno amarelo */
+    text-shadow:
+        -1px -1px 0 yellow,
+        1px -1px 0 yellow,
+        -1px 1px 0 yellow,
+        1px 1px 0 yellow,
+        -2px -2px 0 yellow,
+        2px -2px 0 yellow,
+        -2px 2px 0 yellow,
+        2px 2px 0 yellow;
+    position: absolute;
+    left: 50%;
+    animation: floating-damage-crit 3.7s ease-out forwards;
+}
+
+@keyframes floating-damage {
+    0%   { opacity: 0; transform: translateY(0) scale(0.4); }
+    8%   { opacity: 1; transform: translateY(-14px) scale(1.35); }
+    20%  { opacity: 1; transform: translateY(-24px) scale(1.0); }
+    75%  { opacity: 1; transform: translateY(-95px) scale(1.0); }
+    100% { opacity: 0; transform: translateY(-135px) scale(0.92); }
+}
+
+@keyframes floating-damage-crit {
+    0%   { opacity: 0; transform: translateY(0) scale(0.3); }
+    7%   { opacity: 1; transform: translateY(-18px) scale(1.5); }
+    18%  { opacity: 1; transform: translateY(-30px) scale(1.05); }
+    75%  { opacity: 1; transform: translateY(-110px) scale(1.0); }
+    100% { opacity: 0; transform: translateY(-145px) scale(0.92); }
+}
+#monsterHpBar {
+            position: relative; /* Isso é crucial para que o texto fique dentro da barra */
+        }
+        #monsterHpTextOverlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            vertical-align: -4px;
+            transform: translate(-50%, -50%);
+            color: yellow;
+            font-weight: bold;
+            text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+            white-space: nowrap;
+            z-index: 2; 
+        }
+#combatTimer {
+  font-weight: bold;
+  font-size: 1.7em;
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}
+
+.mine-card.aberta    { 
+  border: 4px solid white; 
+}
+.mine-card.disputando { 
+  border: 4px solid #3399ff; 
+}
+.mine-card.ocupada   {
+  border: 4px solid #9f7f00;
+}
+.mine-card.esgotada  {
+  border: 4px solid #ff3333;
+  background-image: url('https://aden-rpg.pages.dev/assets/minaesgotada.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+.mine-card.aberta p:nth-of-type(1) {
+  color: white;
+  font-weight: bold;
+}
+.mine-card.disputando p:nth-of-type(1) {
+  color: #3399ff;
+  font-weight: bold;
+}
+.mine-card.ocupada p:nth-of-type(1) {
+  color: #ffcc00;
+  font-weight: bold;
+}
+.mine-card.esgotada p:nth-of-type(1) {
+  color: #ff8c8c;
+  font-weight: bold;
+  text-shadow:
+        1px 1px 2px #000,
+        -1px -1px 2px #000,
+        1px -1px 2px #000,
+        -1px 1px 2px #000, 
+        0 0 2px #000,
+        0 0 4px #000;
+}
+
+#buyAttackBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -6px;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+}
+#buyModal .modal-content p {
+  text-align: center;
+  margin: 15px 0;
+  white-space: normal;
+  line-height: 1.4em;
+  width: 100%;
+}
+.confirmabuy-btn {
+  flex: 0 0 auto;
+  min-width: 160px;
+  max-width: 170px;
+  padding: 8px 14px;
+  font-size: 0.80em!important;
+}
+#buyDecreaseQtyBtn, #buyIncreaseQtyBtn, #raidBuyAttackBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+}
+#buyModal .modal-content {
+ background: #2e2e2e !important;
+  background-image: none !important; 
+  width: 97%;
+}
+
+#playerTopBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #555;
+}
+
+.top-bar-link {
+    color: #e0dccc;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+
+#pageTitle {
+    font-size: 1.2em;
+    font-weight: bold;
+    flex-grow: 1;
+    text-align: center;
+}
+
+#refreshBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+/* NOVO: Estilos para o avatar do dono da mina */
+.mine-owner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: white;
+  font-weight: bold;
+  background: rgba(0,0,0,0.4);
+  border-radius: 8px;
+}
+
+.owner-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid yellow;
+  object-fit: cover;
+}
+
+.ranking-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ranking-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+/* Estilos para o novo Modal PvP */
+#pvpArena {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 97%;
+    height: auto;
+    margin: 12px 0 8px;
+    gap: 6px;
+}
+
+.player-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative; /* Importante para o posicionamento do dano */
+}
+
+.player-name-pvp {
+  font-size: 0.9em;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.avatar-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.player-avatar-pvp {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid #ffd700;
+}
+
+.vs-separator {
+    font-size: 2em;
+    font-weight: bold;
+    color: red;
+    text-shadow:
+        1px 1px 2px yellow,
+        -1px -1px 2px gold,
+        1px -1px 2px gold,
+        -1px 1px 2px gold, 
+        0 0 4px gold,
+        0 0 8px gold;
+        justify-content: center;
+        top: 4%;
+      margin-left: -3px;
+        vertical-align: -6px;
+        position: relative;
+}
+
+/* Container dos botões no modal de confirmação */
+#confirmModal .modal-content div {
+    display: flex;
+    flex-direction: column; /* Coloca os itens em coluna */
+    align-items: center;    /* Centraliza os botões */
+    gap: 10px;              /* Adiciona um espaço entre os botões */
+}
+
+/* Ajusta o tamanho dos botões no modal de confirmação */
+#confirmCancelBtn, #confirmActionBtn {
+    width: 80%; /* Define uma largura para os botões */
+    max-width: 200px; /* Define uma largura máxima */
+    font-size: 0.8em;
+}
+#pvpCombatModal .modal-content {
+  justify-content: center;
+  align-items: center;
+}
+
+
+/* --- Adicione essas classes em 'mines.css' --- */
+
+.player-hp-bar {
+    position: relative;
+    width: 135px;
+    height: 24px;
+    background: linear-gradient(180deg,#111 0%,#1e1e1e 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    margin-top: 10px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+
+.player-hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #127a22, #1ec938);
+    transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+    position: relative;
+}
+.player-hp-fill::after {
+    content:'';
+    position:absolute;top:0;left:0;right:0;height:45%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.22) 0%,transparent 100%);
+    border-radius:4px 4px 0 0;pointer-events:none;
+}
+
+/* Você pode adicionar mais estilos se quiser, como a cor da borda, etc. */
+.player-side {
+    position: relative;
+    /* ... mantenha os estilos existentes */
+}
+ 
+.damage-number, .crit-damage-number, .evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+}
+
+.hp-text-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 98%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+    font-size: 0.6em;
+    white-space: nowrap;
+}
+
+.evade-text {
+    color: white; /* Cor azul claro para destaque */
+    font-size: 1.4em;
+    font-weight: bold;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+    animation: damage-animation 2s forwards; /* Reutiliza a animação existente */
+}
+
+
+
+@keyframes damage-animation {
+    0% {
+        opacity: 2;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -150%) scale(1.5);
+    }
+}
+
+/* --- Ajuste para os textos de Dano e Desvio --- */
+.damage-number,
+.crit-damage-number,
+.evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* O transform move o elemento para a esquerda pela metade do seu próprio tamanho,
+       garantindo a centralização exata. */
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    font-weight: bold;
+    white-space: nowrap; /* Impede que o texto quebre em várias linhas */
+    text-shadow: 2px 2px 4px #000;
+}
+
+.damage-number {
+  font-family: Georgia, serif;
+  font-size: 23px;
+  color: #fff;
+  animation: floating-damage 3.4s ease-out forwards;
+}
+
+.crit-damage-number {
+  font-family: Georgia, serif;
+  font-size: 2.1em;
+  color: red;
+  /* Contorno amarelo */
+  text-shadow:
+      -1px -1px 0 yellow,
+      1px -1px 0 yellow,
+      -1px 1px 0 yellow,
+      1px 1px 0 yellow,
+      -2px -2px 0 yellow,
+      2px -2px 0 yellow,
+      -2px 2px 0 yellow,
+      2px 2px 0 yellow;
+  animation: floating-damage-crit 3.7s ease-out forwards;
+}
+
+.evade-text {
+    font-size: 1.4em;
+    color: white; /* Cor branca para destaque */
+    animation: floating-damage 2s forwards; /* Reutiliza a animação existente */
+}
+
+/* Animação dos textos de dano: explosão rápida + flutuação suave + fade no final */
+@keyframes floating-damage {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    8%   { opacity: 1; transform: translate(-50%, -90%) scale(1.35); }
+    20%  { opacity: 1; transform: translate(-50%, -110%) scale(1.0); }
+    75%  { opacity: 1; transform: translate(-50%, -280%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -380%) scale(0.92); }
+}
+
+@keyframes floating-damage-crit {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    7%   { opacity: 1; transform: translate(-50%, -100%) scale(1.5); }
+    18%  { opacity: 1; transform: translate(-50%, -130%) scale(1.05); }
+    75%  { opacity: 1; transform: translate(-50%, -320%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -420%) scale(0.92); }
+}
+
+#playerFooterBar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-top: 2px solid #555;
+    z-index: 100;
+}
+
+.footer-bar-link {
+    color: #e0dccc;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    font-size: 0.9em;
+    padding: 0 5px;
+    text-align: center;
+}
+
+.buy-btn {width: 32px;
+  height: 32px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: 3px;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+    
+}
+
+.buy-btn:hover {
+    background-color: #45a049;
+}
+
+/* Modal de Histórico */
+#historyModal .modal-content {
+  background-color: #2e2e2e;
+  width: 90%;
+  max-width: 600px;
+}
+
+#historyList {
+    list-style: none;
+    padding: 0;
+    max-height: 250px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.2);
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+#historyList li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+#historyList li:last-child {
+    border-bottom: none;
+}
+.history-button-container {
+    position: relative;
+}
+
+.new-log-indicator {
+    position: absolute;
+    margin-top: -10px;
+    right: -5px;
+    background-color: red;
+    color: white;
+    font-size: 0.7em;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 2px 5px;
+    display: none;
+    z-index: 10;
+}
+#buyPvpIncreaseQtyBtn, #buyPvpDecreaseQtyBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+}
+
+@keyframes attack-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.attack-anim {
+    animation: attack-pulse 0.4s ease-in-out;
+}
+
+
+.modal-overlay2 {
+    position: fixed;
+  
+    width: 100%;
+    height: 100%;
+   background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+  
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+
+#attackBtn.disabled-attack-btn {
+    filter: grayscale(100%);
+    opacity: 0.4; 
+    cursor: not-allowed; 
+    pointer-events: none; 
+}
+/* ═══════════════════════════════════════════════════════
+   MOLDURAS DE SKIN — Minas de Cristal
+   ═══════════════════════════════════════════════════════
+
+   Proporção calculada a partir do inventário:
+     avatar 100px + borda 3px×2 = 106px, frame = 195px → ratio 1.8396
+     Owner card: 80px img + 2px×2 borda = 84px  → frame 155px (top -4px)
+     PvP avatar:  80px img + 3px×2 borda = 86px  → frame 156px
+
+   PvP frame: top = (containerPx - framePx) / 2 = (80 - 156) / 2 = -38px
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Wrapper do avatar do dono na mine-card ─────────────── */
+.mine-owner-avatar-wrapper {
+    position: relative;
+    width: 155px;
+    height: 155px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mine-owner-avatar-wrapper .owner-avatar {
+    width: 80px;
+    height: 80px;
+}
+
+.mine-frame-overlay {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    width: 155px;
+    height: 155px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+    display: none;
+}
+
+.mine-frame-sheen {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    width: 155px;
+    height: 155px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
+}
+.mine-frame-sheen::after {
+    content: '';
+    position: absolute;
+    top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg,
+        transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _minefs 6s ease-in-out infinite;
+}
+@keyframes _minefs {
+    0%   { left:-130%; opacity:0; }
+    2%   { opacity:1; }
+    98%  { left:155%; opacity:1; }
+    99%  { opacity:0; left:155%; }
+    100% { left:155%; opacity:0; }
+}
+
+/* ── PvP: avatar-container já existe com position:relative ─ */
+
+.pvp-frame-overlay {
+    position: absolute;
+    top: -41px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 154px;
+    height: 154px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+    display: none;
+}
+
+.pvp-frame-sheen {
+    position: absolute;
+    top: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 156px;
+    height: 156px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
+}
+.pvp-frame-sheen::after {
+    content: '';
+    position: absolute;
+    top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg,
+        transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _minefs 6s ease-in-out infinite;
+}
+
+/* ── Espaçamento PvP — escopado ao modal para não afetar mine cards ──
+   Frame se estende 38px acima/abaixo do avatar-container (80px).
+   44px = 38px + 6px de folga visual.
+   Para ajustar: mude os valores abaixo. ─────────────────────────── */
+#pvpCombatModal .player-name-pvp {
+    margin-bottom: 44px;
+}
+#pvpCombatModal .player-hp-bar {
+    margin-top: 44px;
+}

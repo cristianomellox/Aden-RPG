@@ -1,0 +1,4446 @@
+// Registro do Service Worker Otimizado
+if ('serviceWorker' in navigator) {
+    const registerSW = () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
+                setInterval(() => reg.update(), 60 * 60 * 1000); 
+                
+                if (reg.installing) {
+                    console.log('⚙️ SW: Instalando...');
+                } else if (reg.waiting) {
+                    console.log('⚙️ SW: Aguardando ativação...');
+                } else if (reg.active) {
+                    console.log('✅ SW: Ativo e servindo cache!');
+                }
+            })
+            .catch(err => console.error('❌ Erro ao registrar SW:', err));
+    };
+
+    // Se a página já carregou, registra agora. Se não, espera o load.
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        registerSW();
+    } else {
+        window.addEventListener('load', registerSW);
+    }
+}
+// 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
+let musicStarted = false;
+let backgroundMusic;
+
+/**
+ * Função global para iniciar a música de fundo.
+ * Se chamada com forceMute=true (pelo intro), ela inicia o áudio no mudo.
+ * Em chamadas futuras (clique/arraste), ela apenas desmuta.
+ * * @param {boolean} [forceMute=false] - Se deve forçar o áudio a iniciar no mudo.
+ */
+function startBackgroundMusic(forceMute = false) 
+{
+  // Se intro estiver rodando, apenas sinalizamos interesse em tocar a música
+  // Exceto se for uma chamada de forceMute (do clique inicial)
+  if (window.__introPlaying && !forceMute) {
+    console.log("Intro rodando — adiando desmute. Será iniciado ao finalizar/pular o intro.");
+    window.__introWantedToStartMusic = true;
+    return;
+  }
+
+  // Se os assets baixados via zip (loading.js) ainda não estiverem prontos,
+  // espera terminar antes de criar o áudio — evita pedir aden.mp3 antes de
+  // ele existir no cache (o arquivo foi movido do repositório pro zip "sons").
+  if (window.assetsReadyPromise && !window.assetsReady) {
+    window.assetsReadyPromise.then(() => startBackgroundMusic(forceMute));
+    return;
+  }
+
+  // Cria o objeto de áudio "preguiçosamente" (lazy-load) na primeira chamada
+  if (typeof backgroundMusic === 'undefined' || backgroundMusic === null) {
+    try {
+      backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/aden.mp3");
+      backgroundMusic.volume = 0.03;
+      backgroundMusic.loop = true;
+    } catch(e){
+      console.warn("Falha ao criar backgroundMusic:", e);
+      return;
+    }
+  }
+
+  // Se já está tocando, e estamos chamando para desmutar (não forceMute)
+  if (musicStarted && !forceMute && backgroundMusic.muted) {
+     backgroundMusic.muted = false;
+     console.log("🎵 Música de fundo desmutada pelo gesto do usuário!");
+     return;
+  }
+
+  // Se já foi iniciada e não estamos em modo forceMute, ignora.
+  if (musicStarted && !forceMute) return;
+
+
+  // Define o estado de mudo com base no parâmetro
+  backgroundMusic.muted = forceMute; 
+
+  // Tenta tocar, com fallback de muted se bloqueado
+  const playPromise = backgroundMusic.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      musicStarted = true; // Define o estado
+      if (forceMute) {
+        console.log("🎵 Música de fundo iniciada (MUTED) para desbloquear áudio.");
+      } else {
+        console.log("🎵 Música de fundo iniciada!");
+      }
+    }).catch(err => {
+      console.warn("⚠️ Falha ao iniciar música (tentando fallback forçado):", err);
+      try {
+        backgroundMusic.muted = true;
+        backgroundMusic.play().then(() => {
+          musicStarted = true; // Define o estado
+          console.log("🎵 Música de fundo iniciada (muted). Esperando gesto do usuário para ativar som.");
+          // Se o fallback forçado funcionar, adiciona um listener para desmutar na próxima interação
+          function onFirstGesture() {
+            try {
+              if (backgroundMusic && backgroundMusic.muted) backgroundMusic.muted = false;
+            } catch(e){}
+            window.removeEventListener('pointerdown', onFirstGesture);
+          }
+          window.addEventListener('pointerdown', onFirstGesture, { once: true, capture: true });
+        }).catch(e => {
+          console.warn("Não foi possível iniciar música mesmo em muted:", e);
+        });
+      } catch(e2){
+        console.warn("Fallback muted falhou:", e2);
+      }
+    });
+  }
+}
+
+// Expor globalmente IMEDIATAMENTE para que o Intro (IIFE) possa encontrá-la
+window.startBackgroundMusic = startBackgroundMusic;
+window.__musicDebug = { isStarted: () => musicStarted };
+
+// =======================================================================
+// NOVA LÓGICA: CONTROLE DE VISIBILIDADE (PAUSAR/RETOMAR AO SAIR DA ABA)
+// =======================================================================
+document.addEventListener("visibilitychange", () => {
+  // Se o objeto de áudio não existe, não faz nada
+  if (!backgroundMusic) return;
+
+  if (document.visibilityState === 'hidden') {
+    // Usuário saiu da aba ou minimizou: Pausa a música se estiver tocando
+    if (!backgroundMusic.paused) {
+      backgroundMusic.pause();
+      // console.log("🎵 Música pausada (aba em segundo plano).");
+    }
+  } else if (document.visibilityState === 'visible') {
+    // Usuário voltou: Retoma APENAS se a música já tivesse sido iniciada anteriormente
+    if (musicStarted && backgroundMusic.paused) {
+      backgroundMusic.play().catch(e => console.warn("⚠️ Falha ao retomar música automaticamente:", e));
+      // console.log("🎵 Música retomada (aba ativa).");
+    }
+  }
+});
+// =======================================================================
+
+
+// Os listeners de interação SÓ podem ser adicionados após o DOM carregar
+document.addEventListener("DOMContentLoaded", () => {
+  
+  // NENHUM 'new Audio()' aqui. Isso foi o erro.
+
+  // Função utilitária para registrar listeners com opções comuns
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {
+      // alguns targets (ex: null) podem falhar, silenciosamente ignoramos
+    }
+  }
+
+  // 1) Eventos primários que normalmente desbloqueiam áudio
+  // (Estes listeners agora chamam a função global, que DESMUTA o áudio se ele estiver muted)
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, function onPrimary(e) {
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
+    });
+    addCapturedListener(document.body, ev, function onPrimary2(e) {
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
+    });
+  }
+
+  // 2) Tentar capturar ARRASTO (para desmutar)
+  let moveArmed = false; 
+  function armMove() { moveArmed = true; setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+  addCapturedListener(document.body, "pointerdown", armMove);
+  addCapturedListener(document.body, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted && !backgroundMusic.muted) return; // Se tocando e não muted, ignora
+    if (!moveArmed) return;
+
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+  addCapturedListener(document.body, "touchmove", handleMoveForMusic);
+  addCapturedListener(document.body, "pointermove", handleMoveForMusic);
+
+  // 3) Listeners de Mapa (para desmutar)
+  const mapSelectors = [
+    "#mapContainer",
+    "#map",
+    ".map",
+    ".leaflet-container",
+    ".mapboxgl-canvas",
+    ".mapboxgl-map"
+  ];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  // 4) Fallbacks de "soltar" (Up)
+  function tryOnUp(e) { if (!musicStarted || backgroundMusic.muted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+  addCapturedListener(document.body, "pointerup", tryOnUp);
+  addCapturedListener(document.body, "touchend", tryOnUp);
+
+  // 5) Fallback temporizado (apenas tentará iniciar se nada ocorreu)
+  setTimeout(() => {
+    if (!musicStarted) {
+      try { startBackgroundMusic(); } catch(e) {}
+    }
+  }, 6000);
+});
+// FIM DA MÚSICA DE FUNDO
+
+// =======================================================================
+// INÍCIO: SCRIPT DO INTRO E SELETOR DE IDIOMA (REFATORADO)
+// =======================================================================
+
+(function() {
+    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v32';
+    const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
+    const FORCE_SHOW_PARAM = 'show_intro';
+
+    // --- Lista de Idiomas Suportados ---
+    const languages = [
+        { code: 'pt', label: 'Português', flag: '🇧🇷' },
+        { code: 'en', label: 'English', flag: '🇺🇸' },
+        { code: 'es', label: 'Español', flag: '🇪🇸' },
+        { code: 'zh-CN', label: '中文', flag: '🇨🇳' },
+        { code: 'ja', label: '日本語', flag: '🇯🇵' },
+        { code: 'ko', label: '한국어', flag: '🇰🇷' },
+        { code: 'id', label: 'Indonesian', flag: '🇮🇩' },
+        { code: 'tl', label: 'Filipino', flag: '🇵🇭' },
+        { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+        { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+        { code: 'fr', label: 'Français', flag: '🇫🇷' },
+        { code: 'hi', label: 'Indian (Hindi)', flag: '🇮🇳' },
+        { code: 'ms', label: 'Melayu', flag: '🇲🇾' },
+        { code: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
+        { code: 'ar', label: 'Arabic', flag: '🇸🇦' }
+    ];
+
+    // Injeta o CSS do modal apenas uma vez
+    if (!document.getElementById('lang-modal-style')) {
+        const style = document.createElement('style');
+        style.id = 'lang-modal-style';
+        style.innerHTML = `
+        .lang-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 8px; 
+            margin-bottom: 20px; 
+            max-height: 300px; 
+            overflow-y: auto;
+        }
+        .lang-opt { 
+            background: #1a1a1a; 
+            border: 1px solid #444; 
+            color: #bbb; 
+            padding: 8px 4px; 
+            cursor: pointer; 
+            border-radius: 6px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .lang-opt:hover {
+            background: #2a2a2a; 
+            color: #fff;
+        }
+        .lang-opt.selected { 
+            border-color: #c9a94a; 
+            background: #2b2515; 
+            color: #c9a94a;
+            box-shadow: 0 0 8px rgba(201, 169, 74, 0.3);
+            font-weight: bold;
+        }
+        .lang-flag { font-size: 1.5em; margin-bottom: 4px; }
+        .lang-name { font-size: 0.8em; }
+        #welcomeOkBtn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+      `;
+        document.head.appendChild(style);
+    }
+
+    /**
+     * Função Global para abrir o Modal de Idioma
+     * @param {boolean} isUpdateMode - Se true, apenas troca o idioma e recarrega (sem vídeo).
+     */
+    window.openLanguageModal = function(isUpdateMode = false) {
+        // Remove modal anterior se existir (para evitar duplicatas)
+        const oldModal = document.getElementById('welcomeModal');
+        if (oldModal) oldModal.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'welcomeModal';
+        modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.85);backdrop-filter:blur(3px);';
+
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = 'width:90%;max-width:400px;padding:25px;border-radius:12px;background:#0b0b0b;color:#fff;text-align:center;border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.8);';
+
+        // Título e Subtítulo baseados no modo
+        const titleText = isUpdateMode ? "Idioma / Language" : "Bem-vindo / Welcome";
+        const subText = isUpdateMode ? "Select new language:" : "Select your language to start:";
+
+        // Título HTML
+        const title = document.createElement('h2');
+        title.innerHTML = titleText;
+        title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em;";
+        modalContent.appendChild(title);
+        
+        const betaTag = document.createElement('p');
+        betaTag.innerHTML = "(Tradução em fase Beta)";
+        betaTag.style.cssText = "font-size: 0.9em; color: lightblue; font-weight: bold; margin-top: -12px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+        modalContent.appendChild(betaTag);
+
+        // Instrução HTML
+        const subtitle = document.createElement('p');
+        subtitle.textContent = subText;
+        subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px; font-weight: bold;";
+        modalContent.appendChild(subtitle);
+
+        // Grid de Idiomas
+        const grid = document.createElement('div');
+        grid.className = 'lang-grid';
+
+        // Tenta pegar o idioma atual do cookie para pré-selecionar
+        let currentCookieLang = 'pt';
+        try {
+            const cookies = document.cookie.split(";");
+            const googCookie = cookies.find(c => c.trim().startsWith("googtrans="));
+            if (googCookie) {
+                const val = googCookie.split("=")[1];
+                const parts = val.split("/");
+                currentCookieLang = parts[parts.length - 1];
+            }
+        } catch (e) {}
+
+        let selectedLang = currentCookieLang || 'pt';
+
+        languages.forEach(lang => {
+            const opt = document.createElement('div');
+            opt.className = 'lang-opt';
+            if (lang.code === selectedLang) opt.classList.add('selected');
+
+            opt.innerHTML = `<span class="lang-flag">${lang.flag}</span><span class="lang-name">${lang.label}</span>`;
+
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.lang-opt').forEach(el => el.classList.remove('selected'));
+                opt.classList.add('selected');
+                selectedLang = lang.code;
+            });
+
+            grid.appendChild(opt);
+        });
+        modalContent.appendChild(grid);
+
+        // Botão de Confirmar
+        const btnText = isUpdateMode ? "Confirm & Reload" : "<strong>START GAME</strong>";
+        const okBtn = document.createElement('button');
+        okBtn.id = 'welcomeOkBtn';
+        okBtn.innerHTML = btnText;
+        okBtn.style.cssText = 'width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; background: linear-gradient(180deg, #c9a94a, #8a7330); color:#000; cursor:pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
+        
+        // Botão Cancelar (Apenas no modo Update)
+        if (isUpdateMode) {
+             const cancelBtn = document.createElement('button');
+             cancelBtn.innerText = "Cancelar";
+             cancelBtn.style.cssText = 'width:100%; padding:10px; margin-top:10px; background:transparent; border:1px solid #444; color:#aaa; cursor:pointer; font-size:0.9em; border-radius:8px;';
+             cancelBtn.onclick = () => modal.remove();
+             modalContent.appendChild(okBtn);
+             modalContent.appendChild(cancelBtn);
+        } else {
+             modalContent.appendChild(okBtn);
+        }
+
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+
+        // --- Ação do Botão Confirmar ---
+        okBtn.addEventListener('click', async function(ev) {
+            ev.stopPropagation();
+            okBtn.disabled = true;
+
+            // window.changeLanguage (auto_translate.js) cuida do cookie E do
+            // salvamento em players.language (usado pelo worker de push pra
+            // traduzir notificações) — precisa terminar ANTES de prosseguir,
+            // senão a gravação no banco corre risco de ser cortada pelo reload.
+            if (typeof window.changeLanguage !== 'function') {
+                console.warn('[Idioma] window.changeLanguage não disponível — auto_translate.js carregou?');
+            }
+
+            if (isUpdateMode) {
+                // Modo Update: window.changeLanguage já salva e recarrega.
+                if (typeof window.changeLanguage === 'function') {
+                    await window.changeLanguage(selectedLang);
+                } else {
+                    // Fallback (não deveria acontecer): pelo menos aplica o cookie e recarrega.
+                    window.location.reload();
+                }
+            } else {
+                // Modo Intro: salva o idioma (sem recarregar — o vídeo/música
+                // começa em seguida) e só então segue o fluxo normal.
+                if (typeof window.changeLanguage === 'function') {
+                    await window.changeLanguage(selectedLang, /* skipReload */ true);
+                } else if (selectedLang !== 'pt') {
+                    // Fallback: pelo menos o cookie, se o outro script não carregou.
+                    const cookieValue = `/pt/${selectedLang}`;
+                    document.cookie = `googtrans=${cookieValue}; path=/;`;
+                    document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
+                }
+
+                if (typeof window.startBackgroundMusic === 'function') {
+                    window.startBackgroundMusic(true);
+                }
+                startVideoFromUserGesture(selectedLang, modal);
+            }
+        });
+    };
+
+    // Função interna para rodar o vídeo da intro com Fade In/Out suave
+    async function startVideoFromUserGesture(lang, modalEl) {
+        // aden_intro.webm agora vem do zip "videos" — garante que já foi
+        // extraído pro cache antes de criar o elemento de vídeo.
+        if (window.assetsReadyPromise && !window.assetsReady) {
+            await window.assetsReadyPromise;
+        }
+        try {
+            localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
+            window.__introSeen = true;
+
+            if(modalEl) modalEl.remove(); // Remove o modal
+
+            // Cria overlay do vídeo
+            const overlay = document.createElement('div');
+            overlay.id = 'gameIntroOverlay';
+            // Garante fundo preto absoluto
+            overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background-color:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background-color:black;'; 
+            
+            const video = document.createElement('video');
+            video.id = 'gameIntroVideo';
+            video.src = INTRO_VIDEO_SRC;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+            video.setAttribute('preload', 'auto');
+            
+            // COMEÇA INVISÍVEL PARA O FADE IN
+            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;background-color:black;opacity:0;transition:opacity 0.8s ease-in-out;'; 
+            
+            container.appendChild(video);
+            overlay.appendChild(container);
+            document.documentElement.appendChild(overlay);
+
+            window.__introPlaying = true;
+            const prevOverflow = document.documentElement.style.overflow;
+            document.documentElement.style.overflow = 'hidden';
+
+            // Lógica de Fade Out próximo ao fim (0.8s antes)
+            const timeUpdateHandler = () => {
+                if (video.duration && video.currentTime > video.duration - 0.8) {
+                    video.style.opacity = '0'; // Fade Out
+                }
+            };
+            video.addEventListener('timeupdate', timeUpdateHandler);
+
+            // Lógica de Fade In assim que começar a tocar
+            video.addEventListener('playing', () => {
+                requestAnimationFrame(() => {
+                    video.style.opacity = '1';
+                });
+            }, { once: true });
+
+            video.muted = false;
+            video.play().catch(() => {
+                // Fallback para autoplay com som bloqueado
+                video.muted = true;
+                video.play().catch(() => {});
+            });
+
+            video.addEventListener('ended', () => {
+                window.__introPlaying = false;
+                
+                // Pequeno delay para garantir que o fade out visual terminou
+                setTimeout(() => {
+                    overlay.remove();
+                    document.documentElement.style.overflow = prevOverflow || '';
+
+                    if (typeof window.startBackgroundMusic === 'function') {
+                        window.startBackgroundMusic();
+                    }
+
+                    // Se não for PT, recarrega para garantir tradução se não aplicou ainda
+                    if (lang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
+                        window.location.reload();
+                    }
+                }, 100);
+            }, { once: true });
+
+        } catch (e) {
+            console.warn('Erro intro', e);
+            window.__introPlaying = false; // Garante liberação em caso de erro
+        }
+    }
+
+    // --- Lógica de Inicialização Automática (Intro) ---
+    function _forceShowIntroFromUrl() {
+        try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; } 
+        catch (e) { return false; }
+    }
+
+    window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
+
+    // Se ainda não viu a intro (ou forçado por URL), abre em modo Intro
+    if (!window.__introSeen || _forceShowIntroFromUrl()) {
+        // Pequeno delay para garantir que DOM carregou
+        setTimeout(() => window.openLanguageModal(false), 100);
+    }
+
+})();
+
+// Adiciona Listener ao botão do Menu de Opções
+document.addEventListener("DOMContentLoaded", () => {
+    const changeLangBtn = document.getElementById('changeLanguageBtn');
+    if (changeLangBtn) {
+        changeLangBtn.addEventListener('click', (e) => {
+            // Fecha o submenu ao clicar
+            const submenus = document.querySelectorAll('.footer-submenu');
+            submenus.forEach(s => s.style.display = 'none');
+            
+            // Abre o modal em modo "Update" (true)
+            window.openLanguageModal(true);
+        });
+    }
+});
+
+// =======================================================================
+// FIM DO SCRIPT DO INTRO
+// =======================================================================
+
+// =======================================================================
+// INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
+// =======================================================================
+
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        // 'implicit': tokens chegam direto na URL hash (#access_token=...).
+        // Evita o fluxo PKCE padrão, que salva um code_verifier no localStorage
+        // ANTES de redirecionar para o Google. Em WebViews (AppCreator24), o
+        // localStorage pode ser perdido durante a navegação externa, fazendo a
+        // troca de token falhar silenciosamente — sessão nunca é criada.
+        // Com implicit, não há code_verifier nem troca de código: os tokens
+        // chegam imediatamente na URL de retorno e são processados na hora.
+        flowType: 'implicit',
+        persistSession: true,        // Garante que a sessão seja salva no localStorage
+        autoRefreshToken: true,      // Renova o token automaticamente antes de expirar
+        detectSessionInUrl: true,    // Detecta e processa tokens da URL hash no retorno OAuth
+    }
+});
+
+// =======================================================================
+// NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 7;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) {
+                    db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) {
+                    db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) {
+                    db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+
+    setAuth: async function(sessionData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(AUTH_STORE, 'readwrite');
+            // Salva com expiração para invalidar periodicamente se necessário
+            const authObj = { 
+                key: 'current_session', 
+                value: sessionData, 
+                updated_at: Date.now() 
+            };
+            tx.objectStore(AUTH_STORE).put(authObj);
+        } catch(e) { console.warn("Erro ao salvar Auth no DB Global", e); }
+    },
+
+    clearAuth: async function() {
+        try {
+            const db = await this.open();
+            const tx = db.transaction([AUTH_STORE, PLAYER_STORE], 'readwrite');
+            tx.objectStore(AUTH_STORE).clear();
+            tx.objectStore(PLAYER_STORE).clear();
+        } catch(e) {}
+    },
+
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+
+    setPlayer: async function(playerData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            tx.objectStore(PLAYER_STORE).put({ key: 'player_data', value: playerData });
+        } catch(e) { console.warn("Erro ao salvar Player no DB Global", e); }
+    },
+
+    // Atualização cirúrgica: Lê, mescla e salva
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            
+            // Promise wrapper para get
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+                // Atualiza também a variável global em memória se existir
+                if (window.currentPlayerData) {
+                    Object.assign(window.currentPlayerData, changes);
+                    renderPlayerUI(window.currentPlayerData, true); // Re-renderiza UI
+                }
+            }
+        } catch(e) { console.warn("Erro update parcial", e); }
+    }
+};
+
+// Expor Globalmente para outros scripts (Mines, Arena, etc.)
+window.GlobalState = GlobalDB;
+
+// =======================================================================
+// CACHE PERSISTENTE (Legacy - Mantido para compatibilidade)
+// =======================================================================
+const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão (24h)
+
+function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
+    const cacheItem = {
+        expires: Date.now() + (ttlMinutes * 60 * 1000), 
+        data: data
+    };
+    try {
+        localStorage.setItem(key, JSON.stringify(cacheItem));
+    } catch (e) {
+        console.warn("Falha ao salvar no localStorage (provavelmente cheio):", e);
+    }
+}
+
+function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
+    try {
+        const cachedItem = localStorage.getItem(key);
+        if (!cachedItem) return null;
+        const { expires, data } = JSON.parse(cachedItem);
+        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); 
+        if (Date.now() > expirationTime) {
+            localStorage.removeItem(key);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        localStorage.removeItem(key); 
+        return null;
+    }
+}
+
+/**
+ * Atualiza o cache e a UI localmente sem ir ao servidor.
+ * Agora integrado ao GlobalDB.
+ */
+function updateLocalPlayerData(changes) {
+    if (!currentPlayerData) return;
+
+    // 1. Atualiza memória RAM
+    Object.keys(changes).forEach(key => {
+        currentPlayerData[key] = changes[key];
+    });
+
+    // 2. Atualiza Cache Legacy (LocalStorage)
+    setCache('player_data_cache', currentPlayerData, 1440);
+
+    // 3. Atualiza Novo Global DB (IndexedDB)
+    GlobalDB.updatePlayerPartial(changes);
+
+    // 4. Redesenha a UI
+    renderPlayerUI(currentPlayerData, true);
+}
+// =======================================================================
+
+// ============================================================
+// HELPER INDEXEDDB PARA SCRIPT.JS (COMPARTILHADO COM INVENTORY)
+// ============================================================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 47; // Mantenha a mesma versão do inventory.js
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(META_STORE)) {
+                db.createObjectStore(META_STORE, { keyPath: "key" });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
+ * VERSÃO OTIMIZADA: Faz Merge de itens parciais (id, quantity) com os dados completos no cache.
+ */
+async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        // 1. Atualiza, insere OU DELETA os itens modificados (COM MERGE)
+        if (Array.isArray(newItems)) {
+            // Precisamos esperar as operações assíncronas dentro do loop
+            const promises = newItems.map(item => {
+                return new Promise((resolve) => {
+                    if (item.quantity > 0) {
+                        // Leitura para Merge (Economia de Egress: Server manda parcial)
+                        const getReq = store.get(item.id);
+                        getReq.onsuccess = () => {
+                            const existingData = getReq.result || {};
+                            // Mescla: dados novos sobrescrevem antigos, mantém o resto (ex: reforge)
+                            const mergedItem = { ...existingData, ...item };
+                            store.put(mergedItem);
+                            resolve();
+                        };
+                        getReq.onerror = () => {
+                            // Fallback: tenta salvar direto se ler falhar
+                            store.put(item);
+                            resolve();
+                        };
+                    } else {
+                        // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
+                        if (item.id) {
+                            store.delete(item.id);
+                            console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+                        }
+                        resolve();
+                    }
+                });
+            });
+            
+            await Promise.all(promises);
+        }
+
+        // 2. Atualiza o Timestamp para manter sync com inventory.js
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        // 3. Atualiza os stats do jogador (Ouro/Cristais)
+        if (updatedStats) {
+            GlobalDB.updatePlayerPartial(updatedStats);
+            const req = meta.get("player_stats");
+            req.onsuccess = () => {
+                const currentStats = req.result ? req.result.value : {};
+                const finalStats = { ...currentStats, ...updatedStats };
+                meta.put({ key: "player_stats", value: finalStats });
+            };
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); // Resolve mesmo com erro para não travar UI
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
+    }
+}
+// =======================================================================
+
+
+// =======================================================================
+// DADOS DO JOGADOR E DEFINIÇÕES DE MISSÃO
+// =======================================================================
+let currentPlayerId = null; // Armazena o ID do usuário logado
+let currentPlayerData = null; // Armazena todos os dados do jogador (com bônus)
+
+// Variáveis de controle para EVITAR DUPLO LOAD (Egress)
+window.isPlayerLoading = false;
+window.initialLoadDone = false;
+
+// Configuração do Cache de Player (15 Minutos)
+const PLAYER_CACHE_DURATION = 15 * 60 * 1000; 
+
+// Definições das Missões de Progressão (Client-side para UI)
+const mission_definitions = {
+    level: [
+        { req: 2, item_id: 2, qty: 10, desc: "Alcance nível 2.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 3, item_id: 2, qty: 10, desc: "Alcance nível 3.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 4, item_id: 2, qty: 10, desc: "Alcance nível 4.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 5, item_id: 26, qty: 5, desc: "Alcance nível 5.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 10, item_id: 26, qty: 5, desc: "Alcance nível 10.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 15, item_id: 26, qty: 5, desc: "Alcance nível 15.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 20, item_id: 26, qty: 5, desc: "Alcance nível 20.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 25, item_id: 26, qty: 5, desc: "Alcance nível 25.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 30, item_id: 26, qty: 5, desc: "Alcance nível 30.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" }
+    ],
+    afk: [
+        { req: 2, item_id: 13, qty: 1, desc: "Alcance o estágio 2 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/asa_guardia.webp" }, 
+        { req: 3, item_id: 10, qty: 10, desc: "Alcance o estágio 3 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_anel_runico.webp" },
+        { req: 4, crystals: 1500, qty: 1500, desc: "Alcance o estágio 4 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 5, crystals: 100, qty: 100, desc: "Alcance o estágio 5 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 6, crystals: 500, qty: 500, desc: "Alcance o estágio 6 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 7, crystals: 500, qty: 500, desc: "Alcance o estágio 7 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 8, crystals: 500, qty: 500, desc: "Alcance o estágio 8 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 9, crystals: 500, qty: 500, desc: "Alcance o estágio 9 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 10, crystals: 500, qty: 500, desc: "Alcance o estágio 10 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 11, crystals: 1000, qty: 1000, desc: "Alcance o estágio 11 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 12, crystals: 1000, qty: 1000, desc: "Alcance o estágio 12 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 13, crystals: 1000, qty: 1000, desc: "Alcance o estágio 13 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 14, crystals: 1000, qty: 1000, desc: "Alcance o estágio 14 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 15, crystals: 1500, qty: 1500, desc: "Alcance o estágio 15 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 16, crystals: 1000, qty: 1000, desc: "Alcance o estágio 16 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 17, crystals: 1000, qty: 1000, desc: "Alcance o estágio 17 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 18, crystals: 1000, qty: 1000, desc: "Alcance o estágio 18 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 19, crystals: 1000, qty: 1000, desc: "Alcance o estágio 19 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 20, crystals: 2500, qty: 2500, desc: "Alcance o estágio 20 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 21, crystals: 1000, qty: 1000, desc: "Alcance o estágio 21 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 22, crystals: 1000, qty: 1000, desc: "Alcance o estágio 22 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 23, crystals: 1000, qty: 1000, desc: "Alcance o estágio 23 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 24, crystals: 1000, qty: 1000, desc: "Alcance o estágio 24 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 25, crystals: 3000, qty: 3000, desc: "Alcance o estágio 25 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 26, crystals: 1000, qty: 1000, desc: "Alcance o estágio 26 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 27, crystals: 1000, qty: 1000, desc: "Alcance o estágio 27 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 28, crystals: 1000, qty: 1000, desc: "Alcance o estágio 28 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 29, crystals: 1000, qty: 1000, desc: "Alcance o estágio 29 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 30, crystals: 3000, qty: 3000, desc: "Alcance o estágio 30 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 35, crystals: 3000, qty: 3000, desc: "Alcance o estágio 35 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 40, crystals: 3000, qty: 3000, desc: "Alcance o estágio 40 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 50, item_id: 42, qty: 3, desc: "Alcance o estágio 50 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" },
+        { req: 60, crystals: 3000, qty: 3000, desc: "Alcance o estágio 60 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 70, crystals: 3000, qty: 3000, desc: "Alcance o estágio 70 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 80, crystals: 3000, qty: 3000, desc: "Alcance o estágio 80 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 90, crystals: 3000, qty: 3000, desc: "Alcance o estágio 90 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 100, crystals: 5000, qty: 5000, desc: "Alcance o estágio 100 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" }
+    ],
+    misc: [
+        { req_type: "inventory", crystals: 200, qty: 200, desc: "Construa ou adquira um novo equipamento na bolsa.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req_type: "mine_attack", crystals: 500, qty: 500, desc: "Dispute uma mina de cristal.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req_type: "buy_raid_attack", gold: 10, qty: 10, desc: "Compre um ataque na Raid de guilda.", img: "https://aden-rpg.pages.dev/assets/goldcoin.webp" }
+    ]
+};
+
+// =======================================================================
+// FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR LOJA OU ABRIR PV)
+// =======================================================================
+async function handleUrlActions() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+
+    if (action === 'openShopVideo') {
+        const shopModal = document.getElementById('shopModal');
+        if (shopModal) {
+            shopModal.style.display = 'flex';
+        }
+        const videoTabButton = document.querySelector('.shop-tab-btn[data-tab="shop-video"]');
+        if (videoTabButton) {
+            videoTabButton.click();
+        }
+        history.replaceState(null, '', window.location.pathname);
+
+    } else if (action === 'open_pv') {
+        const targetId = urlParams.get('target_id');
+        const targetName = urlParams.get('target_name');
+
+        if (targetId && targetName) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                showFloatingMessage("Você precisa estar logado para iniciar uma conversa.");
+                return;
+            }
+
+            showFloatingMessage(`Abrindo conversa com ${targetName}...`);
+
+            try {
+                const { data, error } = await supabaseClient.rpc('get_or_create_private_conversation', {
+                    target_player_id: targetId
+                });
+
+                if (error) throw error;
+
+                const conversationId = data.conversation_id;
+                const pvModal = document.getElementById('pvModal');
+                
+                if (pvModal) {
+                    pvModal.style.display = 'flex';
+                    if (window.openChatView) {
+                        await window.openChatView(conversationId, targetName);
+                    } else {
+                        console.error('A função window.openChatView não está pronta.');
+                        showFloatingMessage('Erro ao carregar o chat. Tente novamente.');
+                    }
+                }
+            } catch (err) {
+                console.error("Erro ao tentar abrir PV a partir da URL:", err);
+                showFloatingMessage(`Erro ao abrir conversa: ${err.message}`);
+            }
+
+            history.replaceState(null, '', window.location.pathname);
+        }
+    }
+}
+
+
+// Cache de definições de itens para uso no Espiral e outras funcionalidades
+let itemDefinitions = new Map();
+
+// Elementos da UI
+const authContainer = document.getElementById('authContainer');
+const playerInfoDiv = document.getElementById('playerInfoDiv');
+const authMessage = document.getElementById('authMessage');
+
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const signInBtn = document.getElementById('signInBtn');
+const signUpBtn = document.getElementById('signUpBtn');
+const otpInputContainer = document.getElementById('otpInputContainer');
+const otpInput = document.getElementById('otpInput');
+const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+
+const profileEditModal = document.getElementById('profileEditModal');
+const editPlayerNameInput = document.getElementById('editPlayerName');
+const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
+const profileEditMessage = document.getElementById('profileEditMessage');
+
+const welcomeContainer = document.getElementById('welcomeContainer');
+
+const floatingMessageDiv = document.getElementById('floatingMessage');
+const footerMenu = document.getElementById('footerMenu');
+// const homeBtn = document.getElementById('homeBtn'); // REMOVIDO
+
+// --- Elementos para recuperação de senha ---
+const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+const forgotPasswordEmailInput = document.getElementById('forgotPasswordEmailInput');
+const sendRecoveryCodeBtn = document.getElementById('sendRecoveryCodeBtn');
+const closeForgotPasswordModalBtn = document.getElementById('closeForgotPasswordModalBtn');
+const forgotPasswordMessage = document.getElementById('forgotPasswordMessage');
+
+const verifyRecoveryModal = document.getElementById('verifyRecoveryModal');
+const recoveryEmailDisplay = document.getElementById('recoveryEmailDisplay');
+const recoveryCodeInput = document.getElementById('recoveryCodeInput');
+const newPasswordInput = document.getElementById('newPasswordInput');
+const updatePasswordBtn = document.getElementById('updatePasswordBtn');
+const closeVerifyRecoveryModalBtn = document.getElementById('closeVerifyRecoveryModalBtn');
+const verifyRecoveryMessage = document.getElementById('verifyRecoveryMessage');
+
+// --- Elementos da Loja ---
+const shopModal = document.getElementById('shopModal');
+const shopMessage = document.getElementById('shopMessage');
+const closeShopModalBtn = document.getElementById('closeShopModalBtn');
+
+// --- Elementos do Modal de Confirmação de Compra ---
+const purchaseConfirmModal = document.getElementById('purchaseConfirmModal');
+const confirmModalMessage = document.getElementById('confirmModalMessage');
+const confirmPurchaseFinalBtn = document.getElementById('confirmPurchaseFinalBtn');
+const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
+
+
+// Função OTIMIZADA para carregar definições de itens no cache local
+// Modificado para reduzir Egress buscando apenas o necessário e cacheando tudo
+async function loadItemDefinitions() {
+    const CACHE_KEY = 'item_definitions_full_v1'; // Alterado para forçar novo cache completo
+    const CACHE_TTL_24H = 43200; // 24 horas * 60 minutos
+
+    // 1. Tenta carregar do cache em memória (RAM)
+    if (itemDefinitions.size > 0) return;
+
+    // 2. Tenta carregar do cache persistente (LocalStorage)
+    const cachedData = getCache(CACHE_KEY, CACHE_TTL_24H);
+    if (cachedData) {
+        // Recria o Map a partir dos dados [key, value] salvos no cache
+        try {
+             itemDefinitions = new Map(cachedData);
+             console.log('📚 [Cache] Definições de itens carregadas (Memória/Local).');
+             return;
+        } catch(e) {
+            console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
+            localStorage.removeItem(CACHE_KEY); // Limpa cache corrompido
+        }
+    }
+
+    // 3. Se não houver cache, busca no Supabase
+    // OTIMIZAÇÃO: Buscamos TODAS as colunas estáticas necessárias para evitar JOINs futuros
+    console.log('🌐 [Network] Baixando definições COMPLETAS de itens...');
+    const { data, error } = await supabaseClient
+        .from('items')
+        .select(`
+            item_id, name, display_name, rarity, item_type, stars,
+            min_attack, attack, defense, health, 
+            crit_chance, crit_damage, evasion,
+            crafts_item_id
+        `);
+    
+    if (error) {
+        console.error('Erro ao carregar definições de itens:', error);
+        return;
+    }
+    
+    const dataForCache = []; // Array [key, value] para salvar no localStorage
+    for (const item of data) {
+        // Fallback para display_name se vazio
+        if (!item.display_name) item.display_name = item.name;
+        
+        itemDefinitions.set(item.item_id, item);
+        dataForCache.push([item.item_id, item]); // Salva como [key, value]
+    }
+    
+    // 4. Salva no cache persistente para a próxima vez com TTL de 24h
+    setCache(CACHE_KEY, dataForCache, CACHE_TTL_24H);
+    console.log(`✅ [Cache] ${data.length} definições completas salvas.`);
+}
+
+// Expõe globalmente para que o inventory.js possa hidratar itens sem ir ao banco
+window.itemDefinitions = itemDefinitions;
+window.getItemDefinition = function(itemId) {
+    return itemDefinitions.get(itemId);
+};
+
+// Funções de Notificação Flutuante
+function showFloatingMessage(message, duration = 5000) {
+    if (!floatingMessageDiv) return;
+    floatingMessageDiv.textContent = message;
+    floatingMessageDiv.style.display = 'block';
+    floatingMessageDiv.offsetWidth;
+    floatingMessageDiv.style.opacity = '1';
+    setTimeout(() => {
+        floatingMessageDiv.style.opacity = '0';
+        setTimeout(() => {
+            floatingMessageDiv.style.display = 'none';
+        }, 500);
+    }, duration);
+}
+window.showFloatingMessage = showFloatingMessage; // Expor globalmente
+
+// Funções de Autenticação
+// =============================================================
+// TRADUÇÃO DE ERROS DO SUPABASE (mensagens chegam em inglês)
+// =============================================================
+function translateSupabaseError(message) {
+    if (!message) return 'Erro desconhecido.';
+    const m = message.toLowerCase();
+    if (m.includes('invalid login credentials') || m.includes('invalid_credentials') || m.includes('invalid credentials'))
+        return '❌ E-mail ou senha incorretos. Caso tenha criado sua conta recentemente, use "Esqueci minha senha" para definir uma senha.';
+    if (m.includes('email not confirmed'))
+        return '⚠️ E-mail não confirmado. Verifique sua caixa de entrada (ou spam).';
+    if (m.includes('user already registered') || m.includes('already registered'))
+        return '⚠️ Este e-mail já está cadastrado. Tente fazer login.';
+    if (m.includes('password should be at least') || m.includes('password must be'))
+        return '⚠️ A senha deve ter pelo menos 6 caracteres.';
+    if (m.includes('too many requests') || m.includes('rate limit') || m.includes('over_email_send_rate_limit'))
+        return '⏳ Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+    if (m.includes('email link is invalid or has expired') || m.includes('token has expired') || m.includes('otp expired'))
+        return '⏱️ O código expirou ou é inválido. Solicite um novo.';
+    if (m.includes('signup is disabled') || m.includes('signups not allowed'))
+        return '🚫 Cadastro temporariamente desativado.';
+    if (m.includes('network') || m.includes('fetch'))
+        return '🌐 Erro de conexão. Verifique sua internet e tente novamente.';
+    if (m.includes('user not found'))
+        return '❌ Nenhuma conta encontrada com este e-mail.';
+    // Fallback: retorna a mensagem original traduzida literalmente
+    return `Erro: ${message}`;
+}
+
+async function signIn() {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    authMessage.textContent = 'Tentando entrar...';
+    
+    // Ao logar com sucesso, o listener onAuthStateChange será disparado e
+    // atualizará o GlobalDB
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+        authMessage.textContent = translateSupabaseError(error.message);
+    }
+}
+
+// ── Whitelist de domínios de e-mail permitidos ──────────────────────────────
+const ALLOWED_EMAIL_DOMAINS = [
+    // Google
+    'gmail.com',
+    // Microsoft
+    'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+    // Apple
+    'icloud.com', 'me.com', 'mac.com',
+    // Yahoo
+    'yahoo.com', 'yahoo.com.br',
+    // Clássicos Brasileiros
+    'uol.com.br', 'bol.com.br', 'ig.com.br', 'terra.com.br',
+    // Outros provedores confiáveis
+    'protonmail.com', 'proton.me',
+    'zoho.com',
+    'aol.com',
+];
+
+function isEmailDomainAllowed(email) {
+    const parts = email.trim().toLowerCase().split('@');
+    if (parts.length !== 2) return false;
+    const domain = parts[1];
+    return ALLOWED_EMAIL_DOMAINS.includes(domain);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _executeSignUp() {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    authMessage.textContent = 'Enviando código de confirmação...';
+
+    // Monta a data de nascimento a partir dos 3 seletores para enviar ao trigger
+    const day   = document.getElementById('birthDaySelect')   ? document.getElementById('birthDaySelect').value   : '';
+    const month = document.getElementById('birthMonthSelect') ? document.getElementById('birthMonthSelect').value : '';
+    const year  = document.getElementById('birthYearSelect')  ? document.getElementById('birthYearSelect').value  : '';
+    const birthDateStr = (year && month && day)
+        ? `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+        : null;
+
+    const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: {
+            emailRedirectTo: 'https://aden-rpg.pages.dev',
+            data: { birth_date: birthDateStr }
+        }
+    });
+
+    if (error) {
+        authMessage.textContent = translateSupabaseError(error.message);
+    } else {
+        authMessage.textContent = 'Código de confirmação enviado para seu e-mail! Verifique a caixa de spam, caso não receba.';
+        signInBtn.style.display = 'none';
+        signUpBtn.style.display = 'none';
+        passwordInput.style.display = 'none';
+        const _googleBtn = document.getElementById('googleSignInBtn');
+        if (_googleBtn) _googleBtn.style.display = 'none';
+        // Abre o modal de e-mail automaticamente para o usuário ver o campo OTP
+        const _emlModal = document.getElementById('emailLoginModal');
+        if (_emlModal && _emlModal.style.display === 'none') _emlModal.style.display = 'flex';
+        otpInputContainer.style.display = 'block';
+    }
+}
+
+function signUp() {
+    const email = emailInput.value.trim();
+
+    if (!email) {
+        authMessage.textContent = 'Por favor, insira seu e-mail.';
+        return;
+    }
+
+    if (!isEmailDomainAllowed(email)) {
+        authMessage.textContent = '❌ E-mail não permitido. Use um provedor confiável (Gmail, Outlook, iCloud, Yahoo, etc.).';
+        return;
+    }
+
+    // Abre o modal de confirmação
+    const modal = document.getElementById('signUpConfirmModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+// Listeners do modal de confirmação de registro
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmModal = document.getElementById('signUpConfirmModal');
+    const btnNo  = document.getElementById('signUpConfirmNo');
+    const btnYes = document.getElementById('signUpConfirmYes');
+    const daySelect   = document.getElementById('birthDaySelect');
+    const yearSelect  = document.getElementById('birthYearSelect');
+
+    // Popula dias (01–31)
+    if (daySelect) {
+        for (let d = 1; d <= 31; d++) {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = String(d).padStart(2, '0');
+            daySelect.appendChild(opt);
+        }
+    }
+
+    // Popula anos (ano atual descendo até 1950)
+    if (yearSelect) {
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear; y >= 1950; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            yearSelect.appendChild(opt);
+        }
+    }
+
+    if (btnNo) {
+        btnNo.addEventListener('click', () => {
+            if (confirmModal) confirmModal.style.display = 'none';
+        });
+    }
+    if (btnYes) {
+        btnYes.addEventListener('click', () => {
+            // --- Verificação de Idade (Lei 15.211/2025 - Lei Felca) ---
+            const ageMsg = document.getElementById('ageVerificationMessage');
+            const day   = daySelect   ? parseInt(daySelect.value)   : 0;
+            const month = document.getElementById('birthMonthSelect') ? parseInt(document.getElementById('birthMonthSelect').value) : 0;
+            const year  = yearSelect  ? parseInt(yearSelect.value)  : 0;
+
+            if (!day || !month || !year) {
+                if (ageMsg) ageMsg.textContent = '⚠️ Por favor, preencha sua data de nascimento completa.';
+                return;
+            }
+
+            const born  = new Date(year, month - 1, day);
+            const today = new Date();
+            let age = today.getFullYear() - born.getFullYear();
+            const monthDiff = today.getMonth() - born.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < born.getDate())) age--;
+
+            if (age < 18) {
+                if (ageMsg) ageMsg.textContent = '🔞 Acesso negado. Este jogo é destinado a maiores de 18 anos (Lei 15.211/2025).';
+                return;
+            }
+
+            if (ageMsg) ageMsg.textContent = '';
+            if (confirmModal) confirmModal.style.display = 'none';
+            _executeSignUp();
+        });
+    }
+    // Fecha ao clicar fora
+    if (confirmModal) {
+        confirmModal.addEventListener('click', (e) => {
+            if (e.target === confirmModal) confirmModal.style.display = 'none';
+        });
+    }
+
+    // --- Lógica do Modal de Chances do Espiral (Lei 15.211/2025) ---
+    const chancesData = {
+        common: {
+            title: 'Espiral Comum — Chances',
+            rows: [
+                { rarity: 'R',  label: 'Fragmento R',  chance: '97%', color: 'lightgreen' },
+                { rarity: 'SR', label: 'Fragmento SR', chance: '3%',  color: 'lightblue' },
+            ]
+        },
+        advanced: {
+            title: 'Espiral Avançado — Chances',
+            rows: [
+                { rarity: 'SR', label: 'Fragmento SR', chance: '100%', color: '#f0c040' },
+            ]
+        }
+    };
+
+    function buildChancesContent(type) {
+        const data = chancesData[type];
+        let html = '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+        html += '<tr style="color:#aaa; border-bottom:1px solid #444;"><th style="padding:6px 4px; text-align:left;">Tipo</th><th style="padding:6px 4px; text-align:left;">Item</th><th style="padding:6px 4px; text-align:right;">Chance</th></tr>';
+        data.rows.forEach(row => {
+            html += `<tr style="border-bottom:1px solid #333;">
+                <td style="padding:8px 4px;"><span style="font-weight:bold; color:${row.color}; background:rgba(0,0,0,0.4); padding:2px 7px; border-radius:4px; font-size:0.85em;">${row.rarity}</span></td>
+                <td style="padding:8px 4px; color:#ddd;">${row.label}</td>
+                <td style="padding:8px 4px; text-align:right; font-weight:bold; color:${row.color};">${row.chance}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        html += '<p style="font-size:0.75em; color:#888; margin-top:12px; line-height:1.4;">As probabilidades são por sorteio individual e independentes entre si. Informações divulgadas em conformidade com a Lei nº 15.211/2025.</p>';
+        return html;
+    }
+
+    const spiralChancesModal  = document.getElementById('spiralChancesModal');
+    const spiralChancesTitle  = document.getElementById('spiralChancesTitle');
+    const spiralChancesContent = document.getElementById('spiralChancesContent');
+    const closeSpiralChancesBtn = document.getElementById('closeSpiralChancesBtn');
+
+    ['Common', 'Advanced'].forEach(type => {
+        const btn = document.getElementById(`openChances${type}Btn`);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const t = type.toLowerCase();
+                if (spiralChancesTitle)  spiralChancesTitle.textContent  = chancesData[t].title;
+                if (spiralChancesContent) spiralChancesContent.innerHTML = buildChancesContent(t);
+                if (spiralChancesModal)  spiralChancesModal.style.display = 'flex';
+            });
+        }
+    });
+
+    if (closeSpiralChancesBtn) {
+        closeSpiralChancesBtn.addEventListener('click', () => {
+            if (spiralChancesModal) spiralChancesModal.style.display = 'none';
+        });
+    }
+    if (spiralChancesModal) {
+        spiralChancesModal.addEventListener('click', (e) => {
+            if (e.target === spiralChancesModal) spiralChancesModal.style.display = 'none';
+        });
+    }
+});
+
+async function verifyOtp() {
+    const email = emailInput.value;
+    const token = otpInput.value;
+    authMessage.textContent = 'Verificando código...';
+
+    const { error } = await supabaseClient.auth.verifyOtp({
+        email,
+        token,
+        type: 'email'
+    });
+
+    if (error) {
+        authMessage.textContent = translateSupabaseError(error.message);
+    } else {
+        // Conta criada com sucesso via OTP — porém sem senha definida.
+        // Exibe modal para o jogador definir uma senha para logins futuros.
+        authMessage.textContent = '✅ Conta verificada! Defina uma senha para acessar futuramente.';
+        showSetPasswordModal();
+    }
+}
+
+/**
+ * Exibe modal para o novo jogador definir uma senha logo após o registro por OTP.
+ * Isso evita o erro "invalid credentials" ao tentar logar novamente no futuro.
+ */
+function showSetPasswordModal() {
+    const existing = document.getElementById('setPasswordModal');
+    if (existing) existing.remove();
+
+    if (!document.getElementById('set-password-style')) {
+        const style = document.createElement('style');
+        style.id = 'set-password-style';
+        style.innerHTML = `
+            #setPasswordModal {
+                position: fixed; inset: 0; z-index: 99998;
+                display: flex; justify-content: center; align-items: center;
+                background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            }
+            #setPasswordModal .spw-box {
+                background: #0e0e0e; border: 1px solid #333; border-radius: 14px;
+                padding: 26px 22px 20px; width: 92%; max-width: 360px;
+                text-align: center;
+                box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            }
+            #setPasswordModal h3 {
+                color: #c9a94a; margin: 0 0 6px; font-size: 1.1em;
+            }
+            #setPasswordModal p {
+                color: #888; font-size: 0.82em; margin: 0 0 16px; line-height: 1.5;
+            }
+            #setPasswordModal input {
+                width: 100%; padding: 10px 12px; background: #1a1a1a;
+                border: 1px solid #444; color: #fff; border-radius: 8px;
+                font-size: 0.9em; margin-bottom: 10px; box-sizing: border-box;
+            }
+            #setPasswordModal .spw-confirm-btn {
+                width: 100%; padding: 11px;
+                background: linear-gradient(180deg, #c9a94a, #8a7330);
+                color: #000; font-weight: bold; font-size: 0.9em;
+                border: none; border-radius: 8px; cursor: pointer;
+                text-transform: uppercase; letter-spacing: 1px;
+                margin-bottom: 8px;
+            }
+            #setPasswordModal .spw-skip-btn {
+                width: 100%; padding: 9px; background: transparent;
+                border: 1px solid #333; color: #666; font-size: 0.8em;
+                border-radius: 8px; cursor: pointer;
+            }
+            #setPasswordModal .spw-msg { font-size: 0.8em; min-height: 18px; margin-top: 6px; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'setPasswordModal';
+    modal.innerHTML = `
+        <div class="spw-box">
+            <h3>🔐 Defina sua Senha</h3>
+            <p>
+                Sua conta foi criada! Defina uma senha agora.
+            </p>
+            <input type="password" id="spwNewPwd" placeholder="Nova senha (mín. 6 caracteres)">
+            <input type="password" id="spwConfPwd" placeholder="Confirme a senha">
+            <button class="spw-confirm-btn" id="spwConfirmBtn">Salvar Senha</button>
+            <button class="spw-skip-btn" id="spwSkipBtn" style="display: none;">Definir depois (use "Esqueci minha senha")</button>
+            <p class="spw-msg" id="spwMsg"></p>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const confirmBtn = modal.querySelector('#spwConfirmBtn');
+    const skipBtn    = modal.querySelector('#spwSkipBtn');
+    const msgEl      = modal.querySelector('#spwMsg');
+    const pwd1       = modal.querySelector('#spwNewPwd');
+    const pwd2       = modal.querySelector('#spwConfPwd');
+
+    confirmBtn.addEventListener('click', async () => {
+        const p1 = pwd1.value;
+        const p2 = pwd2.value;
+        if (!p1 || p1.length < 6) { msgEl.style.color = '#e55'; msgEl.textContent = 'A senha deve ter pelo menos 6 caracteres.'; return; }
+        if (p1 !== p2)             { msgEl.style.color = '#e55'; msgEl.textContent = 'As senhas não coincidem.'; return; }
+
+        confirmBtn.disabled = true;
+        msgEl.style.color = '#aaa';
+        msgEl.textContent = 'Salvando...';
+
+        const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+        if (error) {
+            msgEl.style.color = '#e55';
+            msgEl.textContent = translateSupabaseError(error.message);
+            confirmBtn.disabled = false;
+        } else {
+            msgEl.style.color = '#7dc97d';
+            msgEl.textContent = '✅ Senha salva com sucesso!';
+            setTimeout(() => modal.remove(), 1500);
+        }
+    });
+
+    skipBtn.addEventListener('click', () => modal.remove());
+}
+
+async function signOut() {
+    // --- CORREÇÃO DE CACHE APLICADA ---
+    // Limpa explicitamente o cache do jogador antes de sair e recarregar
+    localStorage.removeItem('player_data_cache');
+    await GlobalDB.clearAuth(); // Limpa DB Global
+    
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+        console.error('Erro ao sair:', error.message);
+    }
+    window.location.reload();
+}
+
+// === Animação da barra de EXP (apenas apresentação visual) ===
+// Detecta quando o valor de EXP aumenta e anima o preenchimento da barra
+// lentamente, com brilho, DEPOIS que a página estiver totalmente carregada
+// visualmente.
+//
+// IMPORTANTE: o ganho de EXP quase sempre já chega pronto no primeiro fetch
+// do jogador (a ação que deu XP aconteceu antes/em outra tela, e o valor
+// novo vem junto com o carregamento da página). Por isso não basta comparar
+// com o estado em memória — que sempre começa "null" a cada load, fazendo
+// cair sempre no caminho "aplica direto". É preciso lembrar qual foi o
+// ÚLTIMO valor que o jogador efetivamente VIU na barra, persistido em
+// localStorage por jogador. Assim, ao carregar a página:
+//   1. Mostra IMEDIATAMENTE o valor antigo (o que ele já tinha visto).
+//   2. Espera a página terminar de carregar (evento 'load').
+//   3. Só então anima lentamente, com brilho, até o valor novo.
+let __xpBarLastPercent = null;
+let __xpBarPendingAnimation = null; // { percent, label } aguardando o load completo
+let __xpBarPageFullyLoaded = (document.readyState === 'complete');
+window.addEventListener('load', () => {
+    __xpBarPageFullyLoaded = true;
+    if (__xpBarPendingAnimation) {
+        const { percent, label } = __xpBarPendingAnimation;
+        __xpBarPendingAnimation = null;
+        // Pequeno respiro pra garantir que tudo (imagens, layout) já assentou
+        // visualmente antes de começar a animação.
+        setTimeout(() => __animateXpBarTo(percent, label), 400);
+    }
+});
+
+function __xpBarStorageKey(playerId) {
+    return `aden_xp_bar_state_${playerId || 'anon'}`;
+}
+
+function __loadXpBarState(playerId) {
+    try {
+        const raw = localStorage.getItem(__xpBarStorageKey(playerId));
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function __saveXpBarState(playerId, level, percent) {
+    try {
+        localStorage.setItem(__xpBarStorageKey(playerId), JSON.stringify({ level, percent }));
+    } catch (e) { /* localStorage indisponível — ignora, é só cosmético */ }
+}
+
+function __applyXpBarInstant(percent, label) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
+
+    xpBar.style.transition = 'none';
+    xpBar.style.width = `${percent}%`;
+    void xpBar.offsetWidth; // força reflow p/ a próxima transição funcionar
+    xpBar.style.transition = '';
+    xpTextEl.textContent = label;
+    container.classList.remove('xp-filling');
+}
+
+function __animateXpBarTo(clampedPercent, xpLabel) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
+
+    const delta = clampedPercent - (__xpBarLastPercent || 0);
+    const duration = Math.min(2.4, Math.max(0.9, delta / 100 * 3.2)); // 0.9s ~ 2.4s
+
+    xpTextEl.textContent = xpLabel;
+    container.classList.add('xp-filling');
+    xpBar.style.transition = `width ${duration}s ease-in-out`;
+    void xpBar.offsetWidth;
+    xpBar.style.width = `${clampedPercent}%`;
+
+    const onTransitionEnd = (e) => {
+        if (e.propertyName !== 'width') return;
+        xpBar.removeEventListener('transitionend', onTransitionEnd);
+        container.classList.remove('xp-filling');
+    };
+    xpBar.addEventListener('transitionend', onTransitionEnd);
+
+    __xpBarLastPercent = clampedPercent;
+}
+
+function updateXpBar(xpPercent, xpLabel, playerId, playerLevel) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
+
+    const clampedPercent = Math.max(0, Math.min(100, xpPercent));
+
+    // Primeira chamada nesta sessão da página: decide com base no que foi
+    // salvo da última vez que o jogador viu a barra (outra sessão/reload),
+    // não apenas no estado em memória (que sempre começa vazio).
+    if (__xpBarLastPercent === null) {
+        const stored = __loadXpBarState(playerId);
+
+        // Sem estado anterior comparável, subiu de nível, ou não houve
+        // crescimento real (ex.: diminuiu) — aplica direto, sem animação.
+        if (!stored || stored.level !== playerLevel || clampedPercent <= stored.percent) {
+            __applyXpBarInstant(clampedPercent, xpLabel);
+            __xpBarLastPercent = clampedPercent;
+            __saveXpBarState(playerId, playerLevel, clampedPercent);
+            return;
+        }
+
+        // Houve ganho real de EXP desde a última vez que o jogador viu a
+        // barra. Mostra primeiro o valor ANTIGO (o que ele já conhecia) e
+        // só anima para o novo valor depois que a página carregar de vez.
+        __applyXpBarInstant(stored.percent, xpLabel);
+        __xpBarLastPercent = stored.percent;
+        __saveXpBarState(playerId, playerLevel, clampedPercent);
+
+        if (__xpBarPageFullyLoaded) {
+            setTimeout(() => __animateXpBarTo(clampedPercent, xpLabel), 400);
+        } else {
+            __xpBarPendingAnimation = { percent: clampedPercent, label: xpLabel };
+        }
+        return;
+    }
+
+    // Já existe estado em memória nesta mesma página (XP mudou durante o
+    // uso, sem reload — ex.: recompensa recebida na hora).
+    __saveXpBarState(playerId, playerLevel, clampedPercent);
+
+    if (clampedPercent <= __xpBarLastPercent) {
+        __applyXpBarInstant(clampedPercent, xpLabel);
+        __xpBarLastPercent = clampedPercent;
+        return;
+    }
+
+    if (__xpBarPageFullyLoaded) {
+        __animateXpBarTo(clampedPercent, xpLabel);
+    } else {
+        __xpBarPendingAnimation = { percent: clampedPercent, label: xpLabel };
+    }
+}
+
+// Função helper para renderizar a UI com os dados do jogador
+// ALTERADO: Removidos stats detalhados (Atk, Def, HP, Crit, Evasão)
+// Apenas exibe Nome, Facção e Botões
+function renderPlayerUI(player, preserveActiveContainer = false) {
+    authContainer.style.display = 'none';
+    const avatarSrc = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+    // Contas 100% Google (sem identidade "email"/senha no Supabase Auth) não
+    // têm senha para trocar — o fluxo de "Alterar Senha" exige reautenticar
+    // com a senha atual, o que nunca existiu para essas contas. Por isso o
+    // botão fica oculto nesse caso (ver updateAuthProviderFlag).
+    const canChangePassword = window.hasPasswordIdentity !== false;
+    playerInfoDiv.innerHTML = `
+      <div class="acc-modal-header">
+        <div class="acc-modal-avatar-wrap">
+          <img class="acc-modal-avatar" src="${avatarSrc}" alt="Avatar">
+          <span class="acc-modal-level">Nv. ${player.level}</span>
+        </div>
+        <p class="acc-modal-name">${player.name}</p>
+        <p class="acc-modal-faction">${player.faction}</p>
+      </div>
+      <div class="acc-menu">
+        <button class="acc-menu-item" id="editProfileBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+          <span class="acc-menu-label">Editar Perfil</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>
+        ${canChangePassword ? `
+        <button class="acc-menu-item" id="changePasswordBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <span class="acc-menu-label">Alterar Senha</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>` : ''}
+        <button class="acc-menu-item acc-menu-danger" id="signOutBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+          <span class="acc-menu-label">Deslogar</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>
+      </div>
+    `;
+    const editProfileBtn = playerInfoDiv.querySelector('#editProfileBtn');
+    if (editProfileBtn) {
+        editProfileBtn.addEventListener('click', () => {
+            document.getElementById('editProfileIcon').click();
+        });
+    }
+    document.getElementById('playerAvatar').src = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+    document.getElementById('playerNameText').textContent = player.name;
+    document.getElementById('playerLevel').textContent = `Nv. ${player.level}`;
+    document.getElementById('playerPower').textContent = formatNumberCompact(player.combat_power);
+    document.getElementById('playerGold').innerHTML = `<img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 22px; height: 17px; vertical-align: -4px;"> ${formatNumberCompact(player.gold)}`;
+    document.getElementById('playerCrystals').innerHTML = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px; vertical-align: -4px;"> ${formatNumberCompact(player.crystals)}`;
+    const xpPercent = Math.min(100, Math.floor((player.xp / player.xp_needed_for_level) * 100));
+    document.getElementById('xpBarContainer').style.display = 'flex';
+    updateXpBar(xpPercent, `${player.xp} / ${player.xp_needed_for_level}`, player.id, player.level);
+    document.getElementById('playerTopBar').style.display = 'flex';
+    if (welcomeContainer && player && player.name) {
+        welcomeContainer.innerHTML = `
+            <div id="mapContainer">
+                <div id="mapImage"></div>
+            </div>
+        `;
+    }
+    if (!preserveActiveContainer) {
+        updateUIVisibility(true, 'welcomeContainer');
+    }
+}
+
+// OTIMIZAÇÃO: Função applyItemBonuses removida. 
+// O cálculo agora é feito via RPC no servidor para atualizar a coluna combat_power.
+
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA ZERO EGRESS + SERVER-SIDE CP)
+async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
+    
+    // --- GATILHO DE SEGURANÇA PARA EVITAR REQUISIÇÕES DUPLICADAS ---
+    if (window.isPlayerLoading) {
+        // console.log("⏳ [PlayerInfo] Carregamento em progresso... ignorando chamada duplicada.");
+        return;
+    }
+    window.isPlayerLoading = true;
+
+    try {
+        // [ALTERAÇÃO] Verificação de tempo do Cache
+        const now = Date.now();
+        const lastFetch = parseInt(localStorage.getItem('aden_player_last_fetch_ts') || '0');
+        const isCacheValid = (now - lastFetch) < PLAYER_CACHE_DURATION;
+
+        // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
+        // Só usa cache se não for forçado E se o cache estiver no prazo
+        if (!forceRefresh && isCacheValid) {
+            const cachedPlayer = await GlobalDB.getPlayer();
+            if (cachedPlayer) {
+                console.log(`⚡ [PlayerInfo] Cache válido (${Math.floor((now - lastFetch)/60000)}m). Usando dados locais.`);
+                currentPlayerData = cachedPlayer;
+                currentPlayerId = cachedPlayer.id;
+                renderPlayerUI(cachedPlayer, preserveActiveContainer);
+                checkProgressionNotifications(cachedPlayer);
+                enforceBirthDateCompliance(cachedPlayer);
+                
+                // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
+                if (!localStorage.getItem('aden_starter_pack_given_' + cachedPlayer.id)) {
+                    checkAndGiveStarterPack(cachedPlayer);
+                }
+                
+                // Dispara o evento de "Pronto" para que o PV.js saiba que pode carregar
+                window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
+                
+                window.initialLoadDone = true; // Marca que o carregamento ocorreu
+                return;
+            }
+        }
+
+        // 2. Se não tiver no DB, busca do Supabase
+        console.log("🌐 [PlayerInfo] Buscando dados novos no Supabase...");
+        let userId = currentPlayerId;
+        if (!userId) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                updateUIVisibility(false);
+                return;
+            }
+            userId = session.user.id;
+            currentPlayerId = userId;
+        }
+
+        // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
+        // INCLUÍDO 'is_banned' e 'ban_reason' para eliminar o script duplicado no index.html
+        const columnsToSelect = `
+            id, 
+            name, 
+            faction, 
+            avatar_url, 
+            level, 
+            xp, 
+            xp_needed_for_level, 
+            gold, 
+            crystals, 
+            combat_power, 
+            progression_state,
+            current_afk_stage,
+            last_attack_time,
+            raid_attacks_bought_count,
+            last_afk_start_time,
+            guild_id,
+            rank,
+            is_banned,
+            ban_reason,
+            birth_date,
+            daily_rewards_log 
+        `;
+
+        const { data: player, error: playerError } = await supabaseClient
+            .from('players')
+            .select(columnsToSelect)
+            .eq('id', userId)
+            .single();
+            
+        if (playerError || !player) {
+            console.error("Erro ao buscar jogador:", playerError);
+            return;
+        }
+
+        // --- LÓGICA DE BANIMENTO INTEGRADA (Economiza 1 requisição) ---
+        if (player.is_banned === true) {
+            console.warn(`Usuário ${userId} está banido.`);
+            const banModal = document.getElementById('banModalOverlay');
+            const banReasonContent = document.getElementById('banReasonContent');
+            const logoutBanBtn = document.getElementById('logoutBanBtn');
+
+            if (banModal && banReasonContent && logoutBanBtn) {
+                banReasonContent.innerText = player.ban_reason || "Motivo não especificado.";
+                banModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+
+                logoutBanBtn.onclick = async () => {
+                    await signOut();
+                };
+                // Interrompe o carregamento do jogo
+                return; 
+            }
+        }
+
+        // --- LÓGICA DE CP NO SERVIDOR (OTIMIZADO: 1 VEZ POR DIA) ---
+        // Só executa se a data salva for diferente da data de hoje
+        const STORAGE_KEY_CP = `aden_cp_check_${player.id}`;
+        const todayStr = new Date().toISOString().split('T')[0]; // Data atual (UTC) ex: "2023-10-27"
+        const lastCheck = localStorage.getItem(STORAGE_KEY_CP);
+
+        if (lastCheck !== todayStr) {
+            console.log("🔄 [System] Executando verificação diária de Combat Power...");
+            
+            supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
+                .then(({ data: newCp, error }) => {
+                    if (!error && newCp !== null) {
+                        // Marca como feito hoje
+                        localStorage.setItem(STORAGE_KEY_CP, todayStr);
+                        
+                        // Atualiza a UI se houve mudança
+                        if (player.combat_power !== newCp) {
+                            console.log(`⚡ CP Atualizado de ${player.combat_power} para ${newCp}`);
+                            player.combat_power = newCp;
+                            document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
+                            
+                            // Atualiza cache local com o novo valor
+                            if (currentPlayerData) currentPlayerData.combat_power = newCp;
+                            GlobalDB.updatePlayerPartial({ combat_power: newCp });
+                            setCache('player_data_cache', currentPlayerData, 1440);
+                        }
+                    }
+                })
+                .catch(err => console.warn("Falha no check diário de CP:", err));
+        } else {
+            // console.log("✅ [System] CP já verificado hoje.");
+        }
+
+        // Armazena e Renderiza
+        currentPlayerData = player;
+        localStorage.setItem('aden_player_last_fetch_ts', now.toString()); // Marca a hora do fetch
+        
+        // Salva no DB Global e Cache Legacy
+        await GlobalDB.setPlayer(player);
+        setCache('player_data_cache', player, 1440);
+
+        renderPlayerUI(player, preserveActiveContainer);
+        checkProgressionNotifications(player);
+        enforceBirthDateCompliance(player);
+
+        // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
+        if (!localStorage.getItem('aden_starter_pack_given_' + player.id)) {
+            checkAndGiveStarterPack(player); // async, não bloqueia
+        }
+
+        if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
+            if (typeof window.updateProfileEditModal === 'function') {
+                window.updateProfileEditModal(player);
+            }
+            const nameInput = document.getElementById('editPlayerName');
+            if (nameInput) nameInput.value = '';
+            profileEditModal.style.display = 'flex';
+        }
+
+        // Dispara o evento avisando que o jogador está pronto (para PV.js e outros)
+        window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: player }));
+        window.initialLoadDone = true; // Marca que o carregamento ocorreu
+
+    } finally {
+        window.isPlayerLoading = false; // Libera o semáforo
+    }
+}
+
+// =======================================================================
+// DATA DE NASCIMENTO OBRIGATÓRIA (Lei 15.211/2025) — contas via Google
+// =======================================================================
+// O cadastro por e-mail já força a coleta da data de nascimento antes de
+// enviar o OTP (ver _executeSignUp). O login/registro via Google (OAuth
+// redirect ou One Tap) autentica direto com o Google e não passa por essa
+// etapa, então a conta pode ser criada sem birth_date.
+//
+// Não é possível pedir a data ANTES do jogador escolher a conta do Google:
+// nesse momento ainda não sabemos se é uma conta nova ou uma já existente,
+// e travar o próprio seletor de contas do Google não é algo controlável
+// pelo app. Por isso, a checagem é feita DEPOIS da autenticação: sempre
+// que os dados do jogador são carregados (renderPlayerUI/fetchAndDisplayPlayerInfo)
+// e a coluna birth_date está vazia, um modal bloqueante é exibido — cobre
+// tanto contas novas via Google quanto contas Google antigas que ainda não
+// tinham essa exigência.
+function enforceBirthDateCompliance(player) {
+    const modal = document.getElementById('googleBirthDateModal');
+    if (!modal) return;
+
+    if (!player || player.birth_date) {
+        // Já possui data de nascimento cadastrada — garante que o modal esteja fechado
+        if (modal.style.display !== 'none') {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        return;
+    }
+
+    // Não exibe por cima do modal de banimento (prioridade)
+    const banModal = document.getElementById('banModalOverlay');
+    if (banModal && banModal.style.display === 'flex') return;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+window.enforceBirthDateCompliance = enforceBirthDateCompliance;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const gDaySelect  = document.getElementById('googleBirthDaySelect');
+    const gYearSelect = document.getElementById('googleBirthYearSelect');
+    const gMsg        = document.getElementById('googleBirthDateMessage');
+    const gConfirmBtn = document.getElementById('googleBirthDateConfirmBtn');
+    const gLogoutBtn  = document.getElementById('googleBirthDateLogoutBtn');
+
+    if (!gConfirmBtn) return; // Modal não presente nesta página
+
+    // Popula dias (01–31)
+    if (gDaySelect) {
+        for (let d = 1; d <= 31; d++) {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = String(d).padStart(2, '0');
+            gDaySelect.appendChild(opt);
+        }
+    }
+
+    // Popula anos (ano atual descendo até 1950)
+    if (gYearSelect) {
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear; y >= 1950; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            gYearSelect.appendChild(opt);
+        }
+    }
+
+    gConfirmBtn.addEventListener('click', async () => {
+        const day   = gDaySelect ? parseInt(gDaySelect.value) : 0;
+        const month = document.getElementById('googleBirthMonthSelect') ? parseInt(document.getElementById('googleBirthMonthSelect').value) : 0;
+        const year  = gYearSelect ? parseInt(gYearSelect.value) : 0;
+
+        if (gMsg) { gMsg.style.color = '#ff6b6b'; gMsg.textContent = ''; }
+
+        if (!day || !month || !year) {
+            if (gMsg) gMsg.textContent = '⚠️ Por favor, preencha sua data de nascimento completa.';
+            return;
+        }
+
+        const born  = new Date(year, month - 1, day);
+        const today = new Date();
+        let age = today.getFullYear() - born.getFullYear();
+        const monthDiff = today.getMonth() - born.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < born.getDate())) age--;
+
+        if (age < 18) {
+            if (gMsg) gMsg.textContent = '🔞 Acesso negado. Este jogo é destinado a maiores de 18 anos (Lei 15.211/2025).';
+            return;
+        }
+
+        if (!currentPlayerId) {
+            if (gMsg) gMsg.textContent = 'Não foi possível identificar sua conta. Tente sair e entrar novamente.';
+            return;
+        }
+
+        gConfirmBtn.disabled = true;
+        if (gMsg) { gMsg.style.color = '#aaa'; gMsg.textContent = 'Salvando...'; }
+
+        const birthDateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+        try {
+            const { data, error } = await supabaseClient.rpc('set_player_birth_date', {
+                p_birth_date: birthDateStr
+            });
+
+            if (error || !data || data.success === false) {
+                const msg = (data && data.error) || (error && translateSupabaseError(error.message)) || 'Não foi possível salvar sua data de nascimento.';
+                if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = msg; }
+                gConfirmBtn.disabled = false;
+                return;
+            }
+
+            if (currentPlayerData) currentPlayerData.birth_date = birthDateStr;
+            GlobalDB.updatePlayerPartial({ birth_date: birthDateStr });
+
+            const modal = document.getElementById('googleBirthDateModal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+            if (gMsg) gMsg.textContent = '';
+        } catch (err) {
+            console.error('Erro ao salvar data de nascimento:', err);
+            if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = 'Ocorreu um erro ao salvar. Tente novamente.'; }
+        } finally {
+            gConfirmBtn.disabled = false;
+        }
+    });
+
+    if (gLogoutBtn) {
+        gLogoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.body.style.overflow = '';
+            signOut();
+        });
+    }
+});
+
+// === Botão de copiar ID do jogador ===
+document.addEventListener('DOMContentLoaded', () => {
+  const copiarIdDiv = document.getElementById('copiarid');
+  if (!copiarIdDiv) return;
+
+  copiarIdDiv.addEventListener('click', async () => {
+    if (!currentPlayerId) {
+      showFloatingMessage('ID do jogador ainda não carregado.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentPlayerId);
+
+      const originalText = copiarIdDiv.textContent.trim();
+      copiarIdDiv.classList.add('copied');
+      copiarIdDiv.textContent = 'Copiado!';
+
+      // Reinsere o ícone SVG junto do texto
+      copiarIdDiv.insertAdjacentHTML('afterbegin', `
+       
+      `);
+
+      setTimeout(() => {
+        copiarIdDiv.classList.remove('copied');
+        copiarIdDiv.textContent = originalText;
+        copiarIdDiv.insertAdjacentHTML('afterbegin', `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px; vertical-align: middle;">
+        <path d="M4 1.5H14V11.5H4V1.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M12 4.5V14.5H2V4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+        `);
+      }, 3000);
+    } catch (err) {
+      console.error('Falha ao copiar ID:', err);
+      showFloatingMessage('Não foi possível copiar o ID.');
+    }
+  });
+});
+
+
+// --- Recuperação de senha com token ---
+if (forgotPasswordLink) {
+    forgotPasswordLink.addEventListener('click', e => {
+        e.preventDefault();
+        forgotPasswordModal.style.display = 'flex';
+        forgotPasswordMessage.textContent = '';
+    });
+}
+if (closeForgotPasswordModalBtn) {
+    closeForgotPasswordModalBtn.addEventListener('click', () => {
+        forgotPasswordModal.style.display = 'none';
+    });
+}
+if (sendRecoveryCodeBtn) {
+    sendRecoveryCodeBtn.addEventListener('click', async () => {
+        const email = forgotPasswordEmailInput.value;
+        if (!email) {
+            forgotPasswordMessage.textContent = 'Informe um e-mail válido.';
+            return;
+        }
+        forgotPasswordMessage.textContent = 'Enviando código...';
+        const { error } = await supabaseClient.auth.signInWithOtp({
+            email,
+            options: { shouldCreateUser: false }
+        });
+        if (error) {
+            forgotPasswordMessage.textContent = `Erro: ${error.message}`;
+        } else {
+            forgotPasswordMessage.textContent = 'Código enviado! Verifique seu e-mail.';
+            forgotPasswordModal.style.display = 'none';
+            verifyRecoveryModal.style.display = 'flex';
+            recoveryEmailDisplay.value = email;
+        }
+    });
+}
+if (closeVerifyRecoveryModalBtn) {
+    closeVerifyRecoveryModalBtn.addEventListener('click', () => {
+        verifyRecoveryModal.style.display = 'none';
+    });
+}
+if (updatePasswordBtn) {
+    updatePasswordBtn.addEventListener('click', async () => {
+        const email = recoveryEmailDisplay.value;
+        const token = recoveryCodeInput.value;
+        const newPassword = newPasswordInput.value;
+        if (!email || !token || !newPassword) {
+            verifyRecoveryMessage.textContent = 'Preencha todos os campos.';
+            return;
+        }
+        if (newPassword.length < 6) {
+            verifyRecoveryMessage.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+            return;
+        }
+        const { error: verifyError } = await supabaseClient.auth.verifyOtp({
+            email,
+            token,
+            type: 'recovery'
+        });
+        if (verifyError) {
+            verifyRecoveryMessage.textContent = `Erro: ${verifyError.message}`;
+            return;
+        }
+        const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
+        if (updateError) {
+            verifyRecoveryMessage.textContent = `Erro: ${updateError.message}`;
+            return;
+        }
+        verifyRecoveryMessage.textContent = 'Senha atualizada! Faça login novamente.';
+        setTimeout(() => {
+            verifyRecoveryModal.style.display = 'none';
+            window.location.reload();
+        }, 2500);
+    });
+}
+
+// --- UI ---// --- UI ---
+window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
+  if (isLoggedIn) {
+    authContainer.style.display = 'none';
+    footerMenu.style.display = 'flex';
+    welcomeContainer.style.display = 'block';
+    // Fecha o modal de e-mail caso esteja aberto (ex: login bem-sucedido)
+    const _emlModal = document.getElementById('emailLoginModal');
+    if (_emlModal) _emlModal.style.display = 'none';
+  } else {
+    authContainer.style.display = 'flex'; 
+    welcomeContainer.style.display = 'none';
+    footerMenu.style.display = 'none';
+    // signInBtn/signUpBtn/passwordInput estão dentro do modal de e-mail.
+    // Restauramos o estado padrão deles para a próxima vez que o modal abrir.
+    signInBtn.style.display = 'block';
+    signUpBtn.style.display = 'block';
+    passwordInput.style.display = 'block';
+    otpInputContainer.style.display = 'none';
+    const _googleSignInBtn = document.getElementById('googleSignInBtn');
+    if (_googleSignInBtn) _googleSignInBtn.style.display = 'flex';
+    const _emailOpenBtn = document.getElementById('emailLoginOpenBtn');
+    if (_emailOpenBtn) _emailOpenBtn.style.display = 'flex';
+    authMessage.textContent = '';
+  }
+};
+
+
+
+// Eventos
+signInBtn.addEventListener('click', signIn);
+signUpBtn.addEventListener('click', signUp);
+verifyOtpBtn.addEventListener('click', verifyOtp);
+
+// === Login com Google (One Tap / WebView-aware) ===
+
+// Client ID do Google OAuth (mesmo cadastrado no Supabase Dashboard)
+const GOOGLE_CLIENT_ID = '142797874763-vtsbudfqdico4pse4gtm4v6bv15ud1qr.apps.googleusercontent.com';
+
+/**
+ * Detecta se o app está rodando dentro de um WebView (ex: AppCreator24, wrappers Android).
+ * O Google bloqueia One Tap e OAuth popup em WebViews por segurança.
+ */
+function isWebView() {
+    const ua = navigator.userAgent || '';
+    // 'wv' é a flag oficial do WebView do Android
+    // Ausência de 'Chrome/' em user-agents Android indica WebView nativo
+    return /wv|WebView/.test(ua) || (ua.includes('Android') && !ua.includes('Chrome/'));
+}
+
+/**
+ * Fallback padrão: redireciona para o fluxo OAuth completo do Google.
+ * Usado tanto no navegador quanto no WebView (AppCreator24).
+ *
+ * IMPORTANTE — Por que não usamos _system para abrir no Chrome externo:
+ * O AppCreator24 intercepta todos os window.open() e abre no próprio WebView.
+ * Mesmo que _system funcionasse, os tokens OAuth iriam para o Chrome e NUNCA
+ * voltariam para o WebView, impedindo que o Supabase salvasse a sessão no
+ * localStorage/IndexedDB do app — causando re-login a cada abertura.
+ *
+ * Solução: abrir o OAuth dentro do próprio WebView (window.location.href).
+ * Após a autenticação, o Google redireciona de volta para o app (redirectTo),
+ * o Supabase detecta os tokens na URL e salva a sessão no localStorage.
+ * Nas próximas aberturas, checkAuthStatus() encontra a sessão no GlobalDB
+ * sem nenhum egress — idêntico ao comportamento do login por email/senha.
+ *
+ * Limitação conhecida: o seletor de contas salvas não aparece no WebView
+ * (WebView não compartilha cookies do Chrome), mas o login ocorre uma única
+ * vez e fica persistido, sem necessidade de re-autenticar nas próximas sessões.
+ */
+function googleOAuthRedirect() {
+    authMessage.textContent = 'Redirecionando para o Google...';
+    supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: 'https://aden-rpg.pages.dev',
+            // URL hardcoded (não usa window.location.origin) porque em WebViews o origin
+            // pode retornar uma URL diferente (GitHub Pages ou URL interna do wrapper),
+            // causando redirecionamento errado após OAuth → usuário nunca volta ao app.
+            queryParams: {
+                // Força o Google a SEMPRE exibir o seletor de contas.
+                // Sem isso, após deslogar e clicar em Google novamente, o Google
+                // reentra automaticamente na última conta sem perguntar — o jogador
+                // não conseguiria trocar de conta.
+                prompt: 'select_account'
+            }
+        }
+    }).then(({ error }) => {
+        if (error) authMessage.textContent = translateSupabaseError(error.message);
+    });
+    // Em caso de sucesso, o Supabase redireciona para o Google automaticamente.
+    // Ao retornar via redirectTo, checkAuthStatus() detecta e persiste a sessão,
+    // disparando fetchAndDisplayPlayerInfo() — igual ao fluxo de email/senha.
+}
+
+/**
+ * Detecta se a conta logada possui uma identidade "email" vinculada (ou seja,
+ * se ela tem senha própria no Supabase Auth). Contas criadas 100% via Google
+ * (OAuth ou One Tap) não possuem senha — nesse caso "Alterar Senha" não se
+ * aplica: o fluxo de troca de senha exige reautenticar com email+senha atual,
+ * e uma conta Google-only nunca teve uma senha para reautenticar.
+ *
+ * Fica salvo em window.hasPasswordIdentity e é usado por renderPlayerUI()
+ * para decidir se exibe o botão "Alterar Senha" no menu da conta.
+ * Por segurança, se não conseguirmos determinar (dado ausente/inesperado),
+ * assumimos true (mostra o botão) para nunca esconder a opção de quem
+ * realmente precisa dela.
+ */
+function updateAuthProviderFlag(session) {
+    try {
+        const identities = (session && session.user && session.user.identities) || [];
+        window.hasPasswordIdentity = identities.length === 0
+            ? true
+            : identities.some(identity => identity.provider === 'email');
+    } catch (e) {
+        window.hasPasswordIdentity = true;
+    }
+}
+
+/**
+ * Callback chamado pelo SDK do Google após o usuário escolher uma conta.
+ * Troca o credential (JWT) por uma sessão Supabase via signInWithIdToken.
+ */
+async function handleGoogleOneTapCredential(response) {
+    // Marca que o credential foi recebido — impede que o fallback de redirect
+    // do prompt() conflite com este fluxo (problema FedCM / Chrome 131+).
+    window._googleCredentialReceived = true;
+    console.log('[OneTap] ✅ Credential recebido. Iniciando signInWithIdToken...');
+
+    authMessage.textContent = 'Autenticando com Google...';
+
+    const { data, error } = await supabaseClient.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+    });
+
+    console.log('[OneTap] Resultado:', { hasSession: !!data?.session, error: error?.message });
+
+    if (error) {
+        // Conta com esse e-mail já existe com outro provider (email/senha)
+        if (error.message.includes('already registered') ||
+            error.message.includes('provider') ||
+            error.message.includes('already exists')) {
+            authMessage.textContent =
+                '⚠️ Este e-mail já tem cadastro com senha. ' +
+                'Entre com e-mail/senha ou use "Esqueceu a senha?" para vincular o Google.';
+        } else {
+            authMessage.textContent = translateSupabaseError(error.message);
+        }
+        return;
+    }
+
+    if (data?.session) {
+        console.log('[OneTap] 🎉 Sessão criada! Carregando jogador...');
+        // Trata o sucesso diretamente — não depende do onAuthStateChange,
+        // que pode ser bloqueado pelo guard initialLoadDone=true de cache anterior.
+        await GlobalDB.setAuth(data.session);
+        updateAuthProviderFlag(data.session);
+        currentPlayerId = data.session.user.id;
+        window.initialLoadDone = false;
+        window.isPlayerLoading = false;
+        fetchAndDisplayPlayerInfo(true);
+    } else {
+        console.warn('[OneTap] ⚠️ Sem erro mas também sem sessão. Tentando getSession...');
+        // Fallback: o Supabase pode ter a sessão mesmo que data.session venha null
+        const { data: sd } = await supabaseClient.auth.getSession();
+        if (sd?.session) {
+            await GlobalDB.setAuth(sd.session);
+            updateAuthProviderFlag(sd.session);
+            currentPlayerId = sd.session.user.id;
+            window.initialLoadDone = false;
+            window.isPlayerLoading = false;
+            fetchAndDisplayPlayerInfo(true);
+        }
+    }
+}
+
+/**
+ * Inicializa o Google One Tap assim que o SDK carregar.
+ * Só executa em navegadores reais (não em WebViews).
+ */
+function initGoogleOneTap() {
+    if (typeof google === 'undefined' || !google.accounts) return;
+    if (isWebView()) return; // WebViews não suportam One Tap
+
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleOneTapCredential,
+        auto_select: false,          // Não seleciona conta automaticamente (evita entrar na conta errada)
+        cancel_on_tap_outside: true,
+    });
+}
+
+// Inicializa o One Tap ao carregar a página (aguarda SDK)
+window.addEventListener('load', initGoogleOneTap);
+
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', () => {
+
+        // Em WebViews (AppCreator24, etc.), o Google bloqueia One Tap e popups.
+        // Usa diretamente o redirect OAuth, que abre no navegador externo.
+        if (isWebView()) {
+            googleOAuthRedirect();
+            return;
+        }
+
+        // SDK do Google não carregou (ex: sem internet, bloqueado por extensão)
+        if (typeof google === 'undefined' || !google.accounts) {
+            googleOAuthRedirect();
+            return;
+        }
+
+        // Navegador normal: tenta exibir o seletor One Tap / FedCM
+        window._googleCredentialReceived = false; // Reseta a flag a cada tentativa
+        google.accounts.id.prompt((notification) => {
+            console.log('[OneTap] Notification type:', notification.getMomentType(),
+                '| notDisplayed:', notification.isNotDisplayed(),
+                '| skipped:', notification.isSkippedMoment(),
+                '| dismissed:', notification.isDismissedMoment());
+
+            if (notification.isNotDisplayed()) {
+                // One Tap genuinamente não pôde exibir (bloqueado por extensão, etc.)
+                console.log('[OneTap] Não exibido — usando OAuth redirect.');
+                googleOAuthRedirect();
+                return;
+            }
+
+            if (notification.isSkippedMoment()) {
+                // ATENÇÃO: Em modo FedCM (Chrome 131+), isSkippedMoment() dispara
+                // ANTES do credential callback, enquanto o card nativo ainda está
+                // aberto. Chamar googleOAuthRedirect() aqui conflitaria com o FedCM.
+                // Aguardamos 600ms: se o credential callback disparar nesse intervalo,
+                // _googleCredentialReceived=true e o redirect é cancelado.
+                console.log('[OneTap] Skipped — aguardando credential callback (FedCM race)...');
+                setTimeout(() => {
+                    if (!window._googleCredentialReceived) {
+                        console.log('[OneTap] Nenhum credential recebido — usando OAuth redirect.');
+                        googleOAuthRedirect();
+                    } else {
+                        console.log('[OneTap] Credential já recebido — redirect cancelado.');
+                    }
+                }, 600);
+                return;
+            }
+            // isDismissedMoment com 'credential_returned' = FedCM entregou o token.
+            // O handleGoogleOneTapCredential já foi chamado, nada a fazer aqui.
+        });
+    });
+}
+
+// =======================================================================
+// OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO
+// =======================================================================
+window.authCheckComplete = false;
+
+async function checkAuthStatus() {
+    try {
+        // 1. TENTA AUTH VIA GLOBAL DB (ZERO EGRESS)
+        // NOTA: GlobalDB.getAuth() já retorna session diretamente (sem wrapper .value)
+        const cachedAuth = await GlobalDB.getAuth();
+        if (cachedAuth && cachedAuth.user) {
+             console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
+             currentPlayerId = cachedAuth.user.id;
+             updateAuthProviderFlag(cachedAuth);
+             window.authCheckComplete = true;
+
+             // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
+             await fetchAndDisplayPlayerInfo(false);
+             
+             if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+             handleUrlActions();
+             return;
+        }
+
+        // 2. Fallback: getSession() do Supabase (lê do LocalStorage ou Rede)
+        // ⚠️ CORREÇÃO: destructuring seguro — evita TypeError se 'data' for null
+        //    (ocorre quando o storage foi limpo e o Supabase não consegue inicializar)
+        const authResult = await supabaseClient.auth.getSession();
+        const session = authResult?.data?.session ?? null;
+
+        if (session) {
+            currentPlayerId = session.user.id;
+            updateAuthProviderFlag(session);
+            window.authCheckComplete = true;
+            
+            // Salva no Global DB para a próxima vez ser Zero Egress
+            await GlobalDB.setAuth(session);
+            
+            // Busca dados (FALSE para respeitar cache)
+            fetchAndDisplayPlayerInfo(false); 
+            
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+            handleUrlActions();
+        } else {
+            // Sem sessão, mostra tela de login
+            updateUIVisibility(false);
+            window.authCheckComplete = true;
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        }
+    } catch (err) {
+        // Captura qualquer erro inesperado (ex: storage corrompido, Supabase SDK lançando)
+        console.error('❌ [Auth] Erro em checkAuthStatus:', err);
+        updateUIVisibility(false);
+    } finally {
+        // ✅ GARANTIA ABSOLUTA: authCheckComplete SEMPRE é setado e a loading screen fecha
+        //    independente de qualquer erro ou caminho de código acima.
+        if (!window.authCheckComplete) {
+            window.authCheckComplete = true;
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        }
+    }
+}
+
+// 1. Tenta renderizar IMEDIATAMENTE usando o GlobalDB (Zero Network)
+document.addEventListener("DOMContentLoaded", async () => {
+    // Tenta renderizar algo na tela antes mesmo de checar auth
+    const cachedPlayer = await GlobalDB.getPlayer();
+    
+    if (cachedPlayer) {
+        console.log("⚡ [Init] Interface carregada via GlobalDB (Sem consumo de Auth)");
+        currentPlayerData = cachedPlayer;
+        currentPlayerId = cachedPlayer.id;
+        renderPlayerUI(cachedPlayer);
+        checkProgressionNotifications(cachedPlayer);
+        
+        // Se já temos os dados, avisamos imediatamente
+        window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
+        window.initialLoadDone = true; // Marca que o carregamento ocorreu
+    }
+
+    // 2. Inicia verificação de Auth
+    checkAuthStatus();
+});
+
+// Escuta mudanças de autenticação (login, logout, renovação de token)
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        // SEMPRE salva a sessão no GlobalDB — independente de initialLoadDone.
+        // Sem isso, o login via Google OAuth nunca persiste no IndexedDB:
+        // a página carrega com dados antigos do cache (initialLoadDone=true),
+        // e o evento SIGNED_IN chegaria tarde, mas o return antecipado impedia
+        // de salvar a nova sessão → usuário fica deslogado ao reabrir o app.
+        await GlobalDB.setAuth(session);
+        updateAuthProviderFlag(session);
+
+        if (event === 'SIGNED_IN') {
+            // Login real. Garante carregamento mesmo quando initialLoadDone=true
+            // por cache de sessão anterior (ex.: sessão expirou, usuário logou de novo).
+            const onLoginScreen = authContainer && authContainer.style.display !== 'none';
+            if (onLoginScreen || !currentPlayerData) {
+                window.initialLoadDone = false;
+                fetchAndDisplayPlayerInfo(true);
+            }
+        } else if (event === 'INITIAL_SESSION') {
+            // Restauração de sessão na inicialização: respeita o cache se já carregou.
+            if (!window.initialLoadDone && !currentPlayerData) {
+                fetchAndDisplayPlayerInfo(false);
+            }
+        }
+    } else if (event === 'TOKEN_REFRESHED' && session) {
+        // O Supabase renova o access token periodicamente (~1h).
+        // Salva o token renovado no IndexedDB para persistir entre sessões.
+        // Sem isso, o IndexedDB ficaria com um token expirado após algumas horas.
+        await GlobalDB.setAuth(session);
+        updateAuthProviderFlag(session);
+    } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('player_data_cache');
+        await GlobalDB.clearAuth();
+        window.location.reload();
+    }
+});
+
+
+
+// --- Modal de avatar / conta (abre pelo avatar, nome ou botão de config) ---
+function openPlayerInfoModal() {
+    const modal = document.getElementById('playerInfoModal');
+    const modalContent = document.getElementById('modalPlayerInfoContent');
+    if (!modal || !modalContent || !playerInfoDiv) return;
+
+    modalContent.innerHTML = playerInfoDiv.innerHTML;
+    modal.style.display = 'flex';
+    const modalEditProfileBtn = modal.querySelector('#editProfileBtn');
+    if (modalEditProfileBtn) {
+        modalEditProfileBtn.onclick = () => {
+            modal.style.display = 'none';
+            document.getElementById('editProfileIcon').click();
+        };
+    }
+    const modalSignOutBtn = modal.querySelector('#signOutBtn');
+    if (modalSignOutBtn) {
+        modalSignOutBtn.onclick = () => {
+            modal.style.display = 'none';
+            signOut();
+        };
+    }
+    const modalChangePasswordBtn = modal.querySelector('#changePasswordBtn');
+    if (modalChangePasswordBtn) {
+        modalChangePasswordBtn.onclick = () => {
+            modal.style.display = 'none';
+            openChangePasswordModal();
+        };
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const avatar = document.getElementById('playerAvatar');
+    const nameText = document.getElementById('playerNameText');
+    const configBtn = document.getElementById('topBarConfigBtn');
+    const modal = document.getElementById('playerInfoModal');
+    const closeBtn = document.getElementById('closePlayerInfoBtn');
+
+    if (avatar) avatar.addEventListener('click', openPlayerInfoModal);
+    if (nameText) nameText.addEventListener('click', openPlayerInfoModal);
+    if (configBtn) configBtn.addEventListener('click', openPlayerInfoModal);
+
+    if (modal && closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+    }
+});
+
+// --- Modal de Preferências de Notificações Push (menu Opções > Notificações) ---
+async function openNotifPrefsModal() {
+    const modal = document.getElementById('notifPrefsModal');
+    const msgEl = document.getElementById('notifPrefsMsg');
+    if (!modal) return;
+
+    // Fecha o submenu de opções, se estiver aberto
+    const maisSubmenu = document.getElementById('maisSubmenu');
+    if (maisSubmenu) maisSubmenu.style.display = 'none';
+
+    modal.style.display = 'flex';
+    if (msgEl) { msgEl.style.color = '#aaa'; msgEl.textContent = 'Carregando...'; }
+
+    const checkboxes = modal.querySelectorAll('.notif-pref-checkbox');
+    checkboxes.forEach(cb => { cb.disabled = true; });
+
+    try {
+        const { data, error } = await supabaseClient.rpc('get_notification_preferences');
+        if (error || !data || data.success === false) {
+            throw new Error((data && data.error) || (error && error.message) || 'Erro ao carregar preferências');
+        }
+        checkboxes.forEach(cb => {
+            const key = cb.dataset.pref;
+            cb.checked = data[key] !== false; // default: marcado (recebendo)
+            cb.disabled = false;
+        });
+        if (msgEl) msgEl.textContent = '';
+    } catch (err) {
+        console.error('Erro ao carregar preferências de notificação:', err);
+        // Fallback: mantém tudo marcado por padrão, mas libera a interação
+        checkboxes.forEach(cb => { cb.checked = true; cb.disabled = false; });
+        if (msgEl) { msgEl.style.color = '#e55'; msgEl.textContent = 'Não foi possível carregar suas preferências salvas.'; }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('notifPrefsModal');
+    const closeBtn = document.getElementById('closeNotifPrefsBtn');
+    const msgEl = document.getElementById('notifPrefsMsg');
+    if (!modal) return;
+
+    closeBtn && closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    modal.querySelectorAll('.notif-pref-checkbox').forEach(cb => {
+        cb.addEventListener('change', async () => {
+            const key = cb.dataset.pref;
+            const enabled = cb.checked;
+            cb.disabled = true;
+            if (msgEl) { msgEl.style.color = '#aaa'; msgEl.textContent = 'Salvando...'; }
+            try {
+                const { data, error } = await supabaseClient.rpc('set_notification_preference', {
+                    p_key: key,
+                    p_enabled: enabled
+                });
+                if (error || !data || data.success === false) {
+                    throw new Error((data && data.error) || (error && error.message) || 'Erro ao salvar');
+                }
+                if (msgEl) { msgEl.style.color = '#7dc97d'; msgEl.textContent = '✅ Preferência salva.'; }
+            } catch (err) {
+                console.error('Erro ao salvar preferência de notificação:', err);
+                cb.checked = !enabled; // reverte visualmente
+                if (msgEl) { msgEl.style.color = '#e55'; msgEl.textContent = 'Não foi possível salvar. Tente novamente.'; }
+            } finally {
+                cb.disabled = false;
+            }
+        });
+    });
+});
+
+
+function openChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (!modal) return;
+    // Segurança extra: contas 100% Google não têm senha para trocar.
+    // O botão já fica oculto em renderPlayerUI, isso é só um cinto de segurança.
+    if (window.hasPasswordIdentity === false) {
+        showFloatingMessage('Sua conta usa login com Google e não possui senha para alterar.');
+        return;
+    }
+    const curEl = document.getElementById('cpwCurrentPwd');
+    const p1El  = document.getElementById('cpwNewPwd');
+    const p2El  = document.getElementById('cpwConfirmPwd');
+    const msgEl = document.getElementById('cpwMessage');
+    if (curEl) curEl.value = '';
+    if (p1El)  p1El.value  = '';
+    if (p2El)  p2El.value  = '';
+    if (msgEl) { msgEl.textContent = ''; }
+    modal.style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const cpwModal       = document.getElementById('changePasswordModal');
+    const cpwCloseBtn     = document.getElementById('closeChangePasswordModalBtn');
+    const cpwConfirmBtn   = document.getElementById('cpwConfirmBtn');
+    const cpwCurrentPwd   = document.getElementById('cpwCurrentPwd');
+    const cpwNewPwd       = document.getElementById('cpwNewPwd');
+    const cpwConfirmPwd   = document.getElementById('cpwConfirmPwd');
+    const cpwMessage      = document.getElementById('cpwMessage');
+
+    if (!cpwModal) return;
+
+    const closeCpwModal = () => { cpwModal.style.display = 'none'; };
+
+    if (cpwCloseBtn) cpwCloseBtn.addEventListener('click', closeCpwModal);
+    cpwModal.addEventListener('click', (e) => {
+        if (e.target === cpwModal) closeCpwModal();
+    });
+
+    if (cpwConfirmBtn) {
+        cpwConfirmBtn.addEventListener('click', async () => {
+            const curPwd = cpwCurrentPwd ? cpwCurrentPwd.value : '';
+            const p1 = cpwNewPwd ? cpwNewPwd.value : '';
+            const p2 = cpwConfirmPwd ? cpwConfirmPwd.value : '';
+
+            if (cpwMessage) { cpwMessage.style.color = '#ff9999'; cpwMessage.textContent = ''; }
+
+            if (!curPwd) {
+                if (cpwMessage) cpwMessage.textContent = 'Informe sua senha atual.';
+                return;
+            }
+            if (!p1 || p1.length < 6) {
+                if (cpwMessage) cpwMessage.textContent = 'A nova senha deve ter pelo menos 6 caracteres.';
+                return;
+            }
+            if (p1 !== p2) {
+                if (cpwMessage) cpwMessage.textContent = 'As senhas não coincidem.';
+                return;
+            }
+
+            cpwConfirmBtn.disabled = true;
+            if (cpwMessage) { cpwMessage.style.color = '#aaa'; cpwMessage.textContent = 'Verificando senha atual...'; }
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                const email = session && session.user ? session.user.email : null;
+                if (!email) throw new Error('Não foi possível identificar sua conta. Faça login novamente.');
+
+                // Reautentica com a senha atual antes de trocar, por segurança
+                const { error: reauthError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: curPwd
+                });
+                if (reauthError) {
+                    if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = 'Senha atual incorreta.'; }
+                    cpwConfirmBtn.disabled = false;
+                    return;
+                }
+
+                if (cpwMessage) { cpwMessage.style.color = '#aaa'; cpwMessage.textContent = 'Salvando nova senha...'; }
+
+                const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+                if (error) {
+                    if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = translateSupabaseError(error.message); }
+                    cpwConfirmBtn.disabled = false;
+                    return;
+                }
+
+                if (cpwMessage) { cpwMessage.style.color = '#7dc97d'; cpwMessage.textContent = '✅ Senha alterada com sucesso!'; }
+                setTimeout(closeCpwModal, 1500);
+            } catch (err) {
+                console.error('Erro ao alterar senha:', err);
+                if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = err.message || 'Ocorreu um erro ao alterar a senha.'; }
+            } finally {
+                cpwConfirmBtn.disabled = false;
+            }
+        });
+    }
+});
+document.getElementById('editProfileIcon').onclick = () => {
+    profileEditModal.style.display = 'flex';
+};
+const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
+if (closeProfileModalBtn) {
+    closeProfileModalBtn.onclick = () => {
+        profileEditModal.style.display = 'none';
+    };
+}
+
+// === MENU LATERAL (LOSANGOS) ===
+document.addEventListener("DOMContentLoaded", () => {
+  
+  // Carrega as definições de itens ao iniciar a página (agora usa cache).
+  loadItemDefinitions();
+    
+  const missionsBtn = document.getElementById("missionsBtn");
+  const missionsSub = document.getElementById("missionsSubmenu");
+  const moreBtn = document.getElementById("moreBtn");
+  const moreSub = document.getElementById("moreSubmenu");
+
+  function toggleSubmenu(btn, submenu) {
+    const isVisible = submenu.style.display === "flex";
+    document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    if (!isVisible) {
+      submenu.style.display = "flex";
+      submenu.style.top = (btn.offsetTop + (btn.offsetHeight / 2)) + "px";
+    }
+  }
+
+  missionsBtn.addEventListener("click", () => toggleSubmenu(missionsBtn, missionsSub));
+  moreBtn.addEventListener("click", () => toggleSubmenu(moreBtn, moreSub));
+
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#sideMenu")) {
+      document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    }
+  });
+
+  const modal = document.getElementById("genericModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalMessage = document.getElementById("modalMessage");
+  const closeModal = document.getElementById("closeGenericModal");
+
+  const modalMessages = {
+    titulosModal: "Títulos em breve!",
+    // "progressaoModal" removido daqui
+    comercioModal: "Comércio em breve!",
+    rankingModal: "Ranking em breve!",
+    petsModal: "Pets em breve!"
+  };
+
+  document.querySelectorAll("#sideMenu .menu-item[data-modal]").forEach(item => {
+    item.addEventListener("click", () => {
+      const key = item.getAttribute("data-modal");
+
+      if (key === "espiralModal") {
+        openSpiralModal();
+        return;
+      }
+      
+      // NOVA LÓGICA PARA PROGRESSÃO
+      if (key === "progressaoModal") {
+        openProgressionModal();
+        return;
+      }
+      
+      if (key === "lojaModal") {
+        openShopModal();
+        return;
+      }
+      
+      if (key === "bolsaModal") {
+        window.location.href = "inventory.html";
+        return;
+      }
+      if (key === "pvModal") {
+        document.getElementById('pvModal').style.display = "flex";
+        return;
+      }
+
+      if (modalMessages[key]) {
+        modalTitle.textContent = item.querySelector("span").textContent;
+        modalMessage.textContent = modalMessages[key];
+        modal.style.display = "flex";
+      }
+    });
+  });
+
+  closeModal.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+  
+  // Listener para fechar o novo modal de progressão
+  const closeProgressionBtn = document.getElementById('closeProgressionModalBtn');
+  if (closeProgressionBtn) {
+      closeProgressionBtn.addEventListener('click', closeProgressionModal);
+  }
+
+  // ===============================================
+  // === INÍCIO - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+  const recursosBtn = document.getElementById('recursosBtn');
+  const pvpBtnFooter = document.getElementById('pvpBtnFooter');
+  const maisBtnFooter = document.getElementById('maisBtnFooter');
+
+  const recursosSubmenu = document.getElementById('recursosSubmenu');
+  const pvpSubmenu = document.getElementById('pvpSubmenu');
+  const maisSubmenu = document.getElementById('maisSubmenu');
+
+  const allSubmenus = [recursosSubmenu, pvpSubmenu, maisSubmenu];
+
+  function closeAllFooterSubmenus() {
+      allSubmenus.forEach(submenu => {
+          if (submenu) submenu.style.display = 'none';
+      });
+  }
+
+  function toggleFooterSubmenu(submenu, button) {
+      if (!submenu || !button) return;
+      
+      const isVisible = submenu.style.display === 'flex';
+      closeAllFooterSubmenus();
+
+      if (!isVisible) {
+          submenu.style.display = 'flex';
+          
+          // Posiciona o submenu acima do botão
+          const btnRect = button.getBoundingClientRect();
+          const footerRect = document.getElementById('footerMenu').getBoundingClientRect();
+          submenu.style.bottom = (window.innerHeight - footerRect.top) + 5 + 'px'; // 5px de espaço
+
+          // Centraliza o submenu horizontalmente com o botão
+          const submenuRect = submenu.getBoundingClientRect();
+          let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+
+          // Ajusta se sair da tela
+          if (newLeft < 5) { newLeft = 5; }
+          if ((newLeft + submenuRect.width) > (window.innerWidth - 5)) { 
+              newLeft = (window.innerWidth - submenuRect.width - 5);
+          }
+          
+          submenu.style.left = newLeft + 'px';
+      }
+  }
+
+  if (recursosBtn) {
+      recursosBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Impede que o 'document' click feche imediatamente
+          toggleFooterSubmenu(recursosSubmenu, recursosBtn);
+      });
+  }
+  if (pvpBtnFooter) {
+      pvpBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(pvpSubmenu, pvpBtnFooter);
+      });
+  }
+  if (maisBtnFooter) {
+      maisBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(maisSubmenu, maisBtnFooter);
+      });
+  }
+
+  // Fecha submenus ao clicar em qualquer outro lugar
+  // Adiciona ao listener 'click' principal do 'document' que já existe para o sideMenu
+  const originalDocClickListener = document.onclick;
+  document.addEventListener('click', (e) => {
+      // Chama o listener original se existir
+      if (typeof originalDocClickListener === 'function') {
+          originalDocClickListener(e);
+      }
+
+      // Lógica para fechar os submenus do footer
+      if (!e.target.closest('.footer-submenu') && !e.target.closest('.footer-btn')) {
+          closeAllFooterSubmenus();
+      }
+  });
+  // ===============================================
+  // === FIM - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+
+});
+
+
+// ===============================================
+// === PACOTE INICIAL DE BOAS-VINDAS (NOVO)   ===
+// ===============================================
+
+/**
+ * Itens do pacote inicial — usado apenas para exibir no modal.
+ * A entrega real é feita pelo RPC no servidor.
+ */
+const STARTER_PACK_ITEMS = [
+    { id: 1,  qty: 1, name: 'Espada de Ferro',           img: 'https://aden-rpg.pages.dev/assets/itens/espada_de_ferro.webp' },
+    { id: 85, qty: 5, name: 'Escudo de Caça',            img: 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp' },
+    { id: 99, qty: 5, name: 'Ampulheta de Caça',         img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp' },
+    { id: 41, qty: 5, name: 'Cartão de Espiral Comum',   img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' },
+    { id: 128, qty: 1, name: 'Moldura da Raposa',   img: 'https://aden-rpg.pages.dev/assets/itens/moldura_da_raposa.webp' },
+];
+
+/**
+ * Verifica se o jogador é novo (nível 1, nunca recebeu o pacote)
+ * e, se sim, chama o RPC e exibe o modal de boas-vindas.
+ * Zero egress após a primeira execução.
+ * Chave localStorage é por ID de jogador — evita colisão entre contas no mesmo browser.
+ */
+async function checkAndGiveStarterPack(player) {
+    if (!player || !player.id) return;
+    const PACK_KEY = 'aden_starter_pack_given_' + player.id;
+
+    // Guard dupla client-side: se já tiver a flag, não faz nada
+    if (localStorage.getItem(PACK_KEY)) return;
+
+    // Verifica client-side se o pack já foi marcado no progression_state (sem query extra)
+    if (player?.progression_state?.starter === true) {
+        localStorage.setItem(PACK_KEY, '1');
+        return;
+    }
+
+    // Só entrega para nível 1 — após levelar up a flag já terá sido setada
+    if (player.level !== 1) {
+        localStorage.setItem(PACK_KEY, '1');
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient.rpc('give_starter_pack');
+
+        if (error) {
+            console.warn('⚠️ [StarterPack] Erro na RPC:', error.message);
+            return;
+        }
+
+        // Pack já foi dado (ex: localStorage foi limpo mas server tem a flag)
+        if (data?.already_given || !data?.success) {
+            localStorage.setItem(PACK_KEY, '1');
+            return;
+        }
+
+        // ✅ Sucesso: marca localmente e atualiza cache
+        localStorage.setItem(PACK_KEY, '1');
+
+        // Atualiza progression_state local para refletir a flag
+        if (currentPlayerData) {
+            currentPlayerData.progression_state = {
+                ...(currentPlayerData.progression_state || {}),
+                starter: true
+            };
+            GlobalDB.updatePlayerPartial({ progression_state: currentPlayerData.progression_state });
+        }
+
+        // Atualiza cache cirúrgico do inventário
+        if (data.inventory_updates && data.new_timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+
+        // Exibe o modal de boas-vindas
+        showStarterPackModal();
+
+    } catch (err) {
+        console.error('❌ [StarterPack] Erro inesperado:', err);
+    }
+}
+
+/**
+ * Exibe o modal de boas-vindas com os itens do pacote inicial.
+ */
+function showStarterPackModal() {
+    // Remove instância anterior se existir
+    const existing = document.getElementById('starterPackModal');
+    if (existing) existing.remove();
+
+    // --- Injeta CSS do modal (apenas uma vez) ---
+    if (!document.getElementById('starter-pack-style')) {
+        const style = document.createElement('style');
+        style.id = 'starter-pack-style';
+        style.innerHTML = `
+            #starterPackModal {
+                position: fixed; inset: 0; z-index: 99997;
+                display: flex; justify-content: center; align-items: center;
+                background: rgba(0,0,0,0.88);
+                backdrop-filter: blur(6px);
+                animation: spFadeIn 0.4s ease;
+            }
+            @keyframes spFadeIn {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+            }
+            @keyframes spSlideUp {
+                from { opacity: 0; transform: translateY(40px) scale(0.95); }
+                to   { opacity: 1; transform: translateY(0)    scale(1);    }
+            }
+            #starterPackModal .sp-box {
+                background: linear-gradient(160deg, #0e0c07 0%, #1a1508 60%, #0e0c07 100%);
+                border: 1px solid #5a4510;
+                border-radius: 16px;
+                padding: 28px 22px 22px;
+                width: 92%; max-width: 370px;
+                text-align: center;
+                box-shadow: 0 0 40px rgba(201,169,74,0.25), 0 0 8px rgba(0,0,0,0.8);
+                animation: spSlideUp 0.45s cubic-bezier(0.22,1,0.36,1);
+            }
+            #starterPackModal .sp-crown {
+                font-size: 2.4em; margin-bottom: 4px;
+            }
+            #starterPackModal .sp-title {
+                font-size: 1.35em; font-weight: bold;
+                color: #e8c96a;
+                text-shadow: 0 0 12px rgba(201,169,74,0.6);
+                margin: 0 0 4px;
+            }
+            #starterPackModal .sp-subtitle {
+                font-size: 0.82em; color: #9a8456;
+                margin: 0 0 18px;
+                line-height: 1.4;
+            }
+            #starterPackModal .sp-divider {
+                border: none; border-top: 1px solid #3a2e10;
+                margin: 0 0 18px;
+            }
+            #starterPackModal .sp-pack-label {
+                font-size: 0.78em; text-transform: uppercase;
+                letter-spacing: 2px; color: #c9a94a;
+                margin-bottom: 14px;
+            }
+            #starterPackModal .sp-items {
+                display: grid; grid-template-columns: repeat(4, 1fr);
+                gap: 10px; margin-bottom: 20px;
+            }
+            #starterPackModal .sp-item {
+                background: rgba(255,255,255,0.04);
+                border: 1px solid #3a2e10;
+                border-radius: 10px; padding: 8px 4px;
+                display: flex; flex-direction: column;
+                align-items: center; gap: 6px;
+                transition: border-color 0.2s;
+            }
+            #starterPackModal .sp-item:hover { border-color: #c9a94a; }
+            #starterPackModal .sp-item img {
+                width: 44px; height: 44px;
+                object-fit: contain;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+            }
+            #starterPackModal .sp-item .sp-qty {
+                font-size: 0.78em; color: #c9a94a; font-weight: bold;
+            }
+            #starterPackModal .sp-item .sp-name {
+                font-size: 0.6em; color: #888;
+                line-height: 1.2; text-align: center;
+            }
+            #starterPackModal .sp-bag-hint {
+                font-size: 0.78em; color: #6a5c38;
+                margin-bottom: 18px;
+            }
+            #starterPackModal .sp-bag-hint strong { color: #c9a94a; }
+            #starterPackModal .sp-btn {
+                width: 100%; padding: 13px;
+                background: linear-gradient(180deg, #d4b050 0%, #8a6f22 100%);
+                color: #0e0c07; font-weight: bold;
+                font-size: 0.95em; letter-spacing: 1px;
+                border: none; border-radius: 10px; cursor: pointer;
+                box-shadow: 0 4px 12px rgba(201,169,74,0.35);
+                text-transform: uppercase;
+                transition: filter 0.15s;
+            }
+            #starterPackModal .sp-btn:hover { filter: brightness(1.1); }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // --- Monta o HTML do modal ---
+    const modal = document.createElement('div');
+    modal.id = 'starterPackModal';
+
+    const itemsHTML = STARTER_PACK_ITEMS.map(item => `
+        <div class="sp-item">
+            <img src="${item.img}" alt="${item.name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+            <span class="sp-qty">x${item.qty}</span>
+            <span class="sp-name">${item.name}</span>
+        </div>
+    `).join('');
+
+    modal.innerHTML = `
+        <div class="sp-box">
+            <div class="sp-crown">⚔️</div>
+            <h2 class="sp-title">Bem-vindo a Aden!</h2>
+            <p class="sp-subtitle">
+                Sua jornada começa agora, aventureiro.<br>
+                Preparamos um pacote especial para você.
+            </p>
+            <hr class="sp-divider">
+            <p class="sp-pack-label">🎁 Pacote Inicial</p>
+            <div class="sp-items">${itemsHTML}</div>
+            <p class="sp-bag-hint">Os itens foram enviados para a sua <strong>Bolsa</strong>.</p>
+            <button class="sp-btn" id="spCloseBtn">Começar a Jogar</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Fecha ao clicar no botão
+    modal.querySelector('#spCloseBtn').addEventListener('click', () => {
+        modal.style.opacity = '0';
+        modal.style.transition = 'opacity 0.3s';
+        setTimeout(() => modal.remove(), 300);
+    });
+
+    // Fecha ao clicar fora
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.3s';
+            setTimeout(() => modal.remove(), 300);
+        }
+    });
+}
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE PROGRESSÃO (NOVO) ===
+// ===============================================
+
+/**
+ * Verifica se há missões de progressão resgatáveis (APENAS Level e AFK).
+ * Isso é rápido e pode ser chamado após o login.
+ */
+function checkProgressionNotifications(player) {
+    if (!player) return;
+
+    const missionsDot = document.getElementById('missionsNotificationDot');
+    const progressionDot = document.getElementById('progressionNotificationDot');
+    if (!missionsDot || !progressionDot) return;
+
+    let hasClaimable = false;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    // 1. Checar Nível
+    const levelIndex = state.level || 0;
+    if (levelIndex < mission_definitions.level.length) {
+        const currentMission = mission_definitions.level[levelIndex];
+        if (player.level >= currentMission.req) {
+            hasClaimable = true;
+        }
+    }
+
+    // 2. Checar AFK (só checa se ainda não achou resgatável)
+    if (!hasClaimable) {
+        const afkIndex = state.afk || 0;
+        if (afkIndex < mission_definitions.afk.length) {
+            const currentMission = mission_definitions.afk[afkIndex];
+            if (player.current_afk_stage >= currentMission.req) {
+                hasClaimable = true;
+            }
+        }
+    }
+    
+    // 3. Checar Misc (só checa se ainda não achou resgatável)
+    // Vamos checar apenas os que não exigem busca no inventário (Misc 2 e 3)
+     if (!hasClaimable) {
+        const miscIndex = state.misc || 0;
+        if (miscIndex === 1) { // Missão "Dispute uma mina"
+             if (player.last_attack_time) {
+                hasClaimable = true;
+             }
+        } else if (miscIndex === 2) { // Missão "Compre um ataque na Raid"
+            if (player.raid_attacks_bought_count > 0) {
+                hasClaimable = true;
+            }
+        }
+    }
+
+
+    missionsDot.style.display = hasClaimable ? 'block' : 'none';
+    progressionDot.style.display = hasClaimable ? 'block' : 'none';
+}
+
+/**
+ * Abre o modal de progressão e chama a renderização
+ */
+function openProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderProgressionModal();
+    }
+}
+
+/**
+ * Fecha o modal de progressão
+ */
+function closeProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    closeMissionDetailPopover();
+}
+
+/**
+ * ══════════════════════════════════════════════════════════════════
+ * Renderização do modal de Progressão — versão "cards de conquista"
+ * Mostra TODAS as missões de cada categoria (não só a atual), separadas
+ * visualmente em "Concluídas" e "Pendentes/Bloqueadas", com clique para
+ * abrir um card flutuante com a descrição completa. A lógica de resgate
+ * (handleProgressionClaim / checkMiscRequirement / RPC) não foi alterada.
+ * ══════════════════════════════════════════════════════════════════
+ */
+
+// Cache em memória dos dados de cada missão renderizada, usado pelo popover
+// de detalhes ao clicar em um card (evita reprocessar/reconsultar nada).
+let __progressionMissionCache = {};
+
+const PROG_CATEGORY_META = {
+    level: {
+        title: 'Progresso de Nível',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>'
+    },
+    afk: {
+        title: 'Progresso de Aventura (AFK)',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M3 20l6-14 4 9 3-6 5 11"/></svg>'
+    },
+    misc: {
+        title: 'Missões Diversas',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z"/></svg>'
+    }
+};
+
+/**
+ * Retorna {current, required} para a barra de progresso de uma missão,
+ * ou null quando a categoria não tem um valor numérico comparável (misc).
+ */
+function getMissionProgressInfo(categoryKey, mission, player) {
+    if (categoryKey === 'level') {
+        return { current: player.level || 0, required: mission.req };
+    }
+    if (categoryKey === 'afk') {
+        return { current: player.current_afk_stage || 0, required: mission.req };
+    }
+    return null;
+}
+
+function buildMissionRewardLabel(mission) {
+    if (mission.crystals !== undefined) return `x${mission.qty}`;
+    if (mission.gold !== undefined) return `x${mission.qty}`;
+    return `x${mission.qty}`;
+}
+
+/**
+ * Monta o HTML de um card de missão (usado tanto para a missão ativa quanto
+ * para as futuras/bloqueadas). completed=true gera o mini-badge da tira de
+ * concluídas em vez de um card grande.
+ */
+function renderMissionCardHTML(categoryKey, idx, mission, status, progressInfo, canClaim) {
+    const key = `${categoryKey}-${idx}`;
+    const rewardLabel = buildMissionRewardLabel(mission);
+
+    let progressHTML = '';
+    if (progressInfo && (status === 'active' || status === 'locked')) {
+        const pct = Math.max(0, Math.min(100, Math.round((progressInfo.current / progressInfo.required) * 100)));
+        progressHTML = `
+            <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${pct}%;"></div></div>
+            <span class="mission-card-progress-text">${Math.min(progressInfo.current, progressInfo.required)} / ${progressInfo.required}</span>
+        `;
+    }
+
+    let statusIconHTML = '';
+    let actionsHTML = '';
+    if (status === 'active') {
+        statusIconHTML = canClaim
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+        actionsHTML = `
+            <div class="mission-actions">
+                <button class="claim-btn" data-category="${categoryKey}" ${canClaim ? '' : 'disabled'}>
+                    Resgatar
+                </button>
+            </div>
+        `;
+    } else if (status === 'locked') {
+        statusIconHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+    }
+
+    return `
+        <div class="mission-card status-${status}${status === 'active' && canClaim ? ' claimable' : ''}" data-mission-key="${key}">
+            <div class="mission-reward">
+                <img src="${mission.img}" alt="Recompensa">
+                <span>${rewardLabel}</span>
+            </div>
+            <div class="mission-details">
+                <p>${mission.desc}</p>
+                ${progressHTML}
+            </div>
+            ${status === 'locked' ? `<div class="mission-status-icon">${statusIconHTML}</div>` : ''}
+            ${actionsHTML}
+        </div>
+    `;
+}
+
+function renderMiniBadgeHTML(categoryKey, idx, mission) {
+    const key = `${categoryKey}-${idx}`;
+    return `
+        <div class="mini-badge" data-mission-key="${key}" title="${mission.desc}">
+            <img src="${mission.img}" alt="Recompensa">
+            <span class="mini-badge-check">✓</span>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza um bloco completo de categoria (título, contador, tira de
+ * concluídas e trilha de pendentes/bloqueadas) e devolve o elemento pronto.
+ */
+async function renderProgressionCategoryBlock(categoryKey, player, state) {
+    const defs = mission_definitions[categoryKey];
+    const stateIndex = state[categoryKey] || 0;
+    const meta = PROG_CATEGORY_META[categoryKey];
+
+    const block = document.createElement('div');
+    block.className = 'prog-category-block';
+
+    const completedCount = Math.min(stateIndex, defs.length);
+    block.innerHTML = `
+        <div class="prog-category-header">
+            <div class="prog-category-icon">${meta.icon}</div>
+            <div class="prog-category-title">${meta.title}</div>
+            <div class="prog-count-badge">${completedCount}/${defs.length}</div>
+        </div>
+    `;
+
+    // --- Concluídas (tira de mini-badges) ---
+    if (completedCount > 0) {
+        const completedLabel = document.createElement('div');
+        completedLabel.className = 'prog-subsection-label completed-label';
+        completedLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Concluídas`;
+        block.appendChild(completedLabel);
+
+        const strip = document.createElement('div');
+        strip.className = 'prog-completed-strip';
+        let stripHTML = '';
+        for (let i = 0; i < completedCount; i++) {
+            const mission = defs[i];
+            __progressionMissionCache[`${categoryKey}-${i}`] = { categoryKey, idx: i, mission, status: 'completed', progressInfo: null, canClaim: false };
+            stripHTML += renderMiniBadgeHTML(categoryKey, i, mission);
+        }
+        strip.innerHTML = stripHTML;
+        block.appendChild(strip);
+    }
+
+    // --- Pendentes / Bloqueadas (trilha de cards) ---
+    if (stateIndex >= defs.length) {
+        const doneMsg = document.createElement('p');
+        doneMsg.className = 'mission-complete-message';
+        doneMsg.textContent = 'Missões dessa categoria completas!';
+        block.appendChild(doneMsg);
+    } else {
+        const pendingLabel = document.createElement('div');
+        pendingLabel.className = 'prog-subsection-label pending-label';
+        pendingLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Próximas Missões`;
+        block.appendChild(pendingLabel);
+
+        const track = document.createElement('div');
+        track.className = 'prog-pending-track';
+        let trackHTML = '';
+
+        for (let i = stateIndex; i < defs.length; i++) {
+            const mission = defs[i];
+            const status = (i === stateIndex) ? 'active' : 'locked';
+            const progressInfo = getMissionProgressInfo(categoryKey, mission, player);
+
+            let canClaim = false;
+            if (status === 'active') {
+                if (categoryKey === 'level') {
+                    canClaim = player.level >= mission.req;
+                } else if (categoryKey === 'afk') {
+                    canClaim = player.current_afk_stage >= mission.req;
+                } else if (categoryKey === 'misc') {
+                    // Verificação assíncrona apenas para a missão atual (igual ao comportamento original)
+                    canClaim = await checkMiscRequirement(i, player);
+                }
+            }
+
+            __progressionMissionCache[`${categoryKey}-${i}`] = { categoryKey, idx: i, mission, status, progressInfo, canClaim };
+            trackHTML += renderMissionCardHTML(categoryKey, i, mission, status, progressInfo, canClaim);
+        }
+
+        track.innerHTML = trackHTML;
+        block.appendChild(track);
+    }
+
+    return block;
+}
+
+/**
+ * Renderiza o conteúdo do modal de progressão
+ */
+async function renderProgressionModal() {
+    const container = document.getElementById('progressionListContainer');
+    if (!container) return;
+
+    if (!currentPlayerData) {
+        container.innerHTML = '<p>Erro ao carregar dados do jogador. Tente novamente.</p>';
+        return;
+    }
+
+    container.innerHTML = ''; // Limpa o conteúdo
+    __progressionMissionCache = {};
+    const player = currentPlayerData;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    const levelBlock = await renderProgressionCategoryBlock('level', player, state);
+    container.appendChild(levelBlock);
+
+    const afkBlock = await renderProgressionCategoryBlock('afk', player, state);
+    container.appendChild(afkBlock);
+
+    const miscBlock = await renderProgressionCategoryBlock('misc', player, state);
+    container.appendChild(miscBlock);
+
+    // Adiciona listeners aos botões de resgate
+    container.querySelectorAll('.claim-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evita abrir o popover de detalhes ao clicar em Resgatar
+            handleProgressionClaim(e);
+        });
+    });
+
+    // Clique em qualquer card ou mini-badge abre o balão de detalhes completos
+    container.querySelectorAll('.mission-card, .mini-badge').forEach(el => {
+        el.addEventListener('click', () => {
+            const key = el.getAttribute('data-mission-key');
+            const data = __progressionMissionCache[key];
+            if (data) openMissionDetailPopover(data);
+        });
+    });
+}
+
+/**
+ * Abre um card flutuante com a descrição completa da missão, recompensa e
+ * status (concluída / disponível / em progresso / bloqueada).
+ */
+function openMissionDetailPopover(data) {
+    closeMissionDetailPopover(); // Garante que só exista um popover por vez
+
+    const { mission, status, progressInfo } = data;
+
+    const statusLabels = {
+        completed: 'Concluída',
+        active: 'Disponível',
+        locked: 'Bloqueada'
+    };
+    let statusLabel = statusLabels[status] || '';
+    if (status === 'active' && progressInfo && progressInfo.current < progressInfo.required) {
+        statusLabel = 'Em Progresso';
+    }
+
+    let progressHTML = '';
+    if (progressInfo) {
+        const pct = Math.max(0, Math.min(100, Math.round((progressInfo.current / progressInfo.required) * 100)));
+        progressHTML = `
+            <p class="mission-popover-progress-text">Progresso: ${Math.min(progressInfo.current, progressInfo.required)} / ${progressInfo.required}</p>
+            <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${pct}%;"></div></div>
+        `;
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'mission-popover-backdrop';
+    backdrop.id = 'missionDetailPopoverBackdrop';
+    backdrop.innerHTML = `
+        <div class="mission-popover">
+            <div class="mission-popover-close" id="missionDetailPopoverClose">&times;</div>
+            <img class="mission-popover-reward" src="${mission.img}" alt="Recompensa">
+            <div class="mission-popover-qty">${buildMissionRewardLabel(mission)}</div>
+            <span class="mission-popover-status ${status}">${statusLabel}</span>
+            <p class="mission-popover-desc">${mission.desc}</p>
+            ${progressHTML}
+        </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const close = () => closeMissionDetailPopover();
+    backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) close();
+    });
+    document.getElementById('missionDetailPopoverClose').addEventListener('click', close);
+}
+
+function closeMissionDetailPopover() {
+    const existing = document.getElementById('missionDetailPopoverBackdrop');
+    if (existing) existing.remove();
+}
+
+/**
+ * Verifica o requisito para a missão "misc" atual.
+ */
+async function checkMiscRequirement(missionIndex, player) {
+    if (missionIndex === 0) {
+        // "Construa ou adquira um novo equipamento na bolsa."
+        try {
+            // Tenta usar RPC (se você a criou)
+             const { data, error: rpcError } = await supabaseClient
+                .rpc('count_player_equipment', { p_player_id: player.id });
+
+            if (rpcError) {
+                 // Fallback para a query com JOIN (mais lenta)
+                 console.warn("RPC count_player_equipment não encontrada, usando query com join.");
+                 const { count: inventoryCount, error: inventoryError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                
+                if(inventoryError) throw inventoryError;
+                return (inventoryCount || 0) > 0;
+            }
+            
+            return (data || 0) > 0;
+
+        } catch (err) {
+            console.error("Erro ao checar inventário para missão misc 0:", err);
+            // Fallback 2 (caso a primeira query falhe por algum motivo)
+             try {
+                const { count: finalCount, error: finalError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                if (finalError) return false;
+                return (finalCount || 0) > 0;
+             } catch(e) { return false; }
+        }
+    } else if (missionIndex === 1) {
+        // "Dispute uma mina de cristal."
+        return !!player.last_attack_time; // Retorna true se last_attack_time não for null/undefined
+    } else if (missionIndex === 2) {
+        // "Compre um ataque na Raid de guilda."
+        return (player.raid_attacks_bought_count || 0) > 0; //
+    }
+    return false;
+}
+
+/**
+ * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE E EVITAR EGRESS)
+ */
+async function handleProgressionClaim(event) {
+    const button = event.target;
+    const category = button.dataset.category;
+    if (!category) return;
+
+    button.disabled = true;
+    button.textContent = "Aguarde...";
+
+    try {
+        const { data, error } = await supabaseClient.rpc('claim_progression_reward', {
+            p_category: category
+        });
+
+        if (error) throw new Error(error.message);
+
+        showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
+
+        // 1. Atualiza Status Locais (Ouro/Cristais)
+        const updates = {};
+        if (data.crystals_added) updates.crystals = (currentPlayerData.crystals || 0) + data.crystals_added;
+        if (data.gold_added) updates.gold = (currentPlayerData.gold || 0) + data.gold_added;
+        
+        // 2. Atualiza o Estado da Progressão Local
+        if (data.new_index !== undefined) {
+             const newState = { ...(currentPlayerData.progression_state || { level: 0, afk: 0, misc: 0 }) };
+             newState[category] = data.new_index;
+             updates.progression_state = newState;
+        }
+
+        updateLocalPlayerData(updates);
+
+        // 3. Atualiza Cirurgicamente o Inventário (Se ganhou item)
+        if (data.inventory_updates && data.new_timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+
+        // 4. Re-renderiza o modal e checa notificações (Sem baixar nada do server)
+        checkProgressionNotifications(currentPlayerData);
+        await renderProgressionModal();
+
+    } catch (error) {
+        console.error(`Erro ao resgatar recompensa [${category}]:`, error);
+        showFloatingMessage(`Erro: ${error.message.replace('Error: ', '')}`);
+        // Re-habilita o botão em caso de erro
+        button.disabled = false;
+        button.textContent = "Resgatar";
+    }
+}
+
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE ESPIRAL (Gacha) ===
+// ===============================================
+
+const spiralModal = document.getElementById('spiralModal');
+const commonSpiralTab = document.querySelector('.tab-btn[data-tab="common"]');
+const advancedSpiralTab = document.querySelector('.tab-btn[data-tab="advanced"]');
+const commonSpiralContent = document.getElementById('common-spiral');
+const advancedSpiralContent = document.getElementById('advanced-spiral');
+const commonCardCountSpan = document.getElementById('commonCardCount');
+const advancedCardCountSpan = document.getElementById('advancedCardCount');
+const buyCommonCardBtn = document.getElementById('buyCommonCardBtn');
+const drawCommonBtn = document.getElementById('drawCommonBtn');
+const drawAdvancedBtn = document.getElementById('drawAdvancedBtn');
+
+const buyCardsModal = document.getElementById('buyCardsModal');
+const decreaseCardQtyBtn = document.getElementById('decreaseCardQtyBtn');
+const increaseCardQtyBtn = document.getElementById('increaseCardQtyBtn');
+const cardQtyToBuySpan = document.getElementById('cardQtyToBuy');
+const totalCrystalCostSpan = document.getElementById('totalCrystalCost');
+const confirmPurchaseBtn = document.getElementById('confirmPurchaseBtn');
+const buyCardsMessage = document.getElementById('buyCardsMessage');
+
+const drawConfirmModal = document.getElementById('drawConfirmModal');
+const drawQuantityInput = document.getElementById('drawQuantityInput');
+const confirmDrawBtn = document.getElementById('confirmDrawBtn');
+const drawConfirmMessage = document.getElementById('drawConfirmMessage');
+let currentDrawType = 'common';
+
+const drawResultsModal = document.getElementById('drawResultsModal');
+const drawResultsGrid = document.getElementById('drawResultsGrid');
+
+/**
+ * === GACHA OTIMIZADO (Prioridade Cache Local) ===
+ * Tenta ler os cartões (IDs 41 e 42) do IndexedDB (aden_inventory_db).
+ * Só vai ao servidor se o cache estiver vazio ou inacessível.
+ */
+async function loadSpiralCardsLocalFirst() {
+    let common = 0;
+    let advanced = 0;
+    let foundInCache = false;
+
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+
+        const allItems = await new Promise((resolve) => {
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        });
+
+        // Filtra cartões na memória
+        allItems.forEach(item => {
+            // Verifica estrutura direta ou aninhada (compatibilidade)
+            const itemId = item.item_id || (item.items ? item.items.item_id : 0);
+            
+            if (itemId === 41) { // Cartão Comum
+                common += (item.quantity || 0);
+                foundInCache = true;
+            }
+            if (itemId === 42) { // Cartão Avançado
+                advanced += (item.quantity || 0);
+                foundInCache = true;
+            }
+        });
+
+        // Atualiza UI com dados do cache
+        if (commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
+        if (advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
+
+        console.log(`🃏 [Gacha] Cartões carregados do cache: Comum=${common}, Adv=${advanced}`);
+
+    } catch (e) {
+        console.warn("⚠️ Falha ao ler cache de cartões:", e);
+    }
+
+    // === FALLBACK ===
+    // Se não achou NADA no cache (e sabemos que o usuário pode ter cartões mas nunca abriu o inventário),
+    // ou se quisermos garantir sincronia forçada em algum momento, chamamos o server.
+    // Mas para priorizar performance, só chamamos se 'foundInCache' for false e o usuário estiver logado.
+    
+    if (!foundInCache) {
+        fetchSpiralCardsFromServerFallback(); 
+    }
+}
+
+// Fallback que vai ao servidor (Egress)
+async function fetchSpiralCardsFromServerFallback() {
+    // Usa currentPlayerId global para evitar chamada de Auth
+    if (!currentPlayerId) return; 
+
+    console.log("🌐 [Gacha] Cache vazio/falho. Buscando cartões no servidor...");
+    
+    const { data: serverItems, error } = await supabaseClient
+        .from('inventory_items')
+        .select('quantity, item_id') // Select mínimo
+        .eq('player_id', currentPlayerId)
+        .in('item_id', [41, 42]);
+
+    if (!error && serverItems) {
+        let common = 0, advanced = 0;
+        serverItems.forEach(i => {
+            if (i.item_id === 41) common += i.quantity;
+            if (i.item_id === 42) advanced += i.quantity;
+        });
+        if (commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
+        if (advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
+        
+        // Opcional: Salvar isso no cache agora para a próxima vez
+        // surgicalCacheUpdate(...)
+    }
+}
+
+function openSpiralModal() {
+    // Chama a função otimizada
+    loadSpiralCardsLocalFirst();
+    spiralModal.style.display = 'flex';
+}
+
+commonSpiralTab.addEventListener('click', () => {
+    commonSpiralTab.classList.add('active');
+    advancedSpiralTab.classList.remove('active');
+    commonSpiralContent.style.display = 'block';
+    advancedSpiralContent.style.display = 'none';
+});
+
+advancedSpiralTab.addEventListener('click', () => {
+    advancedSpiralTab.classList.add('active');
+    commonSpiralTab.classList.remove('active');
+    advancedSpiralContent.style.display = 'block';
+    commonSpiralContent.style.display = 'none';
+});
+
+document.querySelector('.close-spiral-modal').addEventListener('click', () => spiralModal.style.display = 'none');
+document.getElementById('closeBuyCardsModalBtn').addEventListener('click', () => buyCardsModal.style.display = 'none');
+document.getElementById('closeDrawConfirmModalBtn').addEventListener('click', () => drawConfirmModal.style.display = 'none');
+document.getElementById('closeDrawResultsModalBtn').addEventListener('click', () => drawResultsModal.style.display = 'none');
+
+buyCommonCardBtn.addEventListener('click', () => {
+    cardQtyToBuySpan.textContent = '1';
+    totalCrystalCostSpan.textContent = '350';
+    buyCardsMessage.textContent = '';
+    buyCardsModal.style.display = 'flex';
+});
+
+increaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent) + 1;
+    cardQtyToBuySpan.textContent = qty;
+    totalCrystalCostSpan.textContent = qty * 350;
+});
+
+decreaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent);
+    if (qty > 1) {
+        qty--;
+        cardQtyToBuySpan.textContent = qty;
+        totalCrystalCostSpan.textContent = qty * 350;
+    }
+});
+
+// MODIFICADO PARA ATUALIZAR O CACHE VIA SYNC
+confirmPurchaseBtn.addEventListener('click', async () => {
+    const quantity = parseInt(cardQtyToBuySpan.textContent);
+    confirmPurchaseBtn.disabled = true;
+    buyCardsMessage.textContent = 'Processando...';
+
+    try {
+        const { data, error } = await supabaseClient.rpc('buy_spiral_cards', { purchase_quantity: quantity });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        buyCardsMessage.textContent = data.message;
+        
+        // 1. Atualiza Cristais na UI e Cache Local (Sem refresh)
+        updateLocalPlayerData({ crystals: data.new_crystals });
+        
+        // 2. Atualiza Cartões no Cache e UI (Via Surgical Update)
+        // O surgicalCacheUpdate atualiza o IndexedDB e a UI se programado para isso
+        if (data.inventory_updates && data.timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
+            
+            // Atualiza visualmente o contador de cartões no modal aberto
+            const cardItem = data.inventory_updates.find(i => i.item_id === 41);
+            if (cardItem && commonCardCountSpan) {
+                commonCardCountSpan.textContent = `x ${cardItem.quantity}`;
+            }
+        }
+
+        setTimeout(() => {
+            buyCardsModal.style.display = 'none';
+            confirmPurchaseBtn.disabled = false;
+        }, 1000);
+
+    } catch (err) {
+        buyCardsMessage.textContent = `Erro: ${err.message}`;
+        confirmPurchaseBtn.disabled = false;
+    }
+});
+
+function openDrawConfirmModal(type) {
+    currentDrawType = type;
+    drawQuantityInput.value = 1;
+    drawConfirmMessage.textContent = '';
+    drawConfirmModal.style.display = 'flex';
+}
+
+drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
+drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
+
+// MODIFICADO PARA GARANTIR SYNC APÓS SORTEIO
+confirmDrawBtn.addEventListener('click', async () => {
+    const quantity = parseInt(drawQuantityInput.value);
+    if (isNaN(quantity) || quantity <= 0) return;
+
+    confirmDrawBtn.disabled = true;
+    drawConfirmMessage.textContent = 'Sorteando...';
+
+    try {
+        const { data, error } = await supabaseClient.rpc('perform_spiral_draw', {
+            draw_type: currentDrawType,
+            p_quantity: quantity
+        });
+
+        if (error) throw error;
+
+        // Fecha modal de confirmação APENAS se deu sucesso
+        drawConfirmModal.style.display = 'none';
+        
+        // 1. Mostra resultados VISUAIS usando dados parciais + Definições Locais
+        displayDrawResults(data.visual_rewards);
+
+        // 2. Atualiza Cache em Background (Sem travar a UI)
+        if (data.inventory_updates && data.timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
+            
+            // Atualiza contador de cartões na UI imediatamente
+            const cardIdToCheck = currentDrawType === 'common' ? 41 : 42;
+            const cardItem = data.inventory_updates.find(i => i.item_id === cardIdToCheck);
+            const targetSpan = currentDrawType === 'common' ? commonCardCountSpan : advancedCardCountSpan;
+            
+            if (targetSpan) {
+                targetSpan.textContent = `x ${cardItem ? cardItem.quantity : 0}`;
+            }
+        }
+
+    } catch (err) {
+        drawConfirmMessage.textContent = `Erro: ${err.message}`;
+    } finally {
+        confirmDrawBtn.disabled = false;
+    }
+});
+
+// === Animação de revelação do gacha (apenas apresentação visual) ===
+// Mostra um overlay com um "núcleo" girando/brilhando por um curto período
+// antes de revelar a grade de resultados já montada. Não altera nenhuma
+// lógica de sorteio/inventário — só atrasa visualmente a exibição.
+function playGachaRevealAnimation(onDone) {
+    const overlay = document.createElement('div');
+    overlay.className = 'gacha-reveal-overlay';
+    overlay.innerHTML = `
+        <div class="gacha-reveal-core-wrap">
+            <div class="gacha-reveal-ring r1"></div>
+            <div class="gacha-reveal-ring r2"></div>
+            <div class="gacha-reveal-ring r3"></div>
+            <div class="gacha-reveal-core"></div>
+            <div class="gacha-reveal-burst"></div>
+            <span class="gacha-reveal-label">Sorteando...</span>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Pequeno "flash" de explosão de luz pouco antes de revelar
+    setTimeout(() => overlay.classList.add('burst'), 3500);
+
+    setTimeout(() => {
+        overlay.remove();
+        if (typeof onDone === 'function') onDone();
+    }, 4000);
+}
+
+function displayDrawResults(itemsMap) {
+    drawResultsGrid.innerHTML = '';
+
+    const hasItems = itemsMap && Object.keys(itemsMap).length > 0;
+
+    const renderGrid = () => {
+        if (!hasItems) {
+            drawResultsGrid.innerHTML = '<p>Nenhum item.</p>';
+            drawResultsModal.style.display = 'flex';
+            return;
+        }
+
+        // Itera sobre o mapa simples ID -> Qtd
+        let cardIndex = 0;
+        for (const [itemIdStr, qty] of Object.entries(itemsMap)) {
+            const itemId = parseInt(itemIdStr, 10);
+
+            // 1. Busca definição no CACHE LOCAL (Sem ir ao servidor)
+            // Se itemDefinitions ainda não carregou, tenta recarregar (fallback seguro)
+            let itemDef = itemDefinitions.get(itemId);
+
+            // Se não achou, define placeholders seguros
+            const name = itemDef ? itemDef.name : `Item #${itemId}`;
+
+            // URL da imagem
+            let imgUrl;
+            if (itemDef) {
+                 imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
+            } else {
+                 // Fallback para imagem desconhecida ou placeholder
+                 console.warn(`Definição de item ${itemId} não encontrada no cache local.`);
+                 imgUrl = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
+            }
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'result-item';
+            // Adiciona classe de raridade se disponível para efeito visual extra
+            if (itemDef && itemDef.rarity) itemDiv.classList.add(`rarity-${itemDef.rarity.toLowerCase()}`);
+            // Atraso escalonado por card para a animação de revelação em cascata
+            itemDiv.style.setProperty('--reveal-delay', `${Math.min(cardIndex * 0.08, 1.2)}s`);
+
+            itemDiv.innerHTML = `
+                <img src="${imgUrl}" alt="${name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+                <span>x${qty}</span>
+            `;
+            drawResultsGrid.appendChild(itemDiv);
+            cardIndex++;
+        }
+
+        drawResultsModal.style.display = 'flex';
+    };
+
+    // Roda a animação de sorteio primeiro, depois revela os itens já com a
+    // grade montada (cascata de entrada controlada via --reveal-delay).
+    playGachaRevealAnimation(renderGrid);
+}
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE LOJA (Shop)      ===
+// ===============================================
+
+function openShopModal() {
+    shopMessage.textContent = '';
+    shopModal.style.display = 'flex';
+}
+
+if (closeShopModalBtn) {
+    closeShopModalBtn.addEventListener('click', () => {
+        shopModal.style.display = 'none';
+    });
+}
+
+// Lógica para alternar entre as abas da loja
+const shopTabs = document.querySelectorAll('.shop-tab-btn');
+const shopContents = document.querySelectorAll('.shop-content');
+
+shopTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        shopTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const targetContentId = tab.getAttribute('data-tab');
+        shopContents.forEach(content => {
+            if (content.id === targetContentId) {
+                content.style.display = 'block';
+            } else {
+                content.style.display = 'none';
+            }
+        });
+    });
+});
+
+// Lógica para os botões de compra com modal de confirmação
+const buyButtons = document.querySelectorAll('.shop-buy-btn');
+let purchaseHandler = null; // Variável para armanezar a função de compra
+
+buyButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const packageId = button.getAttribute('data-package');
+        const itemName = button.getAttribute('data-name');
+        const itemCost = button.getAttribute('data-cost'); // Deve ser string de número
+
+        // Prepara a mensagem do modal
+        confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
+        
+        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE E EVITAR EGRESS)
+        purchaseHandler = async () => {
+            purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
+            button.disabled = true;
+            shopMessage.textContent = ''; // Limpa mensagem antiga do modal
+            showFloatingMessage('Processando sua compra...');
+
+            try {
+                // A RPC agora retorna JSONB com os dados
+                const { data, error } = await supabaseClient.rpc('buy_shop_item', {
+                    package_id: packageId
+                });
+                if (error) throw error;
+
+                showFloatingMessage(data.message);
+                
+                // 1. Atualiza SALDO localmente sem refresh completo
+                if (data.new_gold !== undefined) {
+                    updateLocalPlayerData({ gold: data.new_gold });
+                }
+
+                // 2. Atualiza Cirurgicamente o Inventário
+                if (data.inventory_updates && data.new_timestamp) {
+                    await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+                }
+
+            } catch (error) {
+                showFloatingMessage(`Erro: ${error.message}`);
+            } finally {
+                button.disabled = false;
+            }
+        };
+
+        // Mostra o modal de confirmação
+        purchaseConfirmModal.style.display = 'flex';
+    });
+});
+
+// Listener para o botão de confirmação final
+confirmPurchaseFinalBtn.addEventListener('click', () => {
+    if (purchaseHandler) {
+        purchaseHandler();
+    }
+});
+
+// Listener para o botão de cancelar
+cancelPurchaseBtn.addEventListener('click', () => {
+    purchaseConfirmModal.style.display = 'none';
+    purchaseHandler = null; // Limpa o handler
+});
+
+// =======================================================================
+// === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
+// =======================================================================
+
+async function checkRewardLimit() {
+    try {
+        let logData = null;
+
+        // 1. Tenta usar os dados já carregados na memória (ZERO EGRESS - Ideal)
+        if (currentPlayerData && currentPlayerData.daily_rewards_log) {
+            logData = currentPlayerData.daily_rewards_log;
+        } else {
+            // 2. Fallback: Tenta pegar do GlobalDB (IndexedDB)
+            // Alterado para evitar GET direto na tabela players e economizar egress
+            const cachedPlayer = await GlobalDB.getPlayer();
+            if (cachedPlayer && cachedPlayer.daily_rewards_log) {
+                 logData = cachedPlayer.daily_rewards_log;
+            } else {
+                 // Se não tiver no DB Global, tenta LocalStorage Legacy
+                 try {
+                     const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
+                     if (legacyCache && legacyCache.data && legacyCache.data.daily_rewards_log) {
+                        logData = legacyCache.data.daily_rewards_log;
+                     }
+                 } catch(e) {}
+            }
+            // Se ainda assim não achar, não faz requisição de rede para isso.
+            // O fetchAndDisplayPlayerInfo principal cuidará de buscar e atualizar a UI depois.
+        }
+
+        const log = logData || {}; 
+        const counts = (log && log.counts) ? log.counts : {};
+        const logDateStr = log && log.date ? String(log.date) : null;
+
+        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+
+        // Helpers visuais
+        const enableBtn = (btn) => {
+            btn.disabled = false;
+            btn.style.filter = "";
+            btn.style.pointerEvents = "";
+            if (btn.getAttribute('data-original-text')) {
+                btn.textContent = btn.getAttribute('data-original-text');
+            } else {
+                btn.setAttribute('data-original-text', btn.textContent);
+            }
+        };
+
+        const disableBtn = (btn) => {
+             btn.disabled = true;
+             btn.style.filter = "grayscale(100%) brightness(60%)";
+             btn.style.pointerEvents = "none";
+             btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
+             btn.textContent = "Limite atingido";
+        };
+
+        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
+            watchVideoButtons.forEach(btn => enableBtn(btn));
+            return;
+        }
+
+        watchVideoButtons.forEach(btn => {
+            const type = btn.getAttribute('data-reward');
+            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
+            if (isNaN(count) || count < 5) {
+                enableBtn(btn);
+            } else {
+                disableBtn(btn);
+            }
+        });
+    } catch (e) {
+        console.error("Erro ao verificar limites de vídeo:", e);
+    }
+}
+
+const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+
+watchVideoButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+        const rewardType = button.getAttribute('data-reward');
+        button.disabled = true;
+        showFloatingMessage('Preparando sua recompensa...');
+
+        try {
+            const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
+                p_reward_type: rewardType
+            });
+
+            if (rpcError) {
+                if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
+                    showFloatingMessage('Você já atingiu o limite diário para esta recompensa.');
+                    checkRewardLimit();
+                } else {
+                    showFloatingMessage(`Erro: ${rpcError.message}`);
+                }
+                button.disabled = false;
+                return;
+            }
+
+            localStorage.setItem('pending_reward_token', token); //
+
+            const triggerId = `trigger-${rewardType}-ad`;
+            const triggerLink = document.getElementById(triggerId);
+
+            if (triggerLink) {
+                triggerLink.click();
+            } else {
+                throw new Error(`Gatilho para recompensa '${rewardType}' não encontrado.`);
+            }
+
+        } catch (error) {
+            showFloatingMessage(`Erro: ${error.message}`);
+            localStorage.removeItem('pending_reward_token'); //
+        } finally {
+            setTimeout(() => { button.disabled = false; }, 3000);
+        }
+    });
+});
+
+setTimeout(() => {
+    checkRewardLimit();
+}, 600);
+
+
+/* === MAP INTERACTION: DRAG + INÉRCIA + PINCH-TO-ZOOM === */
+// Cria a interação do mapa (arrastar com mouse/touch) com inércia e pinch-to-zoom. Não altera nenhuma outra lógica.
+function enableMapInteraction() {
+    const map = document.getElementById('mapImage');
+    if (!map) return;
+
+    // Guarda contra dupla inicialização
+    if (map._interactionEnabled) return;
+    map._interactionEnabled = true;
+
+    // ── Estado de posição e escala ──────────────────────────────────────────
+    let currentX = 0, currentY = 0;
+    let currentScale = 1;
+    let MIN_SCALE = 0.45; // recalculado dinamicamente para preencher a tela
+    const MAX_SCALE = 2.0;  // limite máximo de zoom-in
+
+    // ── Inércia ─────────────────────────────────────────────────────────────
+    let velocityX = 0, velocityY = 0;
+    let lastDragTime = 0, lastDragX = 0, lastDragY = 0;
+    let animationFrameId = null;
+    const FRICTION = 0.98;
+
+    // ── Drag ────────────────────────────────────────────────────────────────
+    let isDragging = false;
+    let startX = 0, startY = 0;
+
+    // ── Pinch ───────────────────────────────────────────────────────────────
+    let isPinching = false;
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let pinchFocalX = 0, pinchFocalY = 0;
+    let pinchStartTx = 0, pinchStartTy = 0;
+
+    // ── Limites dinâmicos (recalculados a cada mudança de escala) ───────────
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+    function recalcLimits() {
+        const container = document.getElementById('mapContainer');
+        if (!container) return;
+        const cr = container.getBoundingClientRect();
+        // Mesma lógica do forte.js: minScale = max(largura/mapaW, altura/mapaH)
+        // Garante que o mapa sempre preencha a tela sem deixar fundo preto
+        MIN_SCALE = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1600));
+        const scaledW = (map.offsetWidth  || 1500) * currentScale;
+        const scaledH = (map.offsetHeight || 1600) * currentScale;
+        minX = Math.min(0, cr.width  - scaledW);
+        minY = Math.min(0, cr.height - scaledH);
+        maxX = 0;
+        maxY = 0;
+    }
+
+    recalcLimits();
+    // Inicia com um leve zoom (igual à Floresta Mística), em vez do mínimo absoluto
+    currentScale = Math.min(MIN_SCALE * 1.3, MAX_SCALE);
+    // Centraliza o mapa horizontalmente na escala inicial
+    (function() {
+        const container = document.getElementById('mapContainer');
+        if (container) {
+            const cr = container.getBoundingClientRect();
+            const scaledW = (map.offsetWidth  || 1500) * currentScale;
+            const scaledH = (map.offsetHeight || 1600) * currentScale;
+            currentX = Math.min(0, (cr.width  - scaledW) / 2);
+            currentY = Math.min(0, (cr.height - scaledH) / 2);
+        }
+    })();
+    map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+    recalcLimits();
+    window.addEventListener('resize', recalcLimits);
+
+    map.style.touchAction = 'none';
+    map.style.userSelect  = 'none';
+
+    // ── Aplica transform com recálculo de limites (usado pelo pinch) ────────
+    function applyTransform(x, y, s) {
+        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+        const container = document.getElementById('mapContainer');
+        if (container) {
+            const cr = container.getBoundingClientRect();
+            const sw = (map.offsetWidth  || 1500) * s;
+            const sh = (map.offsetHeight || 1600) * s;
+            x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
+            y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
+        }
+        currentX = x; currentY = y; currentScale = s;
+        map.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+        recalcLimits();
+    }
+
+    // ── Aplica transform leve (usado pelo drag/inércia) ─────────────────────
+    function setTransform(x, y) {
+        x = Math.max(minX, Math.min(maxX, x));
+        y = Math.max(minY, Math.min(maxY, y));
+        currentX = x; currentY = y;
+        map.style.transform = `translate(${x}px, ${y}px) scale(${currentScale})`;
+    }
+
+    // ── Inércia ─────────────────────────────────────────────────────────────
+    function inertiaAnimation() {
+        velocityX *= FRICTION;
+        velocityY *= FRICTION;
+        setTransform(currentX + velocityX, currentY + velocityY);
+        if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            velocityX = 0; velocityY = 0;
+            animationFrameId = null;
+        }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    function getPoint(e) {
+        return e.touches && e.touches.length
+            ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            : { x: e.clientX, y: e.clientY };
+    }
+
+    function touchDist(e) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function touchMid(e) {
+        return {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+    }
+
+    // ── Drag handlers ───────────────────────────────────────────────────────
+    function startDrag(e) {
+        if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+        const p = getPoint(e);
+        isDragging = true;
+        startX = p.x - currentX;
+        startY = p.y - currentY;
+        map.style.cursor = 'grabbing';
+        lastDragX = p.x; lastDragY = p.y;
+        lastDragTime = performance.now();
+    }
+
+    function continueDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const p = getPoint(e);
+        setTransform(p.x - startX, p.y - startY);
+        const now = performance.now();
+        const dt  = now - lastDragTime;
+        if (dt > 0) {
+            velocityX = (p.x - lastDragX) / dt;
+            velocityY = (p.y - lastDragY) / dt;
+        }
+        lastDragX = p.x; lastDragY = p.y;
+        lastDragTime = now;
+    }
+
+    function endDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+        map.style.cursor = 'grab';
+        if (Math.abs(velocityX * 10) > 2 || Math.abs(velocityY * 10) > 2) {
+            velocityX *= 10; velocityY *= 10;
+            inertiaAnimation();
+        } else {
+            velocityX = 0; velocityY = 0;
+        }
+    }
+
+    // ── Touch unificado (drag + pinch) ──────────────────────────────────────
+    function onTouchStart(e) {
+        if (e.touches.length >= 2) {
+            isPinching = true;
+            isDragging  = false;
+            if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+            pinchStartDist  = touchDist(e);
+            pinchStartScale = currentScale;
+            const mid = touchMid(e);
+            const container = document.getElementById('mapContainer');
+            const cr = container ? container.getBoundingClientRect() : { left: 0, top: 0 };
+            pinchFocalX = mid.x - cr.left;
+            pinchFocalY = mid.y - cr.top;
+            pinchStartTx = currentX;
+            pinchStartTy = currentY;
+        } else if (e.touches.length === 1 && !isPinching) {
+            startDrag(e);
+        }
+    }
+
+    function onTouchMove(e) {
+        if (e.touches.length >= 2 && isPinching) {
+            e.preventDefault();
+            const newDist  = touchDist(e);
+            const newScale = pinchStartScale * (newDist / pinchStartDist);
+            // Mantém o ponto focal fixo durante o zoom
+            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
+            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
+            applyTransform(
+                pinchFocalX - mapPointX * newScale,
+                pinchFocalY - mapPointY * newScale,
+                newScale
+            );
+        } else if (e.touches.length === 1 && !isPinching) {
+            continueDrag(e);
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (isPinching && e.touches.length < 2) {
+            isPinching = false;
+            velocityX = 0; velocityY = 0;
+            recalcLimits();
+        }
+        if (e.touches.length === 0) {
+            endDrag();
+        }
+    }
+
+    // ── Mouse (desktop) ─────────────────────────────────────────────────────
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', continueDrag, { passive: false });
+    window.addEventListener('mouseup',   endDrag,      { passive: true });
+
+    // ── Touch (mobile) ──────────────────────────────────────────────────────
+    map.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
+
+    map.style.cursor = 'grab';
+    setTimeout(recalcLimits, 100);
+}
+
+(function() {
+    const originalRenderPlayerUI = window.renderPlayerUI;
+    if (typeof originalRenderPlayerUI === 'function') {
+        window.renderPlayerUI = function(player, preserveActiveContainer) {
+            originalRenderPlayerUI(player, preserveActiveContainer);
+            setTimeout(enableMapInteraction, 150);
+        };
+    } else {
+        window.enableMapInteraction = enableMapInteraction;
+    }
+})();

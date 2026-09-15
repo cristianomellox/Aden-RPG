@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+<meta name="googlebot" content="index, follow">
+    <title>Inventário - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link href="style.css" rel="stylesheet"/>
+    <link href="inventory.css" rel="stylesheet"/>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+      /* ═══ TUTORIAL MODAL (estilo AFK/Minas) ════════════════════════ */
+      #tutorialModal {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.88);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center; justify-content: center;
+        z-index: 10000;
+      }
+      #tutorialModal .tut-content {
+        background: #111;
+        padding: 22px 20px;
+        border: 2px solid #ffd700;
+        border-radius: 12px;
+        width: 90%; max-width: 440px;
+        position: relative !important;
+        box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
+        color: #e0dccc;
+        font-family: 'Cinzel', serif;
+        max-height: 88vh; overflow-y: auto;
+        text-shadow: none;
+        box-sizing: border-box;
+      }
+      #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
+      #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
+      #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+      .tut-title {
+        text-align: center; color: #ffd700; margin: 0 0 6px;
+        font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+        text-shadow: 0 0 12px rgba(255,215,0,0.5); font-family: 'Cinzel', serif;
+      }
+      .tut-subtitle {
+        text-align: center; color: #888; font-size: 0.78em;
+        margin: 0 0 16px; padding-bottom: 12px;
+        border-bottom: 1px solid #333; font-style: italic;
+      }
+      .tut-section {
+        margin-bottom: 14px; padding: 12px 14px;
+        background: rgba(255,255,255,0.03);
+        border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+      }
+      .tut-section-title {
+        margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+        text-transform: uppercase; letter-spacing: 1px;
+        padding-bottom: 6px; border-bottom: 1px solid;
+        font-family: 'Cinzel', serif;
+      }
+      .tut-section p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
+      .tut-section p:last-child { margin-bottom: 0; }
+      .tut-info-box {
+        background: rgba(0,0,0,0.3); border-radius: 6px;
+        padding: 10px 12px; font-size: 0.82em;
+        border: 1px solid rgba(255,255,255,0.08); margin-top: 8px;
+      }
+      .tut-info-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+      .tut-info-box li { color: #ccc; line-height: 1.5; }
+      .tut-subsection-title {
+        color: #ffd700; font-size: 0.8em; font-weight: bold;
+        font-family: 'Cinzel', serif; letter-spacing: 1px;
+        margin: 10px 0 4px; text-transform: uppercase;
+      }
+      .tut-rarity-badge {
+        padding: 2px 8px; border-radius: 4px; font-size: 0.75em;
+        font-weight: bold; font-family: 'Cinzel', serif;
+        letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; border: 1px solid;
+      }
+      .tut-rarity-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+      .tut-rarity-row { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: #ccc; }
+      .tut-confirm-btn {
+        display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+        padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+        background: linear-gradient(135deg, #1a1000, #0d0800);
+        border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+        cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+      }
+      .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+
+      /* Pequenos ajustes úteis para seleção múltipla */
+      #fragmentList, #refineFragmentList {
+        display: grid; 
+        gap: 10px;
+        grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+        max-height: 55vh;
+        overflow: auto;
+        padding: 6px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.25);
+      }
+      #fragmentList li, #refineFragmentList li {
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.2);
+        cursor: pointer;
+        display: flex;
+      }
+      #fragmentList li.selected, #refineFragmentList li.selected {
+        outline: 2px solid #e0dccc;
+        background: rgba(255,255,255,0.08);
+      }
+      .fragment-quantity-input {
+        width: 72px;
+      }
+      .fragspanx.btn, .fragspanx {
+        cursor: pointer;
+      }
+      #selectedFragmentPreview { 
+        display: none;
+        margin: 8px 0 12px 0;
+        padding: 8px;
+        border: 1px dashed rgba(255,255,255,0.2);
+        border-radius: 10px;
+      }
+      .modal-overlay { display:none; }
+
+      #itemDescription {
+          margin-top: 10px;
+          padding: 10px;
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+      }
+      .empty-inventory-message {
+        color: white;
+      }
+      #customAlertModal {
+  z-index: 9999 !important;
+}
+
+.shimmer {
+  position: relative;
+  color: transparent; /* texto oculto até revelar */
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.2) 25%,
+    rgba(255,255,255,0.8) 50%,
+    rgba(255,255,255,0.2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerAnim 1.2s infinite;
+  border-radius: 4px;
+  min-height: 18px; /* altura mínima para a barra branca */
+}
+
+@keyframes shimmerAnim {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+@keyframes zoomInOut {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.zoom-border {
+    border: 3px solid #FFD700 !important; /* Borda amarela */
+    animation: zoomInOut 1.5s infinite; /* Aplica a animação */
+}
+
+#background-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;               /* começa invisível; skin_system.js controla o fade via style inline */
+  background-color: black;  /* elimina placeholder cinza nativo do browser */
+  z-index: -1;
+}
+
+/* ── Efeito sheen/shimmer sobre a moldura do avatar ─────────────────
+   A máscara CSS (mask-image) é definida pelo JS com a mesma URL
+   da moldura ativa. Assim o brilho só aparece sobre os pixels
+   opacos da arte da moldura — jamais sobre o avatar em baixo.       */
+#avatarFrameSheen {
+    position: absolute;
+    top: -5px;        /* igual ao top do #avatarFrameOverlay */
+    left: 0;
+    width: 195px;
+    height: 195px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;    /* mostrado pelo JS quando há moldura ativa */
+    /* mask-image é injetado pelo JS via _applyFrame() */
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
+}
+#avatarFrameSheen::after {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: -130%;
+    width: 55%;
+    height: 140%;
+    background: linear-gradient(
+        108deg,
+        transparent           0%,
+        rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%,
+        rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%,
+        rgba(255,255,255,.04) 72%,
+        transparent           100%
+    );
+    animation: avatar-frame-sheen 6s ease-in-out infinite;
+}
+@keyframes avatar-frame-sheen {
+    0%   { left: -130%; opacity: 0; }
+    2%   { opacity: 1; }
+    98%  { left: 155%; opacity: 1; }
+    99%  { opacity: 0; left: 155%; }
+    100% { left: 155%; opacity: 0; }
+}
+
+/* Listas do gerenciador de skins com scroll independente */
+.skin-manager-section {
+    max-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #7b00d4 transparent;
+}
+.skin-manager-section::-webkit-scrollbar { width: 3px; }
+.skin-manager-section::-webkit-scrollbar-thumb { background: #7b00d4; border-radius: 2px; }
+    </style>
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+        <div><span id="pageTitle">Bolsa</span></div>
+        <img id="openTutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; top: 2px; right: 4px;">
+       
+    
+
+    </div>
+
+    <div id="mainContainer">
+        <div id="equipmentAndAvatarContainer">
+          <video autoplay muted loop playsinline id="background-video">
+    <source src="https://aden-rpg.pages.dev/assets/divbolsa.webm" type="video/webm">
+  </video>
+          <!-- SKIN: Botão de gerenciamento de skins (canto superior esquerdo do vídeo) -->
+          <button id="skinConfigBtn" title="Gerenciar Skins">
+              <img src="https://aden-rpg.pages.dev/assets/config.webp" width="20" height="20" alt="Skins">
+          </button>
+
+            <div class="equipment-column">
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_espada.webp'); background-size: cover;" id="weapon-slot" class="equipment-slot" data-slot="weapon"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_anel.webp'); background-size: cover;" id="ring-slot" class="equipment-slot" data-slot="ring"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_elmo.webp'); background-size: cover;" id="helm-slot" class="equipment-slot" data-slot="helm"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_mais.webp'); background-size: cover;" id="special1-slot" class="equipment-slot" data-slot="special1"></div>
+            </div>
+
+            <!-- SKIN: Wrapper do avatar com suporte à moldura sobreposta -->
+            <div id="playerAvatarEquipContainer">
+                <div id="avatarFrameWrapper">
+                    <img id="playerAvatarEquip" src="caminho/para/avatar_padrao.webp" alt="Avatar do Jogador">
+                    <!-- Moldura da skin (position:absolute, z-index 2, CSS em inventory.css) -->
+                    <img id="avatarFrameOverlay" src="" alt="" style="display:none;">
+                    <!-- Sheen: brilho prateado que varre a moldura (z-index 3) -->
+                    <div id="avatarFrameSheen"></div>
+                </div>
+            </div>
+
+            <div class="equipment-column">
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_colar.webp'); background-size: cover;" id="amulet-slot" class="equipment-slot" data-slot="amulet"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_asa.webp'); background-size: cover;" id="wing-slot" class="equipment-slot" data-slot="wing"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_armadura.webp'); background-size: cover;" id="armor-slot" class="equipment-slot" data-slot="armor"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_mais.webp'); background-size: cover;" id="special2-slot" class="equipment-slot" data-slot="special2"></div>
+            </div>
+        </div>
+        
+        <div id="attributesSection">
+            <div class="attribute-row">
+                <div class="attribute-item">
+                    <span class="attribute-label">ATK</span>
+                    <span id="playerAttack" class="attribute-value">0 - 0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">TAXA CRIT</span>
+                    <span id="playerCritChance" class="attribute-value">0%</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">DANO CRIT</span>
+                    <span id="playerCritDamage" class="attribute-value">0%</span>
+                </div>
+            </div>
+            <div class="attribute-row">
+                <div class="attribute-item">
+                    <span class="attribute-label">HP</span>
+                    <span id="playerHealth" class="attribute-value">0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">DEFESA</span>
+                    <span id="playerDefense" class="attribute-value">0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">EVASÃO</span>
+                    <span id="playerEvasion" class="attribute-value">0%</span>
+                </div>
+            </div>
+            <div class="attribute-row">
+                <div class="attribute-item">
+                    <span class="attribute-label">REDUÇÃO CRIT</span>
+                    <span id="playerCritReduction" class="attribute-value">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="bagSection">
+            <div id="bagTabs">
+                <button class="tab-button active" id="tab-all">Tudo</button>
+                <button class="tab-button" id="tab-equipment">Equips.</button>
+                <button class="tab-button" id="tab-fragments">Frags.</button>
+                <button class="tab-button" id="tab-others">Outros</button>
+            </div>
+            <div id="bagItemsGrid"></div>
+        </div>
+    </div>
+
+    <div id="itemDetailsModal" class="modal-overlay">
+        <div id="itemDetailsContent" class="modal-content">
+            <span id="closeDetailsModal" class="btn">x</span>
+            
+            <div id="itemHeader">
+                <div id="itemImageContainer">
+                    <img id="detailItemImage" src="" alt="Imagem do Item">
+                </div>
+                <div id="itemHeaderText">
+                    <div id="itemStars"></div>
+                    <span id="detailItemRarity"></span>
+                    <h2 id="detailItemName">Nome do Item</h2>
+                </div>
+            </div>
+ <div id="itemDescription"></div>
+            <!-- SKIN: exibição do tempo de expiração (visível apenas para skins) -->
+            <p id="skinExpiryInfo" style="display:none;"></p>
+            <div id="itemInfoSection">
+                <div id="itemLevelPower">
+                    <p id="detailItemLevel">Nv. 1</p>
+                    <div id="equipBtnModal"></div>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div id="levelXpBar" class="progress-bar"></div>
+                    <span id="levelXpText" class="progress-bar-text">0/15</span>
+                </div>
+
+                <div id="itemStats"></div>
+            </div>
+            <div id="itemRefineSection">
+              <div id="itemInfoSection">
+                <h3>Refundição</h3>
+    <div id="refineRow1" class="refine-row">
+        <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon">
+        <p style="font-size: 0.7em;">Refine para 4 estrelas para desbloquear</p>
+    </div>
+    <div id="refineRow2" class="refine-row">
+        <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon">
+        <p>Refine para 5 estrelas para desbloquear</p>
+    </div>
+    </div>
+</div>
+           
+
+            <div id="itemActions">
+                <button id="levelUpBtn" class="action-btn">Evoluir</button>
+                <button id="refineBtn" class="action-btn">Refinar</button>
+                <button id="reforgeItemBtn" class="action-btn">Refundir</button>
+               <button 
+    id="deconstructBtn" 
+    class="action-btn"
+    style="background-color: grey; background-image: none; opacity: 0.8;" onclick="handleDeconstruct(selectedItem.id)"
+>
+    Desconstruir
+</button>
+                <!-- SKIN: botão de ativação (visível apenas para skins) -->
+                <button id="activateSkinBtn" class="action-btn" style="display:none;">Ativar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="craftingModal" class="modal-overlay">
+        <div id="craftingContent" class="modal-content">
+            <span id="closeCraftingModal" class="btn">x</span>
+           
+            <div class="modal-header">
+                <div class="modal-text">
+                    <h2 id="craftingFragmentName">Nome do Fragmento</h2>
+                </div>
+                <img id="craftingFragmentImage" src="" alt="Fragmento" class="item-icon">
+                <p>Necessários:<br> <span id="fragmentsNeeded"></span></p>
+                <span style="display: none" id="craftingFragmentQuantity"></span>
+               <div id="craftingCostContainer" style="margin-top:8px;">
+  <p style="margin:0;">Custo:</p>
+  <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+    <img src="https://aden-rpg.pages.dev/assets/cristais.webp" width="30" height="30"> X <span id="crystalCost" style="font-weight: bold;">0</span>
+  </div>
+</div>
+
+            </div>
+
+            <h2>Resultado</h2>
+            <div id="craftingInfo">
+                <div class="crafting-item-preview">
+                    <img id="craftingTargetImage" src="" alt="Item a Ser Construído" class="item-icon">
+                    <div class="crafting-costs"></div>
+                </div>
+            </div>
+
+            <div id="craftingActions">
+                <button id="craftBtn" class="action-btn">Construir</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fragmentSelectModal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="closeFragmentModal" class="fragspanx">X</span>
+            <h2>Selecione Fragmentos (múltiplos permitidos)</h2>
+
+            <div id="selectedFragmentPreview">
+                <p>Dica: você pode marcar vários fragmentos e definir quantidades diferentes.</p>
+            </div>
+
+            <div id="fragmentList"></div>
+            <button id="confirmFragmentSelection" class="action-btn" style="width:100%;">Usar Fragmentos</button>
+        </div>
+    </div>
+
+    <div id="refineFragmentModal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="closeRefineFragmentModal" class="btn">x</span>
+            <h2>Refinar Item</h2><h3>(múltiplos permitidos)</h3>
+            <p id="refineCostsText" style="margin:10px 0 14px 0; font-weight:bold;"></p>
+            <div id="refineFragmentList"></div>
+            <button id="confirmRefineSelectionRefine" class="action-btn" style="width:100%;">Refinar</button>
+        </div>
+    </div>
+
+    <div id="customAlertModal" class="modal-overlay">
+      <div class="modal-content">
+        <p id="customAlertMessage">Mensagem</p>
+        <button id="customAlertOkBtn" class="action-btn">OK</button>
+      </div>
+    </div>
+
+    <div id="customConfirmModal" class="modal-overlay">
+      <div class="modal-content">
+        <p id="customConfirmMessage">Tem certeza?</p>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="customConfirmNoBtn" class="action-btn">Não</button>
+          <button id="customConfirmYesBtn" class="action-btn">Sim</button>
+        </div>
+      </div>
+    </div>
+    <div id="reforgeModal" class="modal-overlay">
+    <div class="modal-content">
+        <span id="closeReforgeModal" class="btn">x</span>
+        <h2>Refundir Equipamento</h2>
+
+        <div id="reforgeSlotsContainer" class="reforge-slots-container">
+            </div>
+
+        <div id="rolledAttributesContainer">
+            </div>
+
+        <p id="reforgeMessage" style="margin-top: 10px;"></p>
+
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+            <button id="reforgeBtn" class="action-btn">REFUNDIR</button>
+            <button id="applyReforgeBtn" class="action-btn" style="display: none;">Aplicar Atributos</button>
+        </div>
+    </div>
+</div>
+<div id="deconstructConfirmModal" class="modal-overlay">
+  <div class="modal-content">
+    <p style="margin-bottom:10px;">Tem certeza que deseja desconstruir este item? <br>Esta ação é <b>irreversível</b>.</p>
+
+    <div style="margin:10px 0; display:flex; align-items:center; gap:6px;">
+      <img src="https://aden-rpg.pages.dev/assets/cristais.webp" width="35" height="35">
+      <span>X400</span>
+    </div>
+
+    <div id="deconstructFragmentPreview" style="margin:10px 0; display:flex; align-items:center; gap:6px;">
+      <!-- preenchido pelo JS -->
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
+      <button id="deconstructCancelBtn" class="action-btn">Cancelar</button>
+      <button id="deconstructConfirmBtn" class="action-btn" style="background-image: none; background-color: grey; opacity: 0.8;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: GERENCIADOR DE SKINS ════════════════════════════════════ -->
+<div id="skinManagerModal" class="modal-overlay">
+    <div id="skinManagerContent" class="modal-content">
+        <span id="closeSkinManagerModal" class="btn">x</span>
+
+        <h3>✦ Skins ✦</h3>
+        <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 12px;">
+            Gerencie moldura e fundo de forma independente
+        </p>
+
+        <!-- ── Seção: Moldura ──────────────────────────── -->
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 5px; text-transform:uppercase; letter-spacing:1px;">Moldura ativa</p>
+        <div id="skinManagerActiveFrame"></div>
+        <div id="skinManagerFrameDeactivateBtn" style="display:none; text-align:center; margin:6px 0;">
+            <button id="deactivateFrameBtn" class="custom-alert-btn" style="font-size:0.78em; padding:7px 14px;">
+                Remover Moldura
+            </button>
+        </div>
+        <div id="skinManagerFrameList" class="skin-manager-section"></div>
+
+        <hr style="border:none; border-top:1px solid #2a2a2a; margin:12px 0;">
+
+        <!-- ── Seção: Fundo ────────────────────────────── -->
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 5px; text-transform:uppercase; letter-spacing:1px;">Fundo ativo</p>
+        <div id="skinManagerActiveVideo"></div>
+        <div id="skinManagerVideoDeactivateBtn" style="display:none; text-align:center; margin:6px 0;">
+            <button id="deactivateVideoBtn" class="custom-alert-btn" style="font-size:0.78em; padding:7px 14px;">
+                Remover Fundo
+            </button>
+        </div>
+        <div id="skinManagerVideoList" class="skin-manager-section"></div>
+    </div>
+</div>
+
+<script src="loading2.js"></script>
+<script type="module" src="inventory.js"></script>
+    <script src="desconstruir.js"></script>
+    <script src="refundir.js"></script>
+    <!-- SKIN: módulo do sistema de skins (carregado após inventory.js) -->
+    <script type="module" src="skin_system.js"></script>
+
+<div id="tutorialModal">
+    <div class="tut-content" style="position:relative;">
+        <button id="closeTutorialBtn" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:26px;font-weight:bold;color:#888;cursor:pointer;line-height:1;z-index:10;padding:0;"
+            onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
+        <h2 class="tut-title">🎒 Guia da Bolsa</h2>
+        <p class="tut-subtitle">"Gerencie seus equipamentos, evolua seus itens e domine Aden."</p>
+
+        <!-- 1. Visão Geral -->
+        <div class="tut-section">
+            <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">1. Visão Geral</h4>
+            <p>A Bolsa é o centro de gestão do seu personagem. Aqui você equipa itens, consulta atributos e acessa todos os seus materiais.</p>
+            <div class="tut-info-box">
+                <ul>
+                    <li>🗡️ <strong style="color:#ffd700">Itens Equipados</strong> — slots ao redor do avatar; afetam diretamente seu poder</li>
+                    <li>📊 <strong style="color:#ffd700">Atributos</strong> — ATK, HP, Defesa, Crítico e Evasão calculados automaticamente</li>
+                    <li>📦 <strong style="color:#ffd700">Lista de Itens</strong> — use as abas para filtrar por Equips., Fragmentos ou Outros</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 2. Equipar -->
+        <div class="tut-section">
+            <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">2. Equipando Itens</h4>
+            <p>Toque em qualquer item da lista e use o botão <strong style="color:#ffd700">Equipar</strong> para colocá-lo em uso.</p>
+            <div class="tut-info-box">
+                <ul>
+                    <li>🔒 Cada slot aceita <strong style="color:#ffd700">apenas um item</strong> — equipar um novo desequipa o anterior automaticamente</li>
+                    <li>✨ Slots: <strong style="color:#ffd700">Arma, Anel, Elmo, Amuleto, Asa, Armadura</strong> e 2 especiais</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 3. Evoluir & Refinar -->
+        <div class="tut-section">
+            <h4 class="tut-section-title" style="color:#ffd700; border-color:#ffd700;">3. Evoluir &amp; Refinar</h4>
+            <p class="tut-subsection-title">⬆ Evoluir</p>
+            <p>Use <strong style="color:#ffd700">fragmentos</strong> como experiência para aumentar o nível do item e ampliar seus bônus.</p>
+            <p class="tut-subsection-title">⭐ Refinar</p>
+            <p>Aumenta a <strong style="color:#ffd700">raridade (estrelas)</strong> do item. Requer fragmentos da mesma raridade e cristais.</p>
+            <div class="tut-info-box">
+                <div class="tut-rarity-grid">
+                    <div class="tut-rarity-row">
+                        <span class="tut-rarity-badge" style="color:#aaa;border-color:#555;background:rgba(80,80,80,0.3);">R</span>
+                        <span>Raro — custo base de cristais</span>
+                    </div>
+                    <div class="tut-rarity-row">
+                        <span class="tut-rarity-badge" style="color:#60c0ff;border-color:#2a6a9a;background:rgba(30,80,140,0.3);">SR</span>
+                        <span>Super Raro — maior poder e custo</span>
+                    </div>
+                    <div class="tut-rarity-row">
+                        <span class="tut-rarity-badge" style="color:#ffd700;border-color:#a07800;background:rgba(120,80,0,0.3);">SSR</span>
+                        <span>Super Super Raro — potência avassaladora</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Criar & Desconstruir -->
+        <div class="tut-section">
+            <h4 class="tut-section-title" style="color:#ff9800; border-color:#ff9800;">4. Criar &amp; Desconstruir</h4>
+            <p class="tut-subsection-title">🔨 Criar Itens</p>
+            <p>Construa equipamentos com <strong style="color:#ffd700">30 fragmentos</strong> + cristais conforme a raridade:</p>
+            <div class="tut-info-box">
+                <ul>
+                    <li><span class="tut-rarity-badge" style="color:#aaa;border-color:#555;background:rgba(80,80,80,0.3);">R</span> → <strong style="color:#ffd700">100 cristais</strong></li>
+                    <li><span class="tut-rarity-badge" style="color:#60c0ff;border-color:#2a6a9a;background:rgba(30,80,140,0.3);">SR</span> → <strong style="color:#ffd700">300 cristais</strong></li>
+                    <li><span class="tut-rarity-badge" style="color:#ffd700;border-color:#a07800;background:rgba(120,80,0,0.3);">SSR</span> → <strong style="color:#ffd700">600 cristais</strong></li>
+                </ul>
+            </div>
+            <p class="tut-subsection-title" style="margin-top:10px;">💥 Desconstruir</p>
+            <p>Destrói o item e recupera parte dos recursos. Custa <strong style="color:#ff6b6b">400 cristais</strong> — veja a <strong style="color:#ffd700">prévia do retorno</strong> antes de confirmar.</p>
+        </div>
+
+        <!-- 5. Refundição -->
+        <div class="tut-section">
+            <h4 class="tut-section-title" style="color:#c084fc; border-color:#c084fc;">5. Refundição</h4>
+            <p>Rerrola os <strong style="color:#ffd700">atributos aleatórios</strong> de um item para otimizar seu build.</p>
+            <div class="tut-info-box">
+                <ul>
+                    <li>⭐ Requer no mínimo <strong style="color:#ffd700">4 estrelas</strong></li>
+                    <li>🪨 Custo: <strong style="color:#ffd700">5 pedras</strong> (4★) ou <strong style="color:#ffd700">10 pedras</strong> (5★+)</li>
+                    <li>👁️ Os novos atributos são <strong style="color:#ffd700">mostrados antes</strong> de você confirmar a aplicação</li>
+                </ul>
+            </div>
+        </div>
+
+        <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+            <button class="tut-confirm-btn" id="closeTutorialBtn2">ENTENDI</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('tutorialModal');
+        const openBtn = document.getElementById('openTutorialBtn');
+        const closeBtn = document.getElementById('closeTutorialBtn');
+        const closeBtn2 = document.getElementById('closeTutorialBtn2');
+
+        const openModal = () => { modal.style.display = 'flex'; };
+        const closeModal = () => { modal.style.display = 'none'; };
+
+        if (openBtn) openBtn.addEventListener('click', openModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+
+        window.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+    });
+</script>
+
+<div id="banModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); color: white; z-index: 10000; justify-content: center; align-items: center; text-align: center; flex-direction: column;">
+    <div style="background: #2b2b2b; padding: 30px; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 69, 0, 0.8); max-width: 90%; width: 400px; border: 3px solid #ff4500;">
+        <img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;">
+        <h2 style="color: #ff4500; font-size: 1.8em; margin-bottom: 20px;">Você foi banido(a)!</h2>
+        
+        <p style="text-align: left; margin-bottom: 25px;">
+            <strong>Motivo:</strong><br>
+            <span id="banReasonContent" style="color: #ffd700; display: block; margin-top: 5px; padding: 10px; border: 1px dashed #444; white-space: pre-wrap;">[Carregando Motivo...]</span>
+        </p>
+
+        <button id="logoutBanBtn" style="background: linear-gradient(to top, #ff4500, #ff8c00); color: white; padding: 12px 25px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: background 0.2s;">
+            Fechar
+        </button>
+    </div>
+</div>
+
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.2em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${15 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+
+
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script type="module" src="title_notifications.js"></script>
+<script src="tutorial_onboarding.js"></script>
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "inventory.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+
+<style>
+  #issm-overlay {
+    display:none; position:fixed; inset:0; z-index:10010;
+    background:rgba(0,0,0,0.88); backdrop-filter:blur(5px);
+    align-items:center; justify-content:center; padding:16px;
+  }
+  #issm-box {
+    background:linear-gradient(160deg,#1a1208,#0d0903);
+    border:2px solid #c9a94a; border-radius:14px;
+    padding:24px 20px 20px; width:90%; max-width:360px;
+    box-shadow:0 0 40px rgba(201,169,74,.25),0 8px 40px rgba(0,0,0,.9);
+    position:relative; text-align:center; box-sizing:border-box;
+    font-family:'Cinzel',serif;
+  }
+  #issm-sparkle {
+    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    font-size:1.6rem; letter-spacing:4px; filter:drop-shadow(0 0 6px gold);
+    animation:issmFloat 2.4s ease-in-out infinite;
+  }
+  @keyframes issmFloat {
+    0%,100%{transform:translateX(-50%) translateY(0)}
+    50%    {transform:translateX(-50%) translateY(-5px)}
+  }
+  #issm-item-img {
+    width:88px; height:88px; object-fit:contain; border-radius:10px;
+    border:1.5px solid rgba(201,169,74,.45); background:rgba(0,0,0,.35);
+    display:block; margin:0 auto 10px; box-shadow:0 0 18px rgba(201,169,74,.2);
+  }
+  #issm-title {
+    font-size:1.1rem; font-weight:700; letter-spacing:.08em;
+    color:#e8d08a; margin:0 0 6px; text-shadow:0 0 16px rgba(201,169,74,.6);
+  }
+  #issm-msg {
+    font-family:'Crimson Pro',Georgia,serif; font-size:.88rem;
+    line-height:1.55; color:#b8b0a0; margin:0 0 14px; font-style:italic;
+  }
+  .issm-div { height:1px; margin:0 0 14px; background:linear-gradient(to right,transparent,rgba(201,169,74,.5),transparent); }
+  #issm-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .issm-btn {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:5px; padding:10px 6px; border-radius:8px; cursor:pointer;
+    border:1px solid rgba(201,169,74,.25); background:rgba(255,255,255,.04);
+    text-decoration:none; color:#a09080;
+    font-family:'Cinzel',serif; font-size:.52rem; letter-spacing:.04em;
+    transition:border-color .18s,background .18s,color .18s,transform .15s;
+    box-sizing:border-box; width:100%;
+    -webkit-appearance:none; appearance:none; line-height:1;
+  }
+  .issm-btn:hover { border-color:#c9a94a; background:rgba(201,169,74,.12); color:#e8d08a; transform:translateY(-2px); }
+  .issm-btn svg { width:26px; height:26px; flex-shrink:0; }
+  .issm-btn span { display:block; }
+  #issm-close {
+    width:100%; padding:10px; border-radius:7px; cursor:pointer;
+    border:1px solid rgba(201,169,74,.35); background:rgba(255,255,255,.05);
+    color:#a09080; font-family:'Cinzel',serif; font-size:.78rem; letter-spacing:.07em;
+    -webkit-appearance:none; appearance:none; transition:all .18s; box-sizing:border-box;
+  }
+  #issm-close:hover { background:rgba(201,169,74,.10); color:#e8d08a; border-color:#c9a94a; }
+</style>
+
+<div id="issm-overlay">
+  <div id="issm-box">
+    <div id="issm-sparkle">✦ ✦ ✦</div>
+    <!-- SEM src aqui — evita requisição fantasma que prende o spinner do wrapper -->
+    <img id="issm-item-img" crossorigin="anonymous" alt=""
+         onerror="this.onerror=null;this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+    <div id="issm-title"></div>
+    <p id="issm-msg"></p>
+    <div class="issm-div"></div>
+    <div id="issm-grid">
+
+      <a class="issm-btn" id="issm-wa" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.526 5.845L.057 23.57l5.862-1.538A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.796 9.796 0 0 1-5.006-1.372l-.36-.213-3.48.913.929-3.397-.234-.371A9.79 9.79 0 0 1 2.182 12C2.182 6.572 6.572 2.182 12 2.182S21.818 6.572 21.818 12 17.428 21.818 12 21.818z"/></svg>
+        <span>WhatsApp</span>
+      </a>
+
+      <a class="issm-btn" id="issm-tg" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#2CA5E0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/></svg>
+        <span>Telegram</span>
+      </a>
+
+      <a class="issm-btn" id="issm-tw" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#e8e0cc"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        <span>X / Twitter</span>
+      </a>
+
+      <a class="issm-btn" id="issm-fb" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        <span>Facebook</span>
+      </a>
+
+      <a class="issm-btn" id="issm-rd" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#FF4500"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+        <span>Reddit</span>
+      </a>
+
+      <button class="issm-btn" id="issm-ig" type="button">
+        <svg viewBox="0 0 24 24" fill="url(#issmIgG)">
+          <defs>
+            <linearGradient id="issmIgG" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%"   stop-color="#f09433"/><stop offset="25%"  stop-color="#e6683c"/>
+              <stop offset="50%"  stop-color="#dc2743"/><stop offset="75%"  stop-color="#cc2366"/>
+              <stop offset="100%" stop-color="#bc1888"/>
+            </linearGradient>
+          </defs>
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
+        </svg>
+        <span>Instagram</span>
+      </button>
+
+    </div>
+    <button id="issm-close" type="button">Fechar</button>
+  </div>
+</div>
+
+<script>
+/**
+ * Monta a URL de compartilhamento que aponta para a Pages Function
+ * /compartilhar com os parâmetros do item.
+ * Bots de redes sociais vão ler os OG meta tags dinâmicos dessa URL.
+ * Humanos que clicarem no link são redirecionados para /download.
+ */
+function buildShareUrl(action, ctx, lang) {
+    var BASE = 'https://aden-rpg.pages.dev';
+
+    // Extrai o número de estrelas diretamente da URL da imagem do item
+    // Ex: ".../Espada_5estrelas.webp" → "5"
+    var m = (ctx.itemImageUrl || '').match(/_(\d+)estrelas\.webp$/i);
+    var imgEstrelas = m ? m[1] : (ctx.stars ? String(ctx.stars) : '1');
+
+    var params = new URLSearchParams({
+        acao:     action,
+        nome:     ctx.itemImageName  || '',   // nome interno → caminho da imagem
+        display:  ctx.itemName       || '',   // nome de exibição → textos dos meta tags
+        estrelas: imgEstrelas
+    });
+
+    if (action === 'level'  && ctx.level)  params.set('nivel', ctx.level);
+    if (action === 'refine' && ctx.stars)  params.set('estrelas', String(ctx.stars));
+    if (lang && lang !== 'pt')             params.set('lang', lang);
+
+    return BASE + '/compartilhar?' + params.toString();
+}
+
+function showItemActionSuccess(action, ctx) {
+    var DL = 'https://aden-rpg.pages.dev/download';
+    var lang = (typeof window.getCurrentLangFromCookie === 'function') ? window.getCurrentLangFromCookie() : 'pt';
+    var title, text, sparkle;
+
+    if (action === 'craft') {
+        title = 'Item Criado!'; sparkle = '✦ ✦ ✦';
+        text = 'Eu acabei de criar ' + ctx.itemName + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+    } else if (action === 'level') {
+        title = 'Item Evoluído!'; sparkle = '⬆ ⬆ ⬆';
+        text = 'Eu acabei de evoluir ' + ctx.itemName + ' para o nível ' + ctx.level + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+    } else if (action === 'refine') {
+        title = 'Item Refinado!'; sparkle = '★ ★ ★';
+        text = 'Eu acabei de refinar ' + ctx.itemName + ' para ' + ctx.stars + ' ★ em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+    } else { return; }
+
+    // ── URL de compartilhamento com OG dinâmico ──────────────────────────
+    // shareUrl aponta para /compartilhar?... (Pages Function com og:image do item)
+    // O bot da rede social crawleia ESSA URL e vê a imagem certa, já traduzida
+    // se lang !== 'pt' (a própria compartilhar.js traduz título/descrição).
+    // Humanos que clicam no link são redirecionados para /download.
+    var shareUrl = buildShareUrl(action, ctx, lang);
+
+    // Preenche a UI com o texto em PT imediatamente (não trava esperando
+    // rede) — se o jogador estiver com outro idioma selecionado, troca pro
+    // texto traduzido assim que a busca terminar, ANTES de montar os links
+    // finais de compartilhamento (o texto que vai pro corpo da mensagem do
+    // WhatsApp/Telegram/Twitter não passa por meta tag nenhuma, então
+    // precisa vir já traduzido — diferente do card de preview do link).
+    renderShareModal(title, sparkle, text, ctx, shareUrl);
+
+    if (lang !== 'pt') {
+        fetch(shareUrl + '&format=json')
+            .then(function (r) { if (!r.ok) throw new Error('fail'); return r.json(); })
+            .then(function (data) {
+                if (data && data.descricao) {
+                    renderShareModal(title, sparkle, data.descricao, ctx, shareUrl);
+                }
+            })
+            .catch(function () { /* mantém o texto em PT já exibido */ });
+    }
+}
+
+function renderShareModal(title, sparkle, text, ctx, shareUrl) {
+    var eUrl  = encodeURIComponent(shareUrl);
+    var eFull = encodeURIComponent(text + ' ' + shareUrl);
+    var eText = encodeURIComponent(text);
+
+    document.getElementById('issm-sparkle').textContent = sparkle;
+    document.getElementById('issm-title').textContent   = title;
+    document.getElementById('issm-msg').textContent     = text;
+
+    var img = document.getElementById('issm-item-img');
+    img.src = ctx.itemImageUrl || '';
+    img.dataset.name    = ctx.itemImageName || 'item';
+    img.dataset.shareUrl = shareUrl; // guarda para o botão do Instagram
+
+    document.getElementById('issm-wa').href = 'https://wa.me/?text=' + eFull;
+    document.getElementById('issm-tg').href = 'https://t.me/share/url?url=' + eUrl + '&text=' + eText;
+    document.getElementById('issm-tw').href = 'https://twitter.com/intent/tweet?text=' + eFull;
+    document.getElementById('issm-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + eUrl;
+    document.getElementById('issm-rd').href = 'https://www.reddit.com/submit?url=' + eUrl + '&title=' + eText;
+
+    document.getElementById('issm-overlay').style.display = 'flex';
+}
+
+document.getElementById('issm-ig').addEventListener('click', async function () {
+    var img      = document.getElementById('issm-item-img');
+    var txt      = document.getElementById('issm-msg').textContent || '';
+    var nm       = img.dataset.name     || 'item';
+    // Usa a shareUrl com OG dinâmico; fallback para /download
+    var shareUrl = img.dataset.shareUrl || 'https://aden-rpg.pages.dev/download';
+
+    if (!navigator.share) {
+        try { await navigator.clipboard.writeText(txt + ' ' + shareUrl); } catch(e) {}
+        alert('Link copiado! Cole no Instagram para compartilhar.');
+        return;
+    }
+    var pl = { text: txt, url: shareUrl };
+    try {
+        var c = document.createElement('canvas');
+        c.width  = img.naturalWidth  || 256;
+        c.height = img.naturalHeight || 256;
+        c.getContext('2d').drawImage(img, 0, 0);
+        await new Promise(function(res) {
+            c.toBlob(function(blob) {
+                if (blob) {
+                    var f = new File([blob], 'aden_' + nm + '.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [f] })) pl = { text: txt, files: [f] };
+                }
+                res();
+            }, 'image/png');
+        });
+    } catch(e) {}
+    try { await navigator.share(pl); } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
+});
+
+document.getElementById('issm-close').addEventListener('click', function () {
+    document.getElementById('issm-overlay').style.display = 'none';
+});
+document.getElementById('issm-overlay').addEventListener('click', function (e) {
+    if (e.target === this) this.style.display = 'none';
+});
+document.addEventListener('keydown', function (e) {
+    var ov = document.getElementById('issm-overlay');
+    if (e.key === 'Escape' && ov && ov.style.display !== 'none') ov.style.display = 'none';
+});
+</script>
+
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

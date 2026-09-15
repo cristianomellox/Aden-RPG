@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  
+    <title>Guilda - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  
+    <link rel="stylesheet" href="guild.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+        /* ═══ TUTORIAL MODALS (Raid + GvG) — estilo AFK ════════════════ */
+        .tut-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 10000;
+        }
+        .tut-modal .tut-content {
+            background: #111;
+            padding: 22px 20px;
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            width: 90%; max-width: 440px;
+            position: relative;
+            box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            max-height: 88vh; overflow-y: auto;
+            text-shadow: none;
+            box-sizing: border-box;
+        }
+        .tut-modal .tut-content::-webkit-scrollbar { width: 4px; }
+        .tut-modal .tut-content::-webkit-scrollbar-track { background: #111; }
+        .tut-modal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+        .tut-h-title {
+            text-align: center; color: #ffd700; margin: 0 0 6px;
+            font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(255,215,0,0.5); font-family: 'Cinzel', serif;
+        }
+        .tut-h-subtitle {
+            text-align: center; color: #888; font-size: 0.78em;
+            margin: 0 0 16px; padding-bottom: 12px;
+            border-bottom: 1px solid #333; font-style: italic;
+        }
+        .tut-sec {
+            margin-bottom: 14px; padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .tut-sec-title {
+            margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 1px;
+            padding-bottom: 6px; border-bottom: 1px solid;
+            font-family: 'Cinzel', serif;
+        }
+        .tut-sec p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
+        .tut-sec p:last-child { margin-bottom: 0; }
+        .tut-box {
+            background: rgba(0,0,0,0.3); border-radius: 6px;
+            padding: 10px 12px; font-size: 0.82em;
+            border: 1px solid rgba(255,255,255,0.08); margin-top: 8px;
+        }
+        .tut-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 7px; }
+        .tut-box li { color: #ccc; line-height: 1.5; }
+        .tut-reward-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.78em; }
+        .tut-reward-table th { color: #ffd700; font-family: 'Cinzel', serif; padding: 6px 8px; border-bottom: 1px solid #444; text-align: left; font-size: 0.85em; }
+        .tut-reward-table td { padding: 6px 8px; color: #ccc; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+        .tut-reward-table tr:last-child td { border-bottom: none; }
+        .tut-ok-btn {
+            display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+            padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+            background: linear-gradient(135deg, #1a1000, #0d0800);
+            border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+            cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+        }
+        .tut-ok-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+        .tut-x-btn {
+            position: absolute; top: 10px; right: 14px;
+            background: none; border: none; font-size: 26px; font-weight: bold;
+            color: #888; cursor: pointer; line-height: 1; z-index: 10;
+            padding: 0; font-family: sans-serif;
+        }
+        .tut-x-btn:hover { color: #ffd700; }
+        .tut-frenzy-badge {
+            display: inline-block; background: rgba(255,120,0,0.2);
+            border: 1px solid #ff7800; border-radius: 4px;
+            padding: 1px 7px; color: #ffaa44; font-size: 0.78em;
+            font-family: 'Cinzel', serif; letter-spacing: 1px; vertical-align: middle;
+        }
+    </style>
+<script>
+   // Registro do Service Worker Otimizado
+if ('serviceWorker' in navigator) {
+    const registerSW = () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
+                setInterval(() => reg.update(), 60 * 60 * 1000); 
+                
+                if (reg.installing) {
+                    console.log('⚙️ SW: Instalando...');
+                } else if (reg.waiting) {
+                    console.log('⚙️ SW: Aguardando ativação...');
+                } else if (reg.active) {
+                    console.log('✅ SW: Ativo e servindo cache!');
+                }
+            })
+            .catch(err => console.error('❌ Erro ao registrar SW:', err));
+    };
+  </script>
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;
+  font-weight: bold;
+  font-family: 'Cinzel', serif;
+}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+       <div> <span style="font-weight: bold;" id="pageTitle">Guilda</span></div>
+        <img id="guildtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; margin-top: -2px; cursor:pointer;">
+    </div>
+
+    <div id="mainContainer">
+        <div id="tabMenu">
+            <span class="tab-btn active" data-tab="guilda">Guilda</span>
+            <span class="tab-btn" data-tab="taverna">Taverna</span>
+            <span class="tab-btn" data-tab="ranking">Ranking</span>
+            <span class="tab-btn" data-tab="raid">Raid</span>
+            <span class="tab-btn" data-tab="batalhas">Batalha</span>
+        </div>
+
+        <div id="tabContent">
+            <div id="guilda" class="tab-pane active">
+                <div id="guildInfoContainer" style="display:none;">
+                   
+              <div class="icon-container"><img id="editGuildBtn" src="https://aden-rpg.pages.dev/assets/config.webp" style="width:34px;height:34px;border-radius:4px; display: none;"></img></div>     
+                    <div id="guildInfoHeader" style="display:flex; justify-content:center; align-items:center;">
+                  
+                        
+                    </div>
+                   <div id="guildName"></div>
+<img alt="poder" id="cpIcon" style="width: 20px; height: 32px; margin-top: 2px; vertical-align: -6px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="guildPower" style="font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
+
+                    <div id="guildDescription" style="margin:6px 0;color:white; font-size: 0.8em;"></div>
+                    
+                    <div id="guildLevel">
+                        <span style="color: yellow; font-weight: bold; font-size: 0.9em;">Nv. <span id="guildLevelValue"></span></span>
+              <div class="xp-bar-container">
+    <div class="xp-bar-fill"></div>
+    <div id="guildXpFill"></div>
+</div>
+
+                    </div>
+                    <div class="member-list-container">
+                        <h4>Membros (<span id="guildMemberCountHeader">0</span>)</h4>
+                        <ul id="guildMemberList"></ul>
+                    </div>
+                    <br><br><br>
+                    <div style="border-bottom: 5px solid grey; border-radius: 8px;"></div>
+                    <div id="risco">
+  <h3>Área de Risco</h3>
+  <div>
+    <div id="deleteguild">
+     
+      <span>Deletar <br>Guilda</span>
+    </div>
+    <div id="leaveguild">
+     
+      <span>Sair <br>da Guilda</span>
+    </div>
+  </div>
+</div>
+                   
+                </div>
+                <div id="noGuildContainer" style="display:none;">
+                  <div id="criar">
+                    <p>Você não faz parte de uma guilda.</p>
+                    <button class="action-btn" id="searchGuildBtn" style="color: white;"><span style="font-size: 1em;">Buscar <br>Guilda</span></button>
+                    <button class="action-btn" id="createGuildBtn"style="color: white;"><span style="font-size: 1em;">Criar <br>Guilda</span></button>
+                </div>
+            </div>
+</div>
+            <div id="taverna" class="tab-pane">
+               <div id="tavernContainer" class="tavern-container">
+                  <h3 id="tavernTitle" style="margin-top: 110px; display:none;">Taverna da Guilda</h3>
+                  <div class="tavern-header-inline" style="margin-top: 80px;display: flex;justify-content: center; align-items: center;">
+  <h3 id="tavernTitle2">Taverna da Guilda</h3>
+  <img id="tavtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; margin-top: -15px; right: 3px;">
+  </div>
+  <div id="tavernControls" style="margin-bottom:8px;"></div>
+
+  <!-- Área ativa da Taverna (escondida até entrar) -->
+  <div id="tavernActiveArea" style="display:none;">
+
+    <div id="tavernChat" class="tavern-chat"></div>
+    <div id="tavernChatInput">
+      <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem..." maxlength="200" />
+      <button id="tavernSendBtn" style="margin-top: -6px;" disabled>Enviar</button>
+    </div>
+  </div>
+</div>
+</div>
+            
+
+
+    
+
+            <div id="ranking" class="tab-pane">
+              <center>  <h3>Ranking das Guildas</h3>
+              <h4 style="margin-top: -29px; color: orange;">Poder de Combate</h4>
+              <p style="margin-top: -30px; font-size: 0.7em;">(atualiza Segunda-feira à meia-noite UTC)</p>
+              </center>
+                <ul id="guildRankingList"></ul>
+            </div>
+
+            <div id="raid" class="tab-pane" style="background: none;">
+              <center><h3>Raid de Guilda</h3></center>
+              <div id="raid_1">
+               
+                <div id="tdd">
+                  <h3 class="tdd_h3">Torre da Desolação</h3>
+                  <span class="tdd_desc">Terça, Quinta e<br> Sábado até meia-noite UTC.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
+                  <div id="tddbuttons">
+                   <img id="raidtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;">
+                    <img id="tddstory" src="https://aden-rpg.pages.dev/assets/tddstart.webp" style="width:47px; height:47px; margin-top: -2px;">
+                     
+                   </div>
+                <img id="tddimg" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
+      </div>      
+<div id="raidModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close-btn">&times;</span>
+    <h3>Torre da Desolação</h3>
+    <p>Duração: 15 minutos..</p>
+    <p>Ganhe xp, Cristais, Pedras de Refundição, entre outras recompensas, junto com sua guilda.</p>
+    <button id="startRaidBtn" class="action-btn">Iniciar Raid</button>
+    <button id="cancelRaidBtn" class="action-btn">Cancelar</button>
+  </div>
+</div>
+
+<div id="raidCombatModal" class="modal" style="display:none;">
+  <div class="modal-content">
+   <div id="raidCountdownContainer" style="display:none; text-align:center; padding: 40px 10px; color: white;">
+        <h1 id="raidCountdownMessage" style="font-size: 1.4em; color: yellow; line-height: 1.5;"></h1>
+        <div id="raidCountdownTimer" style="font-size: 3em; font-weight: bold; margin-top: 20px;"></div>
+    </div>
+   <div id="raidHeader" style="position:relative; display:flex; justify-content:center; align-items:center; padding:8px 0;">
+  <div id="raidFloorInfo" style="position:absolute; left:-2px; margin-top: -24px; text-align:center;text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;"></div>
+  <div id="raidTimerInfo" style="font-weight:bold; font-size:1.1em;"></div>
+</div>
+<div id="raidBackBtn" style="position:absolute; right:6px; margin-top: -16px; text-align:center;text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center;"> <img src="https://aden-rpg.pages.dev/assets/sair.webp" style="width:22px; height: 28px;">
+        <small style="font-size: 0.6em;">voltar</small>
+        </div>
+
+    <div id="raidMonsterArea">
+      <div style="position: relative; width:100%; flex: 1 1 auto; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center">
+      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/tddandar01.webp" style="width:100px; height: 200px;">
+      </div>
+      <div id="raidMonsterHpBar">
+        <div id="raidMonsterHpFill"></div>
+        <span id="raidMonsterHpText"></span>
+      </div>
+    </div>
+   <center> <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:38px;height:38px;cursor:pointer; margin-top: 4px;"></center>
+    <p style="font-size: 0.72em; font-weight: bold; margin-top: 2px; margin-bottom: 2px;">
+      Ataques: <span id="raidPlayerAttacks">0</span>
+      <button id="raidBuyAttackBtn" class="btn btn-gold" style="width: 24px;
+  height: 24px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -2px;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;">+</button><br>
+      <span id="raidAttackCooldown"></span>
+    </p>
+    
+   
+  </div>
+</div>
+
+
+<div id="lastRaidResultModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Resultado da Última Raid</h3>
+        <p>Na sua última incursão na Torre da Desolação, sua guilda alcançou:</p>
+        <h2 id="lastRaidFloorResult" style="color: yellow; font-size: 2em; margin: 10px 0;">Andar 0</h2>
+        <button id="startNewRaidFromLastResultBtn" class="action-btn">Iniciar Nova Raid</button>
+        <button id="closeLastResultBtn" class="action-btn">Fechar</button>
+    </div>
+</div>
+
+<div id="raidRewardModal" class="modal" style="display:none; z-index: 12500">
+  <div class="modal-content">
+    <h3>Recompensa de Andar</h3>
+    <p>Você ganhou:</p>
+    <p><strong id="rewardXpText" style="color:lime;">0 XP</strong></p>
+    <p><strong id="rewardCrystalsText" style="color:cyan;">0 Cristais</strong></p>
+    <button id="rewardOkBtn" class="action-btn">Ok</button>
+  </div>
+</div>
+
+
+                </div>
+            </div>
+
+            <div id="batalhas" class="tab-pane">
+                 <center><h3>Batalha de Guilda</h3></center>
+              <div id="gvg_1">
+               
+                <div id="gvgt">
+                  <h3 class="gvgt_h3">Batalha por Territórios</h3>
+                  <span class="gvgt_desc" onclick="window.location.href='guild_battle.html'"><strong>Registro:</strong> Sábado meia-noite UTC.<br><strong>Batalha:</strong> Domingo meia-noite UTC.</span>
+                  <div id="gvgtbuttons">
+                   <img id="gvgttuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;">
+                   </div>
+                <img id="gvgtimg" src="https://aden-rpg.pages.dev/assets/gvg_cidades.webp" style="width: 90vw; height: 180px; background: none;" onclick="window.location.href='guild_battle.html'">
+      </div>  </div>    
+            </div>
+        </div>
+    </div>
+
+    <div id="createGuildModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3>Criar Nova Guilda</h3>
+            <p>Custo: <strong class="crystals-cost">2000</strong> Cristais</p>
+            <p>Nível Mínimo: <strong class="level-min">7</strong></p>
+            <input type="text" id="newGuildNameInput" placeholder="Nome da Guilda" maxlength="12">
+            <button id="confirmCreateGuildBtn" class="action-btn">Criar</button>
+            <p id="createGuildMessage" class="message"></p>
+        </div>
+    </div>
+
+    <div id="editGuildModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <span style="position: fixed; margin-top: 3.7rem; right: 3rem; font-weight: bold; color: gold; font-size: 1.2em;">>>></span>
+            <h3>Editar Guilda</h3>
+
+           <div id="editTabMenu" class="tab-scroll">
+    <span class="edit-tab-btn" data-tab="tab-edit">Editar</span>
+    <span class="edit-tab-btn" data-tab="tab-requests">Solicitações</span>
+    <span class="edit-tab-btn" data-tab="tab-manage">Gerenciar</span>
+    <span class="edit-tab-btn" data-tab="tab-notice">Quadro de Aviso</span>
+    <span class="edit-tab-btn" data-tab="tab-chest">Baú</span>
+</div>
+
+
+            <div id="editTabContent">
+                <div id="tab-edit" class="edit-tab-pane" style="display:none;">
+                    <label>Nome da Guilda (1x a cada 30 dias):</label>
+                    <input type="text" id="editGuildName" maxlength="25">
+                    <p id="editNameInfo" class="message"></p>
+
+                    <label>Descrição:</label>
+                    <textarea id="editGuildDescription" style="height: 120px; width: 90%;" maxlength="100"></textarea>
+
+                    <label>Bandeira da Guilda:</label>
+<div class="upload-container">
+    <label for="guildFlagFileInput" class="custom-file-upload">
+        <img src="https://aden-rpg.pages.dev/assets/promover.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
+        Escolher Bandeira
+    </label>
+    <input id="guildFlagFileInput" type="file" accept="image/*" style="display:none;"/>
+    
+    <span id="guildUploadStatusText" style="font-size: 0.9em; color: #aaa; margin-left: 10px;">Nenhum arquivo.</span>
+</div>
+
+<input type="hidden" id="editGuildFlagUrl">
+
+                    <button id="saveGuildChangesBtn" class="action-btn">Salvar Alterações</button>
+                </div>
+
+                <div id="tab-requests" class="edit-tab-pane" style="display:none;">
+                    <h4>Solicitações Pendentes</h4>
+                    <ul id="guildRequestsList"></ul>
+                </div>
+
+                <div id="tab-manage" class="edit-tab-pane" style="display:none;">
+                    <h4>Gerenciar Membros</h4>
+                    <ul id="manageMembersList"></ul>
+                </div>
+
+                <div id="tab-notice" class="edit-tab-pane" style="display:none;">
+                    <h4>Aviso Atual</h4>
+                    <div id="guildNotice" style="padding:8px;border:1px solid #ddd;border-radius:6px;background:#444;"></div>
+                    <div id="noticeInfo" style="font-size:0.9em;color:white;margin-top:6px;"></div>
+                    <div id="noticeEditor" style="margin-top:8px;display:none;">
+                        <textarea id="editGuildNotice" placeholder="Escreva um aviso breve..." maxlength="150" style="height: 120px; width: 85%;"></textarea>
+                        <button id="saveGuildNoticeBtn" class="action-btn">Atualizar Aviso</button>
+                    </div>
+                    <hr style="margin:10px 0;">
+                    <h4>Registro de Atividades</h4>
+                    <ul id="guildLogsList"></ul>
+                </div>
+
+                <div id="tab-chest" class="edit-tab-pane" style="display:none;">
+                    <h4>Baú</h4>
+                    <p>Em breve.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="searchGuildModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h3>Buscar Guilda</h3>
+        <input type="text" id="searchGuildInput" placeholder="Nome da guilda...">
+        <button id="searchGuildConfirmBtn" class="action-btn">Buscar</button>
+        <ul id="searchGuildResults"></ul>
+      </div>
+    </div>
+    <div id="viewGuildModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-btn" id="viewGuildCloseBtn">&times;</span>
+        <div id="guildViewContainer">
+            <div id="guildViewHeader" style="display:flex; justify-content:center; align-items:center;"></div>
+            <div id="guildViewName" style="text-align: center; font-size: 1.4em;"></div>
+            <div style="display: none; text-align: center;">
+                <img alt="poder" id="cpIcon" style="width: 28px; height: 37px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
+                <span id="guildViewPower" style="color:orange; font-weight:bold; font-size:1.7em; margin-top:4px;"></span>
+            </div>
+            <div id="guildViewDescription" style="margin:6px 0;color:white; font-size: 0.8em; text-align: center;"></div>
+            <div style="text-align: center;">
+                <span style="color: yellow; font-weight: bold; font-size: 1.3em;">Nv. <span id="guildViewLevelValue"></span></span>
+            </div>
+            <div class="member-list-container">
+                <h4>Membros (<span id="guildViewMemberCountHeader">0</span>)</h4>
+                <ul id="guildViewMemberList"></ul>
+            </div>
+            <div id="guildViewActions" style="text-align: center; margin-top: 20px;">
+              
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div id="playerModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <!-- Vídeo de fundo cobrindo todo o modal -->
+    <video autoplay muted loop playsinline id="guild-modal-bg-video"><source src="" type="video/webm"></video>
+    <div id="guild-modal-bg-overlay"></div>
+
+    <span id="closePlayerModal" class="close-btn">&times;</span>
+
+    <div class="modal-inner">
+    <h3 id="playerName">Jogador</h3>
+    <div id="playerLevel">Nv. 0</div>
+
+    <div id="equipmentAndAvatarContainer">
+      <div class="equipment-column">
+        <div id="weapon-slot" class="equipment-slot" data-slot="weapon"></div>
+        <div id="ring-slot" class="equipment-slot" data-slot="ring"></div>
+        <div id="helm-slot" class="equipment-slot" data-slot="helm"></div>
+        <div id="special1-slot" class="equipment-slot" data-slot="special1"></div>
+      </div>
+
+      <div id="playerAvatarEquipContainer">
+        <div class="guild-header">
+          <div style="display: flex;
+  flex-direction: column; justify-content: center; text-align: center; align-items: center;">
+          <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Bandeira" onerror="this.style.display='none'">
+          <div id="playerGuildName">Nome da Guilda</div>
+        </div>
+</div>
+        <!-- Avatar com moldura e sheen sobrepostos -->
+        <div id="guild-avatar-wrapper">
+          <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador">
+          <img id="guild-frame-overlay" src="" alt="">
+          <div id="guild-frame-sheen"></div>
+        </div>
+        <div style="display: none; flex-wrap: nowrap; width: 100%; gap: 12px; justify-content: center; text-align: center; align-items: center;">
+        <img alt="poder" id="cpIcon" style="width: 18px; height: 30px; vertical-align: 4px; position: relative; margin-top: 3px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/><div id="playerCombatPower">0 </div>
+      </div>
+</div>
+      <div class="equipment-column">
+        <div id="amulet-slot" class="equipment-slot" data-slot="amulet"></div>
+        <div id="wing-slot" class="equipment-slot" data-slot="wing"></div>
+        <div id="armor-slot" class="equipment-slot" data-slot="armor"></div>
+        <div id="special2-slot" class="equipment-slot" data-slot="special2"></div>
+      </div>
+    </div>
+
+    <div id="attributesSection">
+      <div class="attribute-row">
+        <div class="attribute-item">
+          <span class="attribute-label">ATK</span>
+          <span id="playerAttack" class="attribute-value">0 - 0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">TAXA CRIT</span>
+          <span id="playerCritChance" class="attribute-value">0%</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">DANO CRIT</span>
+          <span id="playerCritDamage" class="attribute-value">0%</span>
+        </div>
+      </div>
+
+      <div class="attribute-row">
+        <div class="attribute-item">
+          <span class="attribute-label">HP</span>
+          <span id="playerHealth" class="attribute-value">0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">DEFESA</span>
+          <span id="playerDefense" class="attribute-value">0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">EVASÃO</span>
+          <span id="playerEvasion" class="attribute-value">0%</span>
+        </div>
+      </div>
+
+      <div class="attribute-row">
+        <div class="attribute-item">
+          <span class="attribute-label">REDUÇÃO CRIT</span>
+          <span id="playerCritReduction" class="attribute-value">0%</span>
+        </div>
+      </div>
+    </div>
+    <!-- Social stats row -->
+    <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-followers-wrap">
+        <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
+        <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
+      </div>
+      <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-following-wrap">
+        <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
+        <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
+      </div>
+      <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <span id="pm-fame-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;">—</span>
+        <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
+      </div>
+      <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-gifts-wrap">
+        <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;">—</span>
+        <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
+      </div>
+    </div>
+
+    <!-- Action buttons (Seguir / Mensagem) -->
+    <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:-25px; padding: 30px;">
+      <button id="pm-follow-btn" class="pm-action-btn pm-action-follow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        Seguir
+      </button>
+      <button id="sendmp" class="pm-action-btn pm-action-sendmp"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;"> Mensagem</button>
+    </div>
+    </div><!-- /modal-inner -->
+  </div>
+</div>
+
+<!-- ══ SOCIAL LIST MODAL (Seguidores / Seguindo) ══ -->
+<div id="pm-social-list-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span id="psl-title" class="pmx-title">Seguidores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-social-list-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="psl-list" class="pmx-list"></div>
+  </div>
+</div>
+
+<!-- ══ GIFTERS MODAL (Top Presenteadores) ══ -->
+<div id="pm-gifters-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span class="pmx-title">🎁 Top Presenteadores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-gifters-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="pgf-list" class="pmx-list"></div>
+  </div>
+</div>
+
+
+<!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
+<div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner" style="max-height:80vh;">
+    <div class="pmx-topbar">
+      <span id="pgi-title" class="pmx-title">Guilda</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-guild-info-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <div class="pmx-guild-header">
+        <img id="pgi-flag" class="pmx-guild-flag" src="" alt="">
+        <div>
+          <div id="pgi-name" class="pmx-guild-name"></div>
+          <div id="pgi-desc" class="pmx-guild-desc"></div>
+          <div class="pmx-guild-meta"><span id="pgi-level"></span><span id="pgi-members"></span></div>
+        </div>
+      </div>
+      <div id="pgi-join-row" class="pmx-join-row" style="display:none;">
+        <button id="pgi-join-btn" class="pmx-join-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Solicitar Entrada
+        </button>
+      </div>
+      <div class="pmx-member-label">Membros</div>
+      <div id="pgi-member-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="buyModal" class="modal" style="display: none; z-index: 13501;">
+  <div class="modal-content">
+    <h3>Confirmar Compra</h3>
+    <p id="buyPlayerGoldInfo"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 17px; height: 17px"></p>
+    <p>Os ataques comprados só poderão ser usados na Raid atual.</p>
+
+    <p>Quantidade de ataques:</p>
+    <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+      <div style="background: #333; border-radius: 8px; border: white; width: 140px; display:flex; justify-content: center; align-items: center;">
+        <button id="buyDecreaseQtyBtn" class="action-btn" style="width: 34px;
+  height: 34px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -5px;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;">-</button>
+        <span id="buyAttackQty" style="font-size: 2em; color: yellow; margin: 0 12px;">1</span>
+        <button id="buyIncreaseQtyBtn" class="action-btn" style="width: 34px;
+  height: 34px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -5px;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;">+</button>
+      </div>
+    </div>
+    <p id="buyAttackCostInfo">Custo total: 0 Ouro</p>
+    <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+      <button id="buyCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+      <button id="buyConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="raidAlertModal" class="modal" style="display:none; z-index:15000; align-items: center; justify-content: center;">
+  <div class="modal-content">
+    <h3>Aviso</h3>
+    <p id="raidAlertMessage"></p>
+    <button id="raidAlertOkBtn" class="action-btn">OK</button>
+  </div>
+</div>
+
+<div id="tutorialModaltav" class="modal-overlay2" style="display: none; height: 650px!important;">
+        <div class="modal-content2">
+           <center><h3 style="color: white;">Taverna da Guilda</h3></center>
+<p>A taverna é o local onde os membros da guilda se reúnem para conversar e trocar informações.</p>
+<p><strong>Dica:</strong> A Taverna não é necessariamente um chat ativo, pois tem um tempo mínimo para envio de mensagens e um limite de histórico antigo. Use-a para deixar recados importantes.</p>
+<center><button id="closetavTutorialBtn" class="action-btn">Fechar</button></center>
+</div></div>
+
+<div id="tutorialModalRaid" class="tut-modal">
+    <div class="tut-content" style="position:relative; border-color:#a040ff;">
+        <button class="tut-x-btn" id="closeRaidTutorialBtn" onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#888'">&times;</button>
+        <h2 class="tut-h-title" style="color:#c084fc; text-shadow:0 0 12px rgba(160,64,255,0.5);">🗼 Torre da Desolação</h2>
+        <p class="tut-h-subtitle">"Suba os andares com sua guilda e enfrente o Imperador Veinur."</p>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff9800; border-color:#ff9800;">1. Início da Raid</h4>
+            <p>A Raid não é automática — precisa ser iniciada por alguém da guilda.</p>
+            <div class="tut-box"><ul>
+                <li>👑 Apenas <strong style="color:#ffd700">Líder ou Co-Líder</strong> pode iniciar</li>
+                <li>📅 Disponível somente às <strong style="color:#ffd700">Terça, Quinta e Sábado</strong></li>
+                <li>🔁 Apenas <strong style="color:#ffd700">uma vez por dia</strong> por guilda</li>
+                <li>❤️ Ao iniciar, a vida de <strong style="color:#ffd700">todos os membros</strong> é restaurada ao máximo</li>
+                <li>⏳ Tempo de preparação: <strong style="color:#ffd700">10 minutos</strong> antes do combate</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#00bfff; border-color:#00bfff;">2. Ataques e Recuperação</h4>
+            <p>Sua capacidade de ataque é limitada e se regenera com o tempo.</p>
+            <div class="tut-box"><ul>
+                <li>⚔️ Máximo de <strong style="color:#ffd700">3 ataques</strong> acumulados de uma vez</li>
+                <li>⏱️ Recupera <strong style="color:#ffd700">1 ataque</strong> a cada <strong style="color:#ffd700">60 segundos</strong></li>
+                <li>💰 Extras compráveis com <strong style="color:#ffd700">Ouro</strong> — preço sobe a cada 5 compras no dia, reseta diariamente</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff4444; border-color:#ff4444;">3. O Imperador Veinur</h4>
+            <p>A cada <strong style="color:#ffd700">5 andares</strong>, Veinur aparece e ataca — e observa você pelos seus servos durante toda a Raid.</p>
+            <div class="tut-box"><ul>
+                <li>💀 Ataca <strong style="color:#ffd700">todos</strong> os jogadores ativos a cada <strong style="color:#ffd700">30 segundos</strong></li>
+                <li>🌑 <strong style="color:#ff9060">Aura Maligna</strong> — chance de restaurar HP próprio e dos servos</li>
+                <li>☠️ <strong style="color:#ff4444">Morte Súbita</strong> — chance de eliminar um ou mais jogadores instantaneamente</li>
+                <li>🔄 Ao morrer, aguarde — sua vida volta ao máximo e você retorna</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ffd700; border-color:#ffd700;">4. Recompensas e Progresso</h4>
+            <div class="tut-box"><ul>
+                <li>💎 Receba <strong style="color:#ffd700">Cristais</strong> e <strong style="color:#ffd700">XP</strong> proporcionais ao seu dano total</li>
+                <li>🏰 A guilda ganha <strong style="color:#ffd700">XP de guilda</strong> por andar vencido</li>
+                <li>🎁 Há chance de receber <strong style="color:#ffd700">itens extras</strong> como recompensa</li>
+                <li>⬆️ Ao derrotar o monstro, o ranking zera e a guilda avança de andar</li>
+                <li>🏁 Termina no <strong style="color:#ffd700">Andar 40</strong> ou após <strong style="color:#ffd700">15 minutos</strong></li>
+            </ul></div>
+        </div>
+        <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+            <button class="tut-ok-btn" style="border-color:#c084fc; color:#c084fc;" id="closeRaidTutorialBtn2">ENTENDI</button>
+        </div>
+    </div>
+</div>
+    <div id="tddModalStory" class="modal-overlay2" style="display: none;">
+    <div class="modal-content2">
+        <div id="videoContainer">
+            <iframe 
+                id="tddStoryVideo"
+                width="100%" 
+                height="100%" 
+                src="https://www.youtube.com/embed/c7NZ7wrpTSM?autoplay=0&controls=1&modestbranding=1&rel=0" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" 
+                allowfullscreen>
+            </iframe>
+        </div>
+        
+        <center><button id="closetddstoryBtn" class="action-btn">Fechar</button></center>       
+    </div>
+</div>
+
+<div id="tutorialModalgvgt" class="tut-modal">
+    <div class="tut-content" style="position:relative;">
+        <button class="tut-x-btn" id="closegvgtTutorialBtn" onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+        <h2 class="tut-h-title">⚔️ Batalha por Territórios</h2>
+        <p class="tut-h-subtitle">"Conquiste cidades, domine objetivos e leve sua guilda à glória."</p>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#00bfff; border-color:#00bfff;">1. Cronograma</h4>
+            <div class="tut-box"><ul>
+                <li>📋 <strong style="color:#ffd700">Registro:</strong> abre no Sábado à meia-noite UTC <span style="color:#888;">(21h de Sexta no Brasil)</span> e fecha 24h depois</li>
+                <li>⚔️ <strong style="color:#ffd700">Batalha:</strong> começa no Domingo à meia-noite UTC <span style="color:#888;">(21h de Sábado no Brasil)</span> com duração de 24h</li>
+                <li>👥 Apenas <strong style="color:#ffd700">Líder ou Co-Líder</strong> pode registrar a guilda</li>
+                <li>🏙️ Máximo de <strong style="color:#ffd700">5 guildas</strong> por cidade</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff9800; border-color:#ff9800;">2. Campo de Batalha</h4>
+            <p>Cada cidade tem <strong style="color:#ffd700">4 Pontos de Controle</strong> para dominar e um <strong style="color:#ffd700">Nexus</strong>, que é uma área especial (veja a seção 3):</p>
+            <div class="tut-box"><ul>
+                <li>🔵 <strong style="color:#ffd700">4 Pontos de Controle</strong> — objetivos atacáveis.</li>
+                <li>🔴 <strong style="color:#ffd700">Nexus</strong> — não possui HP e não pode ser atacado diretamente; é uma zona de PvP/PvE (seção 3)</li>
+                <li>🏆 A guilda com mais <strong style="color:#ffd700">Pontos de Honra</strong> ao fim vence e conquista a cidade</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff4da6; border-color:#ff4da6;">3. O Nexus — Área de PvP/PvE</h4>
+            <p>Uma zona à parte dos Pontos de Controle, com mobs e jogadores inimigos, onde o combate acontece automaticamente.</p>
+            <div class="tut-box"><ul>
+                <li>🕒 <strong style="color:#ffd700">Abre por 60 minutos</strong> a cada ciclo, começando junto com a batalha, depois fica <strong style="color:#ffd700">fechado por 120 minutos</strong> antes de reabrir — se repete até faltar 1 hora para o fim da batalha (quando não abre mais)</li>
+                <li>🔒 Enquanto fechado, o ícone do Nexus fica acinzentado com uma contagem regressiva; na última hora de batalha, ele some da tela</li>
+                <li>🚪 Toque no ícone do Nexus e confirme para entrar — dentro dele há um território de combate.</li>
+                <li>🔒 Uma vez dentro, <strong style="color:#ffd700">só é possível sair quando a janela (de 60 minutos) fechar</strong> — a exceção é se você for eliminado (então poderá escolher sair ao reviver)</li>
+            </ul></div>
+            <p style="margin-top:8px;">Dentro do Nexus:</p>
+            <div class="tut-box"><ul>
+                <li>🚶 Seu avatar anda sozinho pelo mapa, ataca o mob ou jogador inimigo mais próximo automaticamente e volta a andar — não precisa clicar em nada</li>
+                <li>🌫️ Um <strong style="color:#ffd700">nevoeiro de guerra</strong> só mostra o que está bem perto de você; mobs e inimigos aparecem só quando você se aproxima</li>
+                <li>🎥 Botão de <strong style="color:#ffd700">Câmera</strong> na barra superior: liga/desliga o acompanhamento automático do seu avatar (desliga sozinho se você arrastar o mapa)</li>
+                <li>⚔️ Ao cruzar com um jogador inimigo, um duelo se inicia — igual acontece quando você é desafiado por outro jogador</li>
+                <li>❤️ O HP do duelo <strong style="color:#ff6b6b">não regenera</strong> entre combates: se você saiu de um duelo com pouco HP, começa o próximo já ferido, até ser eliminado</li>
+                <li>💀 Ao ser eliminado, fica <strong style="color:#ffd700">10 minutos</strong> caído até reviver; ao reviver, pode escolher continuar no Nexus ou voltar para os objetivos</li>
+            </ul></div>
+            <p style="margin-top:8px;">Recompensas dentro do Nexus:</p>
+            <div class="tut-box"><ul>
+                <li>👹 Eliminar um mob → <strong style="color:#ffd700">+3 Honra</strong> e <strong style="color:#ffd700">5% de chance</strong> de ganhar uma Ação extra</li>
+                <li>⚔️ Eliminar um jogador inimigo → <strong style="color:#ffd700">+3 Honra</strong> e <strong style="color:#ffd700">5% de chance</strong> de ganhar uma Ação extra</li>
+                <li>📊 O dano causado em duelos do Nexus também conta no seu ranking de dano da batalha, e eliminações aparecem no ranking pessoal</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#c084fc; border-color:#c084fc;">4. Ações de Batalha</h4>
+            <div class="tut-box"><ul>
+                <li>🎯 Máximo de <strong style="color:#ffd700">5 Ações</strong> acumuladas (ações extras do Nexus também respeitam esse limite de 5)</li>
+                <li>⏱️ Recupera <strong style="color:#ffd700">1 Ação</strong> a cada <strong style="color:#ffd700">60 minutos</strong></li>
+                <li>🔥 <span class="tut-frenzy-badge">MODO FRENÉTICO</span> ativa nos últimos 20 min — recupera <strong style="color:#ffd700">1 Ação/minuto</strong></li>
+                <li>💰 Compre reforços com Ouro: <strong style="color:#ffd700">Pacote 1</strong> (3 Ações) ou <strong style="color:#ffd700">Pacote 2</strong> (5 Ações) — essas compras podem passar de 5/5</li>
+            </ul></div>
+            <p style="margin-top:8px;">Use suas ações de duas formas nos Pontos de Controle:</p>
+            <div class="tut-box"><ul>
+                <li>⚔️ <strong style="color:#ffd700">ATACAR</strong> (1 Ação) — causa dano; primeiro atinge a Guarnição inimiga, depois o HP do objetivo; cada ataque já rende <strong style="color:#ffd700">+3 Honra</strong> na hora</li>
+                <li>🛡️ <strong style="color:#ffd700">GUARNECER</strong> (1 Ação) — reforça a defesa de um objetivo aliado, aumentando seu HP</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff6b6b; border-color:#ff6b6b;">5. Captura e Pontuação</h4>
+            <div class="tut-box"><ul>
+                <li>🔵 Captura de <strong style="color:#ffd700">Ponto de Controle</strong> → <strong style="color:#ffd700">+100 Honra</strong> distribuídos proporcionalmente ao dano</li>
+                <li>📉 Perder um objetivo <strong style="color:#ff6b6b">penaliza</strong> na mesma quantidade de Honra</li>
+                <li>⚔️🐺 Honra do Nexus (mobs e eliminações) é somada continuamente, sem precisar dominar nada</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#8ecf8e; border-color:#8ecf8e;">6. Recompensas</h4>
+            <p>Distribuídas para as <strong style="color:#ffd700">3 primeiras guildas</strong>, apenas para quem causou dano:</p>
+            <table class="tut-reward-table">
+                <thead><tr><th>Classificação</th><th>Recompensas</th></tr></thead>
+                <tbody>
+                    <tr><td><strong style="color:#ffd700">🥇 1º Lugar</strong></td><td>8 Cartões Espiral Avançado, 80 Pedras de Refundição, 6000 Cristais</td></tr>
+                    <tr><td><strong style="color:#aaa">🥈 2º Lugar</strong></td><td>12 Cartões Espiral Comum, 40 Pedras de Refundição, 2000 Cristais</td></tr>
+                    <tr><td><strong style="color:#cd7f32">🥉 3º Lugar</strong></td><td>8 Cartões Espiral Comum, 20 Pedras de Refundição, 1000 Cristais</td></tr>
+                </tbody>
+            </table>
+            <div class="tut-box" style="margin-top:8px;"><ul>
+                <li>🏅 <strong style="color:#ffd700">Top 1 de dano</strong> → recompensas <strong style="color:#ffd700">triplicadas</strong></li>
+                <li>🏅 <strong style="color:#ffd700">Top 2 de dano</strong> → recompensas <strong style="color:#ffd700">duplicadas</strong></li>
+                <li>📊 No resultado final você vê o Top 5 de dano numa tabela (posição, nome, guilda, dano, eliminações) e sua própria posição, mesmo se não estiver no Top 5</li>
+            </ul></div>
+        </div>
+        <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+            <button class="tut-ok-btn" id="closegvgtTutorialBtn2">ENTENDI</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const tavtutoImg = document.getElementById("tavtuto");
+            const tutorialModal = document.getElementById("tutorialModaltav");
+            const closetavTutorialBtn = document.getElementById("closetavTutorialBtn");
+
+            if (tavtutoImg) {
+                tavtutoImg.addEventListener("click", () => {
+                    tutorialModaltav.style.display = "flex";
+                });
+            }
+
+            if (closetavTutorialBtn) {
+                closetavTutorialBtn.addEventListener("click", () => {
+                    tutorialModaltav.style.display = "none";
+                });
+            }
+
+            if (tutorialModaltav) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tutorialModaltav) {
+                        tutorialModaltav.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
+    
+         <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const raidtutoImg = document.getElementById("raidtuto");
+            const tutorialModalRaid = document.getElementById("tutorialModalRaid");
+            const closeRaidBtn  = document.getElementById("closeRaidTutorialBtn");
+            const closeRaidBtn2 = document.getElementById("closeRaidTutorialBtn2");
+            const openR  = () => { tutorialModalRaid.style.display = "flex"; };
+            const closeR = () => { tutorialModalRaid.style.display = "none"; };
+            if (raidtutoImg)  raidtutoImg.addEventListener("click", openR);
+            if (closeRaidBtn)  closeRaidBtn.addEventListener("click", closeR);
+            if (closeRaidBtn2) closeRaidBtn2.addEventListener("click", closeR);
+            if (tutorialModalRaid) tutorialModalRaid.addEventListener("click", e => { if (e.target === tutorialModalRaid) closeR(); });
+        });
+    </script>
+        <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const gvgttutoImg = document.getElementById("gvgttuto");
+            const tutorialModalgvgt = document.getElementById("tutorialModalgvgt");
+            const closeGvgBtn  = document.getElementById("closegvgtTutorialBtn");
+            const closeGvgBtn2 = document.getElementById("closegvgtTutorialBtn2");
+            const openG  = () => { tutorialModalgvgt.style.display = "flex"; };
+            const closeG = () => { tutorialModalgvgt.style.display = "none"; };
+            if (gvgttutoImg)  gvgttutoImg.addEventListener("click", openG);
+            if (closeGvgBtn)  closeGvgBtn.addEventListener("click", closeG);
+            if (closeGvgBtn2) closeGvgBtn2.addEventListener("click", closeG);
+            if (tutorialModalgvgt) tutorialModalgvgt.addEventListener("click", e => { if (e.target === tutorialModalgvgt) closeG(); });
+        });
+    </script>
+
+  <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const tddstory = document.getElementById("tddstory");
+            const tddstorymodal = document.getElementById("tddModalStory");
+            const closetddstoryBtn = document.getElementById("closetddstoryBtn");
+
+            if (tddstory) {
+                tddstory.addEventListener("click", () => {
+                    tddstorymodal.style.display = "flex";
+                });
+            }
+
+            if (closetddstoryBtn) {
+                closetddstoryBtn.addEventListener("click", () => {
+                    tddstorymodal.style.display = "none";
+                });
+            }
+
+            if (tddstorymodal) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tddstorymodal) {
+                        tddstorymodal.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
+    
+
+<div id="banModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); color: white; z-index: 10000; justify-content: center; align-items: center; text-align: center; flex-direction: column;">
+    <div style="background: #2b2b2b; padding: 30px; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 69, 0, 0.8); max-width: 90%; width: 400px; border: 3px solid #ff4500;">
+        <img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;">
+        <h2 style="color: #ff4500; font-size: 1.8em; margin-bottom: 20px;">Você foi banido(a)!</h2>
+        
+        <p style="text-align: left; margin-bottom: 25px;">
+            <strong>Motivo:</strong><br>
+            <span id="banReasonContent" style="color: #ffd700; display: block; margin-top: 5px; padding: 10px; border: 1px dashed #444; white-space: pre-wrap;">[Carregando Motivo...]</span>
+        </p>
+
+        <button id="logoutBanBtn" style="background: linear-gradient(to top, #ff4500, #ff8c00); color: white; padding: 12px 25px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: background 0.2s;">
+            Fechar
+        </button>
+    </div>
+</div>
+
+
+<!-- ═══ TUTORIAL DE GUILDA ══════════════════════════════════════════════ -->
+<div id="guildTutorialModal" class="tut-modal">
+    <div class="tut-content" style="position:relative;">
+        <button id="closeGuildTutBtn" class="tut-x-btn" onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
+        <h2 class="tut-h-title">🏰 Guia da Guilda</h2>
+        <p class="tut-h-subtitle">"Una-se, cresça e conquiste terras com seus aliados."</p>
+
+        <!-- 1. Criar ou entrar numa guilda -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ffd700; border-color:#ffd700;">1. Criar ou Entrar numa Guilda</h4>
+            <p>Para criar uma guilda você precisa de <strong style="color:#ffd700">Nível 7</strong> e <strong style="color:#ffd700">2000 Cristais</strong>. O nome pode ter até 12 caracteres (letras, números e espaços).</p>
+            <p>Para entrar numa guilda existente, use o botão <strong style="color:#ffd700">Buscar Guilda</strong>, encontre a que deseja e envie uma solicitação com uma mensagem. O líder ou co-líder precisará aceitar.</p>
+            <div class="tut-box">
+                <ul>
+                    <li>⏳ Ao sair, ser expulso ou ter a guilda deletada, você fica em <strong style="color:#ff9060">cooldown de 24 horas</strong> antes de criar ou entrar em outra guilda</li>
+                    <li>📛 O nome da guilda só pode ser alterado <strong style="color:#ffd700">uma vez a cada 30 dias</strong></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 2. Cargos e permissões -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#c084fc; border-color:#c084fc;">2. Cargos e Permissões</h4>
+            <p>Cada membro possui um cargo que define o que ele pode fazer na guilda:</p>
+            <div class="tut-box">
+                <ul>
+                    <li><strong style="color:#ffd700">Líder</strong> — controle total: editar guilda, promover/rebaixar co-líderes, expulsar qualquer membro, transferir liderança e deletar a guilda</li>
+                    <li><strong style="color:#c084fc">Co-Líder</strong> — pode aceitar solicitações de entrada, expulsar membros comuns e atualizar o quadro de avisos</li>
+                    <li> <strong style="color:#aaa">Membro</strong> — participa das atividades da guilda, mas sem poderes administrativos</li>
+                </ul>
+            </div>
+            <p style="margin-top:8px;">A liderança só pode ser transferida para um <strong style="color:#c084fc">co-líder</strong>. Ao transferir, o líder anterior passa a ser co-líder automaticamente.</p>
+        </div>
+
+        <!-- 3. Níveis, membros e co-líderes -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#4fc3f7; border-color:#4fc3f7;">3. Níveis, Membros e Co-Líderes</h4>
+            <p>Guildas evoluem ganhando <strong style="color:#ffd700">Experiência (XP)</strong> nas atividades coletivas. A cada nível, o limite de membros aumenta e novos co-líderes podem ser promovidos. O nível máximo é <strong style="color:#ffd700">11</strong>.</p>
+            <table class="tut-reward-table">
+                <thead>
+                    <tr>
+                        <th>Nível</th>
+                        <th>Membros</th>
+                        <th>Co-Líderes</th>
+                        <th>XP necessário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>10</td><td>1</td><td>300</td></tr>
+                    <tr><td>2</td><td>12</td><td>1</td><td>848</td></tr>
+                    <tr><td>3</td><td>14</td><td>1</td><td>1.558</td></tr>
+                    <tr><td>4</td><td>16</td><td>1</td><td>2.400</td></tr>
+                    <tr><td style="color:#4fc3f7">5 ✦</td><td>18</td><td style="color:#c084fc"><strong>2</strong></td><td>3.354</td></tr>
+                    <tr><td>6</td><td>20</td><td style="color:#c084fc">2</td><td>4.409</td></tr>
+                    <tr><td>7</td><td>22</td><td style="color:#c084fc">2</td><td>5.556</td></tr>
+                    <tr><td style="color:#4fc3f7">8 ✦</td><td>24</td><td style="color:#ffd700"><strong>3</strong></td><td>6.788</td></tr>
+                    <tr><td>9</td><td>26</td><td style="color:#ffd700">3</td><td>8.100</td></tr>
+                    <tr><td>10</td><td>28</td><td style="color:#ffd700">3</td><td>9.486</td></tr>
+                    <tr><td style="color:#ff9060">11 ★</td><td>30</td><td style="color:#ffd700">3</td><td>—</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:8px; font-size:0.78em; color:#888;">✦ Nível de desbloqueio de co-líder adicional &nbsp;|&nbsp; ★ Nível máximo</p>
+        </div>
+
+        <!-- 4. Quadro de avisos -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#8ecf8e; border-color:#8ecf8e;">4. Quadro de Avisos</h4>
+            <p>Líder e co-líderes podem publicar um aviso visível a todos os membros. O aviso tem limite de <strong style="color:#ffd700">150 caracteres</strong> e só pode ser atualizado <strong style="color:#ffd700">uma vez a cada 5 minutos</strong>.</p>
+        </div>
+
+        <!-- 5. Gerenciamento -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff9060; border-color:#ff9060;">5. Gerenciamento da Guilda</h4>
+            <p>O ícone de configurações (⚙️) da guilda abre o painel de gestão, com as seguintes abas:</p>
+            <div class="tut-box">
+                <ul>
+                    <li>✏️ <strong style="color:#ffd700">Editar</strong> — altera nome (1x/30 dias), descrição e bandeira da guilda</li>
+                    <li>📬 <strong style="color:#ffd700">Solicitações</strong> — lista jogadores que pediram para entrar; líder e co-líderes podem aceitar ou recusar</li>
+                    <li>👥 <strong style="color:#ffd700">Gerenciar</strong> — promover membros a co-líder, rebaixar co-líderes e expulsar membros</li>
+                    <li>📋 <strong style="color:#ffd700">Quadro de Aviso</strong> — edita o aviso da guilda e consulta o registro de atividades</li>
+                    <li>📦 <strong style="color:#888">Baú</strong> — em breve</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 6. Ranking -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ffd700; border-color:#ffd700;">6. Ranking de Guildas</h4>
+            <p>A aba <strong style="color:#ffd700">Ranking</strong> exibe as guildas ordenadas por <strong style="color:#ffd700">Poder de Combate</strong> — a soma do poder de todos os membros. O ranking é <strong style="color:#ffd700">atualizado toda segunda-feira</strong> à meia-noite (UTC).</p>
+        </div>
+
+        <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+            <button class="tut-ok-btn" id="closeGuildTutBtn2">ENTENDI</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const guildtutoImg    = document.getElementById("guildtuto");
+        const guildTutModal   = document.getElementById("guildTutorialModal");
+        const closeBtn1       = document.getElementById("closeGuildTutBtn");
+        const closeBtn2       = document.getElementById("closeGuildTutBtn2");
+
+        const openTut  = () => { guildTutModal.style.display = "flex"; };
+        const closeTut = () => { guildTutModal.style.display = "none"; };
+
+        if (guildtutoImg) guildtutoImg.addEventListener("click", openTut);
+        if (closeBtn1)    closeBtn1.addEventListener("click", closeTut);
+        if (closeBtn2)    closeBtn2.addEventListener("click", closeTut);
+        if (guildTutModal) {
+            guildTutModal.addEventListener("click", (e) => {
+                if (e.target === guildTutModal) closeTut();
+            });
+        }
+    });
+</script>
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 99999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.1em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${15 * correction}px !important; }
+    body { font-size: 1.3rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+
+
+ <script type="module" src="guild_raid.js"></script>
+<script src="loading.js"></script>
+   <script src="number_format.js"></script>
+    <script src="guild.js"></script>
+    <script type="module" src="playerModal.js"></script>
+    <script type="module">
+import { supabase } from './supabaseClient.js';
+// Expõe o cliente autenticado para getSBClient() em guild.js
+window.__guildAuthSB = supabase;
+</script>
+<script src="guild_pv.js"></script>
+<script type="module">
+import { supabase } from './supabaseClient.js';
+
+// ─── Skin helpers ──────────────────────────────────────────────────────────────
+const _GD_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const _MFO = 400, _MFI = 1200;
+
+function _gVideoSwap(src, skipOut) {
+    const vid = document.getElementById('guild-modal-bg-video');
+    if (!vid) return;
+    const doLoad = () => {
+        const s = vid.querySelector('source');
+        if (s) { s.src = src; s.type = 'video/webm'; }
+        vid.load();
+        const fadeIn = () => {
+            vid.style.transition = `opacity ${_MFI}ms ease-in`;
+            vid.style.opacity = '0.98';
+        };
+        if (vid.readyState >= 3) fadeIn();
+        else {
+            vid.addEventListener('canplay',        fadeIn, { once: true });
+            vid.addEventListener('canplaythrough', fadeIn, { once: true });
+        }
+        vid.play().catch(() => {});
+    };
+    if (skipOut) { doLoad(); }
+    else {
+        vid.style.transition = `opacity ${_MFO}ms ease-out`;
+        vid.style.opacity = '0';
+        setTimeout(doLoad, _MFO + 30);
+    }
+}
+
+function _gApplySkin(frameUrl, videoUrl) {
+    const frameEl  = document.getElementById('guild-frame-overlay');
+    const sheenEl  = document.getElementById('guild-frame-sheen');
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (frameUrl) {
+        if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+        if (avatarEl) avatarEl.style.border = 'none';
+        if (sheenEl) {
+            sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+            sheenEl.style.maskImage       = `url('${frameUrl}')`;
+            sheenEl.style.display = 'block';
+        }
+    } else {
+        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+        if (sheenEl)  sheenEl.style.display = 'none';
+        if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
+    }
+    _gVideoSwap(videoUrl || _GD_VID, true);
+}
+
+function _gResetSkin() {
+    const vid     = document.getElementById('guild-modal-bg-video');
+    const frameEl = document.getElementById('guild-frame-overlay');
+    const sheenEl = document.getElementById('guild-frame-sheen');
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+    if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+    if (sheenEl)  sheenEl.style.display = 'none';
+    if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
+}
+
+// ─── Fetch & apply (SECURITY DEFINER bypasses RLS) ────────────────────────────
+// Sempre busca do servidor (sem cache) para garantir moldura e fundo sempre atualizados
+let _gFetching = false;
+async function _gFetchAndApplySkins(playerId) {
+    if (!playerId || _gFetching) return;
+    _gFetching = true;
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
+        if (error) { console.warn('[guild skin]', error.message); _gApplySkin(null, null); return; }
+        _gApplySkin(data?.frame_url || null, data?.video_url || null);
+    } catch(e) {
+        console.warn('[guild skin]', e);
+        _gApplySkin(null, null);
+    } finally {
+        _gFetching = false;
+    }
+}
+
+// ─── Core strategy ─────────────────────────────────────────────────────────────
+// playerModal.js calls its own LOCAL fetchPlayerData() — not window.fetchPlayerData.
+// Wrapping window.fetchPlayerData is therefore useless for most click paths.
+//
+// Instead:
+//   Step A — capture phase click listener (runs before any bubble listeners)
+//            → intercepts .player-link clicks → stores playerId
+//   Step B — MutationObserver on #playerAvatarEquip[src]
+//            → fires when playerModal.js sets the avatar (=modal populated)
+//            → at that point the stored playerId is valid → fetch & apply skin
+
+let _gLastPid = null;
+
+// Step A: capture the playerId before anyone else handles the click
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.player-link');
+    if (!link) return;
+    const pid = link.dataset.playerId;
+    if (!pid) return;
+    _gLastPid = pid;
+    _gResetSkin(); // clear previous skin immediately on click
+}, true /* capture */);
+
+// Step B: detect when playerModal.js finishes populating the avatar
+document.addEventListener('DOMContentLoaded', () => {
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (!avatarEl) return;
+
+    new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            // src changed away from placeholder → modal just got populated
+            if (m.attributeName === 'src') {
+                const newSrc = avatarEl.getAttribute('src') || '';
+                // Skip placeholder / empty states
+                if (!newSrc || newSrc.includes('placeholder') || newSrc === 'https://via.placeholder.com/100') continue;
+                const modal = document.getElementById('playerModal');
+                if (!modal || modal.style.display === 'none' || modal.style.display === '') continue;
+                if (_gLastPid) _gFetchAndApplySkins(_gLastPid);
+            }
+        }
+    }).observe(avatarEl, { attributes: true, attributeFilter: ['src'] });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    
+    // --- Configurações ---
+    const KEY_TAB_SAT = 'aden_guild_tab_seen_saturday';
+    // Removemos KEY_TAB_SUN pois domingo agora é baseado puramente no horário
+    
+    const batalhasTab = document.querySelector('.tab-btn[data-tab="batalhas"]');
+
+    // --- 1. Lógica Visual (Rodada ao carregar e no Intervalo) ---
+    function checkGuildTabNotification() {
+        if (!batalhasTab) return;
+
+        const now = new Date();
+        const day = now.getUTCDay(); // 0=Dom, 6=Sab, 1=Seg
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+
+        let showDot = false;
+
+        // Limpeza na Segunda-feira
+        if (day === 1) {
+            localStorage.removeItem(KEY_TAB_SAT);
+            const dot = batalhasTab.querySelector('.tab-notification-dot');
+            if (dot) dot.remove();
+            return;
+        }
+
+        // Verifica Sábado (Lógica Padrão: Verifica Storage)
+        if (day === 6) {
+            if (!localStorage.getItem(KEY_TAB_SAT)) {
+                showDot = true;
+            }
+        }
+
+        // Verifica Domingo (Lógica Persistente: Horário 00:01 - 23:59)
+        else if (day === 0) {
+            // Início: 00:01 | Fim: 23:58:59
+            const isAfterStart = (hours === 0 && minutes >= 1) || hours > 0;
+            const isBeforeEnd = (hours < 23) || (hours === 23 && minutes < 59);
+
+            if (isAfterStart && isBeforeEnd) {
+                showDot = true; // Força true, ignora storage
+            }
+        }
+
+        // Renderização
+        const existingDot = batalhasTab.querySelector('.tab-notification-dot');
+        
+        if (showDot) {
+            if (!existingDot) {
+                const dot = document.createElement('div');
+                dot.className = 'tab-notification-dot';
+                batalhasTab.appendChild(dot);
+            }
+        } else {
+            // Se showDot virou false (ex: virou 23:59 UTC de domingo), removemos
+            if (existingDot) existingDot.remove();
+        }
+    }
+
+    // --- 2. Evento de Clique (Definido apenas uma vez) ---
+    if (batalhasTab) {
+        batalhasTab.addEventListener('click', () => {
+            const now = new Date();
+            const day = now.getUTCDay();
+
+            // Se for Sábado: Comportamento padrão (salva visto e remove bolinha)
+            if (day === 6) {
+                localStorage.setItem(KEY_TAB_SAT, 'true');
+                const dot = batalhasTab.querySelector('.tab-notification-dot');
+                if (dot) dot.remove();
+            }
+
+            // Se for Domingo (day === 0): 
+            // NÃO faz nada. A bolinha continua lá visualmente e não salvamos nada.
+            // Ela sumirá sozinha quando checkGuildTabNotification detectar 23:59 UTC.
+        });
+    }
+
+    // --- 3. Inicialização e Loop ---
+    checkGuildTabNotification();
+
+    // Verifica a cada minuto para atualizar automaticamente (importante para remover às 23:59 de domingo)
+    setInterval(checkGuildTabNotification, 60000);
+});
+</script>
+
+
+<!-- ══ CONFIRMAÇÃO: Deixar de seguir ══ -->
+<div id="pm-unfollow-confirm" style="display:none;position:fixed;inset:0;z-index:1600;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#1f1b2e,#15131f);border:1px solid rgba(201,169,74,0.35);border-radius:12px;padding:22px 20px;max-width:300px;width:85%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+    <p id="pm-unfollow-text" style="color:#e8d08a;font-family:'Cinzel',serif;font-size:0.95em;line-height:1.5;margin:0 0 10px;"></p>
+    <p style="color:#f5c842;font-size:0.75em;line-height:1.5;margin:0 0 18px;padding:7px 10px;background:rgba(245,200,66,0.08);border-radius:8px;border:1px solid rgba(245,200,66,0.2);">Atenção: se vocês possuírem um laço, ele também será desfeito e a intimidade retornará para 1000.</p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="pm-unfollow-no" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:#ddd;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Não</button>
+      <button id="pm-unfollow-yes" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(220,90,90,0.45);background:rgba(220,90,90,0.18);color:#ff9a9a;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Sim</button>
+    </div>
+  </div>
+</div>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+</body>
+<script defer type="module" src="guild_tavern.js"></script>
+
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+(function() {
+    const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    const isGloballyMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+
+    // Lista de URLs de MÚSICA DE FUNDO (BGM)
+    // Se o URL do áudio criado contiver qualquer uma dessas strings, ele será mutado.
+    const BGM_URL_FRAGMENTS = [
+        '/assets/music_loop_02.mp3', // Índice principal
+        '/assets/idlesong.mp3',      // afk_page.js
+        '/assets/combat_afk_bg.mp3', // afk_page.js
+        '/assets/mina.mp3',
+        '/assets/desolation_tower.mp3',
+        '/assets/arena.mp3',
+        // mines.js
+        // ADICIONE AQUI FRAGMENTOS DE URL DE QUALQUER OUTRA MÚSICA DE FUNDO
+        // Ex: '/assets/arena_bgm.mp3', '/assets/raid_bgm.mp3'
+    ];
+
+    // Guarda o construtor original
+    const OriginalAudio = window.Audio;
+
+    // Se o mute não estiver ativo, ou se já interceptamos, não faça nada.
+    if (!isGloballyMuted || OriginalAudio.__isPatched) {
+        return;
+    }
+
+    // Sobrescreve o construtor nativo
+    window.Audio = function(src) {
+        // 1. Cria o objeto de áudio usando o construtor original
+        const audioInstance = new OriginalAudio(src);
+
+        // 2. Verifica se o 'src' corresponde a um BGM
+        const isBGM = src && BGM_URL_FRAGMENTS.some(fragment => src.includes(fragment));
+
+        if (isBGM) {
+            // 3. Se for BGM e o mute estiver ativo, força o volume para 0.
+            audioInstance.volume = 0;
+            // console.log(`[MUTE PATCH] Muted BGM: ${src}`); // Opcional para debug
+
+            // 4. Adiciona um 'setter' falso para a propriedade 'volume' do objeto
+            // Isso previne que seus scripts de página (ex: combatMusic.volume = 0.4;)
+            // consigam desmutar o áudio posteriormente.
+            Object.defineProperty(audioInstance, 'volume', {
+                get() {
+                    return 0; // Sempre retorna 0
+                },
+                set(newValue) {
+                    // Se o valor for 0 (mutar) ou o valor antigo for 0, permite que o script original
+                    // defina o volume, mas mantemos o nosso em 0.
+                    // Isso é para o caso de o usuário querer restaurar o volume no futuro.
+                    if (newValue > 0 && isGloballyMuted) {
+                        // console.warn(`[MUTE PATCH] Tentativa de desmutar BGM bloqueada. Estado global: Mutado.`);
+                    }
+                    // O objeto de áudio real continua mutado (volume = 0)
+                },
+                configurable: true // Permite que seja redefinido se o estado mudar
+            });
+
+        }
+
+        // 5. Retorna a instância (mutada ou não)
+        return audioInstance;
+    };
+    
+    // Marca o construtor como modificado
+    window.Audio.__isPatched = true;
+    
+    // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
+    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+
+})();
+</script>
+
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "guild.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.2em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.4em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

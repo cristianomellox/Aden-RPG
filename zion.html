@@ -1,0 +1,2170 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <title>Zion - Aden RPG</title>
+    <!-- Import map exigido pelo postfx.js (bloom/color-grade/motion blur do
+         skybox) — ele importa 'three' e 'three/addons/...' como specifiers
+         nus, que só o navegador resolve com isso presente. Mesma versão do
+         Three.js já usada em zion.js (0.160.0), então não há conflito. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="zion.css" /> 
+
+</head>
+<style>
+  /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; 
+}
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* Estilos gerais (Baseado em style.css) */
+body, p, span, div, button {
+    font-family: 'Cinzel', serif;
+}
+h1, h2 {
+    font-family: 'Cinzel', serif;
+    color: #e0dccc;
+    text-shadow: 2px 2px 4px #000;
+    letter-spacing: 1.5px;
+}
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0; /* Removido padding-bottom */
+    background-color: #121212;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* TopBar (Baseado em style.css e guild.html) */
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #333;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg {
+    width: 30px;
+    height: 30px;
+}
+#pageTitle {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #4CAF50; /* Cor para Área Pacífica */
+    text-shadow: 1px 1px 2px #000;
+}
+
+
+/* 3. Estilos para o Mapa em Tela Cheia */
+/* ==================================================================
+   SKYBOX 360° (Three.js) — substitui o antigo mapa plano 1500x1700
+   (background-image + transform: translate/scale). Agora existe uma
+   câmera dentro de uma esfera com a imagem panorâmica projetada por
+   dentro. Arrastar = girar a câmera (yaw/pitch). "Zoom" = estreitar/
+   alargar o FOV. #skyboxCanvas renderiza a esfera (WebGL); #map
+   continua existindo como camada transparente por cima — é nela que
+   os .city-hotspot (nome + feixe de luz) ficam, exatamente como
+   antes. A única mudança é que left/top/scale de cada hotspot são
+   recalculados a cada frame pelo módulo da cidade, projetando sua
+   coordenada esférica (yaw/pitch) para pixels de tela, em vez de um
+   top/left fixo dentro de um mapa 2D. Toda a lógica de jogo (abrir
+   lojas, guilda regente, etc.) continua igual.
+   ================================================================== */
+#mapContainer {
+    position: fixed; /* Fixa no viewport */
+    top: 0;
+    left: 0;
+    width: 100vw; 
+    height: 100vh; 
+    overflow: hidden;
+    margin: 0;
+    z-index: 1; /* Abaixo da TopBar e do Conteúdo */
+    box-shadow: none;
+    background-color: #0d1a0d;
+}
+
+#skyboxCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+    outline: none;
+    cursor: grab;
+}
+#skyboxCanvas.dragging { cursor: grabbing; }
+
+#map {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* deixa o drag chegar ao mapContainer/canvas */
+    user-select: none;
+}
+
+/* Overlay de fade para preto usado no efeito de "entrar no prédio" ao
+   clicar num hotspot de loja, e no efeito simétrico ao sair (ver
+   zion.js). Fica acima de tudo, inclusive dos modais (z-index 3005),
+   para poder cobrir a troca de cena por completo. */
+#screenFade {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3100;
+    transition: opacity .45s ease;
+}
+#screenFade.active { opacity: 1; }
+
+/* (A antiga div preta #zionContent/#zionFooter com nome da cidade e guilda
+   regente foi removida — o nome da cidade agora fica na topbar, e a guilda
+   regente virou um hotspot no mapa. Ver bloco "HOTSPOTS DA CIDADE" abaixo.) */
+
+/* Botão História (Baseado em style.css) */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 40px; 
+    font-size: 1.2em;
+    text-shadow: 1px 1px 2px #000;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+
+/* Estilos do Modal (Mantidos) */
+.modal-container {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.8);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 3px solid #c9a94a;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    max-height: 90vh; 
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    z-index: 2001;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#historyText {
+    overflow-y: auto;
+    max-height: 70vh;
+    padding-right: 10px; 
+    text-align: left;
+    color: #ccc;
+}
+
+/* === ESTILOS DO SUBMENU (Adicionado estilo Solaris/Capital) === */
+.footer-submenu {
+    position: fixed;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 9998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
+    min-width: 180px;
+}
+
+.footer-submenu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    color: #e0dccc;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+    white-space: nowrap;      
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.footer-submenu-btn:hover {
+    background-color: #333;
+    border-color: gold;
+    color: #fff;
+}
+
+.submenu-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
+
+
+/* ================================================================= */
+/* === ESTILOS LOJA MESTRE DE POÇÕES =============================== */
+/* ================================================================= */
+#potionMasterModal {
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.2),
+      rgba(0, 0, 0, 0)
+    ),
+    url('https://aden-rpg.pages.dev/assets/mdp_zion.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    align-items: flex-start; 
+    padding-top: 0;
+}
+
+.potion-master-content {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 20px 10px;
+}
+
+.pm-title {
+    color: gold;
+    font-size: 1.6em;
+    text-shadow: 2px 2px 4px #000;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 8px;
+    border: 1px solid #555;
+    width: 90%;
+}
+
+/* --- BARRA DE RECURSOS (BASE) --- */
+#userResourcesDisplay {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 8px 5px;
+    color: #e0dccc;
+    font-size: 0.9em;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+
+    /* --- ANIMAÇÃO IGUAL AOS CARDS --- */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.res-item-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.res-icon-display {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(1px 1px 2px black);
+}
+/* ------------------------------------- */
+
+.potion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    width: 100%;
+    max-width: 1200px;
+    padding-bottom: 600px; /* Espaço para scroll */
+    padding-top: 10px; /* Ajustado para dar espaço a barra de recursos */
+}
+
+/* Animação de Fade In para os cards */
+@keyframes fadeCardIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ================================================================= */
+/* === MESTRE DE POÇÕES — CENÁRIO 3D (skybox + NPC clicável) ======== */
+/* Mesmo padrão de #mapContainer/#skyboxCanvas/#map da cidade, mas    */
+/* como um "cômodo" à parte que abre por cima do mapa (modal          */
+/* fullscreen, sem topbar). O NPC é um sprite 3D dentro do próprio    */
+/* canvas (sempre de frente pra câmera — nunca entorta ao girar; ver  */
+/* zion.js/initPmNpcSprite), não um elemento do DOM. #mdpNpcSpot   */
+/* abaixo é só um proxy invisível pro clique (ver initPmNpcClickHandler).*/
+/* ================================================================= */
+#potionMasterSceneModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background-color: #0d1a0d;
+    overflow: hidden;
+}
+
+#pmSceneContainer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+#pmSceneCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+    outline: none;
+    cursor: grab;
+}
+#pmSceneCanvas.dragging { cursor: grabbing; }
+
+#pmSceneMap {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Tutorial "clique no vendedor" — só na 1ª vez que o jogador entra   */
+/* neste cenário (ver localStorage em zion.js). Escurece tudo     */
+/* ~50% com uma vinheta que segue a projeção do NPC na tela, deixando */
+/* só ele bem visível — como nos tutoriais de apontar-e-clicar. Some  */
+/* ao primeiro clique na tela (no NPC ou fora dele) e não volta mais. */
+.pm-tutorial-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    background: radial-gradient(circle at var(--pm-spot-x, 50%) var(--pm-spot-y, 45%),
+        rgba(0,0,0,0) 0%,
+        rgba(0,0,0,0) var(--pm-spot-r, 18%),
+        rgba(0,0,0,0.5) calc(var(--pm-spot-r, 18%) + 22%));
+}
+.pm-tutorial-overlay.active { opacity: 1; }
+
+.pm-tutorial-text {
+    position: absolute;
+    top: 64px;
+    right: 14px;
+    z-index: 20;
+    max-width: 220px;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid #ffd77a;
+    color: #ffe9b8;
+    font-weight: bold;
+    font-size: 0.95em;
+    line-height: 1.35;
+    padding: 10px 14px;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity .35s ease, transform .35s ease;
+    pointer-events: none;
+}
+.pm-tutorial-text.active { opacity: 1; transform: translateY(0); }
+
+.pm-scene-exit-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,215,120,0.55);
+    border-radius: 50%;
+    cursor: pointer;
+    color: #ffd77a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.pm-scene-exit-btn:hover { background: rgba(0,0,0,0.75); }
+.pm-scene-exit-btn svg { width: 20px; height: 20px; }
+
+.potion-card {
+    background: linear-gradient(180deg, #2a2a2aBF, #1a1a1aBF);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    
+    /* Configuração da Animação */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.potion-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.potion-img {
+    width: 64px;
+    height: 64px;
+    margin-right: 15px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #000;
+}
+
+.potion-info h4 {
+    margin: 0;
+    color: #e0dccc;
+    font-size: 1.1em;
+    text-align: left;
+}
+
+.cost-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+    margin-top: 5px;
+}
+
+.cost-icon {
+    width: 40px;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.pm-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.pm-qty-selector {
+    display: flex;
+    align-items: center;
+    background: #333;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+.pm-qty-btn {
+    width: 35px;
+    height: 35px;
+    font-size: 1.2em;
+    background: #444;
+    border: 1px solid #555;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+.pm-qty-btn:hover { background: #555; }
+
+.pm-qty-val {
+    width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: white;
+}
+
+.total-price-display {
+    font-size: 0.9em;
+    color: orange;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.4);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.pm-buy-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    border: 1px solid #ffd700;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 1em;
+    text-shadow: none;
+    border-radius: 4px;
+}
+.pm-buy-btn:hover { filter: brightness(1.1); }
+.pm-buy-btn:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.7; }
+
+/* Estilo para a mensagem flutuante */
+#floatingMessage {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #e0dccc;
+    padding: 15px 25px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-size: 1.1em;
+    border: 2px solid gold;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* ==================================================================
+   HOTSPOTS DA CIDADE (mesmo padrão visual das minas: nome + feixe de
+   luz que desce até o chão + modo debug com linhas tracejadas para
+   posicionar). Usado pelas 3 áreas clicáveis (Poções/Ferreiro/Mercador)
+   e pelo hotspot da Guilda Regente.
+   ================================================================== */
+.city-hotspot {
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 4px 2px;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: auto;   /* #map é pointer-events:none; cada hotspot reativa o próprio clique */
+    transform-origin: center center; /* o módulo da cidade aplica translate(-50%,-50%) scale(zoom) aqui */
+}
+.city-hotspot:active { transform: scale(0.97); }
+.city-hotspot.non-interactive { cursor: default; }
+.city-hotspot.non-interactive:active { transform: none; }
+
+/* ─── DEBUG: contorno tracejado + mira no centro de cada hotspot, para
+   reposicionar. Ative acessando a página com ?debugSpots=1 na URL —
+   exatamente como no Vale Arcano (ver zion.js/initSpotDebugTool).
+   Clicar em qualquer ponto do céu mostra o yaw/pitch daquele ponto;
+   copie os números para CITY_SPOTS em zion.js. ───────────────── */
+#map.debug-hotspots .city-hotspot {
+    outline: 1px dashed rgba(255,255,255,0.35);
+}
+#map.debug-hotspots .city-hotspot::before,
+#map.debug-hotspots .city-hotspot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    background: rgba(255, 0, 0, 0.85);
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    pointer-events: none;
+}
+#map.debug-hotspots .city-hotspot::before { width: 16px; height: 2px; }
+#map.debug-hotspots .city-hotspot::after  { width: 2px; height: 16px; }
+
+.city-hotspot-name {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.8em;
+    color: #ffd700;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    line-height: 1;
+    white-space: nowrap;
+    position: relative;
+    z-index: 2;
+}
+
+.city-hotspot-glow-slot {
+    position: relative;
+    flex: 0 0 auto;
+    height: 64px;   /* controla o tamanho da área da luz — ajuste aqui se precisar */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
+    opacity: 0.65;
+}
+
+/* Feixe de luz — mesma técnica das minas, mas AJUSTÁVEL POR HOTSPOT:
+   cada ".city-hotspot-glow" recebe --beam-top / --beam-height /
+   --beam-column-width / --glow-rgb via style inline no próprio elemento,
+   já que cada área da cidade tem um tamanho e nome diferente. */
+.city-hotspot-glow {
+    --glow-rgb: 255,215,0;
+    --beam-top: 4px;           /* quão acima da luz o feixe nasce (perto do nome) */
+    --beam-height: 80px;       /* altura total do feixe — até onde desce em direção ao chão */
+    --beam-column-width: 60px; /* largura real e final da coluna de luz */
+
+    position: absolute;
+    left: 50%;
+    top: var(--beam-top);
+    bottom: auto;
+    width: var(--beam-column-width);
+    height: var(--beam-height);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: screen;
+    background: radial-gradient(ellipse 90% 40% at 50% 94%,
+        rgba(var(--glow-rgb), 0.55) 0%,
+        rgba(var(--glow-rgb), 0.2) 50%,
+        rgba(var(--glow-rgb), 0) 80%);
+    filter: blur(6px);
+    animation: chg-ground-flicker 5.6s ease-in-out infinite;
+}
+.city-hotspot-glow::before,
+.city-hotspot-glow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    pointer-events: none;
+}
+.city-hotspot-glow::before {
+    top: -10%;
+    width: 55%;
+    height: 20%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.95) 0%,
+        rgba(var(--glow-rgb), 0.75) 45%,
+        rgba(var(--glow-rgb), 0) 78%);
+    filter: blur(2.5px);
+    animation: chg-source-flicker 3.4s ease-in-out infinite;
+}
+.city-hotspot-glow::after {
+    top: 4%;
+    width: 100%;
+    height: 92%;
+    transform: translateX(-50%);
+    clip-path: polygon(15% 0%, 85% 0%, 96% 100%, 4% 100%);
+    background: linear-gradient(to bottom,
+        rgba(var(--glow-rgb), 0.75) 0%,
+        rgba(var(--glow-rgb), 0.28) 55%,
+        rgba(var(--glow-rgb), 0) 94%);
+    filter: blur(3px);
+    animation: chg-beam-flicker 4.8s ease-in-out infinite;
+}
+@keyframes chg-ground-flicker {
+    0%   { opacity: 0.65; }
+    30%  { opacity: 0.9;  }
+    55%  { opacity: 0.6;  }
+    78%  { opacity: 0.82; }
+    100% { opacity: 0.65; }
+}
+@keyframes chg-source-flicker {
+    0%   { opacity: 0.7;  }
+    38%  { opacity: 1;    }
+    64%  { opacity: 0.8;  }
+    100% { opacity: 0.7;  }
+}
+@keyframes chg-beam-flicker {
+    0%   { opacity: 0.55; }
+    25%  { opacity: 0.85; }
+    48%  { opacity: 0.4;  }
+    70%  { opacity: 0.78; }
+    88%  { opacity: 0.5;  }
+    100% { opacity: 0.55; }
+}
+
+/* Hotspot da Guilda Regente: SEM feixe de luz — só a bandeira (100x100,
+   redonda, borda gold) e o nome embaixo. Fica 100% oculto (JS) quando a
+   cidade não tem guilda regente — nem imagem nem nome aparecem. */
+#cityGuildHotspot {
+    display: none;
+}
+/* Luz atrás da bandeira: mesma técnica/animação do feixe das lojas
+   (".city-hotspot-glow"), mas ancorada atrás da bandeira redonda em vez de
+   descer até o chão. Ajuste --beam-height / --beam-column-width abaixo para
+   mudar o tamanho do "spot" e da luz. */
+#cityGuildHotspot .guild-flag-glow-slot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;   /* mesmo tamanho da bandeira — ajuste aqui o "spot" */
+    height: 100px;
+    z-index: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#cityGuildHotspot .guild-flag-img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 2px solid gold;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    background-color: rgba(0, 0, 0, 0.6);
+    position: relative;
+    z-index: 2; /* fica acima da luz */
+}
+#cityGuildHotspot .guild-name-label {
+    position: relative;
+    z-index: 2;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    color: orange;
+    font-size: 1.5em;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    text-align: center;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* ================================================================= */
+/* === MODAL ÉPICO: GUILDA REGENTE ================================= */
+/* Layout/cores ficaram como estilo INLINE direto no HTML (mesmo       */
+/* padrão dos outros modais do jogo, ex.: #potionMasterModal) para não  */
+/* depender de cascata/especificidade externa. Aqui só ficam as        */
+/* @keyframes, que não dá pra declarar inline.                        */
+/* ================================================================= */
+@keyframes gv-pop-in {
+    0%   { transform: scale(.75); opacity: 0; }
+    60%  { transform: scale(1.045); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@keyframes gv-rotate {
+    from { transform: translateX(-50%) rotate(0deg); }
+    to   { transform: translateX(-50%) rotate(360deg); }
+}
+@keyframes gv-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.95); }
+    50%      { opacity: 1;    transform: scale(1.08); }
+}
+</style>
+<body>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+       <div> <span id="pageTitle">Zion</span></div>
+        <img src="https://aden-rpg.pages.dev/assets/sobre.webp" id="btnOpenHistory" style="width:50px; height:35px;">
+    </div>
+
+        <div id="mapContainer">
+        <canvas id="skyboxCanvas"></canvas>
+        <div id="map">
+            <!-- ====================================================================
+                 HOTSPOTS DA CIDADE — mesmo padrão de antes: nome + feixe de luz que
+                 desce até o chão. A posição (left/top) e a escala de cada um agora
+                 são calculadas a cada frame por zion.js a partir do yaw/pitch em
+                 CITY_SPOTS (mapa esférico 360°) — não há mais top/left fixos em
+                 px aqui; width/height também vêm de CITY_SPOTS. Para reposicionar,
+                 abra a página com ?debugSpots=1 na URL (mesmo debug do Vale Arcano).
+
+                 Os IDs (btnPotionMaster / btnOficina / btnMercador / btnChancelaria)
+                 foram mantidos de propósito: são os mesmos que potionMasterModal /
+                 oficina.js / mercador.js / chancelaria.js já usam para abrir cada
+                 loja, então o clique continua funcionando exatamente como antes
+                 (zion.js só intercepta o clique para tocar a animação de
+                 aproximação, e deixa o clique original prosseguir em seguida).
+                 ==================================================================== -->
+
+            <div id="btnPotionMaster" class="city-hotspot">
+                <span class="city-hotspot-name">Mestre de Poções</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:300px; --beam-column-width:280px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+
+            <div id="btnOficina" class="city-hotspot">
+                <span class="city-hotspot-name">Ferreiro</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:370px; --beam-column-width:400px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+
+            <div id="btnMercador" class="city-hotspot">
+                <span class="city-hotspot-name">Mercador</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:400px; --beam-column-width:380px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+
+            <!-- Guilda Regente: sem feixe de luz, só bandeira + nome embaixo.
+                 fetchAndDisplayCityOwner() (mais abaixo) mostra/esconde ESTE
+                 bloco inteiro via dataset.cityHidden — quando não há guilda
+                 regente, nem a imagem nem o nome aparecem. Começa oculto
+                 (data-city-hidden="1") até a busca confirmar se há guilda. -->
+            <div id="cityGuildHotspot" class="city-hotspot" data-city-hidden="1">
+                <div class="guild-flag-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:-16px; --beam-height:132px; --beam-column-width:120px; --glow-rgb:255,215,0;"></div>
+                </div>
+                <img id="guild_flag_zion" class="guild-flag-img" src="" alt="Bandeira da Guilda">
+                <span id="guild_name_zion" class="guild-name-label"></span>
+            </div>
+
+            <!-- Chancelaria: abre modal com mapa arrastável próprio mostrando os
+                 títulos da cidade. -->
+            <div id="btnChancelaria" class="city-hotspot">
+                <span class="city-hotspot-name">Chancelaria</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:380px; --beam-column-width:280px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay de fade para preto — efeito de "entrar no prédio" ao clicar
+         num hotspot de loja, e o inverso ao fechar (ver zion.js). -->
+    <div id="screenFade"></div>
+    <!-- Modal épico: Guilda Regente vitoriosa. Abre ao clicar no spot da
+         bandeira/nome da guilda regente (ver initGuildVictoryModal em
+         zion.js). Não abre se não houver guilda regente no momento.
+         Estilo todo INLINE de propósito (mesmo padrão de #potionMasterModal
+         etc.) para não depender de nenhuma regra externa de CSS. -->
+    <div id="guildVictoryModal" class="modal-container" style="display:none; z-index:3200; background: radial-gradient(ellipse at center, rgba(32,21,6,0.94) 0%, rgba(0,0,0,0.97) 78%);">
+        <div class="gv-content" style="position:relative; display:flex; flex-direction:column; align-items:center; gap:12px; padding:48px 34px 36px; max-width:460px; width:88%; box-sizing:border-box; background:linear-gradient(180deg, rgba(44,30,10,0.92), rgba(8,6,3,0.96)); border:2px solid #caa24a; border-radius:14px; box-shadow:0 0 0 1px rgba(255,215,120,0.25), 0 0 70px rgba(255,190,60,0.35), 0 20px 60px rgba(0,0,0,0.65); text-align:center; overflow:hidden; animation: gv-pop-in .55s cubic-bezier(.2,1.4,.4,1) both;">
+            <span class="close-btn" id="closeGuildVictoryBtn" style="position:absolute; top:10px; right:15px; z-index:2;">&times;</span>
+            <div class="gv-rays" style="position:absolute; top:-46%; left:50%; width:900px; height:900px; transform:translateX(-50%); background:conic-gradient(from 0deg,rgba(255,215,120,0.18) 0deg, transparent 14deg, transparent 26deg,rgba(255,215,120,0.18) 40deg, transparent 54deg, transparent 66deg,rgba(255,215,120,0.18) 80deg, transparent 94deg, transparent 106deg,rgba(255,215,120,0.18) 120deg, transparent 134deg, transparent 146deg,rgba(255,215,120,0.18) 160deg, transparent 174deg, transparent 186deg,rgba(255,215,120,0.18) 200deg, transparent 214deg, transparent 226deg,rgba(255,215,120,0.18) 240deg, transparent 254deg, transparent 266deg,rgba(255,215,120,0.18) 280deg, transparent 294deg, transparent 306deg,rgba(255,215,120,0.18) 320deg, transparent 334deg, transparent 346deg,rgba(255,215,120,0.18) 360deg); animation: gv-rotate 24s linear infinite; pointer-events:none; opacity:0.85;"></div>
+            <div class="gv-ribbon" style="position:relative; font-family:'Cinzel', serif; font-weight:700; font-size:1.3em; letter-spacing:3px; color:#fff; background:linear-gradient(180deg, #777, #555 55%, #333); padding:5px 18px; border-radius:3px; box-shadow:0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.5); text-shadow:0 1px 0 rgba(255,255,255,0.3);">Guilda Regente</div>
+            <div class="gv-flag-wrap" style="position:relative; width:132px; height:132px; display:flex; align-items:center; justify-content:center; margin-top:4px; flex:0 0 auto;">
+                <div class="gv-flag-glow" style="position:absolute; inset:-18px; border-radius:50%; background:radial-gradient(circle, rgba(255,210,110,0.55) 0%, rgba(255,210,110,0) 70%); animation: gv-pulse 2.2s ease-in-out infinite;"></div>
+                <img id="guildVictoryFlag" src="" alt="Bandeira da Guilda Regente" style="position:relative; display:block; width:112px; height:112px; max-width:112px; max-height:112px; object-fit:cover; border-radius:50%; border:3px solid #ffd77a; box-shadow:0 0 0 4px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.6); background:#1a1206;">
+            </div>
+            <h2 id="guildVictoryName" style="position:relative; font-family:'Cinzel', serif; font-size:1.6em; margin:2px 0 0; background:linear-gradient(180deg, #fff3cf, #e8b34a 60%, #a9762a); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 2px 10px rgba(255,190,60,0.35); letter-spacing:1px;"></h2>
+            <p id="guildVictoryMessage" style="position:relative; color:#e8dfc8; font-size:1em; line-height:1.55; margin:0;"></p>
+        </div>
+    </div>
+
+    
+    
+        <!-- Modal Mestre de Poções — CENÁRIO 3D (abre primeiro, ao clicar no
+         hotspot da cidade). Fullscreen, sem topbar. O jogador anda a
+         câmera livremente (o NPC é um sprite 3D dentro do canvas — ver
+         initPmNpcSprite em zion.js, sempre de frente pra câmera, nunca
+         entorta) e só a loja de fato (mais abaixo) abre ao clicar nele.
+         Ver initPmScene()/openPmScene() em zion.js. -->
+    <div id="potionMasterSceneModal">
+        <div id="pmSceneContainer">
+            <canvas id="pmSceneCanvas"></canvas>
+            <div id="pmSceneMap">
+                <!-- Proxy invisível: recebe um .click() sintético quando o
+                     raycaster acerta o sprite do NPC no canvas (ver
+                     initPmNpcClickHandler em zion.js). O vendedor em si
+                     não é um elemento do DOM. -->
+                <div id="mdpNpcSpot" style="display:none;" aria-hidden="true"></div>
+            </div>
+            <div id="pmSceneTutorialOverlay" class="pm-tutorial-overlay"></div>
+            <div id="pmSceneTutorialText" class="pm-tutorial-text">👆 Clique no vendedor para comprar poções!</div>
+            <div id="closePmSceneBtn" class="pm-scene-exit-btn" title="Sair">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mestre de Poções -->
+    <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content potion-master-content">
+            <span class="close-btn" id="closePotionMasterBtn">&times;</span>
+            
+            <h3 class="pm-title">Troque Cartões por Poções</h3>
+
+            <!-- Mostra Recursos do Jogador (Apenas os Base) -->
+            <div id="userResourcesDisplay">
+                <span style="width:100%; text-align:center; color:gold;">Você tem:</span>
+                Carregando recursos...
+            </div>
+            
+            <div id="potionShopGrid" class="potion-grid">
+                <!-- Itens gerados via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mercador -->
+    <div id="mercadorModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content" id="mercadorModalContent" style="width:100%;height:100%;max-width:100%;max-height:100vh;background:transparent!important;border:none!important;box-shadow:none!important;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:20px 10px 80px;">
+            <span class="close-btn" id="closeMercadorBtn" style="position:fixed;top:12px;right:18px;z-index:10;">&times;</span>
+            <h3 class="pm-title" style="margin-top:40px;">Mercador Ambulante</h3>
+            <div id="mercadorContent" style="width:100%;max-width:680px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;animation:fadeCardIn 4s ease-out forwards;">
+                Carregando...
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Chancelaria: shell (topbar + mapa arrastável). Todo o conteúdo
+         dinâmico (títulos/avatares) e a lógica de arrastar/zoom são
+         controlados por chancelaria.js. -->
+    <div id="chancelariaModal" class="modal-container chanc-modal" style="display:none; z-index: 3005;">
+        <div id="chancTopBar" class="chanc-topbar">
+            <button id="chancBackBtn" class="top-bar-link chanc-back-btn" aria-label="Voltar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <div><span class="chanc-page-title">Chancelaria</span></div>
+            <div class="chanc-topbar-spacer"></div>
+        </div>
+        <div id="chancMapContainer" class="chanc-map-container">
+            <div id="chancMap" class="chanc-map">
+                <div id="chancTitlesHotspot" class="chanc-titles-hotspot"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="modal-container" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>História de Zion</h2>
+            <div id="historyText">
+                <p>Zion é uma das cidades mais antigas de Aden, fundada por mercadores que buscavam um ponto neutro e seguro para o comércio entre as facções do continente. Sua localização estratégica a transformou rapidamente no principal centro econômico do reino.</p>
+                <p>A cidade é governada por um conselho de mercadores, embora o título honorífico de "Guilda Regente" seja concedido à guilda mais forte na disputa, para a segurança e prosperidade do local. O controle da cidade não é militar, mas sim uma disputa de influência econômica e social, o que garante a sua natureza pacífica.</p>
+                <p>O lema de Zion é "Paz e Lucro", e qualquer conflito interno é rapidamente resolvido pelo Conselho, que preza acima de tudo a estabilidade para os negócios. Isso a torna um refúgio para aventureiros que buscam um lugar seguro para descansar e negociar seus espólios.</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+  let musicStarted = false;
+let backgroundMusic;
+
+document.addEventListener("DOMContentLoaded", () => {
+  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/zion.mp3");
+  backgroundMusic.volume = 0.3;
+  backgroundMusic.loop = true;
+
+  function startBackgroundMusic() {
+    if (musicStarted) return;
+    backgroundMusic.play().then(() => {
+      musicStarted = true;
+      console.log("🎵 Música de fundo iniciada!");
+    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+  }
+
+  // Função utilitária para registrar listeners com opções comuns
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {
+      // alguns targets (ex: null) podem falhar, silenciosamente ignoramos
+    }
+  }
+
+  // 1) Eventos primários que normalmente desbloqueiam áudio
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, function onPrimary(e) {
+      startBackgroundMusic();
+      // remover listener é opcional; play() verifica musicStarted
+    });
+    addCapturedListener(document.body, ev, function onPrimary2(e) {
+      startBackgroundMusic();
+    });
+  }
+
+  // 2) Tentar capturar ARRASTO — só inicia se houver um toque/pointer real associado
+  let moveArmed = false; // armará o gatilho quando detectarmos um pointerdown/touchstart
+  function armMove() { moveArmed = true; /* breve timeout para evitar ficar armado indefinidamente */ setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+  addCapturedListener(document.body, "pointerdown", armMove);
+  addCapturedListener(document.body, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted || !moveArmed) return;
+    // Verifica se o movimento tem dedos ou pressão (sinal de arraste real)
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic();
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+  addCapturedListener(document.body, "touchmove", handleMoveForMusic);
+  addCapturedListener(document.body, "pointermove", handleMoveForMusic);
+
+  // 3) Especial: anexa listeners diretamente aos elementos de mapa mais comuns
+  // Busca por ids/classes que costumam ser usadas por mapas (ajuste se seu mapa usa outro seletor)
+  const mapSelectors = [
+    "#mapContainer",
+    "#map",
+    ".map",
+    ".leaflet-container",
+    ".mapboxgl-canvas",
+    ".mapboxgl-map"
+  ];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  // 4) Fallbacks adicionais: se usuário soltar (pointerup / touchend) após arrastar, tente tocar
+  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+  addCapturedListener(document.body, "pointerup", tryOnUp);
+  addCapturedListener(document.body, "touchend", tryOnUp);
+
+  // 5) Fallback temporizado (após pequena interação) — evita tentar tocar muitas vezes
+  setTimeout(() => {
+    if (!musicStarted) {
+      // última tentativa silenciosa
+      try { startBackgroundMusic(); } catch(e) {}
+    }
+  }, 6000);
+
+  // Expor para debug / chamadas manuais
+  window.startBackgroundMusic = startBackgroundMusic;
+  window.__musicDebug = { isStarted: () => musicStarted };
+});
+// FIM DA MÚSICA DE FUNDO
+  
+// A antiga função enableMapInteraction() (arrastar/pinch de um <div> 2D
+// com background-image) foi removida — a navegação do mapa agora é uma
+// skybox 360° (Three.js), inicializada por zion.js (initSkybox +
+// enableMapInteraction + initSpotDebugTool + initShopTransitions).
+// O modo debug dos hotspots também passou para lá: acesse a página com
+// ?debugSpots=1 na URL para ver os contornos tracejados e descobrir o
+// yaw/pitch de qualquer ponto clicando no céu — mesma convenção do Vale
+// Arcano. Não há mais um toggle fixo (CITY_HOTSPOT_DEBUG) no código.
+
+// =======================================================================
+// Lógica de UI (Menus, Submenus e Modais)
+// =======================================================================
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- Modal de História ---
+    const openHistoryBtn = document.getElementById('btnOpenHistory');
+    const historyModal = document.getElementById('historyModal');
+    const closeHistoryBtn = historyModal.querySelector('.close-btn');
+
+    if (openHistoryBtn && historyModal) {
+        openHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        });
+
+        closeHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'none';
+            document.body.style.overflow = '';
+        });
+        
+        // Fecha ao clicar fora
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+    }
+});
+</script>
+
+<script type="module">
+  import { supabase } from './supabaseClient.js'
+
+
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+function getLocalUserId() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && (parsed.expires > Date.now() || !parsed.expires)) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+async function fetchAndDisplayCityOwner(cityName) {
+    const cityNameLower = cityName.toLowerCase();
+    const cacheKey = `city_owner_cache_${cityNameLower}`;
+    
+        // IDs dos elementos DOM
+    const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
+    const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
+    // Hotspot no mapa que envolve a bandeira + nome (ex.: #cityGuildHotspot).
+    // Quando não há guilda regente, o hotspot inteiro fica oculto — nem
+    // imagem nem nome aparecem.
+    const hotspot = flagImg ? flagImg.closest('.city-hotspot') : null;
+
+    if (!nameSpan || !flagImg) {
+        console.error(`Elementos de guilda para ${cityName} não encontrados.`);
+        return;
+    }
+
+    // Função auxiliar para atualizar a UI
+    // OBS: a visibilidade do hotspot agora é controlada por dataset.cityHidden
+    // (lido pelo módulo da cidade a cada frame na projeção 360°) em vez de
+    // style.display diretamente — o loop de projeção reescreveria display
+    // a cada frame e desfaria um style.display='none' direto.
+    const updateUI = (name, flagUrl) => {
+        if (name && flagUrl) {
+            flagImg.setAttribute('src', flagUrl);
+            flagImg.setAttribute('alt', `Bandeira da Guilda ${name}`);
+            nameSpan.textContent = name;
+            if (hotspot) hotspot.dataset.cityHidden = '0';
+        } else {
+            flagImg.removeAttribute('src');
+            nameSpan.textContent = '';
+            if (hotspot) hotspot.dataset.cityHidden = '1';
+        }
+    };
+
+    try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            const now = new Date().getTime();
+            if (cached && cached.expiry && now < cached.expiry) {
+                console.log(`[Cache] Carregando dono de ${cityName} do cache local.`);
+                updateUI(cached.guildName, cached.guildFlag);
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn("Erro ao ler cache da cidade:", e);
+    }
+
+    try {
+        console.log(`[Network] Buscando dono de ${cityName} no Supabase...`);
+        const { data: ownersData, error } = await supabase.rpc('get_city_owners');
+
+        if (error) {
+            console.error('Erro Supabase ao buscar donos das cidades:', error);
+            return;
+        }
+
+        const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
+        
+        let guildName = null;
+        let guildFlag = null;
+
+        if (cityOwnerData && cityOwnerData.owner_guild_id) {
+            guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
+            guildFlag = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+        }
+
+        updateUI(guildName, guildFlag);
+
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setUTCDate(now.getUTCDate() + 1);
+        tomorrow.setUTCHours(0, 0, 0, 0);
+        
+        const expiryTimestamp = tomorrow.getTime();
+
+        const cacheData = {
+            guildName: guildName,
+            guildFlag: guildFlag,
+            expiry: expiryTimestamp
+        };
+
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+
+    } catch (err) {
+        console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const pageTitle = document.title;
+    const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
+    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
+
+    if (cityName) {
+        fetchAndDisplayCityOwner(cityName);
+    } else {
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
+
+
+/* ================================================================= */
+/* === LÓGICA MESTRE DE POÇÕES (ZION) ============================== */
+/* ================================================================= */
+
+// Lista de Receitas do Mestre de Poções de ZION
+// R = Cartão Espiral Comum (41) | SR = Cartão Espiral Avançado (42)
+const potionRecipes = [
+    // --- RANK R (Frag 41) ---
+    {
+        id: 43, name: "Poção de Cura R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp",
+        resId: 51, resName: "Elora", resCost: 5, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 41, fragCost: 1, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 47, name: "Poção de Destreza R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_r.webp",
+        resId: 52, resName: "Lumina", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 45, name: "Poção de Fúria R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_r.webp", 
+        resId: 53, resName: "Rutus", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 49, name: "Poção de Ataque R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_r.webp", 
+        resId: 54, resName: "Galdra", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    // --- RANK SR (Frag 42) ---
+    {
+        id: 44, name: "Poção de Cura SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_sr.webp",
+        resId: 51, resName: "Elora", resCost: 15, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 42, fragCost: 1, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 48, name: "Poção de Destreza SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_sr.webp",
+        resId: 52, resName: "Lumina", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 46, name: "Poção de Fúria SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_sr.webp",
+        resId: 53, resName: "Rutus", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 50, name: "Poção de Ataque SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_sr.webp",
+        resId: 54, resName: "Galdra", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    }
+];
+
+const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
+
+// --- Carregar Recursos Base do Cache IDB ---
+async function loadResourcesFromCache() {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 47; 
+
+    const resourceMap = {
+        51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
+        52: { count: 0, name: 'Lumina', img: 'https://aden-rpg.pages.dev/assets/itens/lumina.webp' },
+        53: { count: 0, name: 'Rutus', img: 'https://aden-rpg.pages.dev/assets/itens/rutus.webp' },
+        54: { count: 0, name: 'Galdra', img: 'https://aden-rpg.pages.dev/assets/itens/galdra.webp' }
+    };
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onerror = () => resolve(resourceMap); 
+
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                resolve(resourceMap); return;
+            }
+
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const getAllReq = store.getAll();
+
+            getAllReq.onsuccess = () => {
+                const items = getAllReq.result || [];
+                items.forEach(invItem => {
+                    const itemId = invItem.items?.item_id;
+                    if (resourceMap[itemId]) {
+                        resourceMap[itemId].count += (invItem.quantity || 0);
+                    }
+                });
+                resolve(resourceMap);
+            };
+            getAllReq.onerror = () => resolve(resourceMap);
+        };
+    });
+}
+
+// Atualizar Cache Local (Com fix de String ID)
+async function updateResourceCache(resId, resQty, fragId, fragQty) {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 47;
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) { resolve(); return; }
+            
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const getAll = store.getAll();
+
+            getAll.onsuccess = () => {
+                const items = getAll.result;
+                const targets = [
+                    { id: String(resId), qty: resQty },
+                    { id: String(fragId), qty: fragQty }
+                ];
+
+                for (const item of items) {
+                    if (!item.items || !item.items.item_id) continue;
+                    
+                    const currentId = String(item.items.item_id);
+                    const targetIndex = targets.findIndex(t => t.id === currentId);
+                    
+                    if (targetIndex !== -1) {
+                        const target = targets[targetIndex];
+                        if (item.quantity >= target.qty) {
+                            item.quantity -= target.qty;
+                            target.qty = 0;
+                            if (item.quantity <= 0) store.delete(item.id);
+                            else store.put(item);
+                        } else {
+                            target.qty -= item.quantity;
+                            store.delete(item.id);
+                        }
+                    }
+                }
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); 
+        };
+        req.onerror = () => resolve();
+    });
+}
+
+// Renderiza a grade de itens
+function renderPotionShop() {
+    const grid = document.getElementById('potionShopGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    potionRecipes.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'potion-card';
+        card.innerHTML = `
+            <div class="potion-header">
+                <img src="${item.img}" class="potion-img" alt="${item.name}">
+                <div class="potion-info">
+                    <h4>${item.name}</h4>
+                    <div class="cost-row">
+                        <img src="${item.resImg}" class="cost-icon" title="${item.resName}">
+                        <span>x${item.resCost}</span>
+                        <img src="${item.fragImg}" class="cost-icon" style="margin-left:5px;" title="Fragmento">
+                        <span>x${item.fragCost}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pm-controls">
+                <div class="pm-qty-selector">
+                    <button class="pm-qty-btn minus" data-id="${item.id}">-</button>
+                    <span class="pm-qty-val" id="qty-${item.id}">1</span>
+                    <button class="pm-qty-btn plus" data-id="${item.id}">+</button>
+                </div>
+                
+                <div class="total-price-display">
+                    Total: 
+                    <img src="${item.resImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-res-${item.id}">${item.resCost}</span> + 
+                    <img src="${item.fragImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-frag-${item.id}">${item.fragCost}</span>
+                </div>
+
+                <button class="pm-buy-btn" id="buy-btn-${item.id}" data-id="${item.id}">Trocar</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    // Event Listeners
+    document.querySelectorAll('.pm-qty-btn.plus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, 1)));
+    document.querySelectorAll('.pm-qty-btn.minus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, -1)));
+    document.querySelectorAll('.pm-buy-btn').forEach(b => b.addEventListener('click', (e) => buyPotion(e.target.dataset.id)));
+}
+
+// Atualiza quantidade e preço total na UI
+function updateQty(id, delta) {
+    id = parseInt(id);
+    const qtySpan = document.getElementById(`qty-${id}`);
+    if(!qtySpan) return;
+
+    let currentQty = parseInt(qtySpan.textContent);
+    let newQty = currentQty + delta;
+    if (newQty < 1) newQty = 1;
+    if (newQty > 99) newQty = 99; 
+
+    qtySpan.textContent = newQty;
+
+    // Atualiza totais visuais
+    const recipe = potionRecipes.find(r => r.id === id);
+    if (recipe) {
+        document.getElementById(`tot-res-${id}`).textContent = fmt(recipe.resCost * newQty);
+        document.getElementById(`tot-frag-${id}`).textContent = fmt(recipe.fragCost * newQty);
+    }
+}
+
+function showMsg(msg) {
+    let modal = document.getElementById('pmMsgModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pmMsgModal';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;';
+        modal.innerHTML =
+            '<div style="background:linear-gradient(160deg,#1e1e2e,#12121c);border:1px solid #c9a94a;' +
+            'border-radius:12px;padding:28px 24px 20px;max-width:340px;width:88%;' +
+            'display:flex;flex-direction:column;align-items:center;gap:18px;' +
+            'box-shadow:0 8px 32px rgba(0,0,0,.8);font-family:\'Cinzel\',serif;">' +
+                '<p id="pmMsgText" style="color:#e0dccc;font-size:1em;text-align:center;' +
+                'margin:0;line-height:1.5;text-shadow:1px 1px 3px #000;"></p>' +
+                '<button id="pmMsgOk" style="background:linear-gradient(135deg,#b8860b,#8b6914);' +
+                'color:#fff;border:1px solid #c9a94a;border-radius:8px;padding:8px 32px;' +
+                'font-family:\'Cinzel\',serif;font-size:.95em;cursor:pointer;' +
+                'transition:background .2s;">OK</button>' +
+            '</div>';
+        document.body.appendChild(modal);
+        document.getElementById('pmMsgOk').addEventListener('click', () => { modal.style.display = 'none'; });
+        document.getElementById('pmMsgOk').addEventListener('mouseover', function() {
+            this.style.background = 'linear-gradient(135deg,#d4a017,#a07820)';
+        });
+        document.getElementById('pmMsgOk').addEventListener('mouseout', function() {
+            this.style.background = 'linear-gradient(135deg,#b8860b,#8b6914)';
+        });
+    }
+    document.getElementById('pmMsgText').textContent = msg;
+    modal.style.display = 'flex';
+}
+
+// Função de Compra (Chama RPC Específica de Zion)
+async function buyPotion(id) {
+    id = parseInt(id);
+    const btn = document.getElementById(`buy-btn-${id}`);
+    const qty = parseInt(document.getElementById(`qty-${id}`).textContent);
+    const recipe = potionRecipes.find(r => r.id === id);
+
+    if (!recipe) return;
+
+    btn.disabled = true;
+    btn.textContent = "Trocando...";
+
+    try {
+        // CHAMA A NOVA FUNÇÃO RPC PARA ZION
+        const { data, error } = await supabase.rpc('exchange_potion_zion', {
+            p_potion_id: id,
+            p_quantity: qty
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        showMsg(`Sucesso! Você recebeu ${qty}x ${recipe.name}.`);
+        
+        // Atualizar visualmente o Recurso Base
+        const currentSpan = document.getElementById(`res-display-count-${recipe.resId}`);
+        if(currentSpan) {
+            let val = parseInt(currentSpan.textContent.replace('X','')) || 0;
+            val = Math.max(0, val - (recipe.resCost * qty));
+            currentSpan.textContent = `X${val}`;
+        }
+        
+        // Atualizar IndexedDB para ambos os itens consumidos
+        await updateResourceCache(recipe.resId, recipe.resCost * qty, recipe.fragId, recipe.fragCost * qty);
+
+    } catch (err) {
+        console.error(err);
+        showMsg(`Erro: ${err.message || "Falha na troca."}`);
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "Trocar";
+        }
+    }
+}
+
+// Inicialização do Modal
+document.addEventListener('DOMContentLoaded', () => {
+    // Botão que abre a loja (agora é o NPC dentro do cenário 3D — ver
+    // #mdpNpcSpot/openPmScene em zion.js; btnPotionMaster só abre o
+    // cenário, não mais a loja direto)
+    const openBtn = document.getElementById('mdpNpcSpot');
+    const modal = document.getElementById('potionMasterModal');
+    const closeBtn = document.getElementById('closePotionMasterBtn');
+
+    if (openBtn && modal) {
+        openBtn.addEventListener('click', async () => {
+            renderPotionShop();
+            modal.style.display = 'flex';
+            
+            // --- Carrega Recursos (Somente Base) ---
+            const resContainer = document.getElementById('userResourcesDisplay');
+            if (resContainer) {
+                resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span> Carregando...';
+                
+                try {
+                    const counts = await loadResourcesFromCache();
+                    resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span>';
+                    
+                    [51, 52, 53, 54].forEach(id => {
+                        const data = counts[id];
+                        const div = document.createElement('div');
+                        div.className = 'res-item-display';
+                        div.innerHTML = `
+                            <img src="${data.img}" class="res-icon-display" alt="${data.name}">
+                            <span style="font-weight:bold; color: #fff;" id="res-display-count-${id}">X${data.count}</span>
+                        `;
+                        resContainer.appendChild(div);
+                    });
+                } catch (e) {
+                    resContainer.innerHTML = 'Não foi possível carregar os recursos.';
+                }
+            }
+
+        });
+    }
+
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            // Fecha a loja e volta para o cenário 3D do Mestre de Poções
+            // (não volta direto pro mapa da cidade — isso só acontece pelo
+            // ícone de saída do próprio cenário, ver #closePmSceneBtn).
+            modal.style.display = 'none';
+            const sceneModal = document.getElementById('potionMasterSceneModal');
+            if (sceneModal) sceneModal.style.display = 'block';
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
+    const MANUAL_CURRENT_PAGE = "zion.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        // --- NOVO MENU CIDADES (DROPDOWN) ---
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true, // Flag para indicar que é dropdown
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    // Ícone de Seta para baixo (Chevron Down)
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
+            if (item.isDropdown) {
+                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                // Link principal do Dropdown (apenas abre/fecha)
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                // Container dos Sub-itens
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                // Toggle ao clicar no pai
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Não fecha o menu lateral
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                // Renderiza os Sub-itens
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link"; // Classe extra para padding
+                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+
+                    if (isMatch) {
+                        // Bloqueio Total (igual ao código anterior)
+                        subA.removeAttribute("href");
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                        subA.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }, true);
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", () => {
+                            setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: É UM MENU NORMAL ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+
+                if (isMatch) {
+                    a.removeAttribute("href");
+                    a.style.cursor = "default";
+                    a.style.pointerEvents = "none";
+                    a.style.opacity = "1";
+                    a.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }, true);
+                } else {
+                    a.href = item.url;
+                    a.addEventListener("click", () => {
+                         setTimeout(closeMenu, 100);
+                    });
+                }
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+
+<script>window.MERCHANT_CITY = "Zion";</script>
+<script type="module" src="mercador.js"></script>
+<script type="module" src="oficina.js"></script>
+<script type="module" src="chancelaria.js"></script>
+<!-- Skybox 360° do mapa de Zion: câmera esférica (Three.js), projeção
+     dos hotspots, debug (?debugSpots=1) e efeito de aproximação/fade ao
+     entrar nas lojas. Não interfere na lógica de mercador/oficina/
+     chancelaria/mestre de poções acima — só intercepta o clique nos
+     hotspots para tocar a animação antes de deixá-lo prosseguir. -->
+<script type="module" src="zion.js"></script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.3em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.4em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

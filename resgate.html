@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="index, follow">
+  <title>Resgate de Código - Aden RPG</title>
+  <link href="style.css" rel="stylesheet"/>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #playerTopBar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 15px;
+      background: linear-gradient(to bottom, #444, #222);
+      color: white;
+      min-height: 44px;
+      flex-shrink: 0;
+    }
+
+    #pageTitle {
+      font-weight: 800;
+      font-size: 1.5em;
+      text-align: center;
+      flex-grow: 1;
+    }
+
+    .top-bar-link {
+      display: flex;
+      align-items: center;
+      color: white;
+      text-decoration: none;
+    }
+    body, html {
+      text-shadow: 1px 1px 2px #000;
+    }
+    .lucide-chevron-left {
+      width: 28px;
+      height: 28px;
+      margin-right: 5px;
+    }
+
+    /* Conteúdo principal */
+    #resgateContainer {
+      flex-grow: 1;
+      background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/redeem.webp');
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: cover;
+      background-color: none;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #codigoInput {
+      width: 80%;
+      max-width: 300px;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 1em;
+      outline: none;
+    }
+
+    #btnConfirmar {
+      margin-top: 15px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background-color: #c9a94a;
+      color: lightblue;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1em;
+    }
+
+    #btnConfirmar:hover {
+      background-color: #e2c96e;
+    }
+
+    #resgateMensagem {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #ffcc66;
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 5px 10px;
+      border-radius: 4px;
+      display: none; /* Oculto por padrão */
+    }
+
+    /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+    .goog-te-banner-frame.skiptranslate, 
+    .skiptranslate {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }
+
+    body {
+        top: 0px !important; 
+        margin-top: 0px !important;
+        position: static !important; 
+    }
+    .goog-te-balloon-frame {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    .goog-te-gadget {
+        display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    font > font {
+        background-color: transparent !important;
+        box-shadow: none !important;
+        position: static !important;
+    }
+    /* O Menu em si (ID alterado para não conflitar com o da direita) */
+#leftSideMenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px; /* Largura um pouco maior para acomodar ícones */
+    height: 100%;
+    background: #1a1a1a; /* Fundo escuro */
+    border-right: 2px solid #444;
+    z-index: 9999;
+    transform: translateX(-100%); /* Começa escondido à esquerda */
+    transition: transform 2s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Header fica fixo, a lista rola por dentro */
+    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+}
+
+/* Classe para abrir o menu via JS */
+#leftSideMenu.open {
+    transform: translateX(0);
+}
+
+/* Cabeçalho do Menu */
+.menu-header {
+    padding: 15px;
+    background: #111;
+    display: flex;
+    justify-content: space-between; /* Botão e título afastados */
+    align-items: center;
+    border-bottom: 1px solid #333;
+    height: 60px; /* Altura fixa */
+    box-sizing: border-box;
+}
+
+.menu-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.4rem;
+    flex-grow: 1;
+    text-align: center; /* Título centralizado */
+}
+
+/* Botão de Fechar (Hambúrguer) */
+.close-menu-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lista e Itens */
+.menu-list {
+    list-style: none;
+    padding: 0; /* Remove padding padrão da UL */
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    overflow-y: auto; /* Permite rolar quando os submenus abrem */
+}
+
+.menu-item {
+    width: 100%;
+}
+
+.menu-link {
+    display: flex; /* Flexbox para alinhar ícone e texto */
+    align-items: center;
+    justify-content: flex-start; /* Alinha tudo à esquerda */
+    padding: 15px 15px; /* Padding reduzido na esquerda */
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 1.2rem!important;
+    font-weight: bold;
+    font-family: 'Cinzel', serif;
+    position: relative; /* Necessário para a bolinha de notificação se alinhar ao link */
+    transition: background 0.4s, color 0.4s;
+    border-bottom: 1px solid #252525;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.menu-link:hover {
+    background: #333;
+    color: #fff;
+}
+
+/* Estilo do Ícone no Menu */
+.menu-icon {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    margin-right: 15px; /* Espaço entre ícone e texto */
+}
+
+/* Item Ativo (Página atual) */
+.menu-item.active .menu-link {
+    background: #555;
+    color: #ffd700;
+    font-weight: bold;
+    border-left: 4px solid #ffd700;
+    padding-left: 11px; /* Compensa a borda para manter alinhamento */
+}
+
+/* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */
+#menuToggleBtn svg {
+    /* Garante que a transição ocorra suavemente */
+    transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+}
+
+/* Classe para deixar o ícone "Em Pé" (Vertical) */
+/* Usamos -90deg para girar à esquerda como pediu */
+.icon-vertical {
+    transform: rotate(-90deg);
+}
+
+/* --- BOTÃO DE FECHAR (DENTRO DO MENU) --- */
+/* Força o SVG do botão de fechar a ser idêntico ao botão aberto (Vertical) */
+#closeMenuBtn svg {
+    transform: rotate(-90deg); 
+    transition: transform 3s ease;
+    cursor: pointer;
+}
+
+/* Opcional: Ao passar o mouse no fechar, ele gira um pouco */
+#closeMenuBtn:hover svg {
+    transform: rotate(0deg); /* Gira para deitado ao passar o mouse */
+    color: #ff4500;
+}
+
+/* --- BOLINHAS DE NOTIFICAÇÃO (AJUSTE FINO) --- */
+.menu-notification-dot {
+    position: absolute;
+    /* Ajuste de posição para não ficar em cima do ícone */
+    left: 45px; 
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 15;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.9);
+    pointer-events: none;
+    animation: pulseSideDot 2s infinite;
+}
+
+@keyframes pulseSideDot {
+    0% { transform: translateY(-50%) scale(1); opacity: 1; }
+    50% { transform: translateY(-50%) scale(1.3); opacity: 0.8; }
+    100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}
+
+/* --- SUBMENU (DROPDOWN) --- */
+.submenu-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+    background: #111;
+}
+
+.submenu-list.open {
+    max-height: 500px;
+}
+
+.submenu-link {
+    padding-left: 55px !important;
+    font-size: 1.1rem !important;
+}
+
+.dropdown-arrow {
+    margin-left: auto;
+    transition: transform 0.3s;
+}
+
+.dropdown-active > .menu-link .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+/* --- OVERLAY ESCURO ATRÁS DO MENU --- */
+#sideMenuOverlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9998;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+      const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      const codigoInput = document.getElementById('codigoInput');
+      const btnConfirmar = document.getElementById('btnConfirmar');
+      const mensagem = document.getElementById('resgateMensagem');
+
+      // ========================================================
+      // LOGICA DE INDEXEDDB (Atualização Cirúrgica Local)
+      // ========================================================
+      const DB_NAME = "aden_inventory_db";
+      const STORE_NAME = "inventory_store";
+      const META_STORE = "meta_store";
+      const DB_VERSION = 44; 
+
+      function openDB() {
+          return new Promise((resolve, reject) => {
+              const req = indexedDB.open(DB_NAME, DB_VERSION);
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+          });
+      }
+
+      async function surgicalCacheUpdate(newItems, newTimestamp) {
+          try {
+              const db = await openDB();
+              const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+              const store = tx.objectStore(STORE_NAME);
+              const meta = tx.objectStore(META_STORE);
+
+              // 1. Atualiza ou insere os itens modificados
+              if (Array.isArray(newItems) && newItems.length > 0) {
+                  newItems.forEach(item => store.put(item));
+              }
+
+              // 2. Atualiza o Timestamp para evitar redownload no inventário
+              if (newTimestamp) {
+                  meta.put({ key: "last_updated", value: newTimestamp });
+                  meta.put({ key: "cache_time", value: Date.now() }); 
+              }
+
+              return new Promise(resolve => {
+                  tx.oncomplete = () => {
+                      console.log("✅ [Resgate] Cache local atualizado com sucesso.");
+                      resolve();
+                  }
+              });
+          } catch (e) {
+              console.warn("⚠️ Falha ao atualizar IndexedDB via resgate:", e);
+          }
+      }
+      // ========================================================
+
+
+      if (!btnConfirmar) {
+        console.error("Elemento #btnConfirmar não encontrado no DOM!");
+        return;
+      }
+
+      btnConfirmar.addEventListener('click', async () => {
+        const codigo = codigoInput.value.trim();
+        mensagem.style.display = 'block';
+        if (!codigo) {
+          mensagem.textContent = 'Digite um código válido.';
+          return;
+        }
+
+        try {
+          btnConfirmar.disabled = true;
+          btnConfirmar.textContent = "Processando...";
+          mensagem.textContent = 'Verificando...';
+          
+          const { data, error } = await supabaseClient.rpc('redeem_reward_code', { code_id: codigo });
+
+          if (error) {
+            mensagem.textContent = 'Erro: ' + error.message;
+            console.error(error);
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = "Confirmar";
+            return;
+          }
+
+          // Verifica se houve sucesso lógico na RPC
+          if (data && data.success) {
+              mensagem.textContent = data.message;
+              mensagem.style.color = '#76ff03'; // Verde claro para sucesso
+
+              // Se vierem updates de inventário, atualiza o cache localmente
+              if (data.inventory_updates && data.new_timestamp) {
+                  await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+              }
+          } else {
+              // Erro de validação retornado pela RPC (código inválido, já usado, etc)
+              mensagem.textContent = (data && data.message) ? data.message : 'Falha ao resgatar.';
+              mensagem.style.color = '#ff6b6b';
+          }
+
+        } catch (err) {
+          console.error(err);
+          mensagem.textContent = 'Erro de conexão ao tentar resgatar o código.';
+          mensagem.style.color = '#ff6b6b';
+        } finally {
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = "Confirmar";
+        }
+      });
+    });
+  </script>
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body>
+  <div id="playerTopBar">
+    <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+    <div id="pageTitle">Resgate</div>
+    <div style="width: 44px; height: 34px;"></div>
+  </div>
+
+  <div id="resgateContainer">
+    <p style="font-size: 1.2em;">Digite um código promocional para resgatar prêmios.</p>
+    <input id="codigoInput" type="text" placeholder="Digite o código">
+    <button id="btnConfirmar">Confirmar</button>
+    <p id="resgateMensagem"></p>
+  </div>
+  
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // cria um elemento para medir o tamanho real de 1rem
+      const testEl = document.createElement("div");
+      testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+      testEl.textContent = "M";
+      document.body.appendChild(testEl);
+
+      const actualRem = testEl.getBoundingClientRect().height;
+      document.body.removeChild(testEl);
+
+      console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+      // queremos sempre 16px como base (modo padrão)
+      const targetRem = 15;
+      const correction = targetRem / actualRem;
+
+      const style = document.createElement("style");
+      style.textContent = `
+        html { font-size: ${15 * correction}px !important; }
+        body { font-size: 1rem !important; }
+      `;
+      document.head.appendChild(style);
+
+      console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+    });
+  </script>
+  <div id="google_translate_element"></div>
+
+  <script src="auto_translate.js"></script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+  
+  <div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "resgate.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+</body>
+</html>

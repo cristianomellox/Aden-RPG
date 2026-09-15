@@ -1,0 +1,24 @@
+name: Limpar Historico Inteligente
+on: workflow_dispatch
+
+permissions:
+  contents: write   # necessário pro "git push --force" no final funcionar
+
+jobs:
+  limpar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Baixar BFG
+        run: wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar
+      - name: Limpar Audios e Videos do Passado
+        run: java -jar bfg-1.14.0.jar --delete-files "*.{mp3,webm,mp4,ogg,wav}" .git
+      - name: Limpar Imagens Pesadas do Passado (> 2KB)
+        run: java -jar bfg-1.14.0.jar --strip-blobs-bigger-than 2K .git
+      - name: Forcar Atualizacao do Repositorio
+        run: |
+          git reflog expire --expire=now --all
+          git gc --prune=now --aggressive
+          git push --force origin HEAD:main

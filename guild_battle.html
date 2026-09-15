@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-K">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <title>Batalha de Guildas</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="guild.css">
+    <link rel="stylesheet" href="guild_battle.css">
+    <link rel="stylesheet" href="nexus.css">
+    
+    <style>
+        /* Ajustes para o novo layout visual (Imagem + Texto) */
+        .battle-objective {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none; /* Remove borda antiga */
+            background: transparent; /* Remove fundo quadrado */
+            padding: 0;
+            transition: all 0.3s ease;
+            width: 140px; 
+        }
+
+        .battle-objective:hover {
+            transform: scale(1.1);
+        }
+
+        /* Título em cima */
+        .obj-name {
+            font-weight: bold;
+            font-size: 1em;
+            margin-bottom: 2px;
+            text-shadow: 2px 2px 4px #000;
+            color: white;
+            z-index: 5;
+        }
+
+        #obj-nexus .obj-name {
+            font-size: 1.2em;
+            color: gold;
+            margin-bottom: 5px;
+        }
+
+        /* Container Visual (Imagem + Texto Guarnição) */
+        .obj-visual {
+            position: relative;
+            width: 80px;  
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* A Imagem em si */
+        .obj-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0px 0px 5px var(--guild-color-neutral));
+            transition: filter 0.3s ease;
+        }
+
+        /* Nexus: 80x80, redondo (item 2) */
+        #obj-nexus .obj-visual {
+            width: 80px;
+            height: 80px;
+        }
+        #img-nexus {
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        /* Guarnição Sobreposta */
+        .obj-garrison-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.9em;
+            color: #00bcd4;
+            font-weight: 900;
+            text-shadow: 
+                1px 1px 0 #000,
+                -1px -1px 0 #000, 
+                1px -1px 0 #000, 
+                -1px 1px 0 #000,
+                0 0 5px black;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 10;
+            margin-top: 0; /* Reset de margem antiga */
+        }
+
+        /* Informações em baixo (Dono e HP) */
+        .obj-info-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: -5px;
+            z-index: 5;
+        }
+
+        .obj-owner-name {
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-shadow: 1px 1px 3px #000;
+            text-align: center;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--guild-color-neutral);
+        }
+
+        .obj-hp-bar {
+            width: 100%;
+            height: 14px;
+            background: #222;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #555;
+            position: relative;
+            box-shadow: 0 0 3px black;
+        }
+        
+        /* Ajuste de posição para os novos elementos (caso precise sobrescrever o CSS antigo) */
+        #obj-nexus { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #obj-cp-1 { top: 20%; left: 25%; transform: translate(-50%, -50%); }
+        #obj-cp-2 { top: 20%; right: 25%; transform: translate(50%, -50%); }
+        #obj-cp-3 { bottom: 20%; left: 25%; transform: translate(-50%, 50%); }
+        #obj-cp-4 { bottom: 20%; right: 25%; transform: translate(50%, 50%); }
+    </style>
+    
+</head>
+<body>
+
+    <audio id="audioNormalHit" src="https://aden-rpg.pages.dev/assets/normal_hit.mp3" preload="auto"></audio>
+    <audio id="audioCritHit" src="https://aden-rpg.pages.dev/assets/critical_hit.mp3" preload="auto"></audio>
+
+    <div id="playerTopBar">
+        <a href="guild.html" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div id="pageTitle">Batalha por Territórios</div>
+        <div style="width: 28px;"></div> </div>
+
+    <div id="battleContainer">
+
+        <div id="battleActiveScreen" style="display: none; flex-direction: column; height: 100%;">
+            <div id="battleHeader">
+              
+  <img id="showShopBtn" src="https://aden-rpg.pages.dev/assets/iconloja.webp" alt="Loja" style="width: 30px; height: 30px; margin-left: 4px; margin-top: -2px; cursor: pointer;">
+                <div id="battleTimer">55:00</div>
+                <button id="showRankingBtn">
+                    <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width: 30px; height: 30px; margin-right: 4px; margin-top: -3px;">
+                </button>
+            </div>
+
+            <div id="battleMap" style="background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.3)), url('https://aden-rpg.pages.dev/assets/guild_battle.webp');">
+                
+                <div class="battle-objective" id="obj-nexus" data-index="0">
+                    <span class="obj-name">Nexus</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/b_nexus.png" class="obj-img" id="img-nexus" alt="Nexus">
+                        <span class="obj-garrison-count" id="obj-garrison-0"></span>
+                    </div>
+                </div>
+
+                <div class="battle-objective" id="obj-cp-1" data-index="1">
+                    <span class="obj-name">Ponto 1</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.png" class="obj-img" id="img-cp-1" alt="Ponto 1">
+                        <span class="obj-garrison-count" id="obj-garrison-1"></span>
+                    </div>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-1">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-1"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-1">4k / 4k</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="battle-objective" id="obj-cp-2" data-index="2">
+                    <span class="obj-name">Ponto 2</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.png" class="obj-img" id="img-cp-2" alt="Ponto 2">
+                        <span class="obj-garrison-count" id="obj-garrison-2"></span>
+                    </div>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-2">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-2"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-2">4k / 4k</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="battle-objective" id="obj-cp-3" data-index="3">
+                    <span class="obj-name">Ponto 3</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.png" class="obj-img" id="img-cp-3" alt="Ponto 3">
+                        <span class="obj-garrison-count" id="obj-garrison-3"></span>
+                    </div>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-3">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-3"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-3">4k / 4k</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="battle-objective" id="obj-cp-4" data-index="4">
+                    <span class="obj-name">Ponto 4</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.png" class="obj-img" id="img-cp-4" alt="Ponto 4">
+                        <span class="obj-garrison-count" id="obj-garrison-4"></span>
+                    </div>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-4">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-4"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-4">4k / 4k</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="battleFooter">
+                <div id="playerBattleInfo">
+                    <div id="player-attacks">Ações: 5 / 5</div>
+                    <div id="player-cooldown"></div>
+                </div>
+                <div id="garrison-status">
+                    Status: Atacando
+                </div>
+            </div>
+        </div>
+
+        <div id="loadingScreen">
+            <h2>Carregando...</h2>
+        </div>
+
+        <div id="citySelectionScreen" style="display: none;">
+            <div style="background-color: rgba(0, 0, 0, 0.6); border-radius: 10px;">
+            <h2 style="color:lightblue;">Registro</h2>
+            <p style="font-weight: bold; font-size: 1.1em;">Seu Líder ou Co-Líder pode registrar a guilda para a próxima batalha.</p>
+            
+            <p id="registrationTimer" style="font-weight: bold; font-size: 1.1em;"></p>
+            </div>
+            <div class="city-grid" id="cityGrid">
+                </div>
+            <p id="citySelectionMessage" style="color: #ffc107;"></p>
+        </div>
+
+        <div id="waitingScreen" style="display: none;">
+            <div style="background-color: rgba(0, 0, 0, 0.6); border-radius: 10px;">
+            <h2>Batalha Registrada</h2>
+            <p style="font-size: 1.1em;">Sua guilda está registrada para a batalha em <strong id="waitCityName"></strong>.</p>
+            <p style="font-size: 1.1em;">A batalha começa em:</p>
+            <span id="waitTimer">00:00</span>
+            
+            <div id="waitGuildListArea">
+                <p>Guildas Prontas para a Batalha:</p>
+                <ul id="waitGuildList" class="ranking-list">
+                    </ul>
+                    </div>
+            </div>
+        </div>
+        
+       <div id="resultsModal" class="modal" style="display: none; height: 90vh;">
+            <div class="modal-content">
+               
+               <span class="modal-close" id="resultsModalClose">&times;</span>
+                
+                <h2>Batalha Finalizada</h2>
+                <p>A batalha em <strong id="resultCityName"></strong> terminou!</p>
+                <p id="resultBattleDate" style="font-size: 0.9em; color: #ccc; margin-top: -10px; margin-bottom: 10px; text-align: center;"></p>
+
+                <h3>Ranking de Honra</h3>
+                <ol id="resultsRankingHonor" class="ranking-list results-list">
+                    </ol>
+                
+                <h3>Top 5 Dano</h3>
+                <table id="resultsRankingDamage" class="ranking-table results-list">
+                    </table>
+
+                <h3>Recompensas</h3>
+                <p id="resultsRewardMessage"></p>
+                
+                <div id="resultsGuildRewards" class="results-rewards-section"></div>
+                <div id="resultsPlayerRewards" class="results-rewards-section"></div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="resultsModalCloseBtn" class="action-btn">Fechar</button>
+                </div>
+            </div>
+        </div>
+  
+    
+    <div id="objectiveModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="objectiveModalClose">&times;</span>
+            <h3 id="objectiveModalTitle"></h3>
+            <p id="objectiveModalGarrisonWarning" style="color: #ffc107; display: none;"></p>
+            <div id="objectiveModalActions">
+                <button id="objectiveAttackBtn" class="action-btn">Atacar</button>
+                <button id="objectiveGarrisonBtn" class="action-btn">Guarnecer</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="alertModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="alertModalClose">&times;</span>
+            <p id="alertModalMessage"></p>
+            <button id="alertModalOk" class="action-btn">OK</button>
+        </div>
+    </div>
+    
+    <div id="battleRankingModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="rankingModalClose">&times;</span>
+            <h3>Ranking da Batalha</h3>
+            <div class="ranking-tabs">
+                <button class="tab-btn active" data-tab="guilds">Pontos de Honra</button>
+                <button class="tab-btn" data-tab="damage">Dano Causado</button>
+            </div>
+            <div id="rankingTabGuilds" class="tab-pane active">
+                <ul class="ranking-list" id="guildRankingList">
+                    </ul>
+            </div>
+            <div id="rankingTabDamage" class="tab-pane">
+                <table class="ranking-table" id="playerDamageList">
+                    </table>
+            </div>
+        </div>
+    </div>
+    
+    <div id="cityRegisterConfirmModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="cityRegisterModalClose">&times;</span>
+            <h3 id="cityRegisterModalTitle">Confirmar Registro</h3>
+            <p>Deseja registrar sua guilda na batalha por <strong id="cityRegisterModalCityName"></strong>?</p>
+            <div id="cityRegisterModalGuildListArea">
+                <p>Guildas já registradas (Máx 5):</p>
+                <ul id="cityRegisterModalGuildList" class="ranking-list">
+                    <li>Nenhuma guilda registrada.</li>
+                </ul>
+                <span style="font-size: 0.9em; color: #fff;">As guildas serão reveladas assim que sua guilda se registrar ou ao atingirem os 5 registros.</span>
+            </div>
+            <p id="cityRegisterModalMessage" style="color: #ffc107;"></p>
+            <div id="cityRegisterModalActions">
+                <button id="cityRegisterModalCancelBtn" class="action-btn" style="background-color: #555;">Cancelar</button>
+                <button id="cityRegisterModalConfirmBtn" class="action-btn">Registrar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="garrisonLeaveConfirmModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="garrisonLeaveModalClose">&times;</span>
+            <h3>Ação Perigosa</h3>
+            <p id="garrisonLeaveModalMessage" style="color: #ffc107;">
+                Atenção: Ao sair da sua guarnição atual, o objetivo ficará com 0 ou menos de HP e será **derrotado**.
+            </p>
+            <p>Deseja continuar mesmo assim?</p>
+            <div id="garrisonLeaveModalActions">
+                <button id="garrisonLeaveModalCancelBtn" class="action-btn" style="background-color: #555;">Cancelar</button>
+                <button id="garrisonLeaveModalConfirmBtn" class="action-btn">Continuar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="battleShopModal" class="modal-container" style="display:none; height: 90vh;">
+        <div class="modal-content">
+            <span class="modal-close" id="battleShopModalClose" style="top: 10px; right: 15px; font-size: 2em; color: white;">&times;</span>
+            
+            <div id="shop-main" class="shop-content">
+                <h2>Loja da Batalha</h2>
+                <p>Compre ações extras para esta batalha. (Limite de 5 por pacote)</p>
+
+                <div class="shop-item">
+                    <img src="https://aden-rpg.pages.dev/assets/pvp.webp" alt="Ações" class="shop-item-img" style="width: 80px; height: 80px; object-fit: contain;">
+                    <div class="shop-item-details">
+                        <h3>Pacote de Ações <strong>x3</strong></h3>
+                        <p>Adiciona +3 ações de batalha.</p>
+                        <div class="shop-item-cost">
+                            <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                            <span>30</span>
+                        </div>
+                       <button class="shop-buy-btn" id="buyPack1Btn" data-package="pack_1" data-cost="30" data-actions="3">Comprar</button>
+                       <p id="pack1Remaining" style="font-size:0.8em; margin-top:4px; color:#aaa;">5 compra(s) restante(s)</p>
+                    </div>
+                </div>
+
+                <div class="shop-item">
+                    <img src="https://aden-rpg.pages.dev/assets/pvp.webp" alt="Ações" class="shop-item-img" style="width: 80px; height: 80px; object-fit: contain;">
+                    <div class="shop-item-details">
+                        <h3>Pacote de Ações <strong>x5</strong></h3>
+                        <p>Adiciona +5 ações de batalha.</p>
+                        <div class="shop-item-cost">
+                            <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                            <span>75</span>
+                        </div>
+                        <button class="shop-buy-btn" id="buyPack2Btn" data-package="pack_2" data-cost="75" data-actions="5">Comprar</button>
+                        <p id="pack2Remaining" style="font-size:0.8em; margin-top:4px; color:#aaa;">5 compra(s) restante(s)</p>
+                    </div>
+                </div>
+                
+                <p id="battleShopMessage" style="color: white; margin-top: 10px;"></p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="banModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); color: white; z-index: 10000; justify-content: center; align-items: center; text-align: center; flex-direction: column;">
+    <div style="background: #2b2b2b; padding: 30px; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 69, 0, 0.8); max-width: 90%; width: 400px; border: 3px solid #ff4500;">
+        <img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;">
+        <h2 style="color: #ff4500; font-size: 1.8em; margin-bottom: 20px;">Você foi banido(a)!</h2>
+        
+        <p style="text-align: left; margin-bottom: 25px;">
+            <strong>Motivo:</strong><br>
+            <span id="banReasonContent" style="color: #ffd700; display: block; margin-top: 5px; padding: 10px; border: 1px dashed #444; white-space: pre-wrap;">[Carregando Motivo...]</span>
+        </p>
+
+        <button id="logoutBanBtn" style="background: linear-gradient(to top, #ff4500, #ff8c00); color: white; padding: 12px 25px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: background 0.2s;">
+            Fechar
+        </button>
+    </div>
+</div>
+    
+ 
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+    
+    <script type="module" src="guild_battle.js"></script>
+    <div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script src="security.js"></script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>      
+      </body>
+</html>

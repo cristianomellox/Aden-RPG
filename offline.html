@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Aden RPG Online — Sem conexão</title>
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        overflow: hidden;
+    }
+
+    body {
+        background-image: url('/assets/offline.webp');
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        min-height: 100vh;
+        min-height: 100dvh;
+        box-sizing: border-box;
+    }
+
+    #offline-footer {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+        background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0) 100%);
+        text-align: center;
+        font-family: Arial, sans-serif;
+    }
+
+    #offline-message {
+        color: #fff;
+        font-size: 1em;
+        line-height: 1.5;
+        margin: 0 0 18px;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+    }
+
+    #offline-reload-btn {
+        background: linear-gradient(to top, #7a4e00, #c98c1a);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 13px 32px;
+        font-size: 1em;
+        font-weight: bold;
+        letter-spacing: 0.3px;
+        cursor: pointer;
+        box-shadow: 0 0 20px rgba(139,105,20,0.45);
+    }
+
+    #offline-reload-btn:active {
+        filter: brightness(1.15);
+    }
+</style>
+</head>
+<body>
+
+    <div id="offline-footer">
+        <p id="offline-message">Você está sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.</p>
+        <button id="offline-reload-btn" onclick="location.reload();">Recarregar</button>
+    </div>
+
+    <script>
+        // Traduções fixas (não dependem do Google Tradutor, que precisa de
+        // internet pra funcionar). Usamos o mesmo cookie "googtrans" que o
+        // jogo já grava ao trocar de idioma (formato "/pt/xx") — ler um
+        // cookie funciona offline, é só um dado já salvo no navegador.
+        const OFFLINE_TRANSLATIONS = {
+            pt:    { msg: "Você está sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.", btn: "Recarregar" },
+            en:    { msg: "You are offline. Please check your internet connection and try again.", btn: "Reload" },
+            es:    { msg: "Estás sin conexión a internet. Por favor, verifica tu conexión e inténtalo de nuevo.", btn: "Recargar" },
+            'zh-CN': { msg: "您已离线。请检查您的网络连接后重试。", btn: "重新加载" },
+            ja:    { msg: "インターネットに接続されていません。接続を確認してもう一度お試しください。", btn: "再読み込み" },
+            ko:    { msg: "인터넷에 연결되어 있지 않습니다. 연결 상태를 확인한 후 다시 시도해 주세요.", btn: "다시 로드" },
+            id:    { msg: "Anda sedang offline. Silakan periksa koneksi internet Anda dan coba lagi.", btn: "Muat Ulang" },
+            tl:    { msg: "Wala kang koneksyon sa internet. Pakisuri ang iyong koneksyon at subukan muli.", btn: "I-reload" },
+            ru:    { msg: "Отсутствует подключение к интернету. Пожалуйста, проверьте соединение и попробуйте снова.", btn: "Перезагрузить" },
+            it:    { msg: "Sei offline. Controlla la tua connessione a internet e riprova.", btn: "Ricarica" },
+            fr:    { msg: "Vous êtes hors ligne. Veuillez vérifier votre connexion internet et réessayer.", btn: "Recharger" },
+            hi:    { msg: "आप ऑफ़लाइन हैं। कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।", btn: "रीलोड करें" },
+            ms:    { msg: "Anda sedang luar talian. Sila semak sambungan internet anda dan cuba lagi.", btn: "Muat Semula" },
+            vi:    { msg: "Bạn đang ngoại tuyến. Vui lòng kiểm tra kết nối internet và thử lại.", btn: "Tải lại" },
+            ar:    { msg: "أنت غير متصل بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.", btn: "إعادة التحميل" },
+        };
+        const RTL_LANGS = ['ar'];
+
+        function getSelectedLangFromCookie() {
+            const cookies = document.cookie.split(';');
+            const googCookie = cookies.find(c => c.trim().startsWith('googtrans='));
+            if (googCookie) {
+                const value = googCookie.split('=')[1] || '';
+                const parts = value.split('/').filter(Boolean);
+                if (parts[1]) return parts[1];
+            }
+            // Sem cookie ainda (ex: primeiríssima visita, antes de escolher
+            // idioma) — tenta adivinhar pelo idioma do aparelho/navegador
+            // em vez de cair direto em português.
+            return detectarIdiomaNavegador();
+        }
+
+        function detectarIdiomaNavegador() {
+            const candidatos = navigator.languages && navigator.languages.length
+                ? navigator.languages
+                : [navigator.language || 'pt'];
+            const suportados = Object.keys(OFFLINE_TRANSLATIONS);
+            for (const raw of candidatos) {
+                if (!raw) continue;
+                const lower = raw.toLowerCase();
+                if (lower.startsWith('zh')) return 'zh-CN';
+                const base = lower.split('-')[0];
+                if (base === 'fil') return 'tl'; // Filipino: navegador usa "fil", nosso código é "tl"
+                if (suportados.includes(base)) return base;
+            }
+            return 'pt';
+        }
+
+        (function aplicarIdiomaOffline() {
+            const lang = getSelectedLangFromCookie();
+            const t = OFFLINE_TRANSLATIONS[lang] || OFFLINE_TRANSLATIONS.pt;
+
+            document.getElementById('offline-message').textContent = t.msg;
+            document.getElementById('offline-reload-btn').textContent = t.btn;
+
+            document.documentElement.lang = lang;
+            document.documentElement.dir = RTL_LANGS.includes(lang) ? 'rtl' : 'ltr';
+        })();
+
+        // Se a conexão voltar sozinha, recarrega automaticamente pra tentar
+        // voltar direto pra página que o jogador estava tentando acessar.
+        window.addEventListener('online', () => {
+            location.reload();
+        });
+    </script>
+
+</body>
+</html>

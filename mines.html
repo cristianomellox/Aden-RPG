@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+<meta name="googlebot" content="index, follow">
+    <title>Minas de Cristal - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="mines.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+        /* ═══ TUTORIAL MODAL (estilo AFK) ══════════════════════════════ */
+        #tutorialModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 10000;
+        }
+        #tutorialModal .tut-content {
+            background: #111;
+            padding: 22px 20px;
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            width: 90%; max-width: 420px;
+            position: relative !important;
+            box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            max-height: 88vh; overflow-y: auto;
+            text-shadow: none;
+            box-sizing: border-box;
+        }
+        #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
+        #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
+        #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+        .tut-title {
+            text-align: center; color: #ffd700; margin: 0 0 6px;
+            font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(255,215,0,0.5);
+            font-family: 'Cinzel', serif;
+        }
+        .tut-subtitle {
+            text-align: center; color: #888; font-size: 0.78em;
+            margin: 0 0 16px; padding-bottom: 12px;
+            border-bottom: 1px solid #333; font-style: italic;
+        }
+        .tut-section {
+            margin-bottom: 14px; padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .tut-section-title {
+            margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 1px;
+            padding-bottom: 6px; border-bottom: 1px solid;
+            font-family: 'Cinzel', serif;
+        }
+        .tut-section p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
+        .tut-info-box {
+            background: rgba(0,0,0,0.3); border-radius: 6px;
+            padding: 10px 12px; font-size: 0.82em;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tut-info-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+        .tut-info-box li { color: #ccc; line-height: 1.5; }
+        .tut-status-grid { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+        .tut-status-row { display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: #ccc; }
+        .tut-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; border: 2px solid; }
+        .tut-confirm-btn {
+            display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+            padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+            background: linear-gradient(135deg, #1a1000, #0d0800);
+            border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+            cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+        }
+        .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+
+        .history-button-container {
+            position: relative;
+        }
+
+        .new-log-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            font-size: 0.7em;
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 2px 5px;
+            display: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="playerTopBar"><button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+       
+       <div> <span id="pageTitle">Minas de Cristal</span></div>
+        <img id="minatuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; margin-top: -2px;">
+      
+            
+    </div>
+
+    <div id="mainContainer">
+
+        <!-- Viewport arrastável/zoom do mapa da mina (padrão UE5 igual ao Index) -->
+        <div id="mineMapViewport">
+            <div id="minesContainer"></div>
+        </div>
+
+        <!-- HUD sobreposto ao mapa: guilda dominante + timer + seletor de zona -->
+        <div id="mineHeader">
+           <p><strong>Guilda Dominante:</strong><br>
+           <span id="guilddom">Nenhuma.</span></p>
+            <p>Próxima sessão em: <span style="color: white;" id="cycleInfo"></span></p>
+            <div id="zoneSelector"></div>
+        </div>
+    </div>
+
+    <div id="combatModal" class="modal-overlay" style="display: none;">
+    
+        <div class="modal-content">
+            <h3 style="margin-top: -10px; font-size: 1em;" id="combatModalTitle">
+              
+              Disputa pela</h3>
+            <div style="margin-top: -10px;" id="combatInfo">
+                <p><span id="combatTimer">5:00</span></p>
+                
+            </div>
+            
+            <div id="monsterArea">
+                <img id="monsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" alt="Monstro da Mina">
+                <div style="margin-top: -40px;" id="monsterHpBar">
+                    <div id="monsterHpFill"></div>
+                    <span id="monsterHpTextOverlay"></span>
+                </div>
+            </div>
+          <img id="attackBtn"src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px; margin-top: -4px;">
+            <p style="margin-top: -8px;">Ataques: <span id="playerAttacks"></span><button id="buyAttackBtn" class="btn btn-gold">+</button><br>
+  <div style="color: white;" id="attackCooldown"></div>
+  </p>
+            <div id="damageRankingContainer">
+                <h4></h4>
+                <ul id="damageRankingList"></ul>
+            </div>
+              <div style="position: absolute; top: 2px; right: 4px; border: 3px solid gold; border-radius: 9px; padding: 0 7px;">
+    <span style="font-weight: 800;" id="backBtn">X</span>
+</div>
+        </div>
+    </div>
+
+    
+    <div id="buyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Confirmar Compra</h3>
+            <p id="buyPlayerGoldInfo"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 17px; height: 17px"></p>
+            <p>Os ataques só poderão ser usados na sessão atual, eles não serão acumulados para a próxima sessão.</p>
+
+            <p>Quantidade de ataques:</p>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+              <div style="background: #333; border-radius: 8px; border: white; width: 140px; justify-content: center; align-items: center;">
+                <button id="buyDecreaseQtyBtn" class="action-btn">-</button>
+                <span id="buyAttackQty" style="font-size: 2em; color: yellow;">1</span>
+                <button id="buyIncreaseQtyBtn" class="action-btn">+</button>
+            </div>
+            </div>
+            <p id="buyAttackCostInfo">Custo total: 0 Ouro</p>
+            <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="buyCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+                <button id="buyConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirmMessage"></p>
+            <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="confirmCancelBtn" class="action-btn">Cancelar</button>
+                <button id="confirmActionBtn" class="action-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    <div id="pvpCombatModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <h3 id="pvpCombatTitle">Desafio pela Mina</h3>
+       <div id="pvpArena">
+    <div id="challengerSide" class="player-side">
+        <span id="challengerName" class="player-name-pvp"></span>
+        <div id="challengerAvatarContainer" class="avatar-container">
+            <img id="challengerAvatar" src="" alt="Avatar do Desafiante" class="player-avatar-pvp">
+            <img id="challengerFrameOverlay" class="pvp-frame-overlay" src="" alt="">
+            <div id="challengerFrameSheen" class="pvp-frame-sheen"></div>
+        </div>
+        <div id="challengerHpBar" class="player-hp-bar">
+            <div id="challengerHpFill" class="player-hp-fill"></div>
+            <span id="challengerHpText" class="hp-text-overlay"></span>
+        </div>
+    </div>
+    
+    <div class="vs-separator">VS</div>
+
+    <div id="defenderSide" class="player-side">
+        <span id="defenderName" class="player-name-pvp"></span>
+        <div id="defenderAvatarContainer" class="avatar-container">
+            <img id="defenderAvatar" src="" alt="Avatar do Dono da Mina" class="player-avatar-pvp">
+            <img id="defenderFrameOverlay" class="pvp-frame-overlay" src="" alt="">
+            <div id="defenderFrameSheen" class="pvp-frame-sheen"></div>
+        </div>
+        <div id="defenderHpBar" class="player-hp-bar">
+            <div id="defenderHpFill" class="player-hp-fill"></div>
+            <span id="defenderHpText" class="hp-text-overlay"></span>
+        </div>
+    </div>
+</div>
+        <p id="pvpCountdown" style="font-size: 1.5em; color: yellow;"></p>
+    </div>
+</div>
+
+<div id="playerFooterBar">
+        <span class="footer-bar-link" id="playerPVPAttemptsBtn">
+           <img src="https://aden-rpg.pages.dev/assets/minapvp.webp" style="width:33px;height:30px;vertical-align:-4px"><span id="playerPVPAttemptsLeft"> 0</span> 
+            <button id="buyPVPAttemptsBtn" class="buy-btn">+</button>
+        </span>
+        <span class="footer-bar-link" id="playerMineLink">
+            <span id="playerOwnedMine">Nenhuma</span>
+        </span>
+        <span class="footer-bar-link history-button-container" id="openHistoryBtn" title="Histórico PvP">
+            Histórico
+            <span class="new-log-indicator">Novo</span>
+        </span>
+    </div>
+
+    <div id="historyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Histórico de Ataques à sua Mina</h3>
+            <ul id="historyList">
+                </ul>
+            <button id="closeHistoryBtn" class="action-btn">Fechar</button>
+        </div>
+    </div>
+
+    <!-- Overlay de transição de sessão: bloqueia a tela ~1min antes/depois
+         da virada de sessão, para cobrir o atraso do cron do Cloudflare -->
+    <div id="sessionTransitionOverlay">
+        <div class="sto-title">Uma nova sessão irá começar em:</div>
+        <div class="sto-timer" id="sessionTransitionTimer">2:00</div>
+    </div>
+
+
+   <script type="module" src="mines.js"></script>
+
+    <div id="buyPvpModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h3>Comprar Tentativas PvP</h3>
+<img src="https://aden-rpg.pages.dev/assets/minapvp.webp" style="width:98px;height:73px;">
+        <p id="buyPvpPlayerGoldInfo"></p>
+        <p>As tentativas compradas só poderão ser usadas no dia atual.</p>
+
+        <p>Quantidade de tentativas:</p>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+          <div style="background: #333; border-radius: 8px; border: white; width: 140px; justify-content: center; align-items: center;">
+            <button id="buyPvpDecreaseQtyBtn" class="buy-btn">-</button>
+            <span id="buyPvpQty" style="font-size: 2em; color: yellow;">1</span>
+            <button id="buyPvpIncreaseQtyBtn" class="buy-btn">+</button>
+          </div>
+        </div>
+        <p id="buyPvpCostInfo">Custo total: 0 Ouro</p>
+        <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+          <button id="buyPvpCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+          <button id="buyPvpConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tutorialModal">
+        <div class="tut-content" style="position:relative;">
+            <button id="closeTutorialBtn" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:26px;font-weight:bold;color:#888;cursor:pointer;line-height:1;z-index:10;padding:0;"
+                onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
+            <h2 class="tut-title">⛏ Guia de Mineração</h2>
+            <p class="tut-subtitle">"Conquiste minas, derrote monstros e colete cristais."</p>
+
+            <!-- 1. Status das Minas -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">1. Status das Minas</h4>
+                <p>Cada mina exibe um estado que indica se ela pode ser disputada. No mapa, a luz das minas muda de cor conforme o estado:</p>
+                <div class="tut-status-grid">
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#1a1a1a; border-color:#ffffff;"></div>
+                        <span><strong style="color:#ffffff">Aberta</strong> — sem dono, sem avatar no mapa; disponível para capturar</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#1a1200; border-color:#FFC107;"></div>
+                        <span><strong style="color:#FFC107">Ocupada</strong> — mostra o avatar e o nome do dono; desafie via PvP</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#001a1a; border-color:#2196F3;"></div>
+                        <span><strong style="color:#2196F3">Disputando</strong> — ícone pulsando no lugar do avatar; combate em andamento contra o monstro</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#1a0808; border-color:#f44336;"></div>
+                        <span><strong style="color:#f44336">Esgotada</strong> — aguardando a próxima sessão</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Capturando via Monstro -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#ff6b6b; border-color:#ff6b6b;">2. Captura: Combate contra Monstro</h4>
+                <p>Esta é a forma principal de obter uma mina <strong style="color:#ffd700">sem dono</strong>.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>⚔️ Você <strong style="color:#ffd700">não pode</strong> iniciar combate se já for dono de uma mina</li>
+                        <li>📊 O sistema registra um <strong style="color:#ffd700">ranking de dano</strong> — quem causar mais dano vence</li>
+                        <li>🏆 Quando o monstro morre ou o tempo acaba, o jogador com <strong style="color:#ffd700">maior dano elegível</strong> torna-se o novo dono</li>
+                        <li>🔄 Se ninguém for elegível, a mina é <strong style="color:#ff9060">resetada</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 3. Combate PvP -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#c084fc; border-color:#c084fc;">3. Captura: Combate PvP</h4>
+                <p>Minas <strong style="color:#FFC107">ocupadas</strong> podem ser roubadas via PvP.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>🛡️ O <strong style="color:#ffd700">dono ataca primeiro</strong>, seguido pelo desafiante</li>
+                        <li>💀 A batalha termina quando um lado chega a <strong style="color:#ff6b6b">zero de vida</strong></li>
+                        <li>🏅 Se o desafiante vencer, ele se torna o <strong style="color:#ffd700">novo dono</strong></li>
+                        <li>📜 O dono pode ver o <strong style="color:#ffd700">histórico</strong> de todos os ataques recebidos</li>
+                        <li>🎟️ Cada desafio consome <strong style="color:#ffd700">1 tentativa PvP</strong> (comprável com ouro, reseta diariamente)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 4. Sessões e Recompensas -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#ffd700; border-color:#ffd700;">4. Sessões e Recompensas</h4>
+                <p>O sistema opera em ciclos de <strong style="color:#ffd700">2 horas</strong>. Um cronômetro na tela indica quando a próxima sessão começa.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>💎 Donos de mina coletam <strong style="color:#ffd700">cristais</strong> passivamente durante a sessão</li>
+                        <li>📦 Máximo de <strong style="color:#ffd700">1500 cristais</strong> por sessão</li>
+                        <li>⚠️ Se sua mina for capturada, você recebe os cristais acumulados <strong style="color:#ffd700">até aquele momento</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 5. Mapa e Zonas -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#66d9ef; border-color:#66d9ef;">5. Mapa e Zonas</h4>
+                <p>As minas ficam espalhadas em um <strong style="color:#ffd700">mapa arrastável</strong> .</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>🗺️ Cada zona tem <strong style="color:#ffd700">10 minas</strong> fixas no mapa</li>
+                        <li>🔓 A <strong style="color:#ffd700">próxima zona</strong> é liberada automaticamente assim que todas as minas da zona atual estiverem ocupadas</li>
+                        <li>🧭 Troque de zona pelo seletor abaixo do cronômetro de sessão; zonas ainda bloqueadas aparecem apagadas</li>
+                        <li>⬆️ Use a seta no topo do painel para recolher/expandir as informações de guilda, sessão e zonas e ver o mapa por inteiro</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 6. Guilda Dominante -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">6. Guilda Dominante</h4>
+                <p>A guilda com <strong style="color:#ffd700">mais membros donos de mina</strong> ao mesmo tempo é exibida no topo da página como <strong style="color:#ffd700">Guilda Dominante</strong>. Coordene com sua guilda para dominar o mapa!</p>
+            </div>
+
+            <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+                <button class="tut-confirm-btn" id="closeTutorialBtn2">ENTENDI</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const minatutoImg = document.getElementById("minatuto");
+            const tutorialModal = document.getElementById("tutorialModal");
+            const closeTutorialBtn = document.getElementById("closeTutorialBtn");
+            const closeTutorialBtn2 = document.getElementById("closeTutorialBtn2");
+
+            const openTutorial = () => { tutorialModal.style.display = "flex"; };
+            const closeTutorial = () => { tutorialModal.style.display = "none"; };
+
+            if (minatutoImg) minatutoImg.addEventListener("click", openTutorial);
+            if (closeTutorialBtn) closeTutorialBtn.addEventListener("click", closeTutorial);
+            if (closeTutorialBtn2) closeTutorialBtn2.addEventListener("click", closeTutorial);
+
+            if (tutorialModal) {
+                tutorialModal.addEventListener("click", (event) => {
+                    if (event.target === tutorialModal) closeTutorial();
+                });
+            }
+        });
+    </script>
+   
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.2em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${15 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+(function() {
+    const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    const isGloballyMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+
+    // Lista de URLs de MÚSICA DE FUNDO (BGM)
+    // Se o URL do áudio criado contiver qualquer uma dessas strings, ele será mutado.
+    const BGM_URL_FRAGMENTS = [
+        '/assets/music_loop_02.mp3', // Índice principal
+        '/assets/idlesong.mp3',      // afk_page.js
+        '/assets/combat_afk_bg.mp3', // afk_page.js
+        '/assets/mina.mp3',
+        '/assets/desolation_tower.mp3',
+        '/assets/arena.mp3',
+        // mines.js
+        // ADICIONE AQUI FRAGMENTOS DE URL DE QUALQUER OUTRA MÚSICA DE FUNDO
+        // Ex: '/assets/arena_bgm.mp3', '/assets/raid_bgm.mp3'
+    ];
+
+    // Guarda o construtor original
+    const OriginalAudio = window.Audio;
+
+    // Se o mute não estiver ativo, ou se já interceptamos, não faça nada.
+    if (!isGloballyMuted || OriginalAudio.__isPatched) {
+        return;
+    }
+
+    // Sobrescreve o construtor nativo
+    window.Audio = function(src) {
+        // 1. Cria o objeto de áudio usando o construtor original
+        const audioInstance = new OriginalAudio(src);
+
+        // 2. Verifica se o 'src' corresponde a um BGM
+        const isBGM = src && BGM_URL_FRAGMENTS.some(fragment => src.includes(fragment));
+
+        if (isBGM) {
+            // 3. Se for BGM e o mute estiver ativo, força o volume para 0.
+            audioInstance.volume = 0;
+            // console.log(`[MUTE PATCH] Muted BGM: ${src}`); // Opcional para debug
+
+            // 4. Adiciona um 'setter' falso para a propriedade 'volume' do objeto
+            // Isso previne que seus scripts de página (ex: combatMusic.volume = 0.4;)
+            // consigam desmutar o áudio posteriormente.
+            Object.defineProperty(audioInstance, 'volume', {
+                get() {
+                    return 0; // Sempre retorna 0
+                },
+                set(newValue) {
+                    // Se o valor for 0 (mutar) ou o valor antigo for 0, permite que o script original
+                    // defina o volume, mas mantemos o nosso em 0.
+                    // Isso é para o caso de o usuário querer restaurar o volume no futuro.
+                    if (newValue > 0 && isGloballyMuted) {
+                        // console.warn(`[MUTE PATCH] Tentativa de desmutar BGM bloqueada. Estado global: Mutado.`);
+                    }
+                    // O objeto de áudio real continua mutado (volume = 0)
+                },
+                configurable: true // Permite que seja redefinido se o estado mudar
+            });
+
+        }
+
+        // 5. Retorna a instância (mutada ou não)
+        return audioInstance;
+    };
+    
+    // Marca o construtor como modificado
+    window.Audio.__isPatched = true;
+    
+    // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
+    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+
+})();
+</script>
+<script type="module" src="title_notifications.js"></script>
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "mines.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.3em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.5em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+<script src="security.js"></script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

@@ -1,0 +1,2092 @@
+import { supabase } from './supabaseClient.js'
+
+// =========================================================
+// >>> ADEN GLOBAL DB (Zero Egress Auth & Player) <<<
+// =========================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 7;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
+
+// =========================================================
+// >>> CATÁLOGO DE ITENS COMERCIALIZÁVEIS <<<
+// =========================================================
+const BASE_ITEM_URL = 'https://aden-rpg.pages.dev/assets/itens/';
+const GOLD_IMG_URL  = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
+
+const TRADEABLE_ITEMS = [
+    { id: 56,  name: 'Pórfero',                img: 'porifero.webp',           minGold: 1  },
+    { id: 57,  name: 'Tecido Alfa',             img: 'tecido_alfa.webp',        minGold: 1  },
+    { id: 58,  name: 'Verniz',                  img: 'verniz.webp',             minGold: 1  },
+    { id: 59,  name: 'Safira',                  img: 'safira.webp',             minGold: 1  },
+    { id: 60,  name: 'Pétala Orium',            img: 'petala_orium.webp',       minGold: 1  },
+    { id: 61,  name: 'Lápis-lazúli',            img: 'lapis_lazuli.webp',       minGold: 1  },
+    { id: 62,  name: 'Essência de Anjo',        img: 'essencia_de_anjo.webp',   minGold: 1  },
+    { id: 63,  name: 'Lubrificante',            img: 'lubrificante.webp',       minGold: 1  },
+    { id: 64,  name: 'Garra de Dragão',         img: 'garra_de_dragao.webp',    minGold: 1  },
+    { id: 65,  name: 'Reagente Ômega',          img: 'reagente_omega.webp',     minGold: 1  },
+    { id: 66,  name: 'Núcleo de Dragão',        img: 'nucleo_de_dragao.webp',   minGold: 1  },
+    { id: 67,  name: 'Pele Animal',             img: 'pele_animal.webp',        minGold: 1  },
+    { id: 68,  name: 'Pena de Harpia',          img: 'pena_de_harpia.webp',     minGold: 1  },
+    { id: 69,  name: 'Lã',                      img: 'la.webp',                 minGold: 1  },
+    { id: 70,  name: 'Sal de Cobalto',          img: 'sal_de_cobalto.webp',     minGold: 1  },
+    { id: 71,  name: 'Lágrima de Fênix',        img: 'lagrima_de_fenix.webp',   minGold: 1  },
+    { id: 72,  name: 'Pedaço de Freixo',        img: 'pedaco_de_freixo.webp',   minGold: 1  },
+    { id: 73,  name: 'Presa de Kelts',          img: 'presa_de_kelts.webp',     minGold: 1  },
+    { id: 74,  name: 'Galho Espiritual',        img: 'galho_espiritual.webp',   minGold: 1  },
+    { id: 75,  name: 'Minério de Mithril',      img: 'minerio_de_mithril.webp', minGold: 1  },
+    { id: 76,  name: 'Pó Ósseo',               img: 'po_osseo.webp',           minGold: 1  },
+    { id: 77,  name: 'Couro Animal',            img: 'couro_animal.webp',       minGold: 1  },
+    { id: 78,  name: 'Linha Mágica',            img: 'linha_magica.webp',       minGold: 1  },
+    { id: 79,  name: 'Mithril Temperado',       img: 'mithril_temperado.webp',  minGold: 1  },
+    { id: 80,  name: 'Carvão',                  img: 'carvao.webp',             minGold: 1  },
+    { id: 81,  name: 'Minério de Ferro',        img: 'minerio_de_ferro.webp',   minGold: 1  },
+    { id: 82,  name: 'Fios de Fibra',           img: 'fios_de_fibra.webp',      minGold: 1  },
+    { id: 83,  name: 'Escama de Dragão',        img: 'escama_de_dragao.webp',   minGold: 1  },
+    { id: 84,  name: 'Chifre de Unicórnio',     img: 'chifre_de_unicornio.webp',minGold: 1  },
+    { id: 85,  name: 'Escudo de Caça',          img: 'escudo_de_caca.webp',     minGold: 1  },
+    { id: 86,  name: 'Asa de Morcego',          img: 'asa_de_morcego.webp',     minGold: 1  },
+    { id: 87,  name: 'Emblema Vampírico',       img: 'emblema_vampirico.webp',  minGold: 1  },
+    { id: 88,  name: 'Quitina',                 img: 'quitina.webp',            minGold: 1  },
+    { id: 89,  name: 'Pedra Âmbar',             img: 'pedra_ambar.webp',        minGold: 1  },
+    { id: 90,  name: 'Lodo Mágico',             img: 'lodo_magico.webp',        minGold: 1  },
+    { id: 91,  name: 'Núcleo de Vinha',         img: 'nucleo_de_vinha.webp',    minGold: 1  },
+    { id: 92,  name: 'Totem Reptiliano',        img: 'totem_reptiliano.webp',   minGold: 1  },
+    { id: 101, name: 'Receita Foice 100%',      img: 'receita_de_fragmentos_de_foice_da_noite_eterna_100.webp',    minGold: 50 },
+    { id: 105, name: 'Receita Armadura 100%',   img: 'receita_de_fragmentos_de_armadura_da_noite_eterna_100.webp', minGold: 50 },
+    { id: 109, name: 'Receita Anel 100%',       img: 'receita_de_fragmentos_de_anel_da_noite_eterna_100.webp',    minGold: 50 },
+    { id: 113, name: 'Receita Colar 100%',      img: 'receita_de_fragmentos_de_colar_da_noite_eterna_100.webp',   minGold: 50 },
+    { id: 117, name: 'Receita Elmo 100%',       img: 'receita_de_fragmentos_de_elmo_da_noite_eterna_100.webp',    minGold: 50 },
+    { id: 121, name: 'Receita Asa 100%',        img: 'receita_de_fragmentos_de_asa_da_noite_eterna_100.webp',     minGold: 50 },
+];
+
+const TRADEABLE_MAP = new Map(TRADEABLE_ITEMS.map(i => [i.id, i]));
+
+// =========================================================
+// >>> INDEXEDDB – INVENTÁRIO <<<
+// =========================================================
+const IDB_NAME    = 'aden_inventory_db';
+const IDB_STORE   = 'inventory_store';
+const IDB_VERSION = 47;
+
+function openIdb() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onerror   = () => rej(req.error);
+        req.onsuccess = e  => res(e.target.result);
+        req.onupgradeneeded = () => {}; // não modifica schema
+    });
+}
+
+async function getTradeableItemsFromIdb() {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return [];
+        const tx    = db.transaction(IDB_STORE, 'readonly');
+        const all   = await new Promise((res, rej) => {
+            const r = tx.objectStore(IDB_STORE).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror   = () => rej(r.error);
+        });
+        // Agrupa por item_id somando quantidades
+        const totals = {};
+        for (const inv of all) {
+            const id = inv.items?.item_id;
+            if (!id || !TRADEABLE_MAP.has(id)) continue;
+            totals[id] = (totals[id] || 0) + (inv.quantity || 0);
+        }
+        return Object.entries(totals)
+            .filter(([, qty]) => qty > 0)
+            .map(([idStr, qty]) => {
+                const meta = TRADEABLE_MAP.get(Number(idStr));
+                return { ...meta, qty };
+            });
+    } catch { return []; }
+}
+
+async function decrementIdbItem(itemId, amount) {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return;
+        const tx    = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        const all   = await new Promise((res, rej) => {
+            const r = store.getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror   = () => rej(r.error);
+        });
+        const matching = all.filter(i => i.items?.item_id === itemId);
+        let remaining  = amount;
+        for (const item of matching) {
+            if (remaining <= 0) break;
+            if (item.quantity >= remaining) {
+                item.quantity -= remaining;
+                remaining = 0;
+                if (item.quantity <= 0) store.delete(item.id);
+                else store.put(item);
+            } else {
+                remaining -= item.quantity;
+                store.delete(item.id);
+            }
+        }
+    } catch (e) { console.warn('pv: idb decrement fail', e); }
+}
+
+async function incrementIdbItem(itemId, amount) {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return;
+        const tx    = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        const all   = await new Promise((res, rej) => {
+            const r = store.getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror   = () => rej(r.error);
+        });
+        const matching = all.filter(i => i.items?.item_id === itemId);
+        if (matching.length > 0) {
+            const item = matching[0];
+            item.quantity = (item.quantity || 0) + amount;
+            store.put(item);
+        }
+        // Se não existe, o recalc do servidor vai sincronizar no próximo login
+    } catch (e) { console.warn('pv: idb increment fail', e); }
+}
+
+// =========================================================
+// >>> ESTILOS CSS DO SISTEMA DE COMÉRCIO <<<
+// =========================================================
+function injectTradeStyles() {
+    if (document.getElementById('pvTradeStyles')) return;
+    const s = document.createElement('style');
+    s.id = 'pvTradeStyles';
+    s.textContent = `
+/* ── MODAL DE SELEÇÃO DE ITENS ── */
+#pvTradeModal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center;
+    z-index: 4500;
+}
+#pvTradeModal.active { display: flex; }
+#pvTradeBox {
+    background: linear-gradient(160deg, #1a0d2e 0%, #120920 100%);
+    border: 1px solid #6a3fa0;
+    border-radius: 14px;
+    width: min(420px, 96vw);
+    max-height: 90vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(120,60,200,.4);
+}
+#pvTradeBox h3 {
+    margin: 0; padding: 14px 18px;
+    background: linear-gradient(90deg, #3b1d6e, #1a0d2e);
+    color: #d4b4ff;
+    font-size: 1em; letter-spacing: .5px;
+    border-bottom: 1px solid #4a2a7a;
+    display: flex; align-items: center; gap: 8px;
+}
+#pvTradeBox h3 span.pv-trade-close {
+    margin-left: auto; cursor: pointer; font-size: 1.3em;
+    color: #a07ce0; line-height: 1;
+}
+#pvTradeBox h3 span.pv-trade-close:hover { color: #fff; }
+#pvTradeItemList {
+    overflow-y: auto; padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 1;
+}
+#pvTradeItemList::-webkit-scrollbar { width: 4px; }
+#pvTradeItemList::-webkit-scrollbar-thumb { background: #5a2d9a; border-radius: 2px; }
+.pv-trade-item-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(160,100,255,.15);
+    border-radius: 8px; padding: 8px 10px;
+    cursor: pointer; transition: background .15s, border-color .15s;
+}
+.pv-trade-item-row:hover, .pv-trade-item-row.selected {
+    background: rgba(120,60,200,.2);
+    border-color: #8a5ad0;
+}
+.pv-trade-item-row img { width: 36px; height: 36px; object-fit: contain; }
+.pv-trade-item-info { flex: 1; }
+.pv-trade-item-info strong { display: block; font-size: .85em; color: #e0ccff; }
+.pv-trade-item-info small  { color: #9a7abf; font-size: .75em; }
+.pv-trade-item-qty-badge {
+    background: rgba(90,45,154,.6);
+    border-radius: 6px; padding: 2px 8px;
+    font-size: .8em; color: #c8aaff; font-weight: bold;
+}
+#pvTradeConfigArea {
+    padding: 14px 18px;
+    border-top: 1px solid rgba(100,60,180,.3);
+    background: rgba(0,0,0,.2);
+    display: flex; flex-direction: column; gap: 10px;
+}
+.pv-trade-selected-preview {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(80,40,140,.25);
+    border-radius: 8px; padding: 8px 12px;
+    border: 1px solid rgba(140,80,220,.3);
+}
+.pv-trade-selected-preview img { width: 40px; height: 40px; object-fit: contain; }
+.pv-trade-selected-preview span { color: #d4b4ff; font-size: .9em; font-weight: bold; }
+.pv-trade-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pv-trade-input-group { display: flex; flex-direction: column; gap: 4px; }
+.pv-trade-input-group label { color: #9a7abf; font-size: .75em; text-transform: uppercase; letter-spacing: .4px; }
+.pv-trade-input-group input {
+    background: rgba(0,0,0,.4); border: 1px solid rgba(120,70,200,.5);
+    border-radius: 6px; color: #e0ccff; padding: 6px 10px;
+    font-size: .9em; width: 100%; box-sizing: border-box;
+    outline: none; transition: border-color .2s;
+}
+.pv-trade-input-group input:focus { border-color: #9060e0; }
+#pvTradeOfferBtn {
+    background: linear-gradient(135deg, #6a2fa0, #3d1870);
+    border: none; color: #f0e0ff;
+    border-radius: 8px; padding: 10px;
+    font-size: .9em; font-weight: bold; cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    letter-spacing: .4px;
+}
+#pvTradeOfferBtn:hover   { opacity: .9; }
+#pvTradeOfferBtn:active  { transform: scale(.97); }
+#pvTradeOfferBtn:disabled { opacity: .45; cursor: not-allowed; }
+.pv-trade-hint { color: #7a5caa; font-size: .73em; text-align: center; }
+
+/* ── MENSAGEM DE TRADE NO CHAT ── */
+.pv-trade-msg {
+    width: 100%; max-width: 360px;
+    min-width: 0;
+    box-sizing: border-box;
+    background: linear-gradient(140deg, #1a0d2e, #0e0720);
+    border: 1px solid #5a3090;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 16px rgba(80,30,160,.35);
+    font-size: .85em;
+}
+.pv-trade-msg-header {
+    background: linear-gradient(90deg, #2d1460, #1a0d2e);
+    padding: 7px 12px;
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid rgba(120,60,200,.3);
+    color: #b090e0; font-size: .78em; font-weight: bold;
+    text-transform: uppercase; letter-spacing: .5px;
+}
+.pv-trade-msg-header img { width: 16px; height: 16px; }
+.pv-trade-msg-body {
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 12px;
+}
+.pv-trade-msg-body img.pv-trade-item-icon {
+    width: 52px; height: 52px; object-fit: contain;
+    border-radius: 8px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(120,60,200,.2);
+    padding: 2px;
+}
+.pv-trade-msg-info { flex: 1; }
+.pv-trade-msg-info .pv-trade-msg-name {
+    color: #e0ccff; font-weight: bold; font-size: .9em; margin-bottom: 3px;
+}
+.pv-trade-msg-info .pv-trade-msg-qty {
+    color: #9a7abf; font-size: .8em;
+}
+.pv-trade-msg-price {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.pv-trade-msg-price img { width: 22px; height: 22px; }
+.pv-trade-msg-price span {
+    color: #ffd766; font-weight: bold; font-size: .95em;
+}
+.pv-trade-msg-footer {
+    padding: 6px 12px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-sizing: border-box; width: 100%;
+}
+.pv-trade-msg-expiry {
+    color: #7a5caa; font-size: .72em; text-align: center;
+}
+.pv-trade-msg-status {
+    text-align: center; font-weight: bold; font-size: .82em;
+    padding: 5px; border-radius: 6px; box-sizing: border-box; width: 100%;
+}
+.pv-trade-msg-status.status-accepted  { background: rgba(30,120,60,.3);  color: #60e090; border: 1px solid rgba(40,160,80,.3);  }
+.pv-trade-msg-status.status-cancelled { background: rgba(120,30,30,.3);  color: #e06060; border: 1px solid rgba(180,40,40,.3);  }
+.pv-trade-msg-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
+.pv-trade-msg-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
+.pv-trade-msg-status.status-pending   { background: rgba(80,40,140,.25); color: #b090e0; border: 1px solid rgba(120,60,200,.3); }
+.pv-trade-msg-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; box-sizing: border-box; }
+.pv-trade-action-btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+    padding: 9px 8px; border: none; border-radius: 7px;
+    font-size: .8em; font-weight: bold; cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    box-sizing: border-box; text-align: center;
+    /* min-width garante que o botão nunca fique menor que o texto some
+       confortavelmente; se não couber os dois lado a lado, o flex-wrap
+       do container acima joga o segundo botão pra uma nova linha em vez
+       de truncar ou quebrar letra por letra. */
+    white-space: normal;
+    line-height: 1.25;
+}
+.pv-trade-action-btn:active { transform: scale(.96); }
+.pv-trade-action-btn:disabled { opacity: .4; cursor: not-allowed; }
+.pv-trade-btn-accept  { background: linear-gradient(135deg, #1d7040, #0e3d20); color: #80ffa0; }
+.pv-trade-btn-decline { background: linear-gradient(135deg, #70200d, #3d0e07); color: #ffaa80; }
+.pv-trade-btn-cancel  { background: linear-gradient(135deg, #4a2060, #251030); color: #c0a0e0; }
+.pv-trade-btn-accept:hover  { opacity: .85; }
+.pv-trade-btn-decline:hover { opacity: .85; }
+.pv-trade-btn-cancel:hover  { opacity: .85; }
+.chat-message .pv-trade-msg { max-width: 100%; }
+
+/* ── BARRA ➕ NOVA CONVERSA ── */
+#pv-list-bar {
+    display: flex; align-items: center;
+    justify-content: flex-end; text-align: right;
+    padding: 5px 10px 4px;
+    border-bottom: 1px solid rgba(120,60,200,.18);
+    background: rgba(0,0,0,.1);
+    box-sizing: border-box;
+}
+#pv-new-convo-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 4px; border-radius: 50%; line-height: 0;
+    transition: background .15s, transform .15s; user-select: none;
+}
+#pv-new-convo-btn:hover { background: rgba(212,160,23,.15); transform: scale(1.18); }
+
+/* ── MENU TRÊS PONTOS ── */
+#pv-context-menu-wrap { position: relative; display: flex; align-items: center; }
+#pv-context-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 6px; border-radius: 50%; line-height: 0;
+    margin-top: 4px; transition: background .15s;
+    user-select: none;
+}
+#pv-context-menu-btn:hover { background: rgba(160,124,224,.15); }
+#pv-context-dropdown {
+    position: absolute; top: calc(100% + 4px); right: 0;
+    background: #1e1030; border: 1px solid #5a3090;
+    border-radius: 10px; min-width: 172px; z-index: 5000;
+    box-shadow: 0 6px 24px rgba(0,0,0,.55); overflow: hidden;
+}
+.pv-dropdown-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 16px; font-size: .85em; color: #d0b8ff;
+    cursor: pointer; transition: background .12s;
+}
+.pv-dropdown-item:hover { background: rgba(120,60,200,.25); }
+.pv-dropdown-item svg { flex-shrink: 0; opacity: .8; }
+.pv-dd-danger { color: #e07070 !important; }
+.pv-dd-danger svg { stroke: #e07070; }
+.pv-dd-danger:hover { background: rgba(200,60,60,.2) !important; }
+
+/* ── MODAL NOVA CONVERSA ── */
+#pvNewConvoModal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center; z-index: 4600;
+}
+#pvNewConvoModal.active { display: flex; }
+#pvNewConvoBox {
+    background: linear-gradient(160deg, #1a0d2e, #120920);
+    border: 1px solid #6a3fa0; border-radius: 14px;
+    width: min(380px, 94vw); overflow: hidden;
+    box-shadow: 0 0 40px rgba(120,60,200,.4);
+}
+#pvNewConvoBox h3 {
+    margin: 0; padding: 14px 18px;
+    background: linear-gradient(90deg, #3b1d6e, #1a0d2e);
+    color: #d4b4ff; font-size: 1em; letter-spacing: .5px;
+    border-bottom: 1px solid #4a2a7a;
+    display: flex; align-items: center; justify-content: space-between;
+}
+#pvNewConvoBox h3 .pv-nc-x { cursor: pointer; font-size: 1.3em; color: #a07ce0; }
+#pvNewConvoBox h3 .pv-nc-x:hover { color: #fff; }
+#pvNewConvoBody { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.pv-nc-warn {
+    background: rgba(212,160,23,.08); border: 1px solid rgba(212,160,23,.3);
+    border-radius: 8px; padding: 10px 12px;
+    color: #d4a017; font-size: .78em; line-height: 1.5;
+}
+#pvNewConvoInput {
+    background: rgba(0,0,0,.4); border: 1px solid rgba(120,70,200,.5);
+    border-radius: 8px; color: #e0ccff; padding: 10px 12px;
+    font-size: .9em; width: 100%; box-sizing: border-box; outline: none;
+    transition: border-color .2s;
+}
+#pvNewConvoInput:focus { border-color: #9060e0; }
+#pvNewConvoStatus { font-size: .78em; text-align: center; min-height: 1.2em; color: #e07070; }
+#pvNewConvoStatus.ok { color: #60e090; }
+#pvNewConvoSubmitBtn {
+    background: linear-gradient(135deg, #6a2fa0, #3d1870);
+    border: none; color: #f0e0ff; border-radius: 8px; padding: 10px;
+    font-size: .9em; font-weight: bold; cursor: pointer;
+    transition: opacity .2s; letter-spacing: .4px; width: 100%;
+}
+#pvNewConvoSubmitBtn:hover { opacity: .9; }
+#pvNewConvoSubmitBtn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── MODAL DE PRESENTE ── */
+#pvGiftModal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center; z-index: 4500;
+}
+#pvGiftModal.active { display: flex; }
+#pvGiftBox {
+    background: linear-gradient(160deg, #1a0d2e, #120920);
+    border: 1px solid #7a3fa0; border-radius: 14px;
+    width: min(420px, 96vw); max-height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 40px rgba(160,60,200,.4);
+}
+#pvGiftBox h3 {
+    margin: 0; padding: 14px 18px;
+    background: linear-gradient(90deg, #4b1d6e, #1a0d2e);
+    color: #e4b4ff; font-size: 1em; letter-spacing: .5px;
+    border-bottom: 1px solid #5a2a7a;
+    display: flex; align-items: center; gap: 8px;
+}
+#pvGiftBox h3 .pv-gift-x { margin-left: auto; cursor: pointer; font-size: 1.3em; color: #b07ce0; }
+#pvGiftBox h3 .pv-gift-x:hover { color: #fff; }
+#pvGiftItemList { overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+#pvGiftItemList::-webkit-scrollbar { width: 4px; }
+#pvGiftItemList::-webkit-scrollbar-thumb { background: #6a2d9a; border-radius: 2px; }
+.pv-gift-item-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(180,100,255,.15);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.pv-gift-item-row:hover, .pv-gift-item-row.selected { background: rgba(140,60,200,.2); border-color: #9a5ad0; }
+.pv-gift-item-row img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.3); }
+.pv-gift-item-info { flex: 1; }
+.pv-gift-item-info strong { display: block; font-size: .85em; color: #e0ccff; }
+.pv-gift-item-info small  { color: #9a7abf; font-size: .75em; }
+.pv-gift-qty-badge { background: rgba(100,45,154,.6); border-radius: 6px; padding: 2px 8px; font-size: .8em; color: #d8aaff; font-weight: bold; }
+#pvGiftConfigArea { padding: 14px 18px; border-top: 1px solid rgba(120,60,200,.3); background: rgba(0,0,0,.2); display: flex; flex-direction: column; gap: 10px; }
+.pv-gift-preview {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(100,40,140,.25); border-radius: 8px; padding: 10px 12px;
+    border: 1px solid rgba(160,80,240,.3);
+}
+.pv-gift-preview img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.3); }
+.pv-gift-preview strong { display: block; color: #e4ccff; font-size: .9em; }
+.pv-gift-preview small  { color: #9070bf; font-size: .78em; }
+#pvGiftSendBtn {
+    background: linear-gradient(135deg, #7a2fa0, #4d1870); border: none;
+    color: #f0e0ff; border-radius: 8px; padding: 10px;
+    font-size: .9em; font-weight: bold; cursor: pointer;
+    transition: opacity .2s; letter-spacing: .4px;
+}
+#pvGiftSendBtn:hover { opacity: .9; }
+#pvGiftSendBtn:disabled { opacity: .45; cursor: not-allowed; }
+.pv-gift-hint { color: #7a5caa; font-size: .73em; text-align: center; }
+
+/* ── CARD MENSAGEM DE PRESENTE ── */
+.pv-gift-msg {
+    width: 100%; max-width: 360px; min-width: 0; box-sizing: border-box;
+    background: linear-gradient(140deg, #1a0d1a, #0e0718);
+    border: 1px solid #7a3090; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 16px rgba(120,30,160,.35); font-size: .85em;
+}
+.pv-gift-msg-header {
+    background: linear-gradient(90deg, #3d1460, #1a0d2e);
+    padding: 7px 12px; display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid rgba(160,60,220,.3);
+    color: #d090e0; font-size: .78em; font-weight: bold;
+    text-transform: uppercase; letter-spacing: .5px;
+}
+.pv-gift-msg-body { padding: 12px; display: flex; align-items: center; gap: 12px; }
+.pv-gift-msg-body img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(160,60,220,.2); padding: 2px; }
+.pv-gift-msg-info .pv-gift-name { color: #e0ccff; font-weight: bold; font-size: .9em; margin-bottom: 3px; }
+.pv-gift-msg-info .pv-gift-sub  { color: #9a7abf; font-size: .78em; }
+.pv-gift-msg-footer { padding: 6px 12px 10px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; width: 100%; }
+.pv-gift-expiry { color: #7a5caa; font-size: .72em; text-align: center; }
+.pv-gift-status { text-align: center; font-weight: bold; font-size: .82em; padding: 5px; border-radius: 6px; box-sizing: border-box; width: 100%; }
+.pv-gift-status.status-accepted  { background: rgba(30,120,60,.3);  color: #60e090; border: 1px solid rgba(40,160,80,.3);  }
+.pv-gift-status.status-cancelled { background: rgba(120,30,30,.3);  color: #e06060; border: 1px solid rgba(180,40,40,.3);  }
+.pv-gift-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
+.pv-gift-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
+.pv-gift-status.status-pending   { background: rgba(100,30,140,.25);color: #c060e0; border: 1px solid rgba(140,60,180,.3); }
+.pv-gift-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; box-sizing: border-box; }
+.pv-gift-btn {
+    flex: 1 1 auto; min-width: 100px; padding: 8px 6px; border: none; border-radius: 7px;
+    font-size: .82em; font-weight: bold; cursor: pointer;
+    transition: opacity .15s, transform .1s; box-sizing: border-box; text-align: center;
+    white-space: normal; line-height: 1.25;
+}
+.pv-gift-btn:active  { transform: scale(.96); }
+.pv-gift-btn:disabled{ opacity: .4; cursor: not-allowed; }
+.pv-gift-accept  { background: linear-gradient(135deg, #1d7040, #0e3d20); color: #80ffa0; }
+.pv-gift-decline { background: linear-gradient(135deg, #70200d, #3d0e07); color: #ffaa80; }
+.pv-gift-cancel  { background: linear-gradient(135deg, #5a1a7a, #2d0d45); color: #d080f0; }
+.pv-gift-accept:hover, .pv-gift-decline:hover, .pv-gift-cancel:hover { opacity: .85; }
+.chat-message .pv-gift-msg { max-width: 100%; }
+`;
+    document.head.appendChild(s);
+}
+
+// =========================================================
+// >>> SKINS PRESENTEÁVEIS <<<
+// =========================================================
+const BLOCKED_GIFT_IDS = new Set([130, 131, 132, 133]);
+
+async function getGiftableSkinsFromIdb() {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return null;
+        const tx  = db.transaction(IDB_STORE, 'readonly');
+        const all = await new Promise((res, rej) => {
+            const r = tx.objectStore(IDB_STORE).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror   = () => rej(r.error);
+        });
+        const totals = {};
+        for (const inv of all) {
+            const item = inv.items;
+            if (!item) continue;
+            const id = item.item_id;
+            if (!id || item.item_type !== 'skin' || BLOCKED_GIFT_IDS.has(id)) continue;
+            // Skins com equipped_slot preenchido estão ativas no perfil → não podem ser presenteadas
+            if (inv.equipped_slot) continue;
+            if (!totals[id]) {
+                const raw = item.img || item.skin_frame_url || null;
+                totals[id] = {
+                    id, name: item.name || item.display_name || `Skin #${id}`,
+                    img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
+                    subtype: item.item_subtype || item.subtype || '',
+                    qty: 0,
+                    // Guarda o inventory_items.id para exclusão precisa
+                    inv_id: inv.id,
+                };
+            }
+            totals[id].qty += (inv.quantity || 0);
+        }
+        const skins = Object.values(totals).filter(s => s.qty > 0);
+        return skins.length > 0 ? skins : null;
+    } catch { return null; }
+}
+
+async function getGiftableSkinsFromSupabase(playerId) {
+    try {
+        // Busca o player para saber quais inventory_ids estão ativos
+        const { data: playerData } = await supabaseClient
+            .from('players')
+            .select('active_frame_inventory_id, active_video_inventory_id')
+            .eq('id', playerId)
+            .single();
+
+        const activeIds = new Set([
+            playerData?.active_frame_inventory_id,
+            playerData?.active_video_inventory_id,
+        ].filter(Boolean));
+
+        const { data, error } = await supabaseClient
+            .from('inventory_items')
+            .select('id, item_id, quantity, equipped_slot, items:item_id(item_id, name, display_name, img, skin_frame_url, item_type, item_subtype)')
+            .eq('player_id', playerId)
+            .eq('items.item_type', 'skin')
+            .gt('quantity', 0);
+        if (error || !data) return [];
+
+        const totals = {};
+        for (const row of data) {
+            const item = Array.isArray(row.items) ? row.items[0] : row.items;
+            if (!item || item.item_type !== 'skin') continue;
+            if (BLOCKED_GIFT_IDS.has(row.item_id)) continue;
+            // Exclui skins com equipped_slot (ativas) ou com inventory id ativo
+            if (row.equipped_slot || activeIds.has(row.id)) continue;
+            const id = row.item_id;
+            if (!totals[id]) {
+                const raw = item.img || item.skin_frame_url || null;
+                totals[id] = {
+                    id, name: item.display_name || item.name || `Skin #${id}`,
+                    img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
+                    subtype: item.item_subtype || '',
+                    qty: 0,
+                };
+            }
+            totals[id].qty += row.quantity || 0;
+        }
+        return Object.values(totals).filter(s => s.qty > 0);
+    } catch { return []; }
+}
+
+async function loadGiftableSkins(playerId) {
+    const fromIdb = await getGiftableSkinsFromIdb();
+    if (fromIdb !== null) return fromIdb;
+    return getGiftableSkinsFromSupabase(playerId);
+}
+
+// =========================================================
+// >>> MÓDULO PRINCIPAL <<<
+// =========================================================
+document.addEventListener("DOMContentLoaded", () => {
+    injectTradeStyles();
+
+    const showFloatingMessage = window.showFloatingMessage || console.log;
+
+    // --- ELEMENTOS DA UI ---
+    const pvMenuBtn            = document.querySelector('.menu-item[data-modal="pvModal"]');
+    const pvModal              = document.getElementById('pvModal');
+    const closePvModalBtn      = document.getElementById('closePvModalBtn');
+    const pvNotificationDot    = document.getElementById('pvNotificationDot');
+    const pvTabs               = document.querySelectorAll('.pv-tab-btn');
+    const pvMessageContent     = document.getElementById('pv-messages');
+    const pvSystemContent      = document.getElementById('pv-system');
+    const conversationListDiv  = document.getElementById('pv-conversation-list');
+    const chatViewDiv          = document.getElementById('pv-chat-view');
+    const backToListBtn        = document.getElementById('pv-back-to-list-btn');
+    const chatWithName         = document.getElementById('pv-chat-with-name');
+    const deleteConvoBtn       = document.getElementById('pv-delete-convo-btn');
+    const chatMessagesDiv      = document.getElementById('pv-chat-messages');
+    const chatInput            = document.getElementById('pv-chat-input');
+    const sendMessageBtn       = document.getElementById('pv-send-message-btn');
+    const systemMessagesListDiv= document.getElementById('pv-system-messages-list');
+    const systemMessageModal   = document.getElementById('systemMessageModal');
+    const closeSystemMessageModalBtn = document.getElementById('closeSystemMessageModalBtn');
+    const systemMessageTitle   = document.getElementById('systemMessageTitle');
+    const systemMessageContent = document.getElementById('systemMessageContent');
+    const systemMessageDate    = document.getElementById('systemMessageDate');
+    const pvSystemTabBtn       = document.querySelector('.pv-tab-btn[data-tab="pv-system"]');
+    const confirmModal         = document.getElementById('confirmModal');
+    const confirmModalMessage  = document.getElementById('pvConfirmModalMessage');
+    let   confirmModalConfirmBtn = document.getElementById('confirmModalConfirmBtn');
+    const confirmModalCancelBtn  = document.getElementById('confirmModalCancelBtn');
+    const confirmModalCloseBtn   = confirmModal ? confirmModal.querySelector('.close-btn') : null;
+
+    // --- Novos elementos ───
+    const pvNewConvoBtn     = document.getElementById('pv-new-convo-btn');
+    const pvContextMenuBtn  = document.getElementById('pv-context-menu-btn');
+    const pvContextDropdown = document.getElementById('pv-context-dropdown');
+    const pvMenuTrade       = document.getElementById('pv-menu-trade');
+    const pvMenuGift        = document.getElementById('pv-menu-gift');
+    const pvMenuDelete      = document.getElementById('pv-menu-delete');
+
+    const closeConfirmModal = () => { if (confirmModal) confirmModal.style.display = 'none'; };
+
+    function showConfirmModal(message, onConfirm) {
+        if (!confirmModal || !confirmModalMessage || !confirmModalConfirmBtn) {
+            if (confirm(message)) onConfirm();
+            return;
+        }
+        confirmModalMessage.textContent = message;
+        const newBtn = confirmModalConfirmBtn.cloneNode(true);
+        confirmModalConfirmBtn.parentNode.replaceChild(newBtn, confirmModalConfirmBtn);
+        confirmModalConfirmBtn = newBtn;
+        newBtn.addEventListener('click', () => { closeConfirmModal(); if (typeof onConfirm === 'function') onConfirm(); }, { once: true });
+        confirmModal.style.display = 'flex';
+        newBtn.focus();
+    }
+
+    if (confirmModal) {
+        confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
+        confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
+        confirmModal.addEventListener('click', e => { if (e.target === confirmModal) closeConfirmModal(); });
+    }
+
+    function showSystemMessageModal(title, content, date) {
+        if (!systemMessageModal) return;
+        systemMessageTitle.textContent   = title;
+        systemMessageContent.textContent = content;
+        systemMessageDate.textContent    = `Enviada em: ${date}`;
+        systemMessageModal.style.display = 'flex';
+    }
+
+    function closeSystemMessageModal() {
+        if (systemMessageModal) {
+            systemMessageModal.style.display  = 'none';
+            systemMessageTitle.textContent    = '';
+            systemMessageContent.textContent  = '';
+            systemMessageDate.textContent     = '';
+        }
+    }
+
+    if (closeSystemMessageModalBtn) closeSystemMessageModalBtn.onclick = closeSystemMessageModal;
+    if (systemMessageModal) {
+        systemMessageModal.addEventListener('click', e => { if (e.target === systemMessageModal) closeSystemMessageModal(); });
+    }
+
+    // --- ESTADO LOCAL ---
+    let localConversations       = new Map();
+    let localSystemMessages      = new Map();
+    let currentPlayer            = null;
+    let currentOpenConversationId = null;
+    let currentOtherPlayerId      = null; // ID do outro jogador na conversa aberta
+
+    // Publica no canal Ably pessoal do destinatário para forçar refresh
+    // instantâneo do PV enquanto ele estiver nas Tavernas. Sem efeito
+    // (e sem erro) em qualquer outra página, já que a função só existe
+    // quando tavernas.js está carregado.
+    function notifyOtherPlayer(otherId) {
+        try {
+            if (otherId && typeof window.tavPublishPvNotify === 'function') {
+                window.tavPublishPvNotify(otherId);
+            }
+        } catch (_) {}
+    }
+    let playerCache              = new Map();
+
+    function loadNameCache() {
+        try {
+            const raw = localStorage.getItem('pv_player_names_cache');
+            if (raw) playerCache = new Map(JSON.parse(raw));
+        } catch (e) { playerCache = new Map(); }
+    }
+
+    function saveNameCache() {
+        try { localStorage.setItem('pv_player_names_cache', JSON.stringify(Array.from(playerCache.entries()))); } catch(e) {}
+    }
+
+    // ============================================================
+    // Chama uma RPC do Supabase com 1 retry automático quando a falha é
+    // de rede (ex.: "Failed to fetch"). Isso acontece esporadicamente
+    // quando o Service Worker troca de versão em segundo plano
+    // (self.skipWaiting() + clients.claim() no sw.js assumem o controle
+    // da página imediatamente, o que pode derrubar uma requisição que já
+    // estava em voo). É transitório: tentar de novo alguns instantes
+    // depois quase sempre resolve, então automatizamos isso aqui em vez
+    // de deixar o jogador ver o erro e ter que clicar de novo.
+    // ============================================================
+    async function callRpcWithRetry(fnName, params, retries = 1) {
+        const result = await supabaseClient.rpc(fnName, params);
+        const msg = result?.error?.message || '';
+        if (result?.error && /failed to fetch/i.test(msg) && retries > 0) {
+            await new Promise(r => setTimeout(r, 700));
+            return callRpcWithRetry(fnName, params, retries - 1);
+        }
+        return result;
+    }
+
+    // ============================================================
+    // SISTEMA DE COMÉRCIO ENTRE JOGADORES
+    // ============================================================
+
+    // Cria e injeta o modal de seleção de itens para trade
+    function ensureTradeModal() {
+        if (document.getElementById('pvTradeModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvTradeModal';
+        wrap.innerHTML = `
+<div id="pvTradeBox">
+  <h3>
+    <img src="https://aden-rpg.pages.dev/assets/tradep.webp" style="width:20px;height:20px;">
+    Comércio com Jogador
+    <span class="pv-trade-close" id="pvTradeCloseBtn">&times;</span>
+  </h3>
+  <div id="pvTradeItemList"><p style="color:#7a5caa;padding:16px;text-align:center;">Carregando seu inventário...</p></div>
+  <div id="pvTradeConfigArea" style="display:none;">
+    <div class="pv-trade-selected-preview" id="pvTradePreview">
+      <img id="pvTradePreviewImg" src="" alt="">
+      <span id="pvTradePreviewName">Selecione um item</span>
+    </div>
+    <div class="pv-trade-inputs">
+      <div class="pv-trade-input-group">
+        <label>Quantidade</label>
+        <input type="number" id="pvTradeQtyInput" min="1" max="9999" value="1" placeholder="Ex: 10">
+      </div>
+      <div class="pv-trade-input-group">
+        <label>Ouro total</label>
+        <input type="number" id="pvTradeGoldInput" min="1" value="1" placeholder="Ex: 50">
+      </div>
+    </div>
+    <div class="pv-trade-hint" id="pvTradeHint"></div>
+    <button id="pvTradeOfferBtn" disabled>Criar Oferta</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+
+        document.getElementById('pvTradeCloseBtn').onclick = closeTradeModal;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeTradeModal(); });
+
+        document.getElementById('pvTradeQtyInput').addEventListener('input', validateTradeInputs);
+        document.getElementById('pvTradeGoldInput').addEventListener('input', validateTradeInputs);
+
+        document.getElementById('pvTradeOfferBtn').addEventListener('click', submitTradeOffer);
+    }
+
+    let selectedTradeItem = null; // { id, name, img, qty, minGold }
+
+    function closeTradeModal() {
+        const m = document.getElementById('pvTradeModal');
+        if (m) m.classList.remove('active');
+        selectedTradeItem = null;
+    }
+
+    async function openTradePanel() {
+        ensureTradeModal();
+        selectedTradeItem = null;
+
+        const config = document.getElementById('pvTradeConfigArea');
+        const offerBtn = document.getElementById('pvTradeOfferBtn');
+        if (config) config.style.display = 'none';
+        if (offerBtn) offerBtn.disabled = true;
+
+        const listDiv = document.getElementById('pvTradeItemList');
+        listDiv.innerHTML = '<p style="color:#7a5caa;padding:16px;text-align:center;">Carregando inventário...</p>';
+
+        document.getElementById('pvTradeModal').classList.add('active');
+
+        const items = await getTradeableItemsFromIdb();
+
+        if (items.length === 0) {
+            listDiv.innerHTML = '<p style="color:#7a5caa;padding:16px;text-align:center;">Nenhum item comercializável na bolsa.</p>';
+            return;
+        }
+
+        listDiv.innerHTML = '';
+        for (const item of items) {
+            const row = document.createElement('div');
+            row.className = 'pv-trade-item-row';
+            row.dataset.itemId = item.id;
+            row.innerHTML = `
+              <img src="${BASE_ITEM_URL}${item.img}" alt="${item.name}" loading="lazy">
+              <div class="pv-trade-item-info">
+                <strong>${item.name}</strong>
+                <small>Mínimo: ${item.minGold} ouro${item.minGold >= 50 ? ' ✦' : ''}</small>
+              </div>
+              <span class="pv-trade-item-qty-badge">x${item.qty}</span>`;
+            row.addEventListener('click', () => selectTradeItem(item, row));
+            listDiv.appendChild(row);
+        }
+    }
+
+    function selectTradeItem(item, rowEl) {
+        // Deseleciona anterior
+        document.querySelectorAll('.pv-trade-item-row.selected').forEach(r => r.classList.remove('selected'));
+        rowEl.classList.add('selected');
+
+        selectedTradeItem = item;
+
+        const config   = document.getElementById('pvTradeConfigArea');
+        const previewImg  = document.getElementById('pvTradePreviewImg');
+        const previewName = document.getElementById('pvTradePreviewName');
+        const qtyInput  = document.getElementById('pvTradeQtyInput');
+        const goldInput = document.getElementById('pvTradeGoldInput');
+        const hint      = document.getElementById('pvTradeHint');
+
+        config.style.display = 'flex';
+        previewImg.src       = `${BASE_ITEM_URL}${item.img}`;
+        previewName.textContent = item.name;
+
+        qtyInput.max   = item.qty;
+        qtyInput.value = 1;
+        goldInput.min  = item.minGold;   // qty 1 × minGold unitário
+        goldInput.value = item.minGold;
+
+        hint.textContent = `Mínimo: ${item.minGold} ouro (1 × ${item.minGold})${item.minGold >= 50 ? ' ✦' : ''}.`;
+        validateTradeInputs();
+    }
+
+    function validateTradeInputs() {
+        const offerBtn  = document.getElementById('pvTradeOfferBtn');
+        const qtyInput  = document.getElementById('pvTradeQtyInput');
+        const goldInput = document.getElementById('pvTradeGoldInput');
+        const hint      = document.getElementById('pvTradeHint');
+        if (!offerBtn || !selectedTradeItem) return;
+
+        // Garantir que gold seja inteiro (sem decimais) antes de calcular
+        if (goldInput.value.includes('.') || goldInput.value.includes(',')) {
+            goldInput.value = Math.floor(parseFloat(goldInput.value.replace(',', '.'))) || 1;
+        }
+
+        const qty  = parseInt(qtyInput.value)  || 1;
+        const gold = parseInt(goldInput.value) || 0;
+
+        // Mínimo total = quantidade × preço unitário mínimo do item
+        const minGoldTotal = qty * selectedTradeItem.minGold;
+
+        // Atualiza o atributo min e trava o valor se ficar abaixo do mínimo
+        goldInput.min = minGoldTotal;
+        if (gold < minGoldTotal) {
+            goldInput.value = minGoldTotal;
+        }
+
+        const goldFinal = parseInt(goldInput.value);
+        const qtyOk  = qty >= 1 && qty <= selectedTradeItem.qty;
+        const goldOk = goldFinal >= minGoldTotal;
+
+        offerBtn.disabled = !(qtyOk && goldOk);
+
+        // Atualiza hint dinamicamente com o mínimo calculado
+        if (hint) {
+            const isSpecial = selectedTradeItem.minGold >= 50;
+            hint.textContent = `Mínimo: ${minGoldTotal} ouro (${qty} × ${selectedTradeItem.minGold})${isSpecial ? ' ✦' : ''}.`;
+        }
+    }
+
+    async function submitTradeOffer() {
+        if (!selectedTradeItem || !currentOpenConversationId || !currentOtherPlayerId) return;
+
+        const qtyInput  = document.getElementById('pvTradeQtyInput');
+        const goldInput = document.getElementById('pvTradeGoldInput');
+        const offerBtn  = document.getElementById('pvTradeOfferBtn');
+
+        const qty       = parseInt(qtyInput.value);
+        const goldTotal = parseInt(goldInput.value);
+
+        if (!qty || !goldTotal || qty < 1 || goldTotal < qty * selectedTradeItem.minGold) {
+            showFloatingMessage('Verifique a quantidade e o preço.');
+            return;
+        }
+
+        offerBtn.disabled = true;
+        offerBtn.textContent = 'Criando oferta...';
+
+        try {
+            const { data, error } = await callRpcWithRetry('create_player_trade', {
+                p_conversation_id: parseInt(currentOpenConversationId),
+                p_buyer_id:        currentOtherPlayerId,
+                p_item_id:         selectedTradeItem.id,
+                p_quantity:        qty,
+                p_gold_price:      goldTotal
+            });
+
+            if (error) throw error;
+            if (!data.success) throw new Error(data.message);
+
+            // Decrementa IDB imediatamente
+            await decrementIdbItem(selectedTradeItem.id, qty);
+
+            closeTradeModal();
+            showFloatingMessage(`Oferta criada! Os itens foram reservados por 12 horas.`);
+            notifyOtherPlayer(currentOtherPlayerId);
+
+            // Força sincronização e re-render do chat
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+
+        } catch (err) {
+            showFloatingMessage(`Erro: ${err.message || 'Não foi possível criar a oferta.'}`);
+            offerBtn.disabled = false;
+            offerBtn.textContent = 'Criar Oferta';
+        }
+    }
+
+    // Busca os status atuais de um array de trade_ids
+    async function fetchTradeStatuses(tradeIds) {
+        if (!tradeIds || tradeIds.length === 0) return {};
+        try {
+            const { data, error } = await callRpcWithRetry('get_trade_statuses', {
+                p_trade_ids: tradeIds
+            });
+            if (error || !data) return {};
+            return data;
+        } catch { return {}; }
+    }
+
+    async function handleAcceptTrade(tradeId, goldPrice, footerEl) {
+        showConfirmModal(
+            `Confirmar compra? Você vai gastar ${goldPrice} de ouro para receber estes itens.`,
+            async () => {
+                const btns = footerEl.querySelectorAll('.pv-trade-action-btn');
+                btns.forEach(b => b.disabled = true);
+
+                const { data, error } = await callRpcWithRetry('accept_player_trade', { p_trade_id: tradeId });
+
+                if (error || !data?.success) {
+                    showFloatingMessage(`Erro: ${(data?.message) || error?.message || 'Falha.'}`);
+                    btns.forEach(b => b.disabled = false);
+                    return;
+                }
+
+                // Atualiza gold no localStorage/cache
+                if (data.new_gold != null) {
+                    try {
+                        const c = JSON.parse(localStorage.getItem('player_data_cache') || '{}');
+                        if (c.data) { c.data.gold = data.new_gold; localStorage.setItem('player_data_cache', JSON.stringify(c)); }
+                        const goldEl = document.getElementById('playerGold');
+                        if (goldEl) goldEl.textContent = data.new_gold;
+                    } catch {}
+                }
+                // Adiciona ao IDB local
+                await incrementIdbItem(data.item_id, data.items_received);
+                notifyOtherPlayer(currentOtherPlayerId);
+
+                // Re-renderiza a conversa para mostrar status atualizado
+                await fetchAndSyncMessages(true);
+                await openChatView(currentOpenConversationId);
+                showFloatingMessage('Transação concluída! Itens adicionados ao inventário.');
+            }
+        );
+    }
+
+    async function handleCancelTrade(tradeId, itemId, qty, footerEl, isSeller) {
+        const msg = isSeller
+            ? 'Cancelar esta oferta? Os itens serão devolvidos para você.'
+            : 'Recusar esta oferta? Os itens serão devolvidos ao vendedor.';
+
+        showConfirmModal(msg, async () => {
+            const btns = footerEl.querySelectorAll('.pv-trade-action-btn');
+            btns.forEach(b => b.disabled = true);
+
+            const { data, error } = await callRpcWithRetry('cancel_player_trade', { p_trade_id: tradeId });
+
+            if (error || !data?.success) {
+                showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
+                btns.forEach(b => b.disabled = false);
+                return;
+            }
+
+            // Se for vendedor: devolve ao IDB
+            if (isSeller) {
+                await incrementIdbItem(data.item_id, data.quantity);
+            }
+            notifyOtherPlayer(currentOtherPlayerId);
+
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+            showFloatingMessage(data.message || 'Oferta processada.');
+        });
+    }
+
+    // ============================================================
+    // MENSAGENS DO SISTEMA
+    // ============================================================
+
+    async function fetchAndRenderSystemMessages({ markAsRead = false, forceRefresh = false } = {}) {
+        if (!currentPlayer || !systemMessagesListDiv) return;
+
+        const SYS_CACHE_KEY = `pv_sys_msg_data_${currentPlayer.id}`;
+        const SYS_TIME_KEY  = `pv_sys_msg_time_${currentPlayer.id}`;
+        const TTL  = 24 * 60 * 60 * 1000;
+        const now  = Date.now();
+        const lastFetch = parseInt(localStorage.getItem(SYS_TIME_KEY) || '0');
+
+        let dbMessages = null;
+
+        if (!forceRefresh && !markAsRead && (now - lastFetch < TTL)) {
+            try {
+                const cached = localStorage.getItem(SYS_CACHE_KEY);
+                if (cached) { dbMessages = JSON.parse(cached); }
+            } catch(e) {}
+        }
+
+        if (!dbMessages) {
+            systemMessagesListDiv.innerHTML = '<p>Carregando mensagens do sistema...</p>';
+            const { data, error } = await supabaseClient
+                .from('system_messages')
+                .select('id, title, preview, created_at')
+                .or(`target_player_id.is.null,target_player_id.eq.${currentPlayer.id}`)
+                .order('created_at', { ascending: false });
+
+            if (error) { systemMessagesListDiv.innerHTML = '<p>Erro ao carregar.</p>'; return; }
+            dbMessages = data;
+            localStorage.setItem(SYS_CACHE_KEY, JSON.stringify(dbMessages));
+            localStorage.setItem(SYS_TIME_KEY, now.toString());
+        }
+
+        if (!dbMessages || dbMessages.length === 0) {
+            systemMessagesListDiv.innerHTML = '<p>Nenhuma mensagem do sistema.</p>';
+            checkUnreadStatus();
+            return;
+        }
+
+        const lastReadId = parseInt(localStorage.getItem(`pv_system_last_read_${currentPlayer.id}`) || '0');
+        let highestId = lastReadId;
+
+        localSystemMessages = new Map();
+        systemMessagesListDiv.innerHTML = '';
+        let hasUnreadSystem = false;
+
+        dbMessages.forEach(msg => {
+            localSystemMessages.set(String(msg.id), msg);
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'system-message-item conversation-item';
+            const numericId = parseInt(msg.id);
+            let isUnread = numericId > lastReadId;
+            if (isUnread) { msgDiv.classList.add('unread'); hasUnreadSystem = true; }
+            if (numericId > highestId) highestId = numericId;
+
+            const sentDate = new Date(msg.created_at);
+            const formattedDate = `${sentDate.toLocaleDateString()} ${sentDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            msgDiv.innerHTML = `
+                <p class="conversation-name">${msg.title || 'Mensagem do Sistema'}</p>
+                <p class="conversation-preview">${msg.preview || 'Clique para ler.'}</p>
+                <small class="system-message-date">${formattedDate}</small>`;
+            msgDiv.addEventListener('click', async () => {
+                const { data: fullMsg } = await supabaseClient.from('system_messages').select('content').eq('id', msg.id).single();
+                if (fullMsg) showSystemMessageModal(msg.title || 'Mensagem do Sistema', fullMsg.content, formattedDate);
+                if (isUnread) msgDiv.classList.remove('unread');
+            });
+            systemMessagesListDiv.appendChild(msgDiv);
+        });
+
+        if (markAsRead && highestId > lastReadId) {
+            localStorage.setItem(`pv_system_last_read_${currentPlayer.id}`, highestId);
+            hasUnreadSystem = false;
+        }
+
+        checkUnreadStatus(hasUnreadSystem);
+    }
+
+    function checkUnreadStatus(hasUnreadSystem) {
+        const hasUnreadPv = [...localConversations.values()].some(c => c.is_unread && !c.is_server_deleted);
+        let systemUnread = hasUnreadSystem;
+        if (systemUnread === undefined) {
+            const lastReadId = parseInt(localStorage.getItem(`pv_system_last_read_${currentPlayer.id}`) || '0');
+            const newestMsg  = [...localSystemMessages.values()].reduce((max, msg) => Math.max(max, parseInt(msg.id)), 0);
+            systemUnread = newestMsg > lastReadId;
+        }
+        if (pvSystemTabBtn) {
+            systemUnread ? pvSystemTabBtn.classList.add('has-unread-system') : pvSystemTabBtn.classList.remove('has-unread-system');
+        }
+        const hasUnreadTotal = hasUnreadPv || systemUnread;
+        if (pvNotificationDot) pvNotificationDot.style.display = hasUnreadTotal ? 'block' : 'none';
+    }
+
+    // ============================================================
+    // MENSAGENS PRIVADAS
+    // ============================================================
+
+    async function fetchAndSyncMessages(forceRefresh = false) {
+        if (!currentPlayer) return;
+
+        const PV_SYNC_KEY  = `pv_meta_sync_time_${currentPlayer.id}`;
+        const TTL_PV = 15 * 60 * 1000;
+        const now    = Date.now();
+        const lastSync = parseInt(localStorage.getItem(PV_SYNC_KEY) || '0');
+
+        if (!forceRefresh && (now - lastSync < TTL_PV)) {
+            renderConversationList();
+            checkUnreadStatus();
+            return;
+        }
+
+        if (currentPlayer.id && currentPlayer.name) playerCache.set(String(currentPlayer.id), currentPlayer.name);
+
+        const STORAGE_KEY_CLEANUP = `aden_pv_cleanup_${currentPlayer.id}`;
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (localStorage.getItem(STORAGE_KEY_CLEANUP) !== todayStr) {
+            supabaseClient.rpc('cleanup_old_private_messages')
+                .then(() => localStorage.setItem(STORAGE_KEY_CLEANUP, todayStr))
+                .catch(err => console.warn('⚠️ Falha na limpeza de PV:', err));
+        }
+
+        const { data: dbConversations, error: convoError } = await supabaseClient
+            .from('private_messages')
+            .select('id, player_one_id, player_two_id, last_message, last_sender_id, updated_at, unread_by_player_one, unread_by_player_two')
+            .or(`player_one_id.eq.${currentPlayer.id},player_two_id.eq.${currentPlayer.id}`);
+
+        if (convoError) { renderConversationList(); checkUnreadStatus(); return; }
+
+        localStorage.setItem(PV_SYNC_KEY, now.toString());
+
+        const activeConvoIds = new Set();
+        const allPlayerIdsToFetch = new Set();
+        let namesChanged = false;
+
+        dbConversations.forEach(dbConvo => {
+            const convoId = String(dbConvo.id);
+            activeConvoIds.add(convoId);
+            const localConvo = localConversations.get(convoId) || { messages: [] };
+            localConvo.id             = convoId;
+            localConvo.player_one_id  = dbConvo.player_one_id;
+            localConvo.player_two_id  = dbConvo.player_two_id;
+            localConvo.last_sender_id = dbConvo.last_sender_id;
+            localConvo.last_message   = dbConvo.last_message;
+            const isPlayerOne = dbConvo.player_one_id === currentPlayer.id;
+            localConvo.is_unread = isPlayerOne ? dbConvo.unread_by_player_one : dbConvo.unread_by_player_two;
+            localConvo.is_server_deleted = false;
+            localConversations.set(convoId, localConvo);
+            const otherId = localConvo.player_one_id === currentPlayer.id ? localConvo.player_two_id : localConvo.player_one_id;
+            allPlayerIdsToFetch.add(otherId);
+        });
+
+        localConversations.forEach((convo, convoId) => {
+            if (!activeConvoIds.has(convoId) && convo.id) convo.is_server_deleted = true;
+            if (convo.is_server_deleted) {
+                const otherId = convo.player_one_id === currentPlayer.id ? convo.player_two_id : convo.player_one_id;
+                allPlayerIdsToFetch.add(otherId);
+            }
+        });
+
+        const idsToFetch = [...allPlayerIdsToFetch].filter(id => !playerCache.has(String(id)) && String(id) !== String(currentPlayer.id));
+        if (idsToFetch.length > 0) {
+            const { data: otherPlayersData, error: playersError } = await supabaseClient.from('players').select('id, name').in('id', idsToFetch);
+            if (!playersError) {
+                otherPlayersData.forEach(p => playerCache.set(String(p.id), p.name));
+                namesChanged = true;
+            }
+        }
+
+        if (namesChanged) saveNameCache();
+        saveToLocalStorage();
+        renderConversationList();
+    }
+
+    function loadFromLocalStorage() {
+        try {
+            const storedConvos = JSON.parse(localStorage.getItem('pv_conversations') || '{}');
+            localConversations = new Map(Object.entries(storedConvos));
+        } catch (e) { localConversations = new Map(); }
+    }
+
+    function saveToLocalStorage() {
+        localStorage.setItem('pv_conversations', JSON.stringify(Object.fromEntries(localConversations)));
+    }
+
+    function getPlayerName(playerId) {
+        return playerCache.get(String(playerId)) || 'Desconhecido';
+    }
+
+    async function renderConversationList() {
+        if (!conversationListDiv) return;
+        const convosToDisplay = [...localConversations.values()];
+        if (convosToDisplay.length === 0) {
+            conversationListDiv.innerHTML = '<p>Nenhuma mensagem ainda. Inicie uma conversa!</p>';
+            return;
+        }
+        conversationListDiv.innerHTML = '';
+        const sortedConversations = convosToDisplay.sort((a, b) => {
+            const lastMsgA = a.messages[a.messages.length - 1]?.timestamp || 0;
+            const lastMsgB = b.messages[b.messages.length - 1]?.timestamp || 0;
+            return new Date(lastMsgB) - new Date(lastMsgA);
+        });
+        sortedConversations.forEach(convo => {
+            const otherPlayerId   = convo.player_one_id === currentPlayer.id ? convo.player_two_id : convo.player_one_id;
+            const otherPlayerName = getPlayerName(otherPlayerId);
+            const item = document.createElement('div');
+            item.className = 'conversation-item';
+            item.dataset.conversationId = convo.id;
+
+            // Preview: oculta texto de trade
+            let previewText = convo.last_message || 'Nenhuma mensagem ainda.';
+            if (previewText === '__TRADE__') previewText = '🛒 Oferta de comércio';
+            if (previewText === '__GIFT__')  previewText = '🎁 Presente enviado';
+
+            if (convo.is_server_deleted) {
+                item.classList.add('archived');
+                item.innerHTML = `<p class="conversation-name">${otherPlayerName} <span class="archived-label">(ARQUIVADA)</span></p><p class="conversation-preview">${previewText}</p>`;
+            } else {
+                if (convo.is_unread) item.classList.add('unread');
+                item.innerHTML = `<p class="conversation-name">${otherPlayerName}</p><p class="conversation-preview">${previewText}</p>`;
+            }
+            item.addEventListener('click', () => openChatView(convo.id, otherPlayerName));
+            conversationListDiv.appendChild(item);
+        });
+    }
+
+    async function openChatView(conversationId, targetPlayerName = null) {
+        currentOpenConversationId = String(conversationId);
+        let convo = localConversations.get(currentOpenConversationId);
+
+        if (!convo) {
+            await fetchAndSyncMessages(true);
+            convo = localConversations.get(currentOpenConversationId);
+            if (!convo) { showFloatingMessage('Não foi possível carregar a conversa.'); return; }
+        }
+
+        const otherPlayerId = convo.player_one_id === currentPlayer.id ? convo.player_two_id : convo.player_one_id;
+        currentOtherPlayerId = otherPlayerId;
+
+        let finalPlayerName = targetPlayerName;
+        if (!finalPlayerName || finalPlayerName === 'Desconhecido') finalPlayerName = getPlayerName(otherPlayerId);
+        chatWithName.textContent = finalPlayerName;
+
+        // Esconde a barra ➕ ao entrar no chat
+        const pvListBar = document.getElementById('pv-list-bar');
+        if (pvListBar) pvListBar.style.display = 'none';
+
+        // Atualiza botão de comércio e menu de contexto
+        _ensureTradeHeaderBtn(convo);
+
+        if (!convo.is_server_deleted) {
+            const { data: msgData } = await supabaseClient
+                .from('private_messages')
+                .select('messages, last_sender_id, last_message')
+                .eq('id', currentOpenConversationId)
+                .single();
+
+            if (msgData) {
+                // CRÍTICO: atualiza last_sender_id com o valor real do servidor.
+                // Sem isso, se a conversa já estava em cache local (o que acontece
+                // sempre que fetchAndSyncMessages usou o cache de 15min em vez de
+                // buscar de novo), o turno era decidido com um dado de até 15
+                // minutos atrás — causando o "aguardando resposta" falso mesmo
+                // quando já era a vez do jogador responder.
+                convo.last_sender_id = msgData.last_sender_id;
+                convo.last_message   = msgData.last_message;
+
+                if (msgData.messages) {
+                    const existingTimestamps = new Set(convo.messages.map(m => m.timestamp));
+                    msgData.messages.forEach(dbMsg => {
+                        if (!existingTimestamps.has(dbMsg.timestamp)) convo.messages.push(dbMsg);
+                    });
+                }
+                localConversations.set(currentOpenConversationId, convo);
+                saveToLocalStorage();
+            }
+        }
+
+        if (deleteConvoBtn) {
+            deleteConvoBtn.style.display = 'block';
+            deleteConvoBtn.title = convo.is_server_deleted ? 'Apagar Histórico Local' : 'Apagar Conversa';
+        }
+
+        if (convo.is_server_deleted) {
+            showFloatingMessage('Esta conversa foi arquivada. Você pode apenas visualizar o histórico.');
+            chatInput.disabled = true;
+            chatInput.placeholder = 'Conversa arquivada - somente leitura.';
+            sendMessageBtn.style.filter = 'grayscale(1)';
+        } else {
+            const isPlayerOne    = convo.player_one_id === currentPlayer.id;
+            const unreadColumn   = isPlayerOne ? 'unread_by_player_one' : 'unread_by_player_two';
+
+            if (convo.is_unread) {
+                convo.is_unread = false;
+                await supabaseClient.from('private_messages').update({ [unreadColumn]: false }).eq('id', currentOpenConversationId);
+                saveToLocalStorage();
+                renderConversationList();
+                checkUnreadStatus();
+            }
+
+            if (convo.last_sender_id === currentPlayer.id) {
+                chatInput.disabled = true;
+                chatInput.placeholder = 'Aguardando resposta do outro jogador.';
+                sendMessageBtn.style.filter = 'grayscale(1)';
+            } else {
+                chatInput.disabled = false;
+                chatInput.placeholder = 'Digite sua mensagem...';
+                sendMessageBtn.style.filter = '';
+            }
+        }
+
+        conversationListDiv.style.display = 'none';
+        chatViewDiv.style.display = 'flex';
+        await renderChatMessages(convo);
+    }
+    window.openChatView = openChatView;
+
+    // Chamado pelo listener do canal Ably "pv-notify:<meuId>" (só existe nas
+    // Tavernas) sempre que o outro jogador manda mensagem/presente/escambo.
+    // Re-sincroniza a lista e, se um chat estiver aberto, também o re-renderiza —
+    // efetivamente marcando como lida em tempo real, sem esperar o polling.
+    window.pvForceRefresh = async function() {
+        await fetchAndSyncMessages(true);
+        if (currentOpenConversationId) {
+            await openChatView(currentOpenConversationId);
+        }
+    };
+
+    function _ensureTradeHeaderBtn(convo) {
+        // Remove botão legado se existir de versão anterior
+        const old = document.getElementById('pv-trade-btn');
+        if (old) old.remove();
+
+        // Controla visibilidade do menu de contexto (⋮)
+        if (pvContextMenuBtn) {
+            pvContextMenuBtn.style.display = 'flex';
+        }
+        if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+
+        // Mostra/oculta opções de escambo e presente para conversas arquivadas
+        if (pvMenuTrade) pvMenuTrade.style.display = convo.is_server_deleted ? 'none' : 'flex';
+        if (pvMenuGift)  pvMenuGift.style.display  = convo.is_server_deleted ? 'none' : 'flex';
+        // Excluir sempre visível
+        if (pvMenuDelete) pvMenuDelete.style.display = 'flex';
+    }
+
+    async function renderChatMessages(convo) {
+        chatMessagesDiv.innerHTML = '';
+        const messages = convo.messages || [];
+
+        // Batch fetch trade statuses
+        const tradeIds = messages.filter(m => m.text === '__TRADE__' && m.trade_id != null).map(m => Number(m.trade_id));
+        let tradeStatuses = {};
+        if (tradeIds.length > 0) tradeStatuses = await fetchTradeStatuses(tradeIds);
+
+        // Batch fetch gift statuses
+        const giftIds = messages.filter(m => m.text === '__GIFT__' && m.gift_id != null).map(m => Number(m.gift_id));
+        let giftStatuses = {};
+        if (giftIds.length > 0) giftStatuses = await fetchGiftStatuses(giftIds);
+
+        for (const msg of messages) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-message';
+            msgDiv.classList.add(msg.sender_id === currentPlayer.id ? 'sent' : 'received');
+
+            if (msg.text === '__TRADE__' && msg.trade_id != null) {
+                msgDiv.classList.add('chat-message-rich');
+                const tradeHtml = buildTradeMessageHtml(msg, tradeStatuses);
+                msgDiv.innerHTML = tradeHtml;
+                const tradeId  = Number(msg.trade_id);
+                const isSeller = msg.sender_id === currentPlayer.id;
+                const footer   = msgDiv.querySelector('.pv-trade-msg-footer');
+                const acceptBtn  = msgDiv.querySelector('.pv-trade-btn-accept');
+                const declineBtn = msgDiv.querySelector('.pv-trade-btn-decline');
+                const cancelBtn  = msgDiv.querySelector('.pv-trade-btn-cancel');
+                if (acceptBtn  && footer) acceptBtn.addEventListener('click',  () => handleAcceptTrade(tradeId, Number(msg.trade_gold), footer));
+                if (declineBtn && footer) declineBtn.addEventListener('click', () => handleCancelTrade(tradeId, msg.trade_item_id, msg.trade_quantity, footer, false));
+                if (cancelBtn  && footer) cancelBtn.addEventListener('click',  () => handleCancelTrade(tradeId, msg.trade_item_id, msg.trade_quantity, footer, true));
+
+            } else if (msg.text === '__GIFT__' && msg.gift_id != null) {
+                msgDiv.classList.add('chat-message-rich');
+                msgDiv.innerHTML = buildGiftMessageHtml(msg, giftStatuses);
+                const giftId  = Number(msg.gift_id);
+                const footer  = msgDiv.querySelector('.pv-gift-msg-footer');
+                const acceptBtn  = msgDiv.querySelector('.pv-gift-accept');
+                const declineBtn = msgDiv.querySelector('.pv-gift-decline');
+                const cancelBtn  = msgDiv.querySelector('.pv-gift-cancel');
+                if (acceptBtn  && footer) acceptBtn.addEventListener('click',  () => handleAcceptGift(giftId, footer));
+                if (declineBtn && footer) declineBtn.addEventListener('click', () => handleCancelGift(giftId, msg.gift_item_id, footer, false));
+                if (cancelBtn  && footer) cancelBtn.addEventListener('click',  () => handleCancelGift(giftId, msg.gift_item_id, footer, true));
+
+            } else {
+                const sentDate      = new Date(msg.timestamp);
+                const formattedDate = `${sentDate.toLocaleDateString()} ${sentDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                msgDiv.innerHTML    = `<p>${msg.text}</p><small>${formattedDate}</small>`;
+            }
+
+            chatMessagesDiv.appendChild(msgDiv);
+
+            // Se a mensagem tiver imagem (ex: card de presente/troca), reajusta o
+            // scroll quando ela terminar de carregar — senão a altura muda depois
+            // do scroll já ter sido calculado e a conversa fica "subida".
+            msgDiv.querySelectorAll('img').forEach(img => {
+                img.addEventListener('load', () => scrollChatToBottom(), { once: true });
+            });
+        }
+
+        scrollChatToBottom();
+    }
+
+    // #pv-chat-messages fica DENTRO de .pv-content, que também tem overflow-y:auto —
+    // ou seja, o container que de fato rola pode ser qualquer um dos dois dependendo
+    // do layout calculado. scrollIntoView() deixa o navegador resolver isso sozinho,
+    // subindo por todos os ancestrais roláveis até o último elemento ficar visível —
+    // diferente de setar scrollTop manualmente num container específico, que só
+    // funciona se aquele for, de fato, o container com overflow real.
+    function scrollChatToBottom() {
+        requestAnimationFrame(() => {
+            const lastMsg = chatMessagesDiv.lastElementChild;
+            if (lastMsg && lastMsg.scrollIntoView) {
+                lastMsg.scrollIntoView({ block: 'end', inline: 'nearest' });
+            } else {
+                chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+            }
+            // Cobre os dois containers de qualquer forma, por garantia.
+            const pvContent = chatMessagesDiv.closest('.pv-content');
+            if (pvContent) pvContent.scrollTop = pvContent.scrollHeight;
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        });
+    }
+
+    function buildTradeMessageHtml(msg, tradeStatuses) {
+        const tradeId   = Number(msg.trade_id);
+        const itemId    = Number(msg.trade_item_id);
+        const qty       = Number(msg.trade_quantity);
+        const gold      = Number(msg.trade_gold);
+        const expiresAt = new Date(msg.trade_expires_at);
+        const isSeller  = msg.sender_id === currentPlayer.id;
+
+        const meta     = TRADEABLE_MAP.get(itemId);
+        const imgUrl   = meta ? `${BASE_ITEM_URL}${meta.img}` : '';
+        const itemName = meta ? meta.name : `Item #${itemId}`;
+
+        // Status (do servidor ou inferido)
+        const serverTrade = tradeStatuses[String(tradeId)];
+        let status = serverTrade?.status || 'pending';
+        const now  = Date.now();
+        if (status === 'pending' && now > expiresAt.getTime()) status = 'expired';
+
+        // Formata expiração
+        const expiryStr = status === 'pending'
+            ? `Expira em ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+            : '';
+
+        const statusLabels = {
+            pending:   '⏳ Aguardando resposta',
+            accepted:  '✅ Transação concluída',
+            cancelled: '❌ Cancelada pelo vendedor',
+            declined:  '🚫 Recusada',
+            expired:   '⌛ Oferta expirada',
+        };
+
+        let actionsHtml = '';
+        if (status === 'pending') {
+            if (isSeller) {
+                actionsHtml = `<div class="pv-trade-msg-actions"><button class="pv-trade-action-btn pv-trade-btn-cancel">Cancelar Oferta</button></div>`;
+            } else {
+                actionsHtml = `
+                    <div class="pv-trade-msg-actions">
+                        <button class="pv-trade-action-btn pv-trade-btn-accept">Aceitar</button>
+                        <button class="pv-trade-action-btn pv-trade-btn-decline">Recusar</button>
+                    </div>`;
+            }
+        }
+
+        return `
+<div class="pv-trade-msg">
+  <div class="pv-trade-msg-header">
+    <img src="https://aden-rpg.pages.dev/assets/tradep.webp" alt="">
+    Oferta de Comércio
+  </div>
+  <div class="pv-trade-msg-body">
+    <img class="pv-trade-item-icon" src="${imgUrl}" alt="${itemName}" loading="lazy">
+    <div class="pv-trade-msg-info">
+      <div class="pv-trade-msg-name">${itemName}</div>
+      <div class="pv-trade-msg-qty">Quantidade: <strong>${qty}</strong></div>
+    </div>
+    <div class="pv-trade-msg-price">
+      <img src="${GOLD_IMG_URL}" alt="Ouro">
+      <span>${gold}</span>
+    </div>
+  </div>
+  <div class="pv-trade-msg-footer">
+    ${expiryStr ? `<div class="pv-trade-msg-expiry">${expiryStr}</div>` : ''}
+    <div class="pv-trade-msg-status status-${status}">${statusLabels[status] || status}</div>
+    ${actionsHtml}
+  </div>
+</div>`;
+    }
+
+    // ============================================================
+    // SISTEMA DE PRESENTE
+    // ============================================================
+    let selectedGiftItem = null;
+
+    function ensureGiftModal() {
+        if (document.getElementById('pvGiftModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvGiftModal';
+        wrap.innerHTML = `<div id="pvGiftBox">
+  <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+    Presentear Jogador <span class="pv-gift-x" id="pvGiftCloseBtn">&times;</span></h3>
+  <div id="pvGiftItemList"><p style="color:#9a7abf;padding:16px;text-align:center;">Carregando skins...</p></div>
+  <div id="pvGiftConfigArea" style="display:none;">
+    <div class="pv-gift-preview">
+      <img id="pvGiftPreviewImg" src="" alt="" style="display:none">
+      <div><strong id="pvGiftPreviewName"></strong><small id="pvGiftPreviewSub"></small></div>
+    </div>
+    <div class="pv-trade-input-group" style="display:flex;flex-direction:column;gap:4px;">
+      <label style="color:#9a7abf;font-size:.75em;text-transform:uppercase;letter-spacing:.4px;">Quantidade</label>
+      <input type="number" id="pvGiftQtyInput" min="1" max="1" value="1"
+        style="background:rgba(0,0,0,.4);border:1px solid rgba(120,70,200,.5);border-radius:6px;color:#e0ccff;padding:6px 10px;font-size:.9em;outline:none;width:100%;box-sizing:border-box;">
+    </div>
+    <p class="pv-gift-hint">O destinatário tem 24h para aceitar.</p>
+    <button id="pvGiftSendBtn">Enviar Presente</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+        document.getElementById('pvGiftCloseBtn').onclick = closeGiftModal;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeGiftModal(); });
+        document.getElementById('pvGiftSendBtn').addEventListener('click', submitGiftOffer);
+    }
+
+    function closeGiftModal() {
+        const m = document.getElementById('pvGiftModal');
+        if (m) m.classList.remove('active');
+        selectedGiftItem = null;
+    }
+
+    async function openGiftPanel() {
+        ensureGiftModal();
+        selectedGiftItem = null;
+        const cfg = document.getElementById('pvGiftConfigArea');
+        if (cfg) cfg.style.display = 'none';
+        const listDiv = document.getElementById('pvGiftItemList');
+        listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Carregando suas skins...</p>';
+        document.getElementById('pvGiftModal').classList.add('active');
+
+        const skins = await loadGiftableSkins(currentPlayer.id);
+
+        if (!skins || skins.length === 0) {
+            listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Nenhuma skin disponível para presentear.<br><small>Skins especiais não podem ser presenteadas.</small></p>';
+            return;
+        }
+        listDiv.innerHTML = '';
+        for (const skin of skins) {
+            const sub = skin.subtype ? (skin.subtype === 'moldura' ? 'Moldura' : skin.subtype === 'fundo' ? 'Fundo' : skin.subtype) : 'Skin';
+            const row = document.createElement('div');
+            row.className = 'pv-gift-item-row';
+            row.innerHTML = `${skin.img ? `<img src="${skin.img}" alt="${skin.name}" loading="lazy">` : '<div style="width:44px;height:44px;background:rgba(255,255,255,.06);border-radius:6px;flex-shrink:0"></div>'}
+              <div class="pv-gift-item-info"><strong>${skin.name}</strong><small>${sub}</small></div>
+              <span class="pv-gift-qty-badge">x${skin.qty}</span>`;
+            row.addEventListener('click', () => {
+                document.querySelectorAll('.pv-gift-item-row.selected').forEach(r => r.classList.remove('selected'));
+                row.classList.add('selected');
+                selectedGiftItem = skin;
+                const cfg = document.getElementById('pvGiftConfigArea');
+                document.getElementById('pvGiftPreviewImg').src = skin.img || '';
+                document.getElementById('pvGiftPreviewImg').style.display = skin.img ? 'block' : 'none';
+                document.getElementById('pvGiftPreviewName').textContent = skin.name;
+                document.getElementById('pvGiftPreviewSub').textContent  = sub;
+                const qtyInput = document.getElementById('pvGiftQtyInput');
+                if (qtyInput) { qtyInput.max = skin.qty; qtyInput.value = 1; }
+                cfg.style.display = 'flex';
+            });
+            listDiv.appendChild(row);
+        }
+    }
+
+    async function submitGiftOffer() {
+        if (!selectedGiftItem || !currentOpenConversationId || !currentOtherPlayerId) return;
+        const btn = document.getElementById('pvGiftSendBtn');
+        const qtyInput = document.getElementById('pvGiftQtyInput');
+        const qty = parseInt(qtyInput?.value) || 1;
+
+        if (qty < 1 || isNaN(qty)) {
+            showFloatingMessage('Quantidade inválida.');
+            return;
+        }
+        if (qty > selectedGiftItem.qty) {
+            showFloatingMessage(`Quantidade insuficiente. Você tem apenas ${selectedGiftItem.qty} disponível(is).`);
+            if (qtyInput) qtyInput.value = selectedGiftItem.qty;
+            return;
+        }
+
+        btn.disabled = true; btn.textContent = 'Enviando...';
+        try {
+            const { data, error } = await callRpcWithRetry('create_player_gift', {
+                p_conversation_id: parseInt(currentOpenConversationId),
+                p_receiver_id:     currentOtherPlayerId,
+                p_item_id:         selectedGiftItem.id,
+                p_quantity:        qty,
+                p_item_name:       selectedGiftItem.name,
+                p_item_img:        selectedGiftItem.img || ''
+            });
+            if (error) throw error;
+            if (!data.success) throw new Error(data.message);
+            await decrementIdbItem(selectedGiftItem.id, qty);
+            closeGiftModal();
+            showFloatingMessage('Presente enviado! O destinatário tem 24h para aceitar.');
+            notifyOtherPlayer(currentOtherPlayerId);
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+        } catch (err) {
+            showFloatingMessage(`Erro: ${err.message || 'Não foi possível enviar.'}`);
+            btn.disabled = false; btn.textContent = 'Enviar Presente';
+        }
+    }
+
+    async function fetchGiftStatuses(giftIds) {
+        if (!giftIds || giftIds.length === 0) return {};
+        try {
+            const { data, error } = await callRpcWithRetry('get_gift_statuses', { p_gift_ids: giftIds });
+            if (error || !data) return {};
+            return data;
+        } catch { return {}; }
+    }
+
+    async function handleAcceptGift(giftId, footerEl) {
+        showConfirmModal('Aceitar este presente?', async () => {
+            const btns = footerEl.querySelectorAll('.pv-gift-btn');
+            btns.forEach(b => b.disabled = true);
+            const { data, error } = await callRpcWithRetry('accept_player_gift', { p_gift_id: giftId });
+            if (error || !data?.success) {
+                showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
+                btns.forEach(b => b.disabled = false); return;
+            }
+            // Invalida o cache do inventário no IDB para forçar re-sync
+            // quando o receptor abrir o inventário
+            _invalidateInventoryCache();
+            notifyOtherPlayer(currentOtherPlayerId);
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+            showFloatingMessage('Presente aceito! Abra o inventário para ver a skin recebida.');
+        });
+    }
+
+    // Limpa o cache_time do IDB para forçar re-sync no próximo acesso ao inventário
+    async function _invalidateInventoryCache() {
+        try {
+            const IDB_NAME_INV = 'aden_inventory_db';
+            const IDB_VER_INV  = 47;
+            const META_STORE   = 'meta_store';
+            const db = await new Promise((res, rej) => {
+                const r = indexedDB.open(IDB_NAME_INV, IDB_VER_INV);
+                r.onsuccess = () => res(r.result);
+                r.onerror   = () => rej(r.error);
+                r.onupgradeneeded = () => {}; // não modifica schema
+            });
+            if (!db.objectStoreNames.contains(META_STORE)) return;
+            const tx    = db.transaction(META_STORE, 'readwrite');
+            const store = tx.objectStore(META_STORE);
+            // Deleta cache_time — inventory.js vai forçar re-sync
+            store.delete('cache_time');
+            store.delete('last_updated');
+        } catch (e) { console.warn('pv: inventory cache invalidation failed', e); }
+    }
+
+    async function handleCancelGift(giftId, itemId, footerEl, isSender) {
+        showConfirmModal(isSender ? 'Cancelar este presente? A skin será devolvida para você.' : 'Recusar este presente?', async () => {
+            const btns = footerEl.querySelectorAll('.pv-gift-btn');
+            btns.forEach(b => b.disabled = true);
+            const { data, error } = await callRpcWithRetry('cancel_player_gift', { p_gift_id: giftId });
+            if (error || !data?.success) {
+                showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
+                btns.forEach(b => b.disabled = false); return;
+            }
+            if (isSender) await incrementIdbItem(itemId, data.quantity || 1);
+            notifyOtherPlayer(currentOtherPlayerId);
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+            showFloatingMessage(data.message || 'Presente processado.');
+        });
+    }
+
+    function buildGiftMessageHtml(msg, giftStatuses) {
+        const giftId   = Number(msg.gift_id);
+        const itemId   = Number(msg.gift_item_id);
+        const qty      = Number(msg.gift_quantity) || 1;
+        const expiresAt = new Date(msg.gift_expires_at);
+        const isSender = msg.sender_id === currentPlayer.id;
+        const itemName = msg.gift_item_name || `Skin #${itemId}`;
+        const itemImg  = msg.gift_item_img  || '';
+
+        const serverGift = giftStatuses[String(giftId)];
+        let status = serverGift?.status || 'pending';
+        if (status === 'pending' && Date.now() > expiresAt.getTime()) status = 'expired';
+
+        const expiryStr = status === 'pending'
+            ? `Expira em ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`
+            : '';
+        const labels = { pending:'⏳ Aguardando resposta', accepted:'✅ Presente aceito', cancelled:'❌ Cancelado pelo remetente', declined:'🚫 Recusado', expired:'⌛ Expirado' };
+        let actions = '';
+        if (status === 'pending') {
+            actions = isSender
+                ? `<div class="pv-gift-actions"><button class="pv-gift-btn pv-gift-cancel">Cancelar Presente</button></div>`
+                : `<div class="pv-gift-actions"><button class="pv-gift-btn pv-gift-accept">Aceitar</button><button class="pv-gift-btn pv-gift-decline">Recusar</button></div>`;
+        }
+        return `<div class="pv-gift-msg">
+  <div class="pv-gift-msg-header"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>${isSender ? 'Presente Enviado' : 'Você Recebeu um Presente'}</div>
+  <div class="pv-gift-msg-body">
+    ${itemImg ? `<img src="${itemImg}" alt="${itemName}" loading="lazy">` : ''}
+    <div class="pv-gift-msg-info"><div class="pv-gift-name">${itemName}</div><div class="pv-gift-sub">Skin${qty > 1 ? ` · Qtd: ${qty}` : ''}</div></div>
+  </div>
+  <div class="pv-gift-msg-footer">
+    ${expiryStr ? `<div class="pv-gift-expiry">${expiryStr}</div>` : ''}
+    <div class="pv-gift-status status-${status}">${labels[status] || status}</div>
+    ${actions}
+  </div>
+</div>`;
+    }
+
+    // ============================================================
+    // MODAL NOVA CONVERSA
+    // ============================================================
+    function ensureNewConvoModal() {
+        if (document.getElementById('pvNewConvoModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvNewConvoModal';
+        wrap.innerHTML = `<div id="pvNewConvoBox">
+  <h3>Nova Conversa<span class="pv-nc-x" id="pvNcX">&times;</span></h3>
+  <div id="pvNewConvoBody">
+    <div class="pv-nc-warn">⚠️ Digite o nome <strong>exatamente</strong> como está no perfil do jogador, incluindo maiúsculas, minúsculas e pontos.</div>
+    <input type="text" id="pvNewConvoInput" placeholder="Nome exato do jogador..." autocomplete="off">
+    <div id="pvNewConvoStatus"></div>
+    <button id="pvNewConvoSubmitBtn">Iniciar Conversa</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+        document.getElementById('pvNcX').onclick = closeNewConvoModal;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeNewConvoModal(); });
+        document.getElementById('pvNewConvoInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pvNewConvoSubmitBtn').click(); });
+        document.getElementById('pvNewConvoSubmitBtn').addEventListener('click', async () => {
+            const input = document.getElementById('pvNewConvoInput');
+            const statusEl = document.getElementById('pvNewConvoStatus');
+            const btn = document.getElementById('pvNewConvoSubmitBtn');
+            const name = input.value.trim();
+            if (!name) return;
+            statusEl.textContent = ''; statusEl.className = ''; btn.disabled = true; btn.textContent = 'Buscando...';
+            try {
+                // Tenta nome exato primeiro; caso falhe, busca nomes que terminem com o texto
+                // para cobrir jogadores com emojis de título (👑⚜️🤡🔰🛡️) na frente do nome
+                let found = null;
+
+                const { data: exact } = await supabaseClient
+                    .from('players').select('id, name').eq('name', name).limit(1);
+                if (exact && exact.length > 0) {
+                    found = exact[0];
+                } else {
+                    // Busca ilike terminando com o nome (captura "👑 Nome", "⚜️ Nome", etc.)
+                    const { data: fuzzy } = await supabaseClient
+                        .from('players').select('id, name').ilike('name', `%${name}`).limit(10);
+                    if (fuzzy && fuzzy.length > 0) {
+                        // Remove qualquer prefixo que não seja letra, número ou ponto
+                    // (cobre emojis atuais e futuros, sem depender de lista hardcoded)
+                    const prefixStrip = /^[^\p{L}\p{N}.]+/u;
+                        found = fuzzy.find(p => p.name.replace(prefixStrip, '') === name) || null;
+                    }
+                }
+
+                if (!found) {
+                    statusEl.textContent = 'Jogador não encontrado. Verifique o nome exato.';
+                    btn.disabled = false; btn.textContent = 'Iniciar Conversa'; return;
+                }
+                const target = found;
+                if (target.id === currentPlayer.id) {
+                    statusEl.textContent = 'Você não pode conversar consigo mesmo.';
+                    btn.disabled = false; btn.textContent = 'Iniciar Conversa'; return;
+                }
+                statusEl.textContent = `Jogador encontrado: ${target.name}`; statusEl.className = 'ok';
+                btn.textContent = 'Abrindo...';
+                const { data: convoData, error: convoErr } = await callRpcWithRetry('get_or_create_private_conversation', { target_player_id: target.id });
+                if (convoErr) throw convoErr;
+                const convoId = convoData?.conversation_id;
+                if (!convoId) throw new Error('Não foi possível criar a conversa.');
+                playerCache.set(String(target.id), target.name); saveNameCache();
+                closeNewConvoModal();
+                pvModal.style.display = 'flex';
+                await fetchAndSyncMessages(true);
+                await openChatView(convoId, target.name);
+            } catch (err) {
+                statusEl.textContent = `Erro: ${err.message || 'Falha.'}`;
+                btn.disabled = false; btn.textContent = 'Iniciar Conversa';
+            }
+        });
+    }
+
+    function openNewConvoModal() {
+        ensureNewConvoModal();
+        const input = document.getElementById('pvNewConvoInput');
+        const statusEl = document.getElementById('pvNewConvoStatus');
+        const btn = document.getElementById('pvNewConvoSubmitBtn');
+        if (input) { input.value = ''; input.focus(); }
+        if (statusEl) { statusEl.textContent = ''; statusEl.className = ''; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Iniciar Conversa'; }
+        document.getElementById('pvNewConvoModal').classList.add('active');
+    }
+
+    function closeNewConvoModal() {
+        const m = document.getElementById('pvNewConvoModal');
+        if (m) m.classList.remove('active');
+    }
+
+    // ============================================================
+    // INICIALIZAÇÃO & EVENTOS
+    // ============================================================
+
+    async function initializePV() {
+        if (!supabaseClient) return;
+
+        loadFromLocalStorage();
+        loadNameCache();
+
+        const waitForPlayer = async () => {
+            if (window.currentPlayerData && window.currentPlayerData.id)
+                return { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
+            try {
+                const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
+                if (legacyCache && legacyCache.data && legacyCache.data.id)
+                    return { id: legacyCache.data.id, name: legacyCache.data.name };
+            } catch(e) {}
+            const globalPlayer = await GlobalDB.getPlayer();
+            if (globalPlayer && globalPlayer.id) return { id: globalPlayer.id, name: globalPlayer.name };
+            return null;
+        };
+
+        currentPlayer = await waitForPlayer();
+
+        if (!currentPlayer) {
+            await new Promise(resolve => {
+                const onPlayerReady = e => {
+                    if (e.detail) { currentPlayer = { id: e.detail.id, name: e.detail.name }; resolve(); }
+                };
+                window.addEventListener('aden_player_ready', onPlayerReady, { once: true });
+                const check = setInterval(async () => {
+                    const p = await waitForPlayer();
+                    if (p) {
+                        currentPlayer = p;
+                        window.removeEventListener('aden_player_ready', onPlayerReady);
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 500);
+            });
+        }
+
+        if (!currentPlayer) return;
+
+        await fetchAndSyncMessages();
+        await fetchAndRenderSystemMessages({ markAsRead: false });
+        setupEventListeners();
+        checkUnreadStatus();
+
+        // Deep link vindo do clique numa notificação push: ?openPV=<conversation_id>
+        try {
+            const params = new URLSearchParams(location.search);
+            const deepLinkConvoId = params.get('openPV');
+            if (deepLinkConvoId) {
+                params.delete('openPV');
+                const newSearch = params.toString();
+                history.replaceState({}, '', location.pathname + (newSearch ? '?' + newSearch : '') + location.hash);
+
+                pvModal.style.display = 'flex';
+                await openChatView(deepLinkConvoId);
+            }
+        } catch (e) {
+            console.warn('[PV] Falha ao abrir conversa via deep link:', e);
+        }
+    }
+
+    function setupEventListeners() {
+        if (pvMenuBtn) pvMenuBtn.onclick = () => { pvModal.style.display = 'flex'; };
+        if (closePvModalBtn) closePvModalBtn.onclick = () => pvModal.style.display = 'none';
+
+        pvTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                pvTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const isMessages = tab.dataset.tab === 'pv-messages';
+                pvMessageContent.style.display = isMessages ? 'block' : 'none';
+                pvSystemContent.style.display  = !isMessages ? 'block' : 'none';
+                const pvListBar = document.getElementById('pv-list-bar');
+                if (pvListBar) pvListBar.style.display = isMessages ? 'flex' : 'none';
+                if (!isMessages) fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true });
+                else fetchAndSyncMessages(true);
+            });
+        });
+
+        if (backToListBtn) {
+            backToListBtn.onclick = () => {
+                chatViewDiv.style.display         = 'none';
+                conversationListDiv.style.display = 'flex';
+                currentOpenConversationId         = null;
+                currentOtherPlayerId              = null;
+                if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+                const pvListBar = document.getElementById('pv-list-bar');
+                if (pvListBar) pvListBar.style.display = 'flex';
+            };
+        }
+
+        // Botão ➕ nova conversa
+        if (pvNewConvoBtn) pvNewConvoBtn.onclick = openNewConvoModal;
+
+        // Menu três pontos — toggle ao clicar
+        if (pvContextMenuBtn) {
+            pvContextMenuBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (!pvContextDropdown) return;
+                pvContextDropdown.style.display = pvContextDropdown.style.display === 'block' ? 'none' : 'block';
+            };
+        }
+
+        // Itens do menu (usando mousedown para evitar conflito com click-fora)
+        if (pvMenuTrade) pvMenuTrade.onmousedown = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openTradePanel(); };
+        if (pvMenuGift)  pvMenuGift.onmousedown  = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openGiftPanel(); };
+        if (pvMenuDelete) {
+            pvMenuDelete.onmousedown = (e) => {
+                e.stopPropagation();
+                pvContextDropdown.style.display = 'none';
+                if (!currentOpenConversationId) return;
+                const convo = localConversations.get(currentOpenConversationId);
+                const message = convo && convo.is_server_deleted
+                    ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
+                    : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
+                showConfirmModal(message, () => {
+                    localConversations.delete(currentOpenConversationId);
+                    saveToLocalStorage();
+                    renderConversationList();
+                    backToListBtn.click();
+                    showFloatingMessage('Conversa apagada.');
+                });
+            };
+        }
+
+        // Fecha dropdown ao clicar em qualquer outro lugar no modal
+        pvModal.addEventListener('click', () => {
+            if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+        });
+
+        const handleSendMessage = async () => {
+            const messageText = chatInput.value.trim();
+            if (!messageText || !currentOpenConversationId) return;
+
+            const convo = localConversations.get(currentOpenConversationId);
+            if (convo && convo.is_server_deleted) {
+                showFloatingMessage('Não é possível enviar mensagens para uma conversa arquivada.');
+                return;
+            }
+
+            sendMessageBtn.style.pointerEvents = 'none';
+            chatInput.disabled = true;
+
+            const { data, error } = await callRpcWithRetry('send_private_message', {
+                conversation_id: currentOpenConversationId,
+                message_text:    messageText
+            });
+
+            if (error) {
+                showFloatingMessage(`Erro: ${error.message}`);
+                sendMessageBtn.style.pointerEvents = 'auto';
+                chatInput.disabled = false;
+            } else {
+                chatInput.value = '';
+                notifyOtherPlayer(currentOtherPlayerId);
+                await fetchAndSyncMessages(true);
+                const currentConvo = localConversations.get(currentOpenConversationId);
+                if (currentConvo) {
+                    await openChatView(currentOpenConversationId);
+                    chatInput.placeholder = 'Aguardando resposta...';
+                    sendMessageBtn.style.filter = 'grayscale(1)';
+                } else {
+                    backToListBtn.click();
+                }
+                sendMessageBtn.style.pointerEvents = 'auto';
+            }
+        };
+
+        if (sendMessageBtn) sendMessageBtn.onclick = handleSendMessage;
+        if (chatInput) chatInput.onkeydown = e => { if (e.key === 'Enter' && !chatInput.disabled) handleSendMessage(); };
+
+        if (deleteConvoBtn) {
+            deleteConvoBtn.onclick = () => {
+                if (!currentOpenConversationId) return;
+                const convo = localConversations.get(currentOpenConversationId);
+                const message = convo && convo.is_server_deleted
+                    ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
+                    : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
+                showConfirmModal(message, () => {
+                    localConversations.delete(currentOpenConversationId);
+                    saveToLocalStorage();
+                    renderConversationList();
+                    backToListBtn.click();
+                    showFloatingMessage('Conversa apagada.');
+                });
+            };
+        }
+    }
+
+    window.pvInitializationPromise = new Promise(async resolve => {
+        await initializePV();
+        resolve();
+    });
+});

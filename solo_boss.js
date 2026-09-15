@@ -1,0 +1,1289 @@
+import { supabase } from './supabaseClient.js'
+
+// =======================================================================
+// MÓDULO: ADEN GLOBAL DB (CÓPIA LOCAL OTIMIZADA)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 7;
+const AUTH_STORE = 'auth_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
+
+// ================= HELPER: AUTH OTIMISTA =================
+async function getLocalUserId() {
+    const globalAuth = await GlobalDB.getAuth();
+    if (globalAuth && globalAuth.value && globalAuth.value.user) {
+        return globalAuth.value.user.id;
+    }
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const session = JSON.parse(localStorage.getItem(k));
+                if (session?.user?.id) return session.user.id;
+            }
+        }
+    } catch (e) {}
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.user?.id || null;
+}
+
+
+// =======================================================================
+// EPIC COMBAT EFFECTS
+// =======================================================================
+function _injectBossEpicStyles() {
+    if (document.getElementById('sb-epic-styles')) return;
+    const css = `
+    @keyframes sb-boss-flash  { 0%{filter:brightness(1) drop-shadow(0 0 16px #f80);} 35%{filter:brightness(3.8) drop-shadow(0 0 30px #fff);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
+    @keyframes sb-boss-crit   { 0%{filter:sepia(1) saturate(4) brightness(1) drop-shadow(0 0 16px #fa0);} 35%{filter:sepia(1) saturate(7) brightness(3.5) drop-shadow(0 0 40px #ffd700);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
+    @keyframes sb-ring        { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.95;} 100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;} }
+    @keyframes sb-ring2       { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.85;} 100%{transform:translate(-50%,-50%) scale(2.8);opacity:0;} }
+    @keyframes sb-spark       { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d));opacity:0;} }
+    @keyframes sb-edge-flash  { 0%,100%{opacity:0;} 25%{opacity:1;} }
+    @keyframes sb-shake-cont  { 0%{transform:translate(0,0);} 10%{transform:translate(-5px,-4px);} 20%{transform:translate(6px,3px);} 30%{transform:translate(-6px,4px);} 40%{transform:translate(5px,-3px);} 50%{transform:translate(-4px,5px);} 60%{transform:translate(6px,-4px);} 70%{transform:translate(-5px,3px);} 80%{transform:translate(4px,-5px);} 90%{transform:translate(-3px,4px);} 100%{transform:translate(0,0);} }
+    @keyframes sb-player-flash{ 0%{filter:brightness(1);} 30%{filter:brightness(2.5) saturate(0);} 100%{filter:brightness(1);} }
+    @keyframes sb-crit-label  { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 15%{opacity:1;transform:translateX(-50%) scale(1.15);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-22px);} }
+    @keyframes sb-float-dmg   { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.4);} 8%{opacity:1;transform:translate(-50%,-50%) translateY(-14px) scale(1.35);} 20%{opacity:1;transform:translate(-50%,-50%) translateY(-24px) scale(1.0);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-95px) scale(1.0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-135px) scale(0.92);} }
+    @keyframes sb-float-crit  { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.25) rotate(-8deg);} 7%{opacity:1;transform:translate(-50%,-50%) translateY(-20px) scale(1.55) rotate(6deg);} 18%{opacity:1;transform:translate(-50%,-50%) translateY(-32px) scale(1.05) rotate(-2deg);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-112px) scale(1.0) rotate(0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-152px) scale(0.92) rotate(0);} }
+    @keyframes sb-float-status{ 0%{opacity:0;transform:translate(-50%,-50%) scale(0.5);} 12%{opacity:1;transform:translate(-50%,-50%) translateY(-10px) scale(1.2);} 70%{opacity:1;transform:translate(-50%,-50%) translateY(-45px) scale(1.0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-65px) scale(0.95);} }
+    .sb-fdmg-normal { font-family:'Cinzel',Georgia,serif; font-size:1.6em; font-weight:bold; color:#fff;
+        text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-dmg 3.4s ease-out forwards; }
+    .sb-fdmg-crit { font-family:'Cinzel',Georgia,serif; font-size:2.2em; font-weight:bold; color:#ffdd00;
+        text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;
+        position:absolute; left:50%; top:35%; transform:translate(-50%,-50%); z-index:23; pointer-events:none;
+        white-space:nowrap; animation:sb-float-crit 3.7s ease-out forwards; }
+    .sb-fdmg-player { font-family:'Cinzel',Georgia,serif; font-size:1.5em; font-weight:bold; color:#ff6666;
+        text-shadow:2px 2px 4px #000,0 0 12px rgba(255,0,0,0.5); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-dmg 3.4s ease-out forwards; }
+    .sb-fdmg-status { font-family:'Cinzel',Georgia,serif; font-size:1.3em; font-weight:bold; color:#fff;
+        text-shadow:2px 2px 4px #000,0 0 10px rgba(255,255,255,0.4); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-status 2.2s ease-out forwards; }
+    .sb-ring  { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring  0.65s ease-out forwards; }
+    .sb-ring2 { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring2 0.8s  ease-out 0.07s forwards; }
+    .sb-spark { position:absolute; border-radius:50%; pointer-events:none; z-index:21; transform:translate(-50%,-50%); animation:sb-spark 0.55s ease-out forwards; }
+    .sb-crit-label { font-family:'Cinzel',Georgia,serif; font-size:1.1em; font-weight:bold; color:#ffd700;
+        text-shadow:0 0 10px #ff8800,2px 2px 3px #000; position:absolute; left:50%;
+        transform:translateX(-50%); z-index:22; pointer-events:none; white-space:nowrap;
+        animation:sb-crit-label 1.2s ease-out forwards; }
+    `;
+    const s = document.createElement('style');
+    s.id = 'sb-epic-styles';
+    s.textContent = css;
+    document.head.appendChild(s);
+}
+
+// Called when the PLAYER attacks the BOSS
+function _epicPlayerAttack(isCrit) {
+    _injectBossEpicStyles();
+    const bossEl  = document.getElementById('bossImage');
+    const container = document.getElementById('sbContainer');
+    const flash   = document.getElementById('sb-screen-flash');
+    if (!bossEl || !container) return;
+
+    // Boss image flash (só filter/drop-shadow — a respiração orgânica em JS
+    // continua controlando o transform o tempo todo, sem ser sobrescrita)
+    bossEl.style.animation = 'none';
+    void bossEl.offsetWidth;
+    bossEl.style.animation = isCrit
+        ? 'sb-boss-crit 0.6s ease-out forwards'
+        : 'sb-boss-flash 0.42s ease-out forwards';
+
+    // Screen flash
+    if (flash) {
+        flash.style.background = isCrit
+            ? 'radial-gradient(ellipse at center, transparent 40%, rgba(255,200,0,.28) 100%)'
+            : 'radial-gradient(ellipse at center, transparent 50%, rgba(255,80,0,.18) 100%)';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, isCrit ? 450 : 280);
+    }
+
+    // Container shake on crit
+    if (isCrit) {
+        container.style.animation = 'none';
+        void container.offsetWidth;
+        container.style.animation = 'sb-shake-cont 0.6s cubic-bezier(.36,.07,.19,.97) both';
+        setTimeout(() => { container.style.animation = ''; }, 620);
+    }
+
+    // Spawn rings & sparks positioned on boss image center
+    const bossRect = bossEl.getBoundingClientRect();
+    const cRect    = container.getBoundingClientRect();
+    const cx = bossRect.left - cRect.left + bossRect.width  / 2;
+    const cy = bossRect.top  - cRect.top  + bossRect.height / 2;
+
+    const ringCount = isCrit ? 2 : 1;
+    for (let r = 0; r < ringCount; r++) {
+        const ring = document.createElement('div');
+        ring.className = r === 0 ? 'sb-ring' : 'sb-ring2';
+        const sz = isCrit ? 110 : 85;
+        ring.style.cssText = `left:${cx}px;top:${cy}px;width:${sz}px;height:${sz}px;`
+            + (isCrit ? 'border:4px solid rgba(255,215,0,.9);box-shadow:0 0 18px rgba(255,215,0,.6);'
+                      : 'border:3px solid rgba(255,140,0,.85);box-shadow:0 0 12px rgba(255,100,0,.45);');
+        container.appendChild(ring);
+        ring.addEventListener('animationend', () => ring.remove());
+    }
+
+    const nSparks = isCrit ? 18 : 10;
+    const spCols  = isCrit ? ['#ffd700','#ffaa00','#fff','#ffcc44'] : ['#fff','#ff9900','#ffcc55'];
+    for (let i = 0; i < nSparks; i++) {
+        const sp = document.createElement('div');
+        sp.className = 'sb-spark';
+        const angle = (360 / nSparks) * i + (Math.random() - 0.5) * 22;
+        const dist  = 70 + Math.random() * 90;
+        const sz    = isCrit ? (5 + Math.random() * 6) : (3 + Math.random() * 5);
+        sp.style.cssText = `left:${cx}px;top:${cy}px;width:${sz}px;height:${sz}px;`
+            + `background:${spCols[Math.floor(Math.random() * spCols.length)]};`
+            + `--a:${angle}deg;--d:${dist}px;animation-delay:${Math.random() * 0.08}s;`
+            + `box-shadow:0 0 5px ${isCrit ? '#ffa000' : '#ff7000'};`;
+        container.appendChild(sp);
+        sp.addEventListener('animationend', () => sp.remove());
+    }
+
+    if (isCrit) {
+        const lbl = document.createElement('div');
+        lbl.className = 'sb-crit-label';
+        lbl.style.cssText = `left:${cx}px;top:${cy - 80}px;`;
+        lbl.textContent = '✦ CRÍTICO! ✦';
+        container.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove());
+    }
+}
+
+// Called when the BOSS attacks the PLAYER
+function _epicBossAttack(evaded) {
+    _injectBossEpicStyles();
+    const flash     = document.getElementById('sb-screen-flash');
+    const playerEl  = document.getElementById('playerAvatar');
+    const container = document.getElementById('sbContainer');
+    if (!container) return;
+
+    if (evaded) return; // no effects for miss
+
+    // Red edge flash
+    if (flash) {
+        flash.style.background = 'radial-gradient(ellipse at center, transparent 30%, rgba(220,20,20,.45) 100%)';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 380);
+    }
+
+    // Player avatar flash
+    if (playerEl) {
+        playerEl.style.animation = 'none';
+        void playerEl.offsetWidth;
+        playerEl.style.animation = 'sb-player-flash 0.45s ease-out forwards';
+        setTimeout(() => { playerEl.style.animation = ''; }, 460);
+    }
+
+    // Spawn sparks on player UI area
+    const playerRow = document.getElementById('playerInfoRow');
+    if (playerRow) {
+        const prRect = playerRow.getBoundingClientRect();
+        const cRect  = container.getBoundingClientRect();
+        const px = prRect.left - cRect.left + prRect.width  / 2;
+        const py = prRect.top  - cRect.top  + prRect.height / 2;
+
+        // Ring
+        const ring = document.createElement('div');
+        ring.className = 'sb-ring';
+        ring.style.cssText = `left:${px}px;top:${py}px;width:60px;height:60px;`
+            + 'border:3px solid rgba(220,50,50,.9);box-shadow:0 0 12px rgba(220,0,0,.5);';
+        container.appendChild(ring);
+        ring.addEventListener('animationend', () => ring.remove());
+
+        // Sparks
+        for (let i = 0; i < 8; i++) {
+            const sp = document.createElement('div');
+            sp.className = 'sb-spark';
+            const angle = (360 / 8) * i + (Math.random() - 0.5) * 20;
+            const dist  = 35 + Math.random() * 45;
+            const sz    = 3 + Math.random() * 3;
+            sp.style.cssText = `left:${px}px;top:${py}px;width:${sz}px;height:${sz}px;`
+                + `background:#ff4444;--a:${angle}deg;--d:${dist}px;`
+                + `animation-delay:${Math.random() * 0.06}s;`
+                + `box-shadow:0 0 4px #ff0000;`;
+            container.appendChild(sp);
+            sp.addEventListener('animationend', () => sp.remove());
+        }
+    }
+}
+
+// Dynamic HP bar color (boss: green → yellow → red)
+function _updateBossHpBarColor(pct) {
+    const fill = document.getElementById('bossHpFill');
+    if (!fill) return;
+    if (pct > 50)       fill.style.background = 'linear-gradient(to right, #28a028, #40c040)';
+    else if (pct > 25)  fill.style.background = 'linear-gradient(to right, #c08000, #e0a000)';
+    else                fill.style.background = 'linear-gradient(to right, #dc2020, #ff5a00)';
+}
+
+// Dynamic HP bar color (player: orange/gold → yellow → red)
+function _updatePlayerHpBarColor(pct) {
+    const fill = document.getElementById('playerHpFill');
+    if (!fill) return;
+    if (pct > 50)       fill.style.background = 'linear-gradient(to right, #28a028, #40c040)';
+    else if (pct > 25)  fill.style.background = 'linear-gradient(to right, #c08000, #e0a000)';
+    else                fill.style.background = 'linear-gradient(to right, #c02020, #e03030)';
+}
+
+// ================= CONFIGURAÇÕES =================
+const BOSS_ATTACK_INTERVAL = 45000; 
+const ATTACK_REGEN_MS = 60000;      
+const MAX_ATTACKS = 3;
+const REVIVE_TIME_MS = 60000;       
+const CACHE_KEY_PREFIX = "aden_solo_boss_";
+
+const VIDEO_INTRO = "https://aden-rpg.pages.dev/assets/karintro.mp4";
+const VIDEO_DEATH = "https://aden-rpg.pages.dev/assets/karoutro.mp4";
+const ATTACK_VIDEOS = [
+    "https://aden-rpg.pages.dev/assets/karatk01.mp4",
+    "https://aden-rpg.pages.dev/assets/karatk02.mp4",
+    "https://aden-rpg.pages.dev/assets/karatk03.mp4",
+    "https://aden-rpg.pages.dev/assets/karatk04.mp4",
+    "https://aden-rpg.pages.dev/assets/karatk05.mp4",
+    "https://aden-rpg.pages.dev/assets/karatk06.mp4"
+];
+
+// Cache em memória para os vídeos (Blob URLs)
+const videoBlobCache = {};
+
+// Função para pré-carregar vídeos em memória (Buffer) com Progresso
+//
+// A barra combina dois sinais e sempre mostra o MAIOR dos dois:
+//
+// 1) Progresso REAL, por bytes baixados (via streaming + Content-Length),
+//    que atualiza a cada pedaço recebido — não só quando um vídeo inteiro
+//    termina. Isso já elimina a maior parte da sensação de "travado",
+//    porque o primeiro vídeo começa a mexer a barra assim que os primeiros
+//    pacotes chegam, em vez de só quando o download completo termina.
+//
+// 2) Um "ticker otimista", que sobe 1% a cada ~150ms sozinho, independente
+//    da rede. Ele serve de piso: se a conexão demorar pra responder o
+//    primeiro byte (TLS handshake, DNS, fila do servidor etc.), o jogador
+//    ainda vê a barra andando desde o primeiro instante, em vez de ficar
+//    parada em 0%. Ele nunca passa de 95% sozinho — os últimos % só fecham
+//    quando os downloads realmente terminam, pra barra nunca "mentir" que
+//    já acabou.
+async function bufferBattleVideos(onProgress) {
+    const allVideos = [...ATTACK_VIDEOS, VIDEO_INTRO, VIDEO_DEATH];
+    const totalCount = allVideos.length;
+
+    let optimisticPct = 0;
+    let realPct = 0;
+    let finished = false;
+
+    const report = () => { if (onProgress) onProgress(Math.min(99, Math.max(optimisticPct, realPct))); };
+
+    // Sobe 1% de cada vez, sem depender de nenhuma resposta de rede.
+    const optimisticTicker = setInterval(() => {
+        if (finished) return;
+        if (optimisticPct < 95) {
+            optimisticPct += 1;
+            report();
+        }
+    }, 150);
+
+    // --- Progresso real por bytes ---
+    let totalBytesExpected = 0;
+    let totalBytesLoaded = 0;
+    const sizeKnownFor = new Array(allVideos.length).fill(false);
+    let allSizesKnown = false;
+
+    function recheckAllSizesKnown() {
+        allSizesKnown = sizeKnownFor.every(Boolean);
+    }
+
+    let loadedCount = 0;
+    function bumpCountFallback() {
+        loadedCount++;
+        // Fallback por contagem de arquivos concluídos — usado quando não
+        // sabemos o tamanho (Content-Length) de todos os vídeos ainda.
+        const countPct = Math.floor((loadedCount / totalCount) * 100);
+        realPct = Math.max(realPct, countPct);
+    }
+
+    // Função auxiliar para baixar um único vídeo, com leitura em streaming
+    // para conseguir progresso por bytes (não só ao final do download).
+    const fetchVideo = async (url, idx) => {
+        if (videoBlobCache[url]) {
+            sizeKnownFor[idx] = true;
+            recheckAllSizesKnown();
+            bumpCountFallback();
+            report();
+            return;
+        }
+
+        try {
+            const response = await fetch(url);
+            const lenHeader = response.headers.get('content-length');
+            const expectedBytes = lenHeader ? parseInt(lenHeader, 10) : 0;
+
+            if (expectedBytes > 0 && response.body && response.body.getReader) {
+                sizeKnownFor[idx] = true;
+                recheckAllSizesKnown();
+                totalBytesExpected += expectedBytes;
+
+                const reader = response.body.getReader();
+                const chunks = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    totalBytesLoaded += value.length;
+                    if (allSizesKnown && totalBytesExpected > 0) {
+                        realPct = Math.max(realPct, Math.floor((totalBytesLoaded / totalBytesExpected) * 100));
+                        report();
+                    }
+                }
+                const blob = new Blob(chunks);
+                videoBlobCache[url] = URL.createObjectURL(blob);
+            } else {
+                // Sem Content-Length disponível: baixa normalmente, sem
+                // progresso por bytes só para este arquivo (o ticker
+                // otimista e o fallback por contagem cobrem esse caso).
+                const blob = await response.blob();
+                videoBlobCache[url] = URL.createObjectURL(blob);
+            }
+        } catch (e) {
+            console.warn("Falha ao criar buffer do vídeo:", url, e);
+        } finally {
+            bumpCountFallback();
+            report();
+        }
+    };
+
+    // Dispara todos os downloads em paralelo
+    const promises = allVideos.map((url, idx) => fetchVideo(url, idx));
+    await Promise.allSettled(promises);
+
+    finished = true;
+    clearInterval(optimisticTicker);
+    if (onProgress) onProgress(100);
+}
+
+const AUDIO_HIT = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
+const AUDIO_CRIT = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
+
+// Áudio de fundo
+const AUDIO_BGM = new Audio("https://aden-rpg.pages.dev/assets/kar_bgm.mp3"); 
+AUDIO_BGM.loop = true;
+AUDIO_BGM.volume = 0.03;
+
+AUDIO_HIT.volume = 0.4;
+AUDIO_CRIT.volume = 0.1;
+
+// ================= ESTADO LOCAL =================
+let state = {
+    sessionId: null,
+    playerId: null,
+    active: false,
+    expiresAt: 0,
+    bossHp: 0,
+    maxBossHp: 0,
+    initialBossHp: 0,
+    bossImageUrl: "", 
+    totalHits: 0, 
+    playerHp: 0,
+    maxPlayerHp: 0,
+    playerStats: {},
+    playerAvatarUrl: "", 
+    attacksLeft: 3,
+    lastAttackTime: null,
+    nextBossAttack: 0,
+    reviveUntil: null,
+    timestamp: 0 // Usado para cálculo offline
+};
+
+let loops = { timer: null, combat: null };
+
+// =================================================================
+// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO DO BOSS
+// -----------------------------------------------------------------
+// Em vez de um @keyframes fixo (que repete sempre o mesmo padrão e
+// fica robótico), a respiração é calculada quadro a quadro: a
+// velocidade e a "profundidade" do fôlego derivam lentamente ao
+// longo do tempo, a curva de inspiração/expiração é assimétrica
+// (como uma respiração real) e, de tempos em tempos, o boss dá uma
+// respirada mais funda (um "suspiro"), quebrando a repetição.
+// Além disso há um leve balanço de peso (rotação + deslocamento
+// horizontal mínimos) para parecer vivo — nunca usamos translateY,
+// então ele não flutua, só respira e balança sutilmente.
+// IMPORTANTE: esta função controla `bossEl.style.transform` sem parar.
+// O flash de dano (_epicPlayerAttack) usa apenas `style.animation`
+// sobre `filter`/`drop-shadow`, nunca sobre `transform`, então os
+// dois nunca brigam pelo mesmo controle.
+// =================================================================
+function initOrganicBreathing(elementId) {
+    const img = document.getElementById(elementId);
+    if (!img) return;
+
+    let breathPhase = Math.random() * Math.PI * 2;
+    let swayPhase = Math.random() * Math.PI * 2;
+
+    let breathSpeed = 1, breathDepth = 1, swaySpeed = 0.35;
+    let targetBreathSpeed = breathSpeed, targetBreathDepth = breathDepth, targetSwaySpeed = swaySpeed;
+    let nextDriftChange = 0;
+
+    let nextDeepBreath = 4000 + Math.random() * 5000;
+    let deepBreathBoost = 0;
+    let deepBreathTarget = 0;
+    let deepBreathHold = 0;
+
+    let lastTime = performance.now();
+
+    function pickNewDriftTargets() {
+        targetBreathSpeed = 0.82 + Math.random() * 0.4;   // ~0.82x–1.22x
+        targetBreathDepth = 0.75 + Math.random() * 0.55;  // ~0.75x–1.3x
+        targetSwaySpeed = 0.25 + Math.random() * 0.25;
+        nextDriftChange = 3000 + Math.random() * 5000;    // novo alvo a cada 3–8s
+    }
+    pickNewDriftTargets();
+
+    function tick(now) {
+        const dt = Math.min(now - lastTime, 100); // evita saltos ao voltar de aba oculta
+        lastTime = now;
+
+        if (document.hidden || img.offsetParent === null) {
+            requestAnimationFrame(tick);
+            return;
+        }
+        // Não brigar com a animação de "tremida" ao levar dano
+        if (img.classList.contains("shake-animation")) {
+            requestAnimationFrame(tick);
+            return;
+        }
+
+        nextDriftChange -= dt;
+        if (nextDriftChange <= 0) pickNewDriftTargets();
+
+        breathSpeed += (targetBreathSpeed - breathSpeed) * 0.0015 * dt;
+        breathDepth += (targetBreathDepth - breathDepth) * 0.0015 * dt;
+        swaySpeed += (targetSwaySpeed - swaySpeed) * 0.0015 * dt;
+
+        nextDeepBreath -= dt;
+        if (nextDeepBreath <= 0) {
+            deepBreathTarget = 1;
+            deepBreathHold = 900; // ms segurando o pico antes de soltar o ar
+            nextDeepBreath = 7000 + Math.random() * 8000;
+        }
+        if (deepBreathTarget > 0) {
+            deepBreathHold -= dt;
+            if (deepBreathHold <= 0) deepBreathTarget = 0;
+        }
+        // Sobe e desce suavemente (sem saltos) — simula inspirar fundo e soltar o ar aos poucos
+        deepBreathBoost += (deepBreathTarget - deepBreathBoost) * 0.005 * dt;
+
+        breathPhase += (dt / 1000) * breathSpeed * ((Math.PI * 2) / 4.2);
+        swayPhase += (dt / 1000) * swaySpeed * (Math.PI * 2);
+
+        // Curva assimétrica: inspiração mais rápida, expiração mais lenta
+        const raw = Math.sin(breathPhase);
+        const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+        const breathAmount = asym * 0.012 * breathDepth * (1 + deepBreathBoost * 0.9);
+        const scaleY = 1 + breathAmount;
+        const scaleX = 1 + breathAmount * 0.43; // o "peito" também expande um pouco na largura
+
+        // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
+        const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;
+        const rotateDeg = sway * 0.12;
+        const translateXpx = sway * 0.3;
+
+        img.style.transform =
+            `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +
+            `scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+
+        requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+}
+
+// ================= INICIALIZAÇÃO =================
+document.addEventListener("DOMContentLoaded", async () => {
+    initOrganicBreathing('bossImage');
+
+    // 1. CORREÇÃO DO VÍDEO DE FUNDO
+    const bgVideo = document.getElementById('sbBackgroundVideo');
+    if (bgVideo) {
+        bgVideo.load();
+        const fadeInVideo = () => { bgVideo.style.opacity = '1'; };
+        if (bgVideo.readyState >= 3) {
+            fadeInVideo();
+        } else {
+            bgVideo.addEventListener('canplaythrough', fadeInVideo, { once: true });
+            bgVideo.addEventListener('canplay', fadeInVideo, { once: true });
+        }
+    }
+
+    document.getElementById('msgCloseBtn').addEventListener('click', () => {
+        document.getElementById('msgModal').style.display = 'none';
+    });
+
+    const userId = await getLocalUserId();
+    
+    if (!userId) {
+        window.location.href = 'index.html';
+        return;
+    }
+    state.playerId = userId;
+    
+    // Verifica sessão (Reload logic)
+    await checkSession(); 
+    
+    document.getElementById('sbStartBtn').addEventListener('click', startBattle);
+    document.getElementById('sbAttackBtn').addEventListener('click', playerAttack);
+});
+
+// ================= UI HELPERS DE LOADING =================
+function showLoading(text) {
+    const modal = document.getElementById('loadingModal');
+    const txt = document.getElementById('loadingText');
+    const barFill = document.getElementById('loadingBarFill');
+    const pct = document.getElementById('loadingPercent');
+    
+    txt.textContent = text || "Carregando...";
+    barFill.style.width = "0%";
+    pct.textContent = "0%";
+    modal.style.display = 'flex';
+}
+
+function updateLoadingProgress(percent) {
+    const barFill = document.getElementById('loadingBarFill');
+    const pct = document.getElementById('loadingPercent');
+    if(barFill) barFill.style.width = `${percent}%`;
+    if(pct) pct.textContent = `${percent}%`;
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').style.display = 'none';
+}
+
+// ================= HELPER DE MENSAGEM (MODAL) =================
+let currentMsgCallback = null;
+
+function showMsg(title, message, type = 'info', callback = null, btnText = "Entendido") {
+    const modal = document.getElementById('msgModal');
+    const titleEl = document.getElementById('msgTitle');
+    const bodyEl = document.getElementById('msgBody');
+    const btn = document.getElementById('msgCloseBtn');
+
+    titleEl.textContent = title;
+    bodyEl.innerHTML = message;
+    btn.textContent = btnText;
+
+    if (type === 'error') {
+        titleEl.style.color = '#ff4444';
+        btn.style.borderColor = '#ff4444';
+    } else {
+        titleEl.style.color = 'gold';
+        btn.style.borderColor = 'gold';
+    }
+
+    currentMsgCallback = callback;
+    btn.onclick = () => {
+        modal.style.display = 'none';
+        if (currentMsgCallback) {
+            currentMsgCallback();
+            currentMsgCallback = null;
+        }
+    };
+
+    modal.style.display = 'flex';
+}
+
+// ================= INTERAÇÃO FORÇADA E CHECK SESSION =================
+
+// Chamado apenas DEPOIS que o buffer de vídeo já carregou no checkSession
+function forceUserInteraction(onResume) {
+    document.getElementById('sbLobby').style.display = 'none';
+    
+    showMsg(
+        "Batalha em Andamento",
+        "Sua sessão foi recuperada e os recursos carregados. Clique abaixo para retomar.",
+        "info",
+        async () => {
+            // Destrava áudio
+            try {
+                await AUDIO_BGM.play();
+            } catch(e) {
+                console.warn("Áudio bloqueado, tentará novamente.");
+            }
+            onResume();
+        },
+        "Retomar Combate"
+    );
+}
+
+// Função para calcular progresso offline (regeneração e dano)
+function processOfflineEvents(savedState) {
+    const now = Date.now();
+    const lastSaveTime = savedState.timestamp || now;
+    
+    // Se passou menos de 1 segundo, ignora
+    if (now - lastSaveTime < 1000) return savedState;
+
+    console.log(`[Offline] Processando tempo decorrido: ${(now - lastSaveTime)/1000}s`);
+
+    // --- 1. REGENERAÇÃO DE ATAQUES DO JOGADOR ---
+    if (savedState.attacksLeft < MAX_ATTACKS && savedState.lastAttackTime) {
+        const timeSinceLastAttack = now - savedState.lastAttackTime;
+        // Quantos ciclos de recarga (60s) cabem nesse tempo?
+        const chargesGained = Math.floor(timeSinceLastAttack / ATTACK_REGEN_MS);
+
+        if (chargesGained > 0) {
+            savedState.attacksLeft += chargesGained;
+            // Avança o lastAttackTime para manter o "resto" do tempo (ex: faltava 5s, continua faltando 5s)
+            savedState.lastAttackTime += (chargesGained * ATTACK_REGEN_MS);
+
+            // Trava no máximo
+            if (savedState.attacksLeft >= MAX_ATTACKS) {
+                savedState.attacksLeft = MAX_ATTACKS;
+                savedState.lastAttackTime = null; // Reset se estiver cheio
+            }
+        }
+    }
+
+    // --- 2. ATAQUES DO BOSS (Dano no Jogador) ---
+    // Se o jogador já estava morto e com timer de reviver, processamos o revive primeiro
+    if (savedState.reviveUntil) {
+        if (now >= savedState.reviveUntil) {
+            savedState.reviveUntil = null;
+            savedState.playerHp = savedState.maxPlayerHp; // Reviveu full
+            console.log("[Offline] Jogador reviveu enquanto estava fora.");
+            // Continua para processar ataques que possam ter ocorrido após o revive
+        } else {
+            // Ainda está dentro do cooldown de revive — não toma dano novo
+            return savedState;
+        }
+    }
+
+    // Se o Boss deveria ter atacado enquanto estava fora, processa um ataque por vez
+    // para identificar o timestamp EXATO da morte e carregar o cooldown corretamente.
+    if (savedState.nextBossAttack < now) {
+        const s = savedState.playerStats;
+        const baseDmg = Math.floor(savedState.maxPlayerHp * 0.15);
+        const dmgPerHit = Math.max(1, baseDmg - Math.floor(s.defense / 5));
+
+        let attackCount = 0;
+        while (savedState.nextBossAttack < now) {
+            const attackTimestamp = savedState.nextBossAttack; // Momento real deste ataque
+            savedState.nextBossAttack = attackTimestamp + BOSS_ATTACK_INTERVAL;
+            attackCount++;
+
+            savedState.playerHp -= dmgPerHit;
+            console.log(`[Offline] Boss atacou (ataque ${attackCount}) em ${new Date(attackTimestamp).toISOString()}. HP restante: ${savedState.playerHp}`);
+
+            if (savedState.playerHp <= 0) {
+                savedState.playerHp = 0;
+                // CORREÇÃO: cooldown começa a partir do momento REAL do golpe fatal,
+                // não do instante em que o jogador voltou à página.
+                savedState.reviveUntil = attackTimestamp + REVIVE_TIME_MS;
+                console.log(`[Offline] Jogador morreu em ${new Date(attackTimestamp).toISOString()}. Revive em ${new Date(savedState.reviveUntil).toISOString()}.`);
+
+                // Se o cooldown já passou enquanto estava fora, auto-revive e continua
+                if (now >= savedState.reviveUntil) {
+                    console.log("[Offline] Cooldown de revive já expirou. Jogador reviveu automaticamente.");
+                    savedState.reviveUntil = null;
+                    savedState.playerHp = savedState.maxPlayerHp;
+                    // Continua o loop para processar ataques após o revive
+                } else {
+                    // Ainda dentro do cooldown — para de processar
+                    break;
+                }
+            }
+        }
+
+        // Garante que o próximo ataque fique no futuro (evita drift por lag)
+        if (savedState.nextBossAttack < now) savedState.nextBossAttack = now + BOSS_ATTACK_INTERVAL;
+    }
+
+    return savedState;
+}
+
+async function checkSession() {
+    const localData = localStorage.getItem(CACHE_KEY_PREFIX + state.playerId);
+    
+    if (localData) {
+        try {
+            let parsed = JSON.parse(localData);
+            
+            // Se expirou
+            if (new Date(parsed.expiresAt) <= new Date()) {
+                console.log("Sessão local expirada detectada. Finalizando...");
+                state = parsed;
+                await finishBattle(false);
+                return;
+            }
+
+            // =========================================================
+            // AQUI É A MUDANÇA: PROCESSA O TEMPO OFFLINE
+            // =========================================================
+            parsed = processOfflineEvents(parsed);
+            // =========================================================
+
+            // Sessão válida encontrada
+            state = parsed;
+            if (typeof state.totalHits === 'undefined') state.totalHits = 0;
+
+            // 1. Mostra Loading com Barra para o usuário que deu F5
+            showLoading("Restaurando Memória...");
+            
+            // 2. Aguarda baixar todos os vídeos para evitar tela preta
+            await bufferBattleVideos((pct) => {
+                updateLoadingProgress(pct);
+            });
+
+            // 3. Esconde loading
+            hideLoading();
+
+            // 4. Pede interação (agora com vídeos prontos na memória)
+            forceUserInteraction(() => {
+                setupUI();
+                startLoops();
+            });
+            return; 
+
+        } catch(e) {
+            console.warn("Erro ao ler cache local", e);
+            localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
+            hideLoading();
+        }
+    }
+
+    // Se não tem sessão, mostra Lobby
+    document.getElementById('sbLobby').style.display = 'flex';
+    document.getElementById('sbContainer').style.display = 'none';
+}
+
+async function startBattle() {
+    const btn = document.getElementById('sbStartBtn');
+    
+    // Tenta iniciar áudio imediatamente no clique
+    AUDIO_BGM.play().catch(()=>{});
+
+    localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
+    const bossImg = document.getElementById('bossImage');
+    if(bossImg) bossImg.src = "";
+
+    // 1. Inicia UI de Loading
+    showLoading("Baixando Recursos...");
+    btn.disabled = true;
+
+    // 2. Carrega Vídeos em Buffer e atualiza Barra
+    await bufferBattleVideos((pct) => {
+        updateLoadingProgress(pct);
+    });
+
+    // 3. Só agora chama o servidor (videos já estão em 100%)
+    const { data, error } = await supabase.rpc('start_solo_boss', { p_player_id: state.playerId });
+
+    if (error || !data.success) {
+        hideLoading();
+        showMsg(
+            "Não foi possível iniciar", 
+            data?.message || "Ocorreu um erro ao conectar com o servidor.", 
+            "error"
+        );
+        btn.disabled = false;
+        return;
+    }
+
+    if (data.recovered) {
+        state.totalHits = 0; 
+        await initCombatState(data);
+        hideLoading();
+        
+        // Se recuperou via servidor (raro vir aqui se nao tinha localstorage, mas possivel em outro device)
+        // Como o usuário já clicou em iniciar, o áudio tá ok.
+        setupUI();
+        startLoops();
+    } else {
+        await initCombatState(data);
+        
+        // Mantem loading escondido, mas inicia video intro
+        hideLoading();
+        
+        playVideo(VIDEO_INTRO, () => {
+            AUDIO_BGM.play().catch(()=>{});
+            setupUI();
+            startLoops();
+        });
+    }
+}
+
+async function initCombatState(serverData) {
+    const { data: pStats } = await supabase.rpc('get_player_details_for_raid', { p_player_id: state.playerId });
+    
+    state.sessionId = serverData.session_id;
+    state.expiresAt = new Date(serverData.expires_at).getTime();
+    state.active = true;
+    
+    state.maxBossHp = Number(serverData.boss_hp);
+    state.initialBossHp = state.maxBossHp;
+    state.bossHp = state.maxBossHp;
+    state.bossImageUrl = serverData.boss_image || "https://aden-rpg.pages.dev/assets/kar-drakul.png"; 
+    
+    if (typeof state.totalHits === 'undefined') state.totalHits = 0;
+    
+    state.playerStats = {
+        min_attack: Number(pStats.min_attack || 0),
+        attack: Number(pStats.attack || 0),
+        crit_chance: Number(pStats.crit_chance || 0),
+        crit_damage: Number(pStats.crit_damage || 0),
+        defense: Number(pStats.defense || 0),
+        evasion: Number(pStats.evasion || 0),
+        health: Number(pStats.health || 100)
+    };
+    state.maxPlayerHp = state.playerStats.health;
+    state.playerHp = state.maxPlayerHp;
+    state.playerAvatarUrl = pStats.avatar_url || "https://via.placeholder.com/80"; 
+    
+    state.attacksLeft = 3;
+    state.lastAttackTime = Date.now(); 
+    state.nextBossAttack = Date.now() + 10000;
+    state.reviveUntil = null;
+    
+    saveState();
+}
+
+function setupUI() {
+    document.getElementById('sbLobby').style.display = 'none';
+    document.getElementById('sbContainer').style.display = 'flex'; 
+    
+    if (state.bossImageUrl) document.getElementById('bossImage').src = state.bossImageUrl;
+    if (state.playerAvatarUrl) document.getElementById('playerAvatar').src = state.playerAvatarUrl;
+    
+    updateBars();
+}
+
+function saveState() {
+    if(!state.active) {
+        localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
+        return;
+    }
+    // ADICIONADO: Timestamp atual para cálculo offline
+    state.timestamp = Date.now();
+    localStorage.setItem(CACHE_KEY_PREFIX + state.playerId, JSON.stringify(state));
+}
+
+function startLoops() {
+    if(loops.timer) clearInterval(loops.timer);
+    if(loops.combat) clearInterval(loops.combat);
+    loops.timer = setInterval(uiLoop, 1000);
+    loops.combat = setInterval(combatLoop, 1000);
+}
+
+function uiLoop() {
+    const now = Date.now();
+    const diff = state.expiresAt - now;
+    
+    if (diff <= 0) {
+        finishBattle(false);
+        return;
+    }
+    
+    const m = Math.floor(diff / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    document.getElementById('sbTimer').textContent = `${m}:${s < 10 ? '0'+s : s}`;
+
+    if (state.attacksLeft < MAX_ATTACKS && state.lastAttackTime) {
+        if (now - state.lastAttackTime >= ATTACK_REGEN_MS) {
+            state.attacksLeft++;
+            state.lastAttackTime = (state.attacksLeft < MAX_ATTACKS) ? now : null;
+            saveState();
+        }
+        if(state.attacksLeft < MAX_ATTACKS) {
+            const nextIn = Math.ceil((ATTACK_REGEN_MS - (now - state.lastAttackTime)) / 1000);
+            document.getElementById('cooldownTimer').textContent = `+1 em ${nextIn}s`;
+        } else {
+            document.getElementById('cooldownTimer').textContent = "";
+        }
+    } else {
+        document.getElementById('cooldownTimer').textContent = "Máximo";
+    }
+
+    if (state.reviveUntil) {
+        if (now >= state.reviveUntil) {
+            state.reviveUntil = null;
+            state.playerHp = state.maxPlayerHp;
+            document.getElementById('reviveOverlay').style.display = 'none';
+            document.getElementById('playerAvatar').style.filter = "none";
+            saveState();
+        } else {
+            const revSecs = Math.ceil((state.reviveUntil - now) / 1000);
+            const overlay = document.getElementById('reviveOverlay');
+            overlay.style.display = 'flex';
+            overlay.textContent = `${revSecs}s`;
+            document.getElementById('playerAvatar').style.filter = "grayscale(100%)";
+        }
+    }
+
+    const atkBtn = document.getElementById('sbAttackBtn');
+    const isDead = !!state.reviveUntil;
+    const hasAttacks = state.attacksLeft > 0;
+    
+    document.getElementById('attacksLeft').textContent = state.attacksLeft;
+
+    if (isDead || !hasAttacks) atkBtn.classList.add('disabled-btn');
+    else atkBtn.classList.remove('disabled-btn');
+    
+    updateBars();
+}
+
+function combatLoop() {
+    if (document.hidden || state.reviveUntil) return;
+    if (Date.now() >= state.nextBossAttack) performBossAttack();
+}
+
+function playerAttack() {
+    if (state.reviveUntil || state.attacksLeft <= 0) return;
+
+    state.attacksLeft--;
+    if (state.lastAttackTime === null) state.lastAttackTime = Date.now();
+
+    const s = state.playerStats;
+    const isCrit = (Math.random() * 100) < s.crit_chance;
+    let dmg = Math.floor(Math.random() * ((s.attack - s.min_attack) + 1) + s.min_attack);
+    if (isCrit) dmg = Math.floor(dmg * (1 + s.crit_damage / 100));
+    dmg = Math.max(1, dmg);
+
+    state.bossHp = Math.max(0, state.bossHp - dmg);
+    state.totalHits++; 
+
+    triggerShake('bossImage'); 
+    _epicPlayerAttack(isCrit);
+    createFloatingText(dmg, isCrit ? 'crit' : 'normal', 'bossImage');
+    
+    const aud = isCrit ? AUDIO_CRIT : AUDIO_HIT;
+    aud.currentTime = 0;
+    aud.play().catch(()=>{});
+
+    saveState();
+    updateBars();
+    _updateBossHpBarColor((state.bossHp / state.maxBossHp) * 100);
+
+    if (state.bossHp <= 0) {
+        finishBattle(true);
+    }
+}
+
+function performBossAttack() {
+    state.nextBossAttack = Date.now() + BOSS_ATTACK_INTERVAL;
+    saveState();
+
+    const vid = ATTACK_VIDEOS[Math.floor(Math.random() * ATTACK_VIDEOS.length)];
+    playVideo(vid, () => {
+        const s = state.playerStats;
+        const evaded = (Math.random() * 100) < s.evasion;
+
+        if (evaded) {
+            _epicBossAttack(true);
+            createFloatingText("Errou!", "normal", "playerUiArea");
+        } else {
+            let baseDmg = Math.floor(state.maxPlayerHp * 0.15); 
+            let dmg = Math.max(1, baseDmg - Math.floor(s.defense / 5));
+            
+            state.playerHp = Math.max(0, state.playerHp - dmg);
+            _epicBossAttack(false);
+            createFloatingText(`-${dmg}`, "player-dmg", "playerAvatar");
+            triggerShake('playerAvatar'); 
+            
+            AUDIO_HIT.currentTime = 0;
+            AUDIO_HIT.play().catch(()=>{});
+
+            if (state.playerHp <= 0) {
+                state.reviveUntil = Date.now() + REVIVE_TIME_MS;
+                createFloatingText("Morto!", "player-dead", "playerUiArea");
+            }
+        }
+        saveState();
+        updateBars();
+        _updatePlayerHpBarColor((state.playerHp / state.maxPlayerHp) * 100);
+    });
+}
+
+async function finishBattle(victory) {
+    clearInterval(loops.timer);
+    clearInterval(loops.combat);
+    state.active = false;
+    
+    // Para música ao finalizar
+    AUDIO_BGM.pause();
+    AUDIO_BGM.currentTime = 0;
+    
+    localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
+
+    const processFinish = async () => {
+        // Reutiliza loading modal, mas sem barra (ou reinicia barra)
+        showLoading("Calculando resultados...");
+        updateLoadingProgress(100);
+
+        const { data, error } = await supabase.rpc('finish_solo_boss', {
+            p_player_id: state.playerId,
+            p_session_id: state.sessionId,
+            p_victory: victory,
+            p_total_hits: state.totalHits 
+        });
+
+        hideLoading();
+
+        if (error || !data.success) {
+            showMsg(
+                "Sessão Encerrada", 
+                "Esta sessão de batalha não é mais válida ou expirou no servidor.", 
+                "error",
+                () => { window.location.href = 'index.html'; }
+            );
+            return;
+        }
+        if (data.leveled_up) {
+        showLevelUpBalloon(data.new_level);
+    }
+
+        showVictoryModal(data, victory);
+    };
+
+    if (victory) {
+        playVideo(VIDEO_DEATH, processFinish);
+    } else {
+        processFinish();
+    }
+}
+
+function triggerShake(elementId) {
+    const el = document.getElementById(elementId);
+    if(el) {
+        el.classList.remove('shake-animation');
+        void el.offsetWidth; 
+        el.classList.add('shake-animation');
+        
+        setTimeout(() => {
+            el.classList.remove('shake-animation');
+        }, 500); 
+    }
+}
+
+function showVictoryModal(data, isVictory) {
+    const titleEl = document.getElementById('resultTitle');
+    const msgEl = document.getElementById('resultMsg');
+    const list = document.getElementById('rewardsList');
+
+    if (isVictory) {
+        titleEl.textContent = "Vitória!";
+        titleEl.style.color = "gold";
+        msgEl.innerHTML = "Kar-Drakul foi derrotado.<br>Recompensas Máximas!";
+    } else {
+        titleEl.textContent = "Fim de Combate";
+        titleEl.style.color = "#ff4444";
+        const hits = data.hits_registered || 0;
+        const pct = data.participation_pct || 0;
+        msgEl.innerHTML = `Tempo Esgotado.<br>Golpes desferidos: <strong style="color:white">${hits}</strong><br>O conselho de Zion ficou <strong style="color:lime">${pct}%</strong> satisfeito com o dano causado.`;
+    }
+
+    list.innerHTML = `
+        <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+            <img src="https://aden-rpg.pages.dev/assets/exp.webp" style="width:24px;"> 
+            <span>${nFmt(data.xp)} XP</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+            <img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:24px;"> 
+            <span>${nFmt(data.crystals)} Cristais</span>
+        </div>
+    `;
+    
+    if (data.items && data.items.length > 0) {
+        list.innerHTML += `<div style="margin-top:10px; border-top:1px solid #444; padding-top:5px; color: gold; margin-bottom:5px;"><strong>Itens achados:</strong></div>`;
+        data.items.forEach(item => {
+            // CORREÇÃO: Pega o nome do item do cache global
+            let itemName = "Item Desconhecido";
+            let imageUrl = "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+
+            if (window.getItemDefinition) {
+                const def = window.getItemDefinition(item.item_id);
+                if (def) {
+                    itemName = def.display_name || def.name;
+                    imageUrl = `https://aden-rpg.pages.dev/assets/itens/${def.name}.webp`;
+                }
+            } else if (item.name) {
+                // Fallback para caso o RPC ainda retorne nome (retrocompatibilidade)
+                itemName = item.name;
+                imageUrl = `https://aden-rpg.pages.dev/assets/itens/${item.name}.webp`;
+            }
+
+            list.innerHTML += `
+            <div class="reward-item">
+                <img src="${imageUrl}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/placeholder.webp'">
+                <div>
+                    <div style="font-size:0.9em; color:yellow; display: none;">${itemName}</div>
+                    <div style="font-size:0.8em; color:#ccc;">Quantidade: ${item.quantity}</div>
+                </div>
+            </div>`;
+        });
+    }
+    
+    document.getElementById('victoryModal').style.display = 'flex';
+}
+
+function showLevelUpBalloon(newLevel) {
+    const balloon = document.getElementById("levelUpBalloon");
+    const text = document.getElementById("levelUpBalloonText");
+    
+    if (balloon && text) {
+        text.innerText = newLevel;
+        balloon.style.display = "block"; // O CSS já tem display flex, mas o style inline controla visibilidade
+        
+        // Garante que o display seja flex para alinhar corretamente, sobrescrevendo o block se necessário
+        balloon.style.display = "flex"; 
+
+        // Oculta após a animação (6s)
+        setTimeout(() => {
+            balloon.style.display = "none";
+        }, 6000);
+    }
+}
+
+function updateBars() {
+    const bPct = (state.bossHp / state.maxBossHp) * 100;
+    document.getElementById('bossHpFill').style.width = `${bPct}%`;
+    document.getElementById('bossHpText').textContent = `${nFmt(state.bossHp)} / ${nFmt(state.maxBossHp)}`;
+    _updateBossHpBarColor(bPct);
+    
+    const pPct = (state.playerHp / state.maxPlayerHp) * 100;
+    document.getElementById('playerHpFill').style.width = `${pPct}%`;
+    document.getElementById('playerHpText').textContent = `${nFmt(state.playerHp)} / ${nFmt(state.maxPlayerHp)}`;
+    _updatePlayerHpBarColor(pPct);
+}
+
+function createFloatingText(text, className, targetId) {
+    _injectBossEpicStyles();
+    const el = document.createElement('div');
+    const classMap = {
+        'crit': 'sb-fdmg-crit',
+        'normal': 'sb-fdmg-normal',
+        'player-dmg': 'sb-fdmg-player',
+        'player-dead': 'sb-fdmg-status'
+    };
+    const mappedClass = classMap[className] || 'sb-fdmg-status';
+    el.className = mappedClass;
+    el.textContent = text;
+    
+    const target = document.getElementById(targetId);
+    if(!target) return;
+
+    const rect = target.getBoundingClientRect();
+    const container = document.getElementById('sbContainer');
+    const containerRect = container.getBoundingClientRect();
+
+    const leftPos = (rect.left - containerRect.left) + (rect.width / 2);
+    const topPos = (rect.top - containerRect.top) + (rect.height / 2);
+
+    el.style.left = leftPos + 'px';
+    el.style.top = topPos + 'px';
+    
+    container.appendChild(el);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
+}
+
+function playVideo(src, callback) {
+    // Pausa BGM para focar no vídeo
+    //const wasBgmPlaying = !AUDIO_BGM.paused;
+   // if (wasBgmPlaying) AUDIO_BGM.pause();
+
+    const overlay = document.getElementById('videoOverlay');
+    const vid = document.getElementById('gameVideo');
+    if (!overlay || !vid) { if (callback) callback(); return; }
+
+    // Verifica se temos a versão em memória (Blob), senão usa a URL normal
+    const videoSrc = videoBlobCache[src] || src;
+
+    // Reset visual
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1'; 
+    });
+    
+    vid.style.opacity = '0'; // Começa invisível
+    vid.src = videoSrc;
+    
+    vid.muted = false;
+    vid.volume = 1.0;
+    vid.load();
+
+    // Lógica de Fade Out (Ease Out) 0.6s antes do fim
+    const timeUpdateHandler = () => {
+        if (vid.duration && vid.currentTime > vid.duration - 0.6) {
+            vid.style.opacity = '0'; // Inicia Fade Out
+        }
+    };
+    vid.addEventListener('timeupdate', timeUpdateHandler);
+
+    // Fade In quando o vídeo realmente começar a tocar
+    const onPlaying = () => {
+        vid.style.opacity = '1'; 
+    };
+    vid.addEventListener('playing', onPlaying, { once: true });
+
+    // Tenta reproduzir
+    const tryPlay = async () => {
+        try {
+            await vid.play();
+        } catch (e) {
+            console.warn("Autoplay falhou, tentando mudo", e);
+            vid.muted = true;
+            vid.play().catch(console.error);
+        }
+    };
+    tryPlay();
+
+    // Ao finalizar
+    vid.onended = () => {
+        vid.removeEventListener('timeupdate', timeUpdateHandler);
+        
+        overlay.style.opacity = '0';
+
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            vid.pause();
+            vid.currentTime = 0;
+            
+            // Retoma BGM se estava tocando
+        //    if (wasBgmPlaying && state.active) {
+        //        AUDIO_BGM.play().catch(()=>{});
+        //    }
+            if(callback) callback();
+        }, 300);
+    };
+}
+
+function nFmt(num) {
+    return Number(num).toLocaleString('pt-BR');
+}

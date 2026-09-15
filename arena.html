@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <title>Arena PvP - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="arena.css?v=20260621d" />
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body onload="removeTranslateBar()">
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+        <div><span id="pageTitle">Arena</span></div>
+        <div id="rankingBtnWrap">
+            <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width:40px; height:40px; cursor: pointer;">
+        </div>
+    </div>
+
+    <div id="arenaContainer">
+      
+        <h2>Desafie um Oponente</h2>
+        <p>Teste sua força contra outros jogadores e suba no ranking.</p>
+        
+        <button id="challengeBtn" class="action-btn">Desafiar</button>
+        
+        <div id="attemptsInfo">
+            Desafios restantes: <span id="arenaAttemptsLeft">...</span>
+        </div>
+       
+        <div id="potionSlotsContainer">
+    <div class="potion-group">
+        <h3>Poções de Ataque</h3>
+        <div class="slots-row">
+            <div class="potion-slot" data-type="attack" data-index="0" id="slot-atk-0">+</div>
+            <div class="potion-slot" data-type="attack" data-index="1" id="slot-atk-1">+</div>
+        </div>
+        <small>Usadas quando você desafia.</small>
+    </div>
+    <div class="potion-group">
+        <h3>Poções de Defesa</h3>
+        <div class="slots-row">
+            <div class="potion-slot" data-type="defense" data-index="0" id="slot-def-0">+</div>
+            <div class="potion-slot" data-type="defense" data-index="1" id="slot-def-1">+</div>
+        </div>
+        <small>Usadas quando você é desafiado.</small>
+    </div>
+</div>
+
+<div id="potionSelectModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <span id="closePotionModal" class="close-btn">&times;</span>
+        <h2>Escolher Poção</h2>
+        <div id="potionListGrid" class="items-grid"></div>
+    </div>
+</div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="pvpCombatModal" class="modal-overlay" style="display: none;">
+      <div style="position: absolute; top: 25px; right: 10px;"><button id="skip">Pular</button></div>
+      <div id="turnTimerContainer" style="display:none; position: absolute; top: 20%; width: 100%; text-align: center; z-index: 100;">
+    <div id="turnTimerCircle" style="
+        width: 60px; height: 60px; 
+        background: radial-gradient(circle, #222, #000);
+        border: 4px solid #FFC107; border-radius: 50%;
+        display: flex; justify-content: center; align-items: center;
+        margin: 0 auto;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+    ">
+        <span id="turnTimerValue" style="font-size: 1.8em; font-weight: bold; color: white;">10</span>
+    </div>
+    <div style="font-size: 0.9em; color: #fff; margin-top: 5px;"><strong>SEU TURNO!<br>Use poções e faça seu ataque!</strong></div>
+</div> 
+        <div class="modal-content">
+          
+         
+          
+          
+            <h2 id="pvpCountdown" style="display: none;">A batalha começará em 5</h2>
+            <div id="pvpArena">
+                <div id="challengerSide" class="player-side">
+                    <span id="challengerName" class="player-name-pvp">Desafiante</span>
+                    <div class="avatar-container" id="challengerAvatarContainer">
+                        <img id="challengerAvatar" src="https://aden-rpg.pages.dev/avatar01.webp" class="player-avatar-pvp">
+                        <img id="challengerFrameOverlay" class="arena-frame-overlay" src="" alt="">
+                        <div id="challengerFrameSheen" class="arena-frame-sheen"></div>
+                    </div>
+                    <div class="player-hp-bar">
+                        <div id="challengerHpFill" class="player-hp-fill"></div>
+                        <span id="challengerHpText" class="hp-text-overlay">100 / 100</span>
+                    </div>
+                </div>
+                <span class="vs-separator">VS</span>
+                <div id="defenderSide" class="player-side">
+                    <span id="defenderName" class="player-name-pvp">Defensor</span>
+                    <div class="avatar-container" id="defenderAvatarContainer">
+                        <img id="defenderAvatar" src="https://aden-rpg.pages.dev/avatar01.webp" class="player-avatar-pvp">
+                        <img id="defenderFrameOverlay" class="arena-frame-overlay" src="" alt="">
+                        <div id="defenderFrameSheen" class="arena-frame-sheen"></div>
+                    </div>
+                    <div class="player-hp-bar">
+                        <div id="defenderHpFill" class="player-hp-fill"></div>
+                        <span id="defenderHpText" class="hp-text-overlay">100 / 100</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="combatControls" style="display:none; position: absolute; bottom: 20%; width: 100%; justify-content: center; align-items: center; z-index: 100;">
+    
+    <div id="attackBtnContainer" style="position: relative; width: 50px; height: 50px; cursor: pointer; transition: transform 0.1s; vertical-align: -6px;">
+        <img src="https://aden-rpg.pages.dev/assets/attackbtn.webp" alt="Atacar" style="width: 100%; height: 100%; filter: drop-shadow(0 0 5px red);">
+        
+    </div>
+
+</div>
+        
+        
+    </div>
+    
+
+    <div id="confirmModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="confirmTitle">Resultado</h3>
+            <p id="confirmMessage" style="color: white; font-size: 1.1em;"></p>
+            <button id="confirmActionBtn" class="action-btn">Ok</button>
+        </div>
+    </div>
+
+    <!-- Modal de Recompensa de Temporada da Arena -->
+    <div id="arenaRewardModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content arena-reward-modal-content">
+            <span class="close-btn" id="closeArenaRewardBtn">&times;</span>
+            <div class="arena-reward-crown-icon">🏆</div>
+            <h2 class="arena-reward-title">Recompensa de Temporada!</h2>
+            <p id="arenaRewardRankText" class="arena-reward-subtitle"></p>
+            <div id="arenaRewardItems" class="arena-reward-items"></div>
+            <button id="arenaRewardClaimBtn" class="action-btn arena-reward-claim-btn">⚔ Resgatar ⚔</button>
+        </div>
+    </div>
+
+    <div id="rankingModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content ranking-modal-content">
+            <span class="close-btn" id="closeRankingBtn">&times;</span>
+            <h2>Top 10 da Arena</h2>
+            <div class="ranking-tabs">
+               <button class="ranking-tab active" data-tab="current">Atual</button>
+<button class="ranking-tab" data-tab="past">Passada</button>
+<button class="ranking-tab" data-tab="history">Histórico</button>
+</div>
+
+<!-- agrupado para controle de exibição -->
+<div id="seasonInfoContainer" style="text-align:center; margin-top:5px;">
+  <span id="seasonInfo">Temporada<br> (Mês) / (Ano)</span>
+  <span style="margin-top: -5px;">(Atualiza todos os dias à meia-noite UTC)</span>
+</div>
+<div id="fixedArenaRank"></div>
+
+            <div id="rankingTabContent" style="margin-top:12px;">
+                <div id="rankingCurrent" class="tab-panel active">
+                    <div id="rankingListContainer">
+                        <div id="rankingPodium" class="ar-podium"></div>
+                        <ol id="rankingList"></ol>
+                    </div>
+                </div>
+                <div id="rankingPast" class="tab-panel" style="display:none;">
+                    <div id="rankingListContainerPast">
+                      <span style="color: lightblue; font-size: 1em; font-weight: bold;">Temporada Anterior</span><br><br>
+                        <div id="rankingPodiumPast" class="ar-podium"></div>
+                        <ol id="rankingListPast"></ol>
+                    </div>
+                </div>
+                <div id="rankingHistory" class="tab-panel" style="display:none;">
+                    <div id="rankingHistoryContainer">
+                        <ul id="rankingHistoryList"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${15 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+    <script type="module" src="arena.js"></script>
+    
+    <div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+(function() {
+    const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    const isGloballyMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+
+    // Lista de URLs de MÚSICA DE FUNDO (BGM)
+    // Se o URL do áudio criado contiver qualquer uma dessas strings, ele será mutado.
+    const BGM_URL_FRAGMENTS = [
+        '/assets/music_loop_02.mp3', // Índice principal
+        '/assets/idlesong.mp3',      // afk_page.js
+        '/assets/combat_afk_bg.mp3', // afk_page.js
+        '/assets/mina.mp3',
+        '/assets/desolation_tower.mp3',
+        '/assets/arena.mp3',
+        // mines.js
+        // ADICIONE AQUI FRAGMENTOS DE URL DE QUALQUER OUTRA MÚSICA DE FUNDO
+        // Ex: '/assets/arena_bgm.mp3', '/assets/raid_bgm.mp3'
+    ];
+
+    // uarda o construtor original
+    const OriginalAudio = window.Audio;
+
+    // Se o mute não estiver ativo, ou se já interceptamos, não faça nada.
+    if (!isGloballyMuted || OriginalAudio.__isPatched) {
+        return;
+    }
+
+    // Sobrescreve o construtor nativo
+    window.Audio = function(src) {
+        // 1. Cria o objeto de áudio usando o construtor original
+        const audioInstance = new OriginalAudio(src);
+
+        // 2. Verifica se o 'src' corresponde a um BGM
+        const isBGM = src && BGM_URL_FRAGMENTS.some(fragment => src.includes(fragment));
+
+        if (isBGM) {
+            // 3. Se for BGM e o mute estiver ativo, força o volume para 0.
+            audioInstance.volume = 0;
+            // console.log(`[MUTE PATCH] Muted BGM: ${src}`); // Opcional para debug
+
+            // 4. Adiciona um 'setter' falso para a propriedade 'volume' do objeto
+            // Isso previne que seus scripts de página (ex: combatMusic.volume = 0.4;)
+            // consigam desmutar o áudio posteriormente.
+            Object.defineProperty(audioInstance, 'volume', {
+                get() {
+                    return 0; // Sempre retorna 0
+                },
+                set(newValue) {
+                    // Se o valor for 0 (mutar) ou o valor antigo for 0, permite que o script original
+                    // defina o volume, mas mantemos o nosso em 0.
+                    // Isso é para o caso de o usuário querer restaurar o volume no futuro.
+                    if (newValue > 0 && isGloballyMuted) {
+                        // console.warn(`[MUTE PATCH] Tentativa de desmutar BGM bloqueada. Estado global: Mutado.`);
+                    }
+                    // O objeto de áudio real continua mutado (volume = 0)
+                },
+                configurable: true // Permite que seja redefinido se o estado mudar
+            });
+
+        }
+
+        // 5. Retorna a instância (mutada ou não)
+        return audioInstance;
+    };
+    
+    // Marca o construtor como modificado
+    window.Audio.__isPatched = true;
+    
+    // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
+    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+
+})();
+</script>
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "arena.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.2em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.4em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+<script src="security.js"></script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

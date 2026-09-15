@@ -1,0 +1,2661 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <meta name="robots" content="index,follow" />
+  <title>Rankings - Aden RPG</title>
+  <link href="style.css" rel="stylesheet"/>
+  <style>
+    /* ===================================================================
+       BASE
+    =================================================================== */
+    body,html{margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;
+      display:flex;flex-direction:column;overflow-y:auto;
+      background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;
+      background-size:cover;color:#e0dccc;text-shadow:1px 1px 2px #000;}
+    #playerTopBar{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;
+      background:linear-gradient(to bottom,#444,#222);color:#fff;min-height:44px;box-shadow:0 2px 5px rgba(0,0,0,.5);}
+    #pageTitle{font-weight:700;font-size:1.1em;text-align:center;flex-grow:1;transition:color .3s;}
+    .top-bar-link{display:flex;align-items:center;color:white;text-decoration:none;}
+
+    #rankingContent{
+      flex-grow:1;padding:14px 14px 96px;width:90vw;max-width:999px;
+      margin:18px auto;border-radius:10px;
+      box-shadow:0 0 20px rgba(0,0,0,.8);background-color:rgba(0,0,0,.5);}
+
+    .loading{text-align:center;padding:20px;font-size:1.05em;opacity:.9;}
+    .pulse{animation:pulse 2s infinite;}
+    @keyframes pulse{0%{box-shadow:0 0 8px rgba(255,215,0,.55);}50%{box-shadow:0 0 26px rgba(255,215,0,1),0 0 46px rgba(255,215,0,.55);}100%{box-shadow:0 0 8px rgba(255,215,0,.55);}}
+    .shimmer{background:linear-gradient(-90deg,#383838 0%,#444 50%,#383838 100%);background-size:400% 400%;animation:shimmer 1.2s ease-in-out infinite;color:transparent!important;}
+    @keyframes shimmer{0%{background-position:-100% 0}100%{background-position:100% 0}}
+    .shimmer::before{content:'\00a0';}
+
+    /* ===================================================================
+       BARRA DE ABAS — entalhada em pedra escura com bordas douradas
+    =================================================================== */
+    #rankingTabBar{
+      display:flex;gap:5px;margin-bottom:16px;padding:5px;
+      background:linear-gradient(180deg,rgba(5,4,2,.88) 0%,rgba(18,14,6,.94) 100%);
+      border:1px solid rgba(201,169,74,.28);border-radius:8px;
+      box-shadow:inset 0 3px 14px rgba(0,0,0,.95),0 1px 0 rgba(201,169,74,.1);}
+
+    .rank-tab{
+      flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:5px;padding:9px 4px 8px;
+      background:linear-gradient(180deg,#2e2519 0%,#1c1610 55%,#252010 100%);
+      border:1px solid rgba(80,60,25,.55);border-radius:5px;
+      color:#6e5e3a;cursor:pointer;
+      transition:background .22s,color .22s,border-color .22s,box-shadow .22s;
+      font-size:.62em;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+      min-width:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
+    .rank-tab svg{width:22px;height:22px;fill:currentColor;flex-shrink:0;transition:filter .22s;}
+    .rank-tab:hover{background:linear-gradient(180deg,#3c3020,#262010);color:#c9a94a;border-color:rgba(201,169,74,.42);}
+    .rank-tab.active{
+      background:linear-gradient(180deg,#5c4518 0%,#2e2008 50%,#4c3c12 100%);
+      border-color:#c9a94a;color:#ffd700;
+      box-shadow:0 0 14px rgba(201,169,74,.32),inset 0 1px 0 rgba(255,215,0,.13);}
+    .rank-tab.active svg{filter:drop-shadow(0 0 5px rgba(255,215,0,.85));}
+    .rank-tab.active::after{
+      content:'';position:absolute;bottom:0;left:15%;width:70%;height:2px;
+      background:linear-gradient(90deg,transparent,#ffd700,transparent);border-radius:1px;}
+    .rank-tab.active::before{
+      content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;
+      background:linear-gradient(105deg,transparent 30%,rgba(255,215,0,.07) 50%,transparent 70%);
+      animation:tabSheen 4s ease-in-out infinite;}
+    @keyframes tabSheen{0%{left:-60%;opacity:0}10%{opacity:1}90%{left:130%;opacity:1}100%{left:130%;opacity:0}}
+
+    /* ===================================================================
+       PAINÉIS DE ABA
+    =================================================================== */
+    .ranking-panel{display:none;}
+    .ranking-panel.active{display:block;animation:panelFade .28s ease;}
+    @keyframes panelFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+    .panel-heading{color:#c9a94a;margin:0 0 4px;font-size:1.4em;text-align:center;letter-spacing:.5px;}
+    .panel-subtext{color:#bbb;border-bottom:3px solid #c9a94a;font-size:.85em;text-align:center;margin:0 0 14px;padding-bottom:8px;}
+
+    /* ===================================================================
+       LISTA CP (preservada igual ao original)
+    =================================================================== */
+    #rankingListCP{list-style:none;padding:0;margin:0;width:100%;max-width:99vw;}
+    #rankingListCP li{display:flex;align-items:center;justify-content:space-between;
+      padding:10px 15px;border-bottom:1px solid rgba(201,169,74,.2);
+      background:rgba(20,20,20,.4);transition:background .2s;}
+    #rankingListCP li:hover{background:rgba(201,169,74,.06);}
+    .rank-position-cp{font-size:1.1em;font-weight:bold;color:#FFC107;width:40px;flex-shrink:0;text-align:center;}
+    .rank-avatar-cp{width:45px;height:45px;border-radius:50%;border:2px solid #888;margin-right:10px;flex-shrink:0;object-fit:cover;}
+    .rank-player-info-cp{flex-grow:1;text-align:left;}
+    .rank-player-name-wrapper{display:flex;align-items:center;gap:8px;}
+    .rank-player-name-cp{display:block;font-size:1em;font-weight:bold;color:#e0dccc;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;cursor:pointer;}
+    .rank-player-name-cp:hover{color:gold;text-decoration:underline;}
+    .rank-guild-name-cp{display:block;font-size:.85em;color:lightblue;font-weight:bold;}
+    .rank-power-cp{font-size:1em;font-weight:bold;color:#4CAF50;text-align:right;min-width:70px;flex-shrink:0;}
+    .rank-eye-icon{width:20px;height:20px;fill:#fff;cursor:pointer;opacity:.8;transition:opacity .2s,transform .2s;flex-shrink:0;}
+    .rank-eye-icon:hover{opacity:1;transform:scale(1.1);filter:drop-shadow(0 0 2px gold);}
+    /* Top 3 agora vira pódio (.cp-podium), ver bloco dedicado abaixo */
+    @media(max-width:700px){
+      .rank-player-name-cp{max-width:90px;font-size:.85em}
+      .rank-guild-name-cp{font-size:.72em}
+      .rank-power-cp{font-size:.9em;min-width:62px}
+      #rankingListCP li{padding:8px 8px}}
+    @media(max-width:400px){
+      .rank-player-name-cp{max-width:70px;font-size:.8em}
+      .rank-power-cp{font-size:.85em;min-width:55px}
+      .rank-position-cp{width:28px;font-size:.95em}
+      .rank-avatar-cp{width:38px;height:38px}
+      #rankingListCP li{padding:6px 6px}}
+
+    /* ===================================================================
+       LISTA UNIVERSAL  (Arena & Ruínas)
+    =================================================================== */
+    .rank-list-u{list-style:none;padding:0;margin:0;width:100%;}
+    .rli{display:flex;align-items:center;gap:10px;padding:10px 15px;
+      border-bottom:1px solid rgba(201,169,74,.14);background:rgba(18,15,8,.48);
+      transition:background .2s;animation:itemIn .3s ease both;}
+    .rli:hover{background:rgba(201,169,74,.07);}
+    @keyframes itemIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+    .rli:nth-child(1){animation-delay:.02s}.rli:nth-child(2){animation-delay:.05s}
+    .rli:nth-child(3){animation-delay:.08s}.rli:nth-child(4){animation-delay:.1s}
+    .rli:nth-child(5){animation-delay:.12s}
+    .rli.is-me{outline:1px solid rgba(120,200,255,.28);}
+    .rli.footer-personal{background:rgba(10,20,35,.65);border-top:2px dashed rgba(100,160,255,.3);border-bottom:none;}
+    .rli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
+    .rli-av{width:44px;height:44px;border-radius:50%;border:2px solid #666;flex-shrink:0;object-fit:cover;}
+    /* Destaque top-1/2/3 nas listas agora vive no pódio (.cp-podium) */
+    .rli-info{flex-grow:1;min-width:0;}
+    .rli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+    .rli-name:hover{color:gold;text-decoration:underline;}
+    .rli-guild{display:block;font-size:.8em;color:lightblue;font-weight:bold;}
+    .rli-val{font-weight:bold;text-align:right;flex-shrink:0;min-width:78px;font-size:1em;}
+    .val-arena{color:#FFD700;}
+    .val-ruins{color:#e53935;}
+
+    /* ===================================================================
+       LISTA GUILDAS
+    =================================================================== */
+    .guild-rank-list{list-style:none;padding:0;margin:0;}
+    .gli{display:flex;align-items:center;gap:12px;padding:10px 15px;
+      border-bottom:1px solid rgba(201,169,74,.14);background:rgba(18,15,8,.48);
+      transition:background .2s;cursor:pointer;animation:itemIn .3s ease both;}
+    .gli:hover{background:rgba(201,169,74,.08);}
+    /* Destaque top-1/2/3 da lista de guildas agora vive no pódio (.cp-podium) */
+    .gli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
+    .gli-flag{width:44px;height:44px;border-radius:6px;object-fit:cover;border:2px solid #666;flex-shrink:0;}
+    /* Destaque top-1/2/3 do flag de guilda agora vive no pódio (.cp-podium) */
+    .gli-info{flex-grow:1;min-width:0;}
+    .gli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .gli-power{font-size:1em;font-weight:bold;color:#FF9800;text-align:right;flex-shrink:0;min-width:80px;}
+
+    /* ===================================================================
+       PÓDIO TOP 3 (padrão AAA) — reutilizado nas abas CP, Guilda, Arena e Ruínas
+    =================================================================== */
+    .cp-podium{display:flex;align-items:flex-end;justify-content:center;gap:6px;
+      width:100%;box-sizing:border-box;padding:26px 4px 14px;margin-bottom:6px;position:relative;}
+    .cp-podium::before{content:'';position:absolute;inset:0;border-radius:14px;
+      background:radial-gradient(60% 70% at 50% 15%, rgba(255,215,0,.14), transparent 70%),
+      linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35));pointer-events:none;}
+    .cp-podium-place{position:relative;display:flex;flex-direction:column;align-items:center;
+      flex:1 1 0;max-width:130px;z-index:1;}
+    .cp-podium-1{order:2;z-index:2;}
+    .cp-podium-2{order:1;}
+    .cp-podium-3{order:3;}
+    .cp-podium-crown{font-size:1.6em;margin-bottom:-6px;filter:drop-shadow(0 0 6px rgba(255,215,0,.9));
+      animation:cpPodiumFloat 2.4s ease-in-out infinite;}
+    @keyframes cpPodiumFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+    .cp-podium-avatar-wrap{position:relative;margin-bottom:6px;}
+    .cp-podium-avatar{display:block;border-radius:50%;object-fit:cover;background:#222;}
+    .cp-podium-avatar.is-flag{border-radius:8px;}
+    .cp-podium-1 .cp-podium-avatar{width:78px;height:78px;border:4px solid #FFD700;
+      box-shadow:0 0 16px rgba(255,215,0,.85),0 0 34px rgba(255,215,0,.4);animation:pulse 2s infinite;
+      will-change:box-shadow;transform:translateZ(0);}
+    .cp-podium-2 .cp-podium-avatar{width:62px;height:62px;border:4px solid #C7CCD6;
+      box-shadow:0 0 12px rgba(199,204,214,.7);}
+    .cp-podium-3 .cp-podium-avatar{width:62px;height:62px;border:4px solid #CD7F32;
+      box-shadow:0 0 12px rgba(205,127,50,.7);}
+    .cp-podium-badge{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);
+      width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-family:'Cinzel',Georgia,serif;font-weight:bold;font-size:.85em;color:#1a1204;
+      border:2px solid rgba(0,0,0,.5);box-shadow:0 2px 4px rgba(0,0,0,.6);}
+    .cp-podium-1 .cp-podium-badge{background:linear-gradient(180deg,#fff3b0,#FFD700 45%,#b8860b);width:30px;height:30px;font-size:.95em;}
+    .cp-podium-2 .cp-podium-badge{background:linear-gradient(180deg,#f2f4f8,#C7CCD6 45%,#8a90a0);}
+    .cp-podium-3 .cp-podium-badge{background:linear-gradient(180deg,#f0b784,#CD7F32 45%,#8a5322);}
+    .cp-podium-name{font-size:.85em;font-weight:bold;color:#f2ecd8;text-align:center;max-width:118px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      text-shadow:1px 1px 2px #000,0 0 6px rgba(0,0,0,.7);margin-top:6px;cursor:pointer;}
+    .cp-podium-name:hover{color:gold;text-decoration:underline;}
+    .cp-podium-guild{font-size:.66em;color:lightblue;font-weight:bold;max-width:118px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:1px 1px 2px #000;}
+    .cp-podium-value{font-size:.8em;font-weight:bold;margin-top:2px;
+      text-shadow:1px 1px 2px #000,0 0 6px rgba(255,215,0,.5);white-space:nowrap;}
+    .cp-podium-value.val-cp{color:#4CAF50;}
+    .cp-podium-value.val-arena{color:#FFD700;}
+    .cp-podium-value.val-ruins{color:#ff6b6b;}
+    .cp-podium-value.val-guild{color:#FF9800;}
+    .cp-podium-step{width:100%;margin-top:10px;border-radius:8px 8px 0 0;display:flex;
+      align-items:flex-start;justify-content:center;padding-top:4px;font-family:'Cinzel',Georgia,serif;
+      font-weight:bold;font-size:1.3em;box-shadow:inset 0 3px 6px rgba(255,255,255,.25),0 -2px 10px rgba(0,0,0,.4);}
+    .cp-podium-1 .cp-podium-step{height:58px;background:linear-gradient(180deg,#ffdf6b,#c9a227 55%,#8a6d10);color:#3a2c02;text-shadow:0 1px 0 rgba(255,255,255,.4);}
+    .cp-podium-2 .cp-podium-step{height:42px;background:linear-gradient(180deg,#e4e8f0,#a9afbd 55%,#6d7280);color:#23252b;}
+    .cp-podium-3 .cp-podium-step{height:30px;background:linear-gradient(180deg,#e8a465,#b06a2e 55%,#6e3f16);color:#2a1502;}
+
+    /* ===================================================================
+       BARRA FIXA DO JOGADOR
+    =================================================================== */
+    #fixedPlayerRank{display:none;position:fixed;bottom:0;left:0;width:100%;z-index:990;
+      background:linear-gradient(to top,#111,#222);border-top:3px solid #c9a94a;
+      box-shadow:0 -4px 15px rgba(0,0,0,.9);}
+    .fixed-content-inner{display:flex;align-items:center;justify-content:space-between;
+      padding:10px 15px;width:100%;max-width:1000px;margin:0 auto;box-sizing:border-box;}
+    #fixedPlayerRank .rank-position-cp{color:#fff;font-size:1.3em;}
+    #fixedPlayerRank .rank-player-name-cp{color:#fff;font-size:1.1em;}
+    #fixedPlayerRank .rank-guild-name-cp{color:#ddd;}
+    #fixedPlayerRank .rank-avatar-cp{border:2px solid #fff;box-shadow:0 0 5px gold;}
+    .fixed-val-cp{font-size:1.2em;font-weight:bold;color:#4CAF50;text-shadow:0 0 3px #000;min-width:90px;text-align:right;flex-shrink:0;}
+    .fixed-val-arena{font-size:1.2em;font-weight:bold;color:#FFD700;text-shadow:0 0 4px rgba(255,215,0,.5);min-width:90px;text-align:right;flex-shrink:0;}
+    .fixed-val-ruins{font-size:1.2em;font-weight:bold;color:#e53935;min-width:90px;text-align:right;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:4px;}
+    .fixed-val-guild{font-size:1.2em;font-weight:bold;color:#FF9800;min-width:90px;text-align:right;flex-shrink:0;}
+
+    /* ===================================================================
+       MODAL DO JOGADOR  (intacto do original)
+    =================================================================== */
+    #playerModal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;
+      background-color:rgba(0,0,0,.8);align-items:center;justify-content:center;}
+    .modal-content-player{background-color:#1a1a1a;border:1px solid #c9a94a;width:90%;max-width:500px;
+      border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,.5);color:#e0dccc;position:relative;overflow:hidden;
+      max-height:92vh;}
+    /* O scroll fica no inner, não no container, para o vídeo de fundo cobrir tudo */
+    .modal-content-player .modal-inner{
+      max-height:92vh;overflow-y:auto;position:relative;z-index:2;}
+    #modal-bg-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;
+      background-color:black;z-index:0;pointer-events:none;min-height:100%;}
+    #modal-bg-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;min-height:100%;}
+    .modal-inner{position:relative;z-index:2;padding:20px;}
+    #closePlayerModal{position:absolute;top:10px;right:15px;color:#aaa;font-size:28px;font-weight:bold;cursor:pointer;transition:color .2s;z-index:10;}
+    #closePlayerModal:hover{color:white;}
+    .player-header{text-align:center;margin-bottom:15px;}
+    #playerName{font-size:1.8em;color:#FFD700;margin-bottom:5px;font-weight:bold;}
+    .player-level-guild{display:flex;justify-content:center;align-items:center;gap:2px;margin-bottom:10px;flex-direction:column;}
+    #playerGuildFlag{width:30px;height:30px;border-radius:5px;object-fit:cover;}
+    #playerGuildName{font-size:1.4em;color:lightblue;}
+    #playerLevel{font-size:1.2em;color:#ccc;font-weight:bold;}
+    .player-visuals{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:10px 0;}
+    .equipment-slots-container{display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
+    .equipment-slot{background-color:#383838;border:1px dashed #555;height:55px;width:55px;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible;border-radius:5px;flex-shrink:0;}
+    .equipment-slot img{width:100%;height:100%;object-fit:cover;border-radius:5px;}
+    .item-level{position:absolute;bottom:-10px;right:7px;background-color:rgba(0,0,0,.7);color:#fff;font-size:.6em;padding:0 3px;border-radius:4px;z-index:99999;}
+    #modal-avatar-wrapper{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    #playerAvatarEquip{width:100px;height:100px;border-radius:50%;border:4px solid #c9a94a;object-fit:cover;box-shadow:0 0 15px rgba(255,215,0,.4);}
+    #modal-frame-overlay{position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:2;object-fit:contain;display:none;}
+    #modal-frame-sheen{position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;}
+    #modal-frame-sheen::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;
+      background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);
+      animation:_mfs 6s ease-in-out infinite;}
+    @keyframes _mfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}
+    #playerCombatPower{font-size:2em;font-weight:bold;color:#4CAF50;background:linear-gradient(to bottom,white,orange,orange);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;margin-top:10px;text-shadow:none!important;}
+    .player-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:20px;padding:10px;border-top:1px solid #444;}
+    .stat-line{display:flex;justify-content:space-between;font-size:.8em;}
+    .stat-line span:first-child{color:#aaa;}
+    .stat-line span:last-child{font-weight:bold;color:#fff;}
+    #sendmp{display:none;width:100%;padding:10px;margin-top:20px;background-color:#2196F3;color:white;border:none;border-radius:5px;cursor:pointer;font-size:1em;font-weight:bold;transition:background-color .2s;text-align:center;text-decoration:none;}
+    #sendmp:hover{background-color:#1e84d4;}
+    #cpIcon{width:26px;height:38px;margin-top:8px;margin-left:-6px;position:relative;}
+
+    /* ── Social stats + ações (Seguir / Mensagem) — padrão taverna ── */
+    #playerModal #pm-social-stats,
+    #playerModal #pm-follow-btn,
+    #playerModal #sendmp.pm-action-btn {
+      position: relative;
+      z-index: 2;
+    }
+    #playerModal .pm-action-btn {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.65em;
+      font-family: 'Cinzel', serif;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      transition: background 0.2s;
+      width: auto;
+      margin-top: 0;
+      text-decoration: none;
+    }
+    #playerModal .pm-action-follow {
+      background: rgba(122,184,255,0.08);
+      border: 1px solid rgba(122,184,255,0.3);
+      color: #7ab8ff;
+    }
+    #playerModal .pm-action-follow:hover { background: rgba(122,184,255,0.22); }
+    #playerModal .pm-action-sendmp {
+      background: rgba(201,169,74,0.12);
+      border: 1px solid rgba(201,169,74,0.35);
+      color: #e8d08a;
+    }
+    #playerModal .pm-action-sendmp:hover { background: rgba(201,169,74,0.22); }
+
+    /* ── Modais auxiliares: Lista social (Seguidores/Seguindo) e Info da Guilda ── */
+    .pmx-modal {
+      display: none; position: fixed; inset: 0; z-index: 1700;
+      background: rgba(0,0,0,0.65); align-items: flex-end; justify-content: center;
+    }
+    .pmx-modal.open { display: flex; }
+    .pmx-inner {
+      width: 100%; max-width: 420px; max-height: 72vh;
+      background: linear-gradient(180deg, #1a0f02 0%, #110900 100%);
+      border: 1px solid rgba(201,169,74,0.55);
+      border-radius: 16px 16px 0 0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .pmx-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 10px; border-bottom: 1px solid rgba(201,169,74,0.3);
+    }
+    .pmx-title { font-family: 'Cinzel', serif; font-size: 0.9rem; color: #e8d08a; letter-spacing: 0.06em; }
+    .pmx-close { background: none; border: none; cursor: pointer; color: #b0a890; padding: 4px; display: flex; align-items: center; }
+    .pmx-close svg { width: 18px; height: 18px; }
+    .pmx-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .pmx-empty { text-align: center; color: #b0a890; font-size: 0.8rem; padding: 32px 16px; }
+    .pmx-row {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-bottom: 1px solid rgba(201,169,74,0.08); cursor: pointer; transition: background 0.15s;
+    }
+    .pmx-row:hover { background: rgba(255,255,255,0.04); }
+    .pmx-av { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1.5px solid rgba(201,169,74,0.55); }
+    .pmx-av img { width: 100%; height: 100%; object-fit: cover; }
+    .pmx-text { flex: 1; font-size: 0.8rem; color: #cfc7b8; line-height: 1.4; }
+    .pmx-text strong { color: #e8d08a; }
+    .pmx-time { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+
+    /* ── Top Presenteadores (ranking de quem mais deu presentes) ── */
+    .pmx-gifter-row {
+      display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+      border-bottom: 1px solid rgba(201,169,74,0.08); cursor: pointer; transition: background 0.15s;
+    }
+    .pmx-gifter-row:hover { background: rgba(255,255,255,0.04); }
+    .pmx-gifter-pos { font-family: 'Cinzel', serif; font-size: 0.85rem; font-weight: 700; color: #e8d08a; width: 22px; flex-shrink: 0; text-align: center; }
+    .pmx-gifter-av { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1.5px solid rgba(201,169,74,0.55); }
+    .pmx-gifter-av img { width: 100%; height: 100%; object-fit: cover; }
+    .pmx-gifter-info { flex: 1; min-width: 0; }
+    .pmx-gifter-name { display: block; font-size: 0.85rem; font-weight: 700; color: #e8d08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pmx-gifter-sub { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+    .pmx-gifter-fame { font-family: 'Cinzel', serif; font-size: 0.85rem; color: #e8d08a; font-weight: 700; flex-shrink: 0; text-align: right; }
+
+    /* Top 3 — ouro / prata / bronze (mesmo padrão do .rli.top-X) */
+    .pmx-gifter-row.top-1 { background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%); border-left: 4px solid #FFD700; }
+    .pmx-gifter-row.top-1 .pmx-gifter-pos,
+    .pmx-gifter-row.top-1 .pmx-gifter-fame { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.6); }
+    .pmx-gifter-row.top-1 .pmx-gifter-av { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.65); }
+
+    .pmx-gifter-row.top-2 { background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%); border-left: 4px solid silver; }
+    .pmx-gifter-row.top-2 .pmx-gifter-pos,
+    .pmx-gifter-row.top-2 .pmx-gifter-fame { color: silver; text-shadow: 0 0 8px rgba(192,192,192,.6); }
+    .pmx-gifter-row.top-2 .pmx-gifter-av { border-color: silver; box-shadow: 0 0 8px rgba(192,192,192,.55); }
+
+    .pmx-gifter-row.top-3 { background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%); border-left: 4px solid #CD7F32; }
+    .pmx-gifter-row.top-3 .pmx-gifter-pos,
+    .pmx-gifter-row.top-3 .pmx-gifter-fame { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,.6); }
+    .pmx-gifter-row.top-3 .pmx-gifter-av { border-color: #CD7F32; box-shadow: 0 0 8px rgba(205,127,50,.5); }
+    .pmx-guild-header { display: flex; gap: 12px; padding: 14px 16px; align-items: center; }
+    .pmx-guild-flag { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: rgba(0,0,0,0.3); }
+    .pmx-guild-name { font-family: 'Cinzel', serif; font-size: 1rem; color: #e8d08a; font-weight: 700; }
+    .pmx-guild-desc { font-size: 0.75rem; color: #b0a890; margin-top: 2px; }
+    .pmx-guild-meta { font-size: 0.7rem; color: #cfc7b8; margin-top: 4px; display: flex; gap: 10px; }
+    .pmx-join-row { padding: 0 16px 12px; }
+    .pmx-join-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px;
+      border-radius: 8px; border: 1px solid rgba(122,184,255,0.35); background: rgba(122,184,255,0.12);
+      color: #7ab8ff; font-family: 'Cinzel', serif; font-size: 0.8em; letter-spacing: 0.05em; cursor: pointer;
+    }
+    .pmx-join-btn svg { width: 18px; height: 18px; }
+    .pmx-join-btn:hover { background: rgba(122,184,255,0.22); }
+    .pmx-join-btn:disabled { opacity: 0.5; cursor: default; }
+    .pmx-join-btn.pgi-requested {
+      opacity: 0.75; cursor: default; pointer-events: none;
+      background: rgba(39,174,96,0.12); border-color: rgba(39,174,96,0.4); color: #6ce6a0;
+    }
+    .pmx-member-label {
+      padding: 10px 16px 4px; font-family: 'Cinzel', serif; font-size: 0.78rem;
+      color: #b0a890; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .pmx-member-role {
+      font-size: 0.65rem; color: #e8d08a; padding: 3px 8px;
+      border: 1px solid rgba(201,169,74,0.3); border-radius: 6px; white-space: nowrap;
+    }
+
+    /* ===================================================================
+       MENU LATERAL  (intacto)
+    =================================================================== */
+    .goog-te-banner-frame.skiptranslate,.skiptranslate,.goog-te-balloon-frame,.goog-te-gadget{display:none!important;visibility:hidden!important;height:0!important;}
+    body{top:0!important;margin-top:0!important;position:static!important;}
+    font > font{background-color:transparent!important;box-shadow:none!important;position:static!important;}
+    #leftSideMenu{position:fixed;top:0;left:0;width:280px;height:100%;background:#1a1a1a;border-right:2px solid #444;
+      z-index:9999;transform:translateX(-100%);transition:transform 2s ease;display:flex;flex-direction:column;overflow:hidden;
+      box-shadow:5px 0 15px rgba(0,0,0,.5);}
+    #leftSideMenu.open{transform:translateX(0);}
+    .menu-header{padding:15px;background:#111;display:flex;justify-content:space-between;align-items:center;
+      border-bottom:1px solid #333;height:60px;box-sizing:border-box;}
+    .menu-header h3{margin:0;color:#ffd700;font-size:1.5rem;flex-grow:1;text-align:center;}
+    .close-menu-btn{background:none;border:none;color:#fff;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;}
+    .menu-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;flex:1 1 auto;overflow-y:auto;}
+    .menu-item{width:100%;}
+    .menu-link{display:flex;align-items:center;justify-content:flex-start;padding:15px;color:#e0e0e0;text-decoration:none;
+      font-size:1.2rem;position:relative;transition:background .4s,color .4s;border-bottom:1px solid #252525;width:100%;box-sizing:border-box;
+      font-family: 'Cinzel', serif;
+      font-weight: bold;
+    }
+    .menu-link:hover{background:#333;color:#fff;}
+    .menu-icon{width:35px;height:35px;object-fit:contain;margin-right:15px;}
+    .menu-item.active .menu-link{background:#555;color:#ffd700;font-weight:bold;border-left:4px solid #ffd700;padding-left:11px;}
+    #menuToggleBtn svg{transition:transform 3s cubic-bezier(.4,0,.2,1);transform-origin:center;}
+    .icon-vertical{transform:rotate(-90deg);}
+    #closeMenuBtn svg{transform:rotate(-90deg);transition:transform 3s ease;cursor:pointer;}
+    #closeMenuBtn:hover svg{transform:rotate(0deg);color:#ff4500;}
+    .menu-notification-dot{position:absolute;left:45px;top:50%;transform:translateY(-50%);width:10px;height:10px;
+      background-color:#ff0000;border:2px solid #fff;border-radius:50%;z-index:15;
+      box-shadow:0 0 5px rgba(255,0,0,.9);pointer-events:none;animation:pulseSideDot 2s infinite;}
+    @keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+    .submenu-list{list-style:none;padding:0;margin:0;max-height:0;overflow:hidden;transition:max-height .35s ease;background:#111;}
+    .submenu-list.open{max-height:500px;}
+    .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+    .dropdown-arrow{margin-left:auto;transition:transform .3s;}
+    .dropdown-active > .menu-link .dropdown-arrow{transform:rotate(180deg);}
+    #sideMenuOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9998;opacity:0;transition:opacity .3s;}
+  </style>
+<style>
+/* ═══════════ PADRÃO MENU LATERAL (referência: mines.html) ═══════════ */
+#leftSideMenu{position:fixed!important;top:0!important;left:0!important;width:280px!important;height:100%!important;background:#1a1a1a!important;border-right:2px solid #444!important;z-index:9999!important;transform:translateX(-100%)!important;transition:transform .3s ease!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;box-shadow:5px 0 15px rgba(0,0,0,.5)!important;}
+#leftSideMenu.open{transform:translateX(0)!important;}
+#leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
+#leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-item{width:100%!important;}
+#leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;}
+#leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
+#leftSideMenu .menu-icon{width:35px!important;height:35px!important;object-fit:contain!important;margin-right:15px!important;}
+#leftSideMenu .menu-item.active>.menu-link{background:#555!important;color:#ffd700!important;font-weight:bold!important;border-left:4px solid #ffd700!important;padding-left:11px!important;}
+#menuToggleBtn svg{transition:transform .3s cubic-bezier(.4,0,.2,1)!important;transform-origin:center!important;}
+.icon-vertical{transform:rotate(-90deg)!important;}
+#leftSideMenu #closeMenuBtn svg{transform:rotate(-90deg)!important;transition:transform .3s ease!important;cursor:pointer!important;}
+#leftSideMenu #closeMenuBtn:hover svg{transform:rotate(0deg)!important;color:#ff4500!important;}
+#leftSideMenu .menu-notification-dot{position:absolute!important;left:45px!important;top:50%!important;transform:translateY(-50%)!important;width:10px!important;height:10px!important;background-color:#ff0000!important;border:2px solid #fff!important;border-radius:50%!important;z-index:15!important;box-shadow:0 0 5px rgba(255,0,0,.9)!important;pointer-events:none!important;animation:pulseSideDot 2s infinite!important;}
+@keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+#leftSideMenu .submenu-list{list-style:none!important;padding:0!important;margin:0!important;max-height:0!important;overflow:hidden!important;transition:max-height .35s ease!important;background:#111!important;}
+#leftSideMenu .submenu-list.open{max-height:500px!important;}
+#leftSideMenu .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+#leftSideMenu .dropdown-arrow{margin-left:auto!important;transition:transform .3s!important;}
+#leftSideMenu .dropdown-active>.menu-link .dropdown-arrow{transform:rotate(180deg)!important;}
+#sideMenuOverlay{display:none;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;background:rgba(0,0,0,.5)!important;z-index:9998!important;opacity:0!important;transition:opacity .3s!important;}
+</style>
+</head>
+<body>
+
+<!-- ── BARRA SUPERIOR ── -->
+<div id="playerTopBar">
+  <button id="menuToggleBtn" class="top-bar-link" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <div id="pageTitle">Rankings</div>
+  <div style="width:4px;height:28px;"></div>
+</div>
+
+<!-- ── CONTEÚDO ── -->
+<div id="rankingContent">
+
+  <!-- ╔══════════════════════════════╗
+       ║       BARRA DE ABAS          ║
+       ╚══════════════════════════════╝ -->
+  <div id="rankingTabBar">
+
+    <!-- ABA: Poder de Combate -->
+    <button class="rank-tab active" data-tab="cp">
+      <!-- Escudo com relâmpago -->
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5L12 1zm1 15.17l-2.5-4.17H12V8l2.5 4.17H13v4z"/></svg>
+      <span>Poder</span>
+    </button>
+
+    <!-- ABA: Guildas -->
+    <button class="rank-tab" data-tab="guild">
+      <!-- Fortaleza -->
+      <svg viewBox="0 0 24 24"><path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>
+      <span>Guilda</span>
+    </button>
+
+    <!-- ABA: Arena PvP -->
+    <button class="rank-tab" data-tab="arena">
+      <!-- Espadas cruzadas -->
+      <svg viewBox="0 0 24 24"><path d="M6.92 5H5L3 9l1.5 1.5 1-1 1.5 1.5-3.5 3.5 1 1L7 12l2 2-1.5 1.5 1 1 3.5-3.5-1-1 5.92-5.92L21 3l-3 .08L6.92 5zm4.95 7.36l-1.42 1.42L14 17.33V21h3v-3l-4.13-4.64zM17 5.5l1 1-9 9-1-1 9-9z"/></svg>
+      <span>Arena</span>
+    </button>
+
+    <!-- ABA: Ruínas -->
+    <button class="rank-tab" data-tab="ruins">
+      <!-- Caveira -->
+      <svg viewBox="0 0 24 24"><path d="M12 2A9 9 0 003 11c0 3.18 1.65 5.97 4.14 7.58L7 21h2v1h2v-1h2v1h2v-1h2l-.14-2.42C19.35 16.97 21 14.18 21 11A9 9 0 0012 2zm-2.5 13.5v-1.25A2.25 2.25 0 0112 16a2.25 2.25 0 002.5-1.75v1.25A2.25 2.25 0 0112 17.5a2.25 2.25 0 01-2.5-2zm1-5.5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/></svg>
+      <span>Ruínas</span>
+    </button>
+
+  </div><!-- /#rankingTabBar -->
+
+  <!-- ── PAINEL: PODER DE COMBATE ── -->
+  <div id="rankingPanel-cp" class="ranking-panel active">
+    <h2 class="panel-heading">Top 10 &mdash; Poder de Combate</h2>
+    <div class="panel-subtext">(Atualiza Segunda, Quarta e Sexta-feira)</div>
+    <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
+  </div>
+
+  <!-- ── PAINEL: GUILDAS ── -->
+  <div id="rankingPanel-guild" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Guildas</h2>
+    <div class="panel-subtext">(Poder total de combate dos membros)</div>
+    <div id="guildRankingWrapper"><div class="loading">Carregando guildas...</div></div>
+  </div>
+
+  <!-- ── PAINEL: ARENA PvP ── -->
+  <div id="rankingPanel-arena" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Arena PvP</h2>
+    <div id="arenaSeasonLabel" class="panel-subtext">Temporada atual</div>
+    <div id="arenaRankingWrapper"><div class="loading">Carregando arena...</div></div>
+  </div>
+
+  <!-- ── PAINEL: RUÍNAS ── -->
+  <div id="rankingPanel-ruins" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Ruínas</h2>
+    <div id="ruinsMonthLabel" class="panel-subtext">Eliminações do mês</div>
+    <div id="ruinsRankingWrapper"><div class="loading">Carregando ruínas...</div></div>
+  </div>
+
+</div><!-- /#rankingContent -->
+
+<!-- ── BARRA FIXA DE RANKING PESSOAL ── -->
+<div id="fixedPlayerRank"></div>
+
+<!-- ── MODAL DO JOGADOR (intacto) ── -->
+<div id="playerModal">
+  <div class="modal-content-player">
+    <video autoplay muted loop playsinline id="modal-bg-video"><source src="" type="video/webm"></video>
+    <div id="modal-bg-overlay"></div>
+    <span id="closePlayerModal">&times;</span>
+    <div class="modal-inner">
+      <div class="player-header">
+        <div id="playerName" class="shimmer">Carregando...</div>
+        <div style="display:flex;align-items:center;justify-content:center;margin-top:-12px;">
+          <div id="playerLevel" class="shimmer">Nv. 1</div>
+        </div>
+        <div class="player-level-guild">
+          <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width:50px;height:55px;">
+          <div id="playerGuildName" class="shimmer">Nome da Guilda</div>
+        </div>
+      </div>
+      <div style="display:none;align-items:center;justify-content:center;gap:7px;margin-top:-25px;margin-bottom:8px;">
+        <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
+        <div id="playerCombatPower" class="shimmer"></div>
+      </div>
+      <div class="player-visuals">
+        <div class="equipment-slots-container left">
+          <div class="equipment-slot" id="weapon-slot"></div>
+          <div class="equipment-slot" id="ring-slot"></div>
+          <div class="equipment-slot" id="helm-slot"></div>
+          <div class="equipment-slot" id="special1-slot"></div>
+        </div>
+        <div id="modal-avatar-wrapper">
+          <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
+          <img id="modal-frame-overlay" src="" alt="">
+          <div id="modal-frame-sheen"></div>
+        </div>
+        <div class="equipment-slots-container right">
+          <div class="equipment-slot" id="amulet-slot"></div>
+          <div class="equipment-slot" id="wing-slot"></div>
+          <div class="equipment-slot" id="armor-slot"></div>
+          <div class="equipment-slot" id="special2-slot"></div>
+        </div>
+      </div>
+      <div class="player-stats">
+        <div class="stat-line"><span>ATK</span><span id="playerAttack" class="shimmer"></span></div>
+        <div class="stat-line"><span>Defesa</span><span id="playerDefense" class="shimmer"></span></div>
+        <div class="stat-line"><span>HP</span><span id="playerHealth" class="shimmer"></span></div>
+        <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
+        <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
+        <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
+        <div class="stat-line"><span>Redução Crítica</span><span id="playerCritReduction" class="shimmer"></span></div>
+      </div>
+      <!-- Social stats row -->
+      <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-followers-wrap">
+          <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-following-wrap">
+          <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-fame-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-gifts-wrap">
+          <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
+        </div>
+      </div>
+
+      <!-- Action buttons (Seguir / Mensagem) -->
+      <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:-25px; padding: 30px;">
+        <button id="pm-follow-btn" class="pm-action-btn pm-action-follow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Seguir
+        </button>
+        <a id="sendmp" href="#" class="pm-action-btn pm-action-sendmp">
+          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;"> Mensagem
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRMAÇÃO: Deixar de seguir ══ -->
+<div id="pm-unfollow-confirm" style="display:none;position:fixed;inset:0;z-index:1600;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#1f1b2e,#15131f);border:1px solid rgba(201,169,74,0.35);border-radius:12px;padding:22px 20px;max-width:300px;width:85%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+    <p id="pm-unfollow-text" style="color:#e8d08a;font-family:'Cinzel',serif;font-size:0.95em;line-height:1.5;margin:0 0 10px;"></p>
+    <p style="color:#f5c842;font-size:0.75em;line-height:1.5;margin:0 0 18px;padding:7px 10px;background:rgba(245,200,66,0.08);border-radius:8px;border:1px solid rgba(245,200,66,0.2);">Atenção: se vocês possuírem um laço, ele também será desfeito e a intimidade retornará para 1000.</p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="pm-unfollow-no" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:#ddd;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Não</button>
+      <button id="pm-unfollow-yes" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(220,90,90,0.45);background:rgba(220,90,90,0.18);color:#ff9a9a;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Sim</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SOCIAL LIST MODAL (Seguidores / Seguindo) ══ -->
+<div id="pm-social-list-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span id="psl-title" class="pmx-title">Seguidores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-social-list-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="psl-list" class="pmx-list"></div>
+  </div>
+</div>
+
+<!-- ══ GIFTERS MODAL (Top Presenteadores) ══ -->
+<div id="pm-gifters-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span class="pmx-title">🎁 Top Presenteadores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-gifters-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="pgf-list" class="pmx-list"></div>
+  </div>
+</div>
+
+
+<!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
+<div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner" style="max-height:80vh;">
+    <div class="pmx-topbar">
+      <span id="pgi-title" class="pmx-title">Guilda</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-guild-info-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <div class="pmx-guild-header">
+        <img id="pgi-flag" class="pmx-guild-flag" src="" alt="">
+        <div>
+          <div id="pgi-name" class="pmx-guild-name"></div>
+          <div id="pgi-desc" class="pmx-guild-desc"></div>
+          <div class="pmx-guild-meta"><span id="pgi-level"></span><span id="pgi-members"></span></div>
+        </div>
+      </div>
+      <div id="pgi-join-row" class="pmx-join-row" style="display:none;">
+        <button id="pgi-join-btn" class="pmx-join-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Solicitar Entrada
+        </button>
+      </div>
+      <div class="pmx-member-label">Membros</div>
+      <div id="pgi-member-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCRIPTS EXTERNOS ── -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script type="module" src="playerModal.js"></script>
+<script src="number_format.js"></script>
+<script type="module" src="guild_pv.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPT PRINCIPAL  (module)
+═══════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { supabase } from './supabaseClient.js'
+
+;(function(){
+
+/* ─────────────────────────────────────────
+   UTILITÁRIOS
+───────────────────────────────────────── */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const DEF_AV   = 'https://aden-rpg.pages.dev/avatar01.webp';
+const DEF_FLAG = 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+
+const EYE_SVG = (pid) =>
+  `<svg class="rank-eye-icon" data-player-id="${esc(pid)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+     <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5
+              c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z
+              m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+   </svg>`;
+
+const SKULL_SVG =
+  `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#e53935;vertical-align:middle;display:inline-block;margin-left:2px;">
+     <path d="M12 2A9 9 0 003 11c0 3.18 1.65 5.97 4.14 7.58L7 21h2v1h2v-1h2v1h2v-1h2l-.14-2.42
+              C19.35 16.97 21 14.18 21 11A9 9 0 0012 2zm-2.5 13.5v-1.25A2.25 2.25 0 0012 16
+              a2.25 2.25 0 002.5-1.75v1.25A2.25 2.25 0 0112 17.5a2.25 2.25 0 01-2.5-2z
+              m1-5.5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/>
+   </svg>`;
+
+/* ─────────────────────────────────────────
+   PÓDIO TOP 3 (padrão AAA) — usado por CP, Guilda, Arena e Ruínas
+───────────────────────────────────────── */
+function buildCpPodiumHTML(top3, opts){
+  opts = opts || {};
+  const avatarField = opts.avatarField || 'avatar_url';
+  const defImg       = opts.defImg || DEF_AV;
+  const isFlag        = !!opts.isFlag;
+  const getValue      = opts.getValue || (() => '');
+  const getGuild       = opts.getGuild || (p => p.guild_name || '');
+  const getName        = opts.getName || (p => p.name || 'Desconhecido');
+  const getId           = opts.getId || (p => p.id);
+  const valueClass      = opts.valueClass || '';
+  const clickable        = opts.clickable !== false;
+
+  if(!top3 || !top3.length) return '';
+  const order = [2, 1, 3];
+  let html = '<div class="cp-podium">';
+  for(const rank of order){
+    const p = top3[rank-1];
+    if(!p) continue;
+    const img   = esc(p[avatarField]) || defImg;
+    const name  = esc(getName(p));
+    const guild = esc(getGuild(p));
+    const val   = getValue(p);
+    const pid   = getId(p);
+    html += `
+    <div class="cp-podium-place cp-podium-${rank}">
+      ${rank===1 ? '<div class="cp-podium-crown">👑</div>' : ''}
+      <div class="cp-podium-avatar-wrap">
+        <img class="cp-podium-avatar${isFlag?' is-flag':''}" src="${img}" onerror="this.src='${defImg}'">
+        <div class="cp-podium-badge">${rank}</div>
+      </div>
+      <div class="cp-podium-name"${clickable && pid ? ` data-player-id="${esc(pid)}"` : ''}>${name}</div>
+      ${guild ? `<div class="cp-podium-guild">${guild}</div>` : ''}
+      <div class="cp-podium-value ${valueClass}">${val}</div>
+      <div class="cp-podium-step">${rank}</div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function openPlayerModal(pid){
+  if(!pid) return;
+  const m = document.getElementById('playerModal');
+  if(m) m.style.display = 'flex';
+  if(window.fetchPlayerData) window.fetchPlayerData(pid);
+}
+
+function delegateListClicks(container){
+  container?.addEventListener('click',(e)=>{
+    const t = e.target.closest('.rli-name') || e.target.closest('.rank-eye-icon') ||
+              e.target.closest('.rank-player-name-cp') || e.target.closest('.cp-podium-name');
+    if(t && t.dataset.playerId) openPlayerModal(t.dataset.playerId);
+  });
+}
+
+/* ─────────────────────────────────────────
+   GLOBAL DB  (compartilhado com mines.js)
+───────────────────────────────────────── */
+const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 6;
+const AUTH_STORE = 'auth_store', OWNERS_STORE = 'owners_store';
+
+const GlobalDB = {
+  open(){
+    return new Promise((res,rej)=>{
+      const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+      req.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(AUTH_STORE))
+          db.createObjectStore(AUTH_STORE, {keyPath:'key'});
+        if(!db.objectStoreNames.contains(OWNERS_STORE))
+          db.createObjectStore(OWNERS_STORE, {keyPath:'id'});
+      };
+      req.onsuccess = ()=> res(req.result);
+      req.onerror  = ()=> rej(req.error);
+    });
+  },
+  async getAuth(){
+    try{
+      const db = await this.open();
+      return new Promise(r=>{
+        const tx  = db.transaction(AUTH_STORE,'readonly');
+        const req = tx.objectStore(AUTH_STORE).get('current_session');
+        req.onsuccess = ()=> r(req.result ? req.result.value : null);
+        req.onerror   = ()=> r(null);
+      });
+    }catch(e){ return null; }
+  },
+  async getAllOwners(){
+    try{
+      const db = await this.open();
+      return new Promise(r=>{
+        const tx  = db.transaction(OWNERS_STORE,'readonly');
+        const req = tx.objectStore(OWNERS_STORE).getAll();
+        req.onsuccess = ()=>{
+          const map = {};
+          (req.result||[]).forEach(o => map[o.id] = o);
+          r(map);
+        };
+        req.onerror = ()=> r({});
+      });
+    }catch(e){ return {}; }
+  },
+  async saveOwners(list){
+    if(!list || !list.length) return;
+    try{
+      const db    = await this.open();
+      const tx    = db.transaction(OWNERS_STORE,'readwrite');
+      const store = tx.objectStore(OWNERS_STORE);
+      const now   = Date.now();
+      // CORREÇÃO: merge com o registro existente em vez de put() cego.
+      // Chamadores parciais (ex: ranking de Ruínas, que só manda guild_name)
+      // não devem apagar o guild_id já cacheado por outras telas.
+      await Promise.all(list.map(o => new Promise(resolve=>{
+        if(!o.id){ resolve(); return; }
+        const getReq = store.get(o.id);
+        getReq.onsuccess = () => {
+          const existing = getReq.result || {};
+          store.put({
+            id: o.id,
+            name:       o.name       !== undefined ? o.name       : existing.name,
+            avatar_url: o.avatar_url !== undefined ? o.avatar_url : existing.avatar_url,
+            guild_id:   o.guild_id   !== undefined ? o.guild_id   : existing.guild_id,
+            timestamp: now
+          });
+          resolve();
+        };
+        getReq.onerror = () => resolve();
+      })));
+      return new Promise(r=>{ tx.oncomplete = ()=>r(); tx.onerror = ()=>r(); });
+    }catch(e){}
+  }
+};
+
+async function getLocalUserId(){
+  const g = await GlobalDB.getAuth();
+  if(g && g.user) return g.user.id;
+  if(g && g.value && g.value.user) return g.value.user.id;
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k.startsWith('sb-') && k.endsWith('-auth-token')){
+        const s = JSON.parse(localStorage.getItem(k));
+        if(s?.user?.id) return s.user.id;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+/* ─────────────────────────────────────────
+   CAMADAS DE CACHE COMPARTILHADAS
+   Cada formato é idêntico ao do arquivo de origem,
+   garantindo total compatibilidade.
+───────────────────────────────────────── */
+
+/* CP: expira na próxima Seg/Qua/Sex (mesmo formato do ranking_cp original) */
+function calcNextMWF(){
+  const now = new Date();
+  for(let i = 1; i <= 7; i++){
+    const d = new Date(now);
+    d.setUTCDate(now.getUTCDate()+i);
+    d.setUTCHours(0,0,0,0);
+    const day = d.getUTCDay();
+    if(day===1||day===3||day===5) return d.getTime();
+  }
+  return now.getTime()+86400000;
+}
+function setCPCache(k,v)  { try{ localStorage.setItem(k, JSON.stringify({v, e:calcNextMWF()})); }catch(e){} }
+function getCPCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const o = JSON.parse(r);
+    if(!o.e || Date.now() >= o.e){ localStorage.removeItem(k); return null; }
+    return o.v;
+  }catch(e){ return null; }
+}
+
+/* Arena: {expires, data} em ms  (mesmo formato de arena.js → setCache/getCache) */
+function setArenaCache(k,data,ttlMin=1440){
+  try{ localStorage.setItem(k, JSON.stringify({expires: Date.now()+ttlMin*60000, data})); }catch(e){}
+}
+function getArenaCache(k){
+  try{
+    const item = localStorage.getItem(k);
+    if(!item) return null;
+    const p = JSON.parse(item);
+    if(Date.now() > p.expires){ localStorage.removeItem(k); return null; }
+    return p.data;
+  }catch(e){ return null; }
+}
+
+/* Guild: {data, expiry} em ms  (mesmo formato de guild.js → setCache/getCache) */
+function setGuildCache(k,data,ttlMs){
+  try{ localStorage.setItem(k, JSON.stringify({data, expiry: Date.now()+ttlMs})); }catch(e){}
+}
+function getGuildCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const o = JSON.parse(r);
+    if(Date.now() > o.expiry){ localStorage.removeItem(k); return null; }
+    return o.data;
+  }catch(e){ return null; }
+}
+
+/* Ruins: {data, expires} em ms  (mesmo formato de ruins.js) */
+function setRuinsCache(k,data,expiresMs){
+  try{ localStorage.setItem(k, JSON.stringify({data, expires:expiresMs})); }catch(e){}
+}
+function getRuinsCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const {data, expires} = JSON.parse(r);
+    return Date.now() < expires ? data : null;
+  }catch(e){ return null; }
+}
+
+function minsToMidnightUTC(){
+  const now = new Date();
+  const mid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()+1));
+  return Math.max(1, Math.floor((mid - now)/60000));
+}
+function ttlNextMonday(){
+  const now = new Date(), day = now.getUTCDay();
+  let add = (8 - day) % 7;
+  if(add === 0) add = 7;
+  const next = new Date(now);
+  next.setUTCDate(now.getUTCDate()+add);
+  next.setUTCHours(0,0,0,0);
+  const ttl = next.getTime() - now.getTime();
+  return ttl > 0 ? ttl : 86400000;
+}
+
+/* ─────────────────────────────────────────
+   HYDRATE PROFILES  (idêntico ao arena.js)
+   Lê GlobalDB → busca apenas os ausentes
+───────────────────────────────────────── */
+async function hydrateProfiles(list){
+  if(!list || !list.length) return [];
+  const gmap = await GlobalDB.getAllOwners();
+  const miss = [], toUpdate = [];
+  const hyd = list.map(item=>{
+    const tid = item.id || item.opponent_id;
+    if(!tid){ return item; }
+    const c = gmap[tid];
+    if(c && c.name){
+      toUpdate.push(c);
+      return {...item, name:c.name, avatar_url:c.avatar_url||DEF_AV, guild_id:item.guild_id||c.guild_id};
+    }
+    miss.push(tid);
+    return {...item, _needsFetch:true};
+  });
+  if(miss.length){
+    try{
+      const {data:fresh} = await supabase.rpc('get_missing_profiles', {p_user_ids:miss});
+      if(fresh){
+        const toSave = [];
+        fresh.forEach(fp=>{
+          hyd.forEach(h=>{
+            const tid = h.id || h.opponent_id;
+            if(tid === fp.id && h._needsFetch){
+              h.name = fp.name || 'Desconhecido';
+              h.avatar_url = fp.avatar_url || DEF_AV;
+              if(!h.guild_id) h.guild_id = fp.guild_id;
+              delete h._needsFetch;
+            }
+          });
+          toSave.push(fp);
+        });
+        await GlobalDB.saveOwners(toSave);
+      }
+    }catch(e){ console.warn('[hydrate]', e); }
+  }
+  hyd.forEach(h=>{ if(h._needsFetch){ h.name='Desconhecido'; h.avatar_url=DEF_AV; delete h._needsFetch; } });
+  if(toUpdate.length) await GlobalDB.saveOwners(toUpdate);
+  return hyd;
+}
+
+function normalizeRpc(d){
+  try{
+    if(!d) return null;
+    if(Array.isArray(d)){
+      const f = d[0];
+      if(f && typeof f==='object'){
+        const ks = Object.keys(f);
+        if(ks.length===1 && typeof f[ks[0]]==='object') return f[ks[0]];
+        return f;
+      }
+    }
+    if(typeof d==='string'){ try{ return normalizeRpc(JSON.parse(d)); }catch{} }
+    return d;
+  }catch(e){ return null; }
+}
+
+/* ─────────────────────────────────────────
+   SKINS / MODAL WRAPPER  (intacto do original)
+───────────────────────────────────────── */
+const _DEFAULT_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const _MFO = 400, _MFI = 1200;
+
+function _videoSwap(src, skipOut){
+  const vid = document.getElementById('modal-bg-video');
+  if(!vid) return;
+  const doLoad = ()=>{
+    const s = vid.querySelector('source');
+    if(s){ s.src = src; s.type = 'video/webm'; }
+    vid.load();
+    const fi = ()=>{ vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.98'; };
+    if(vid.readyState >= 3) fi();
+    else{ vid.addEventListener('canplay', fi, {once:true}); vid.addEventListener('canplaythrough', fi, {once:true}); }
+    vid.play().catch(()=>{});
+  };
+  if(skipOut) doLoad();
+  else{ vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity = '0'; setTimeout(doLoad, _MFO+30); }
+}
+
+function _applySkin(frameUrl, videoUrl){
+  const fr = document.getElementById('modal-frame-overlay');
+  const sh = document.getElementById('modal-frame-sheen');
+  const av = document.getElementById('playerAvatarEquip');
+  if(frameUrl){
+    if(fr){ fr.src = frameUrl; fr.style.display = 'block'; }
+    if(av) av.style.border = 'none';
+    if(sh){ sh.style.webkitMaskImage = `url('${frameUrl}')`; sh.style.maskImage = `url('${frameUrl}')`; sh.style.display = 'block'; }
+  }else{
+    if(fr){ fr.src=''; fr.style.display='none'; }
+    if(sh) sh.style.display='none';
+    if(av) av.style.border='4px solid #c9a94a';
+  }
+  _videoSwap(videoUrl || _DEFAULT_VID, true);
+}
+
+function _resetSkin(){
+  const vid = document.getElementById('modal-bg-video');
+  const fr  = document.getElementById('modal-frame-overlay');
+  const sh  = document.getElementById('modal-frame-sheen');
+  const av  = document.getElementById('playerAvatarEquip');
+  if(vid){ vid.style.transition=''; vid.style.opacity='0'; }
+  if(fr){ fr.src=''; fr.style.display='none'; }
+  if(sh) sh.style.display='none';
+  if(av) av.style.border='4px solid #c9a94a';
+}
+
+async function _fixOwnGuild(pid){
+  const gn = document.getElementById('playerGuildName');
+  const gf = document.getElementById('playerGuildFlag');
+  if(!gn || !gn.textContent || gn.textContent === 'Nome da Guilda') return;
+  try{
+    const {data:pl} = await supabase.from('players').select('guild_id').eq('id',pid).single();
+    if(!pl?.guild_id){ if(gn) gn.textContent='Sem Guilda'; return; }
+    const {data:g} = await supabase.from('guilds').select('name,flag_url').eq('id',pl.guild_id).single();
+    if(g){
+      if(gn){ gn.textContent = g.name||'Sem Guilda'; gn.classList.remove('shimmer'); }
+      if(gf && g.flag_url){ gf.src = g.flag_url; gf.classList.remove('shimmer'); }
+    }
+  }catch(e){}
+}
+
+async function _fetchApplySkins(pid){
+  try{
+    const {data, error} = await supabase.rpc('get_player_skin_urls', {p_player_id:pid});
+    if(error){ _applySkin(null,null); return; }
+    _applySkin(data?.frame_url||null, data?.video_url||null);
+  }catch(e){ _applySkin(null,null); }
+}
+
+// Wrapper sobre window.fetchPlayerData de playerModal.js
+document.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(()=>{
+    const _pm = window.fetchPlayerData;
+    window.fetchPlayerData = async function(pid){
+      _resetSkin();
+      if(_pm) await _pm(pid);
+      await _fixOwnGuild(pid);
+      await _fetchApplySkins(pid);
+    };
+    window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
+  }, 0);
+});
+
+/* ─────────────────────────────────────────
+   ESTADO GLOBAL DE ABAS
+───────────────────────────────────────── */
+let activeTab = 'cp';
+const tabLoaded  = {cp:false, guild:false, arena:false, ruins:false};
+const myRankData = {cp:null,  guild:null,  arena:null,  ruins:null};
+
+/* ─────────────────────────────────────────
+   BARRA FIXA UNIVERSAL
+   Exibe rank pessoal do jogador adaptado a cada aba
+───────────────────────────────────────── */
+function renderFixedBar(tab){
+  const c = document.getElementById('fixedPlayerRank');
+  if(!c) return;
+  const d = myRankData[tab];
+  if(!d){ c.style.display='none'; return; }
+
+  let inner = '';
+
+  if(tab === 'cp'){
+    const av = esc(d.avatar_url)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp" data-player-id="${esc(d.id)}">${esc(d.name)}</span>
+          ${EYE_SVG(d.id)}
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.guild_name||'Sem Guilda')}</span>
+      </div>
+      <span class="fixed-val-cp">${formatNumberCompact(Number(d.cp||0))}</span>`;
+  }
+  else if(tab === 'arena'){
+    const av = esc(d.avatar_url)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp" data-player-id="${esc(d.id)}">${esc(d.name)}</span>
+          ${EYE_SVG(d.id)}
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.guild_name||'Sem Guilda')}</span>
+      </div>
+      <span class="fixed-val-arena">${Number(d.ranking_points||0).toLocaleString()} pts</span>`;
+  }
+  else if(tab === 'ruins'){
+    const av = esc(d.my_avatar)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.my_rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp">${esc(d.my_name||'Você')}</span>
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.my_guild||'')}</span>
+      </div>
+      <span class="fixed-val-ruins">${d.my_kills}&nbsp;${SKULL_SVG}</span>`;
+  }
+  else if(tab === 'guild'){
+    const flag = esc(d.flag_url)||DEF_FLAG;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${flag}" onerror="this.src='${DEF_FLAG}'" style="border-radius:6px;">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp">${esc(d.name)}</span>
+        </div>
+        <span class="rank-guild-name-cp">Sua Guilda</span>
+      </div>
+      <span class="fixed-val-guild">${formatNumberCompact(Number(d.total_power||0))}</span>`;
+  }
+
+  c.innerHTML = `<div class="fixed-content-inner">${inner}</div>`;
+  c.style.display = 'block';
+
+  // Delegação de clique para olho/nome no footer
+  c.onclick = (e)=>{
+    const t = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
+    if(t && t.dataset.playerId) openPlayerModal(t.dataset.playerId);
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA CP — Lógica original preservada na íntegra
+   Cache: getCPCache/setCPCache  →  'ranking_cp_MWF_v4'
+   Shares GlobalDB with mines.js for zero-egress hydration
+═══════════════════════════════════════════════════════════════ */
+async function loadCPRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'ranking_cp_MWF_v4';
+  const w = document.getElementById('rankingWrapper');
+  let finalList = [];
+
+  try{
+    const cached = getCPCache(CACHE_KEY);
+    if(cached){
+      finalList = cached;
+    }else{
+      const loadEl = document.getElementById('loading');
+      if(loadEl) loadEl.textContent = 'Sincronizando Ranking...';
+
+      // 1. Esqueleto leve
+      const {data:sk, error:skE} = await supabase
+        .from('players').select('id,guild_id,combat_power')
+        .neq('is_banned',true).order('combat_power',{ascending:false}).limit(10);
+      if(skE) throw skE;
+
+      // 2. Hydration via GlobalDB
+      const gcMap = await GlobalDB.getAllOwners();
+      const miss=[], upd=[];
+      const hyd = (sk||[]).map(item=>{
+        const c = gcMap[item.id];
+        if(c && c.name){ upd.push(c); return {...item,name:c.name,avatar_url:c.avatar_url}; }
+        miss.push(item.id);
+        return {...item,_needsFetch:true};
+      });
+
+      // 3. Delta fetch dos ausentes
+      if(miss.length){
+        const {data:fp} = await supabase.from('players').select('id,name,avatar_url').in('id',miss);
+        if(fp){
+          fp.forEach(p=>{
+            const idx = hyd.findIndex(h=>h.id===p.id);
+            if(idx!==-1){ hyd[idx].name=p.name; hyd[idx].avatar_url=p.avatar_url; delete hyd[idx]._needsFetch; }
+          });
+          const toSave = fp.map(p=>{ const o=hyd.find(h=>h.id===p.id); return {...p,guild_id:o?.guild_id}; });
+          await GlobalDB.saveOwners(toSave);
+        }
+      }
+      if(upd.length) await GlobalDB.saveOwners(upd);
+
+      // 4. Resolver nomes de guilda
+      const uGuilds = [...new Set(hyd.map(p=>p.guild_id).filter(Boolean))];
+      const gMap = {};
+      if(uGuilds.length){
+        const {data:gs} = await supabase.from('guilds').select('id,name').in('id',uGuilds);
+        (gs||[]).forEach(g=>gMap[g.id]=g.name);
+      }
+
+      finalList = hyd.map(p=>({
+        id:p.id, name:p.name||'Desconhecido', avatar_url:p.avatar_url,
+        guild_name: p.guild_id ? (gMap[p.guild_id]||'Sem Guilda') : 'Sem Guilda',
+        guild_id:p.guild_id, cp:p.combat_power
+      }));
+      setCPCache(CACHE_KEY, finalList);
+    }
+
+    // Render da lista
+    if(!finalList || !finalList.length){
+      w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>';
+    }else{
+      const top3 = finalList.slice(0,3);
+      const rest = finalList.slice(3,10);
+      let html = buildCpPodiumHTML(top3, {
+        valueClass: 'val-cp',
+        getValue: p => formatNumberCompact(Number(p.cp||0)),
+        avatarField: 'avatar_url'
+      });
+      html += '<ol id="rankingListCP">';
+      rest.forEach((p,idx)=>{
+        const pos = idx+4;
+        const av  = esc(p.avatar_url)||DEF_AV;
+        html += `<li data-player-id="${esc(p.id)}">
+          <span class="rank-position-cp">${pos}</span>
+          <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+          <div class="rank-player-info-cp">
+            <div class="rank-player-name-wrapper">
+              <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+              ${EYE_SVG(p.id)}
+            </div>
+            <span class="rank-guild-name-cp">${esc(p.guild_name||'Sem Guilda')}</span>
+          </div>
+          <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
+        </li>`;
+      });
+      html += '</ol>';
+      w.innerHTML = html;
+      delegateListClicks(w);
+    }
+
+    // Rank pessoal (barra fixa)
+    if(myId){
+      const idx = finalList.findIndex(p=>p.id===myId);
+      if(idx !== -1){
+        myRankData.cp = {...finalList[idx], rank:idx+1};
+      }else{
+        const gcMap = await GlobalDB.getAllOwners();
+        let me = gcMap[myId];
+        if(!me || me.cp===undefined){
+          const {data:sm} = await supabase.from('players').select('id,name,avatar_url,guild_id,combat_power').eq('id',myId).single();
+          me = sm;
+          if(me) await GlobalDB.saveOwners([me]);
+        }
+        if(me){
+          const {count} = await supabase.from('players').select('*',{count:'exact',head:true}).gt('combat_power',me.combat_power||me.cp);
+          let gn = 'Sem Guilda';
+          if(me.guild_id){
+            const {data:g} = await supabase.from('guilds').select('name').eq('id',me.guild_id).single();
+            if(g) gn = g.name;
+          }
+          myRankData.cp = {id:me.id, name:me.name, avatar_url:me.avatar_url, guild_name:gn, cp:me.combat_power||me.cp, rank:(count||0)+1};
+        }
+      }
+    }
+    if(activeTab==='cp') renderFixedBar('cp');
+
+  }catch(err){
+    const w2 = document.getElementById('rankingWrapper');
+    if(w2) w2.innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA GUILDAS — cache compartilhado com guild.js
+   Cache key: 'guild_ranking_weekly'  (formato {data, expiry})
+═══════════════════════════════════════════════════════════════ */
+async function loadGuildRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'guild_ranking_weekly';
+  const w = document.getElementById('guildRankingWrapper');
+  let data = getGuildCache(CACHE_KEY);
+
+  try{
+    if(!data){
+      w.innerHTML = '<div class="loading">Sincronizando guildas...</div>';
+      const {data:rpc, error} = await supabase.rpc('get_guilds_ranking', {limit_count:10});
+      if(error) throw error;
+      data = rpc;
+      setGuildCache(CACHE_KEY, data, ttlNextMonday());
+    }
+    renderGuildList(data, myId, w);
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar ranking de guildas.</div>';
+  }
+}
+
+function renderGuildList(data, myId, container){
+  if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhuma guilda encontrada.</div>'; return; }
+
+  const top3 = data.slice(0,3);
+  const rest = data.slice(3,10);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'flag_url',
+    defImg: DEF_FLAG,
+    isFlag: true,
+    clickable: false,
+    getName: g => g.name,
+    getGuild: () => '',
+    getValue: g => formatNumberCompact(Number(g.total_power||0)),
+    valueClass: 'val-guild'
+  });
+
+  html += '<ul class="guild-rank-list">';
+  rest.forEach((g,idx)=>{
+    const pos  = idx+4;
+    const flag = esc(g.flag_url)||DEF_FLAG;
+    const pwr  = formatNumberCompact(Number(g.total_power||0));
+    html += `<li class="gli" data-guild-id="${esc(g.guild_id)}">
+      <span class="gli-pos">${pos}</span>
+      <img class="gli-flag" src="${flag}" onerror="this.src='${DEF_FLAG}'">
+      <div class="gli-info"><span class="gli-name">${esc(g.name)}</span></div>
+      <span class="gli-power">${pwr}</span>
+    </li>`;
+  });
+  html += '</ul>';
+  container.innerHTML = html;
+
+  // Footer fixo — detecta guilda do jogador via GlobalDB
+  if(myId){
+    GlobalDB.getAllOwners().then(gmap=>{
+      const me = gmap[myId];
+      if(me && me.guild_id){
+        const idx = data.findIndex(g => g.guild_id === me.guild_id);
+        if(idx !== -1){
+          myRankData.guild = {...data[idx], rank:idx+1};
+          if(activeTab==='guild') renderFixedBar('guild');
+        }
+      }
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA ARENA — cache compartilhado com arena.js
+   Cache key: 'arena_top_100_cache'  (formato {expires, data})
+═══════════════════════════════════════════════════════════════ */
+async function loadArenaRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'arena_top_100_cache';
+  const w = document.getElementById('arenaRankingWrapper');
+
+  // Migração: descarta cache sem 'id'
+  const raw = localStorage.getItem(CACHE_KEY);
+  if(raw && !raw.includes('"id"')) localStorage.removeItem(CACHE_KEY);
+
+  let rankData = getArenaCache(CACHE_KEY);
+
+  // Label temporada
+  const now = new Date();
+  const month = now.toLocaleString('pt-BR',{month:'long'});
+  const lbl = document.getElementById('arenaSeasonLabel');
+  if(lbl) lbl.textContent = `Temporada: ${month[0].toUpperCase()+month.slice(1)} / ${now.getFullYear()}`;
+
+  try{
+    if(!rankData){
+      w.innerHTML = '<div class="loading">Carregando arena...</div>';
+      const {data:rpc, error} = await supabase.rpc('get_arena_top_100');
+      if(!error){
+        const r = normalizeRpc(rpc);
+        if(r?.success && Array.isArray(r.ranking)){
+          rankData = await hydrateProfiles(r.ranking);
+          if(rankData.length) setArenaCache(CACHE_KEY, rankData, minsToMidnightUTC());
+        }
+      }
+      // Fallback direto
+      if(!rankData){
+        const {data:pl} = await supabase.from('players').select('id,name,avatar_url,ranking_points,guild_id')
+          .neq('is_banned',true).order('ranking_points',{ascending:false}).limit(10);
+        if(pl && pl.length){
+          const gids = [...new Set(pl.map(p=>p.guild_id).filter(Boolean))];
+          const gmap = {};
+          if(gids.length){
+            const {data:gs} = await supabase.from('guilds').select('id,name').in('id',gids);
+            (gs||[]).forEach(g=>gmap[g.id]=g.name);
+          }
+          rankData = pl.map(p=>({...p, guild_name: p.guild_id?(gmap[p.guild_id]||'Sem Guilda'):'Sem Guilda'}));
+          if(rankData.length) setArenaCache(CACHE_KEY, rankData, minsToMidnightUTC());
+        }
+      }
+    }
+
+    renderArenaList(rankData||[], myId, w);
+
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar arena.</div>';
+  }
+}
+
+function renderArenaList(data, myId, container){
+  if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhum jogador classificado ainda.</div>'; return; }
+
+  const top3 = data.slice(0,3);
+  const rest = data.slice(3,10);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'avatar_url',
+    getValue: p => `${Number(p.ranking_points||0).toLocaleString()} pts`,
+    valueClass: 'val-arena'
+  });
+
+  html += '<ul class="rank-list-u">';
+  rest.forEach((p,idx)=>{
+    const pos = idx+4;
+    const av  = esc(p.avatar_url||p.avatar)||DEF_AV;
+    let cls = 'rli';
+    if(p.id===myId) cls+=' is-me';
+    const pts = Number(p.ranking_points||0).toLocaleString();
+    html += `<li class="${cls}">
+      <span class="rli-pos">${pos}</span>
+      <img class="rli-av" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+        <span class="rli-guild">${esc(p.guild_name||'Sem Guilda')}</span>
+      </div>
+      ${EYE_SVG(p.id)}
+      <span class="rli-val val-arena">${pts} pts</span>
+    </li>`;
+  });
+  html += '</ul>';
+  container.innerHTML = html;
+  delegateListClicks(container);
+
+  // Rank pessoal arena
+  if(myId){
+    const idx = data.findIndex(p=>p.id===myId);
+    if(idx !== -1){
+      myRankData.arena = {...data[idx], rank:idx+1};
+      if(activeTab==='arena') renderFixedBar('arena');
+    }else{
+      (async()=>{
+        try{
+          const {data:me} = await supabase.from('players').select('id,name,avatar_url,ranking_points,guild_id').eq('id',myId).single();
+          if(!me) return;
+          const {count} = await supabase.from('players').select('*',{count:'exact',head:true}).gt('ranking_points',me.ranking_points).neq('is_banned',true);
+          let gn = 'Sem Guilda';
+          if(me.guild_id){ const {data:g} = await supabase.from('guilds').select('name').eq('id',me.guild_id).single(); if(g) gn=g.name; }
+          myRankData.arena = {...me, guild_name:gn, rank:(count||0)+1};
+          if(activeTab==='arena') renderFixedBar('arena');
+        }catch(e){}
+      })();
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA RUÍNAS — cache compartilhado com ruins.js
+   Cache key: 'ruins_kills_ranking_v3'  (formato {data, expires})
+═══════════════════════════════════════════════════════════════ */
+async function loadRuinsRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'ruins_kills_ranking_v3';
+  const w = document.getElementById('ruinsRankingWrapper');
+
+  // Label mensal
+  const now = new Date();
+  const month = now.toLocaleString('pt-BR',{month:'long'});
+  const lbl = document.getElementById('ruinsMonthLabel');
+  if(lbl) lbl.textContent = `Eliminações de ${month[0].toUpperCase()+month.slice(1)} / ${now.getFullYear()}`;
+
+  const cached = getRuinsCache(CACHE_KEY);
+  if(cached){ renderRuinsList({...cached, my_id:myId}, w); return; }
+
+  try{
+    w.innerHTML = '<div class="loading">Carregando ruínas...</div>';
+    const {data, error} = await supabase.rpc('get_ruins_kills_ranking');
+    if(error || !data) throw new Error('rpc failed');
+
+    const top10 = data.top10 || [];
+
+    // Salva top10 no GlobalDB (igual ao ruins.js)
+    if(top10.length){
+      GlobalDB.saveOwners(top10.map(p=>({id:p.id, name:p.name, avatar_url:p.avatar_url, guild_name:p.guild_name||null})));
+    }
+
+    // Dados pessoais com fallback para GlobalDB
+    let myName=data.my_name, myAvatar=data.my_avatar, myGuild=data.my_guild;
+    if(!myName || !myAvatar){
+      const gmap = await GlobalDB.getAllOwners();
+      const me = gmap[myId];
+      if(me){ myName=myName||me.name; myAvatar=myAvatar||me.avatar_url; myGuild=myGuild||me.guild_name; }
+    }
+
+    const result = {
+      top10, my_rank:data.my_rank, my_kills:data.my_kills,
+      my_name:myName||'Você', my_avatar:myAvatar||DEF_AV, my_guild:myGuild||''
+    };
+    setRuinsCache(CACHE_KEY, result, Date.now() + minsToMidnightUTC()*60000);
+    renderRuinsList({...result, my_id:myId}, w);
+
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar ruínas.</div>';
+  }
+}
+
+function renderRuinsList(data, container){
+  const top10 = data.top10||[];
+  if(!top10.length){ container.innerHTML='<div class="loading">Nenhuma eliminação este mês.</div>'; return; }
+
+  const top3 = top10.slice(0,3);
+  const rest = top10.slice(3);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'avatar_url',
+    getName: p => p.name || 'Desconhecido',
+    getValue: p => `${Number(p.kills||0)}&nbsp;${SKULL_SVG}`,
+    valueClass: 'val-ruins'
+  });
+
+  html += '<ul class="rank-list-u">';
+  rest.forEach((p,idx)=>{
+    const pos  = idx+4;
+    const av   = esc(p.avatar_url)||DEF_AV;
+    const kills = Number(p.kills||0);
+    const isMe = p.id === data.my_id;
+    let cls = 'rli';
+    if(isMe) cls+=' is-me';
+    const gH = p.guild_name ? `<span class="rli-guild">${esc(p.guild_name)}</span>` : '';
+    html += `<li class="${cls}">
+      <span class="rli-pos">${pos}</span>
+      <img class="rli-av" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name" data-player-id="${esc(p.id)}">${esc(p.name||'Desconhecido')}</span>
+        ${gH}
+      </div>
+      ${EYE_SVG(p.id)}
+      <span class="rli-val val-ruins">${kills}&nbsp;${SKULL_SVG}</span>
+    </li>`;
+  });
+
+  // Footer pessoal (fora do top)
+  const inTop = top10.some(p => p.id === data.my_id);
+  if(!inTop && data.my_id){
+    const myGH = data.my_guild ? `<span class="rli-guild">${esc(data.my_guild)}</span>` : '';
+    html += `<li class="rli footer-personal is-me">
+      <span class="rli-pos">${data.my_rank}</span>
+      <img class="rli-av" src="${esc(data.my_avatar)}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name">${esc(data.my_name||'Você')}</span>
+        ${myGH}
+      </div>
+      <span class="rli-val val-ruins">${data.my_kills}&nbsp;${SKULL_SVG}</span>
+    </li>`;
+  }
+  html += '</ul>';
+  container.innerHTML = html;
+  delegateListClicks(container);
+
+  // Rank pessoal ruínas → footer fixo
+  myRankData.ruins = data;
+  if(activeTab==='ruins') renderFixedBar('ruins');
+}
+
+/* ─────────────────────────────────────────
+   TROCA DE ABA
+───────────────────────────────────────── */
+const TAB_TITLES = {
+  cp:    'Ranking de Poder de Combate',
+  guild: 'Ranking de Guildas',
+  arena: 'Ranking da Arena PvP',
+  ruins: 'Ranking das Ruínas'
+};
+
+function switchTab(name){
+  if(!['cp','guild','arena','ruins'].includes(name)) return;
+  activeTab = name;
+
+  document.querySelectorAll('.rank-tab').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  document.querySelectorAll('.ranking-panel').forEach(p=>{
+    p.classList.toggle('active', p.id === `rankingPanel-${name}`);
+  });
+
+  const ptEl = document.getElementById('pageTitle');
+  if(ptEl) ptEl.textContent = TAB_TITLES[name]||'Rankings';
+
+  // Atualiza footer com dados já disponíveis
+  renderFixedBar(name);
+
+  // Carrega dados apenas na primeira vez que a aba é acessada
+  if(!tabLoaded[name]){
+    tabLoaded[name] = true;
+    switch(name){
+      case 'cp':    loadCPRanking();    break;
+      case 'guild': loadGuildRanking(); break;
+      case 'arena': loadArenaRanking(); break;
+      case 'ruins': loadRuinsRanking(); break;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────
+   INIT
+───────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Fechar modal
+  document.getElementById('closePlayerModal')?.addEventListener('click',()=>{
+    const m = document.getElementById('playerModal');
+    if(m) m.style.display='none';
+  });
+  document.getElementById('playerModal')?.addEventListener('click',(e)=>{
+    if(e.target === document.getElementById('playerModal'))
+      document.getElementById('playerModal').style.display='none';
+  });
+
+  // Listener das abas
+  document.querySelectorAll('.rank-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
+  });
+
+  // Aba padrão
+  switchTab('cp');
+});
+
+})(); // fim IIFE
+</script>
+
+<!-- Correção de tamanho de fonte -->
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const t = document.createElement("div");
+  t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  t.textContent="M";
+  document.body.appendChild(t);
+  const aR = t.getBoundingClientRect().height;
+  document.body.removeChild(t);
+  const s = document.createElement("style");
+  s.textContent=`html{font-size:${15*(16/aR)}px!important}body{font-size:1rem!important}`;
+  document.head.appendChild(s);
+});
+</script>
+
+<!-- Google Translate -->
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="sideMenuOverlay" class="menu-overlay" style="display: none;"></div>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    const MANUAL_CURRENT_PAGE = "ranking_cp.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true,
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: DROPDOWN (Cidades) ===
+            if (item.isDropdown) {
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
+
+                    if (isMatch) {
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
+
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
+                    if (item.key) {
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
+                    }
+
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
+                    }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
+                });
+
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+
+<!-- Shiny / Jester icons (intacto) -->
+<script>
+(function(){
+  const style = document.createElement('style');
+  style.innerHTML=`
+    @keyframes shine{0%{background-position:-200% center}100%{background-position:200% center}}
+    .shiny-icon{display:inline-block;background:linear-gradient(120deg,#add8e6 0%,#2b4bf2 30%,#fff 40%,#2b4bf2 50%,#add8e6 80%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:shine 8s linear infinite;font-weight:900;font-size:1.2em;line-height:1;vertical-align:middle;text-shadow:none!important}
+    .jester-icon{display:inline-block;position:relative;font-size:1.4em;line-height:1;vertical-align:middle;text-shadow:none!important;color:inherit!important;-webkit-text-fill-color:inherit!important}
+    .jester-icon::after{content:attr(data-text);position:absolute;left:0;top:0;pointer-events:none;color:transparent;-webkit-text-fill-color:transparent;background:linear-gradient(120deg,transparent 25%,rgba(101,67,33,.4) 40%,rgba(139,69,19,.7) 50%,rgba(80,80,80,.5) 60%,transparent 75%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;filter:blur(1.5px);animation:shine 6s linear infinite}
+  `;
+  document.head.appendChild(style);
+  const tgt = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+  const jester = '\uD83E\uDD21';
+  function styleNodes(node){
+    if(node.nodeType===3){
+      tgt.lastIndex=0; if(!tgt.test(node.nodeValue)) return;
+      if(!node.parentNode) return;
+      tgt.lastIndex=0;
+      const sp=document.createElement('span');
+      sp.innerHTML=node.nodeValue.replace(tgt,(m)=>
+        (m.indexOf(jester)!==-1||m==='🤡')
+          ? `<span class="jester-icon" data-text="${m}">${m}</span>`
+          : `<span class="shiny-icon">${m}</span>`
+      );
+      node.parentNode.replaceChild(sp,node);
+    }else if(node.nodeType===1&&node.tagName!=='SCRIPT'&&node.tagName!=='STYLE'&&!node.classList.contains('shiny-icon')&&!node.classList.contains('jester-icon')){
+      Array.from(node.childNodes).forEach(styleNodes);
+    }
+  }
+  new MutationObserver(muts=>muts.forEach(m=>m.addedNodes.forEach(styleNodes))).observe(document.body,{childList:true,subtree:true});
+  styleNodes(document.body);
+})();
+</script>
+<!-- ═══ SOCIAL STATS + FOLLOW SYSTEM — Player Modal (ranking_cp) ═══ -->
+<script type="module">
+import { supabase as _sbRank } from './supabaseClient.js';
+
+(function() {
+  // Compact number formatter
+  function fmtC(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
+    if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+    return String(n);
+  }
+
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Avatar de fallback (iniciais coloridas), igual ao padrão das tavernas
+  function avatarFallback(name) {
+    const n = name || '?';
+    // [...n][0] respeita surrogate pairs (emojis), ao contrário de charAt(0)
+    const rawLetter = ([...n][0] || '?').toUpperCase();
+    // Se for emoji ou caractere não-ASCII, usa '?' para não quebrar encodeURIComponent
+    const letter = /^[\x00-\x7F]$/.test(rawLetter) ? rawLetter : '?';
+    const hue = [...n].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="hsl(${hue},45%,35%)"/><text x="50%" y="56%" font-size="18" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="bold">${letter}</text></svg>`;
+    try { return `data:image/svg+xml,${encodeURIComponent(svg)}`; } catch(_) { return ''; }
+  }
+
+  let _rankMyId   = null;
+  let _rankFollowingSet = null;
+  let _rankFollowersSet = null;
+  const _rankCooldowns  = {};
+  const _RANK_CD_MS     = 30_000;
+
+  async function getRankMyId() {
+    if (_rankMyId) return _rankMyId;
+    // GlobalDB (IndexedDB) — mesma fonte usada pelo restante do app
+    try {
+      const db = await new Promise((res, rej) => {
+        const r = indexedDB.open('aden_global_db', 6);
+        r.onsuccess = () => res(r.result);
+        r.onerror   = () => rej(r.error);
+      });
+      const val = await new Promise(res => {
+        const tx  = db.transaction('auth_store','readonly');
+        const req = tx.objectStore('auth_store').get('current_session');
+        req.onsuccess = () => res(req.result?.value || null);
+        req.onerror   = () => res(null);
+      });
+      const uid = val?.user?.id || val?.value?.user?.id;
+      if (uid) { _rankMyId = uid; return _rankMyId; }
+    } catch(e) {}
+    // localStorage fallback
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          const s = JSON.parse(localStorage.getItem(k));
+          if (s?.user?.id) { _rankMyId = s.user.id; return _rankMyId; }
+        }
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  async function ensureRankSets() {
+    const myId = await getRankMyId();
+    if (!myId) return;
+    if (_rankFollowingSet === null) {
+      _rankFollowingSet = new Set();
+      try {
+        const { data } = await _sbRank.rpc('get_following_ids', { p_player_id: myId });
+        (data || []).forEach(r => _rankFollowingSet.add(r.id));
+      } catch(e) {}
+    }
+    if (_rankFollowersSet === null) {
+      _rankFollowersSet = new Set();
+      try {
+        const { data } = await _sbRank.from('player_follows').select('follower_id').eq('following_id', myId);
+        (data || []).forEach(r => _rankFollowersSet.add(r.follower_id));
+      } catch(e) {}
+    }
+  }
+
+  function updateRankFollowBtn(btn, targetId) {
+    if (!btn) return;
+    const isF      = _rankFollowingSet?.has(targetId) ?? false;
+    const followsMe= _rankFollowersSet?.has(targetId) ?? false;
+    const isMutual = isF && followsMe;
+    if (isMutual) {
+      btn.innerHTML = `<svg viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:14px;flex-shrink:0;"><path d="M1 7l3.5 3.5L9 3"/><path d="M8 7l3.5 3.5L16 3"/></svg>Amigos`;
+      btn.style.background  = 'rgba(80,200,160,0.22)';
+      btn.style.borderColor = 'rgba(80,200,160,0.65)';
+      btn.style.color       = '#3fcfa8';
+    } else if (isF) {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M20 6L9 17l-5-5"/></svg>Seguindo`;
+      btn.style.background  = 'rgba(122,184,255,0.22)';
+      btn.style.borderColor = 'rgba(122,184,255,0.6)';
+      btn.style.color       = '#7ab8ff';
+    } else {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Seguir`;
+      btn.style.background  = 'rgba(122,184,255,0.08)';
+      btn.style.borderColor = 'rgba(122,184,255,0.3)';
+      btn.style.color       = '#7ab8ff';
+    }
+  }
+
+  // ── Confirmação: deixar de seguir ──
+  function showUnfollowConfirm(targetName) {
+    return new Promise(resolve => {
+      const modal  = document.getElementById('pm-unfollow-confirm');
+      const txt    = document.getElementById('pm-unfollow-text');
+      const yesBtn = document.getElementById('pm-unfollow-yes');
+      const noBtn  = document.getElementById('pm-unfollow-no');
+      if (!modal || !yesBtn || !noBtn) { resolve(true); return; }
+      const name = targetName || document.getElementById('playerName')?.textContent || 'este jogador';
+      txt.textContent = `Tem certeza que deseja deixar de seguir ${name}?`;
+      modal.style.display = 'flex';
+      const cleanup = (val) => {
+        modal.style.display = 'none';
+        yesBtn.onclick = null; noBtn.onclick = null;
+        resolve(val);
+      };
+      yesBtn.onclick = () => cleanup(true);
+      noBtn.onclick  = () => cleanup(false);
+    });
+  }
+
+  async function rankToggleFollow(targetId) {
+    const myId = await getRankMyId();
+    if (!myId || !targetId || targetId === myId) return;
+    const now  = Date.now();
+    if (now - (_rankCooldowns[targetId] || 0) < _RANK_CD_MS) return;
+
+    await ensureRankSets();
+    const btn = document.getElementById('pm-follow-btn');
+    const isF = _rankFollowingSet?.has(targetId);
+
+    if (isF) {
+      const confirmed = await showUnfollowConfirm();
+      if (!confirmed) return;
+    }
+
+    _rankCooldowns[targetId] = now;
+
+    if (isF) {
+      // ── RPC PRIMEIRO — só atualiza UI se o banco confirmar ──
+      let ufRes = null;
+      try {
+        const { data, error } = await _sbRank.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+        if (error) throw error;
+        ufRes = data;
+      } catch(e) {
+        console.error('[unfollow] RPC falhou:', e);
+        if (typeof showToast === 'function') showToast('Erro ao deixar de seguir. Tente novamente.');
+        return;
+      }
+      _rankFollowingSet.delete(targetId);
+      updateRankFollowBtn(btn, targetId);
+      if (ufRes?.had_bond) {
+        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+        const tgtName = document.getElementById('playerName')?.textContent || 'jogador';
+        if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${tgtName} foi desfeito.`);
+      }
+    } else {
+      _rankFollowingSet.add(targetId);
+      updateRankFollowBtn(btn, targetId);
+      try { await _sbRank.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
+      // Registra notificação persistida (Supabase) para o alvo —
+      // entregue quando ele entrar nas tavernas, mesmo offline agora
+      try { await _sbRank.rpc('register_follow_notification', { p_target_id: targetId }); } catch(e) {}
+    }
+    const foEl = document.getElementById('pm-followers-val');
+    if (foEl) {
+      const cur = parseInt(foEl.textContent.replace(/\D/g,'')) || 0;
+      foEl.textContent = fmtC(Math.max(0, isF ? cur - 1 : cur + 1));
+      foEl.style.opacity = '1';
+    }
+  }
+
+  async function rankLoadSocialStats(playerId) {
+    if (!playerId) return;
+    const cacheKey = 'rank_sstats_' + playerId;
+    let stats = { fame: 0, followers: 0, following: 0, gifts: 0 };
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 3 * 60_000) stats = v;
+      }
+      if (!stats.fame && !stats.followers && !stats.gifts) {
+        const { data } = await _sbRank.rpc('get_social_stats', { p_player_id: playerId });
+        if (data) {
+          stats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0, gifts: data.gifts||0 };
+          sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
+        }
+      }
+    } catch(e) {}
+    if (window._rankModalLastPid !== playerId) return;
+    const foEl  = document.getElementById('pm-followers-val');
+    const figEl = document.getElementById('pm-following-val');
+    const fmEl  = document.getElementById('pm-fame-val');
+    const giEl  = document.getElementById('pm-gifts-val');
+    if (foEl)  { foEl.textContent  = fmtC(stats.followers); foEl.style.opacity = '1'; }
+    if (figEl) { figEl.textContent = fmtC(stats.following); figEl.style.opacity = '1'; }
+    if (fmEl)  { fmEl.textContent  = fmtC(stats.fame);      fmEl.style.opacity  = '1'; }
+    if (giEl)  { giEl.textContent  = fmtC(stats.gifts);     giEl.style.opacity  = '1'; }
+  }
+
+  function resetRankSocial() {
+    ['pm-followers-val','pm-following-val','pm-fame-val','pm-gifts-val'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
+    });
+    const btn = document.getElementById('pm-follow-btn');
+    if (btn) btn.style.display = 'none';
+  }
+
+  // ══════════════════════════════════════════
+  //  SOCIAL LIST MODAL (Seguidores / Seguindo)
+  // ══════════════════════════════════════════
+  const _psl = { type:'followers', pid:null, page:0, loading:false, exhausted:false };
+
+  async function openSocialListModal(type, pid) {
+    const modal   = document.getElementById('pm-social-list-modal');
+    const titleEl = document.getElementById('psl-title');
+    const listEl  = document.getElementById('psl-list');
+    if (!modal || !listEl || !pid) return;
+
+    Object.assign(_psl, { type, pid, page:0, loading:false, exhausted:false });
+    if (titleEl) titleEl.textContent = type === 'following' ? 'Seguindo' : 'Seguidores';
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    listEl.onscroll = () => {
+      if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 60) {
+        loadSocialListPage(listEl);
+      }
+    };
+    await loadSocialListPage(listEl, true);
+  }
+
+  async function loadSocialListPage(listEl, isFirst = false) {
+    if (_psl.loading || _psl.exhausted) return;
+    _psl.loading = true;
+
+    // Garante que a sessão foi restaurada antes de chamar RPC (mesmo padrão do tavernas.js/__tavSB)
+    try { await _sbRank.auth.getSession(); } catch(_) {}
+
+    const empty = _psl.type === 'following' ? 'Não está seguindo ninguém.' : 'Nenhum seguidor.';
+    const rpc   = _psl.type === 'following' ? 'get_following' : 'get_followers';
+
+    try {
+      const { data, error } = await _sbRank.rpc(rpc, {
+        p_player_id: _psl.pid,
+        p_limit:     10,
+        p_offset:    _psl.page * 10
+      });
+      if (error) throw error;
+
+      if (isFirst) listEl.innerHTML = '';
+      const rows = data || [];
+      if (!rows.length && isFirst) {
+        listEl.innerHTML = `<div class="pmx-empty">${empty}</div>`;
+        _psl.exhausted = true;
+        _psl.loading   = false;
+        return;
+      }
+      if (rows.length < 10) _psl.exhausted = true;
+
+      rows.forEach(p => {
+        const av  = p.avatar_url || avatarFallback(p.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(p.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(p.name||'?')}</strong>
+            <div class="pmx-time">${fmtC(p.combat_power||0)} CP</div>
+          </div>`;
+        row.onclick = () => {
+          document.getElementById('pm-social-list-modal')?.classList.remove('open');
+          openPlayerModalById(p.id);
+        };
+        listEl.appendChild(row);
+      });
+
+      _psl.page++;
+    } catch(e) {
+      console.warn('loadSocialListPage:', e);
+      if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+    }
+    _psl.loading = false;
+  }
+
+  // ══════════════════════════════════════════
+  //  GIFTERS MODAL (Top Presenteadores)
+  //  Top 10 — quem mais deu fama em presentes
+  //  para o jogador alvo. Cache leve (3 min).
+  // ══════════════════════════════════════════
+  const _GIFTERS_CACHE_TTL = 3 * 60_000;
+
+  async function openGiftersModal(pid) {
+    const modal  = document.getElementById('pm-gifters-modal');
+    const listEl = document.getElementById('pgf-list');
+    if (!modal || !listEl || !pid) return;
+
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    const cacheKey = 'rank_gifters_' + pid;
+    let rows = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < _GIFTERS_CACHE_TTL) rows = v;
+      }
+    } catch(e) {}
+
+    if (!rows) {
+      try {
+        try { await _sbRank.auth.getSession(); } catch(_) {}
+        const { data, error } = await _sbRank.rpc('get_tavern_gifters', { p_player_id: pid, p_limit: 10 });
+        if (error) throw error;
+        rows = data || [];
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: rows, t: Date.now() }));
+      } catch(e) {
+        console.warn('get_tavern_gifters:', e);
+        listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+        return;
+      }
+    }
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="pmx-empty">Nenhum presente recebido ainda.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    rows.forEach((g, i) => {
+      const pos = i + 1;
+      const av  = g.avatar_url || avatarFallback(g.name || '?');
+      const qty = g.total_qty || 0;
+      const row = document.createElement('div');
+      row.className = 'pmx-gifter-row' + (pos <= 3 ? ' top-' + pos : '');
+      row.innerHTML = `
+        <div class="pmx-gifter-pos">${pos}</div>
+        <div class="pmx-gifter-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(g.name||'?')}'"></div>
+        <div class="pmx-gifter-info">
+          <span class="pmx-gifter-name">${escHtml(g.name || '?')}</span>
+          <div class="pmx-gifter-sub">${fmtC(qty)} presente${qty === 1 ? '' : 's'} enviado${qty === 1 ? '' : 's'}</div>
+        </div>
+        <div class="pmx-gifter-fame">+${fmtC(g.total_fame || 0)}</div>`;
+      row.onclick = () => {
+        modal.classList.remove('open');
+        openPlayerModalById(g.id);
+      };
+      listEl.appendChild(row);
+    });
+  }
+
+  // ══════════════════════════════════════════
+  //  GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador)
+  // ══════════════════════════════════════════
+  async function openGuildInfoModal(guildId) {
+    if (!guildId) return;
+    const modal  = document.getElementById('pm-guild-info-modal');
+    if (!modal) return;
+    modal.classList.add('open');
+
+    const nameEl  = document.getElementById('pgi-name');
+    const descEl  = document.getElementById('pgi-desc');
+    const lvlEl   = document.getElementById('pgi-level');
+    const membEl  = document.getElementById('pgi-members');
+    const flagEl  = document.getElementById('pgi-flag');
+    const listEl  = document.getElementById('pgi-member-list');
+    const joinRow = document.getElementById('pgi-join-row');
+    const joinBtn = document.getElementById('pgi-join-btn');
+    const titleEl = document.getElementById('pgi-title');
+
+    if (nameEl)  nameEl.textContent = 'Carregando...';
+    if (descEl)  descEl.textContent = '';
+    if (listEl)  listEl.innerHTML   = '';
+    // Esconde e reseta o botão para não herdar estado de outra guilda
+    if (joinRow) joinRow.style.display = 'none';
+    if (joinBtn) {
+      joinBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Solicitar Entrada`;
+      joinBtn.disabled = false;
+      joinBtn.classList.remove('pgi-requested');
+    }
+    window._pgiGuildId = guildId;
+
+    const cacheKey = 'tgm_guild_' + guildId;
+    let guildData = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 10 * 60 * 1000) guildData = v;
+      }
+      if (!guildData) {
+        const gRes = await _sbRank.from('guilds')
+          .select('id,name,description,level,flag_url,max_members')
+          .eq('id', guildId).maybeSingle();
+        if (gRes.error || !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
+
+        // get_guild_members é SECURITY DEFINER e contorna as RLS de
+        // public.players, garantindo a lista de membros mesmo quando o
+        // jogador atual não pertence a esta guilda.
+        const { data: members, error: mErr } = await _sbRank.rpc('get_guild_members', { p_guild_id: guildId });
+        if (mErr) console.warn('get_guild_members:', mErr);
+
+        guildData = gRes.data;
+        guildData.players = members || [];
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: guildData, t: Date.now() }));
+      }
+    } catch(e) {
+      if (nameEl) nameEl.textContent = 'Erro ao carregar guilda.';
+      return;
+    }
+    if (!guildData) { if (nameEl) nameEl.textContent = 'Guilda não encontrada.'; return; }
+
+    const allMembers = (guildData.players || []).filter(p => p.rank !== 'admin');
+    const maxM       = guildData.max_members || 30;
+
+    if (flagEl) flagEl.src         = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+    if (nameEl) nameEl.textContent = guildData.name || '';
+    if (descEl) descEl.textContent = guildData.description || '';
+    if (lvlEl)  lvlEl.textContent  = 'Nv. ' + (guildData.level || 1);
+    if (membEl) membEl.textContent = allMembers.length + ' / ' + maxM + ' membros';
+    if (titleEl) titleEl.textContent = guildData.name || 'Guilda';
+
+    // Botão de solicitar entrada — mostra se o jogador atual não tem guilda
+    try {
+      const myId = await getRankMyId();
+      let myGuildId = null;
+      try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) myGuildId = JSON.parse(cached)?.data?.guild_id || null;
+      } catch(e) {}
+      if (!myGuildId && myId) {
+        const { data } = await _sbRank.from('players').select('guild_id').eq('id', myId).maybeSingle();
+        myGuildId = data?.guild_id || null;
+      }
+      const isInThisGuild = myGuildId === guildId;
+      if (joinRow && !myGuildId && !isInThisGuild) {
+        joinRow.style.display = 'flex';
+        // Verifica localStorage: já solicitou antes?
+        try {
+          const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+          if (reqs[guildId]) {
+            _pgiSetJoinRequested(document.getElementById('pgi-join-btn'));
+            // Verifica se o líder já rejeitou (async, não bloqueia render)
+            _pgiVerifyRequest(guildId, myId).then(stillPending => {
+              if (!stillPending) {
+                try { const r = JSON.parse(localStorage.getItem('tav_guild_requests')||'{}'); delete r[guildId]; localStorage.setItem('tav_guild_requests', JSON.stringify(r)); } catch(_) {}
+                const b = document.getElementById('pgi-join-btn');
+                if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Solicitar Entrada`; b.disabled = false; b.classList.remove('pgi-requested'); }
+              }
+            });
+          }
+        } catch(_) {}
+      }
+    } catch(e) {}
+
+    // Lista de membros
+    const ROLE_LABEL = { leader: 'Líder', 'co-leader': 'Co-Líder', member: 'Membro' };
+    const ROLE_ORDER = { leader: 0, 'co-leader': 1, member: 2 };
+    const sorted = allMembers.slice().sort((a,b) => (ROLE_ORDER[a.rank]??2) - (ROLE_ORDER[b.rank]??2));
+    if (listEl) {
+      sorted.forEach(m => {
+        const av  = m.avatar_url || avatarFallback(m.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(m.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(m.name || '?')}</strong>
+            <div class="pmx-time">Nv. ${m.level || 1} · PC ${fmtC(m.combat_power || 0)}</div>
+          </div>
+          <div class="pmx-member-role">${ROLE_LABEL[m.rank] || 'Membro'}</div>`;
+        row.onclick = () => {
+          modal.classList.remove('open');
+          openPlayerModalById(m.id);
+        };
+        listEl.appendChild(row);
+      });
+    }
+  }
+
+  async function guildInfoJoinRequest() {
+    const guildId = window._pgiGuildId;
+    if (!guildId) return;
+    const myId = await getRankMyId();
+    if (!myId) return;
+    const btn = document.getElementById('pgi-join-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const { error } = await _sbRank.rpc('create_guild_join_request', {
+        p_guild_id:  guildId,
+        p_player_id: myId,
+        p_message:   ''
+      });
+      if (error) throw error;
+      // Persiste estado no localStorage compartilhado com tavernas/guild
+      try {
+        const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+        reqs[guildId] = true;
+        localStorage.setItem('tav_guild_requests', JSON.stringify(reqs));
+      } catch(_) {}
+      _pgiSetJoinRequested(btn);
+    } catch(e) {
+      if (btn) btn.disabled = false;
+      console.warn('guildInfoJoinRequest:', e);
+    }
+  }
+
+  // ── Helpers de solicitação de guilda (compartilhados c/ tavernas/guild) ──
+  function _pgiSetJoinRequested(btn) {
+    if (!btn) return;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><polyline points="20 6 9 17 4 12"/></svg> Solicitado`;
+    btn.disabled = true;
+    btn.classList.add('pgi-requested');
+  }
+
+  async function _pgiVerifyRequest(guildId, myId) {
+    try {
+      if (!myId) return true;
+      const { data } = await _sbRank.from('guild_join_requests').select('id').eq('guild_id', guildId).eq('player_id', myId).maybeSingle();
+      return !!data;
+    } catch(_) { return true; }
+  }
+
+  // ══════════════════════════════════════════
+  //  Abre o modal de perfil para outro jogador (a partir de uma lista)
+  // ══════════════════════════════════════════
+  function openPlayerModalById(pid) {
+    if (!pid) return;
+    const playerModal = document.getElementById('playerModal');
+    if (playerModal) playerModal.style.display = 'flex';
+    if (typeof window.fetchPlayerData === 'function') window.fetchPlayerData(pid);
+  }
+
+  // ══════════════════════════════════════════
+  //  Configura links de Seguidores/Seguindo e da guilda do jogador
+  // ══════════════════════════════════════════
+  function setupModalSocialLinks(playerId) {
+    const followersWrap = document.getElementById('pm-followers-wrap');
+    const followingWrap = document.getElementById('pm-following-wrap');
+    if (followersWrap) followersWrap.onclick = () => openSocialListModal('followers', playerId);
+    if (followingWrap) followingWrap.onclick = () => openSocialListModal('following', playerId);
+
+    const giftsWrap = document.getElementById('pm-gifts-wrap');
+    if (giftsWrap) giftsWrap.onclick = () => openGiftersModal(playerId);
+
+    const guildFlagEl = document.getElementById('playerGuildFlag');
+    const guildNameEl = document.getElementById('playerGuildName');
+    const openGuild = () => {
+      const gid = window._tavModalCurrentGuildId;
+      if (gid) openGuildInfoModal(gid);
+    };
+    if (guildFlagEl) { guildFlagEl.onclick = openGuild; guildFlagEl.style.cursor = 'pointer'; }
+    if (guildNameEl) { guildNameEl.onclick = openGuild; guildNameEl.style.cursor = 'pointer'; }
+  }
+
+  // Hook: wrap window.fetchPlayerData (exposto por playerModal.js / wrapper
+  // existente) para injetar o comportamento social ao abrir o modal.
+  document.addEventListener('DOMContentLoaded', async () => {
+    const myId = await getRankMyId();
+    setTimeout(() => {
+      const _prevFetch = window.fetchPlayerData;
+      window.fetchPlayerData = async function(pid) {
+        resetRankSocial();
+        window._rankModalLastPid = pid;
+        if (_prevFetch) await _prevFetch(pid);
+
+        const followBtn = document.getElementById('pm-follow-btn');
+        if (followBtn) {
+          if (!myId || pid === myId) {
+            followBtn.style.display = 'none';
+          } else {
+            followBtn.style.display = 'flex';
+            ensureRankSets().then(() => updateRankFollowBtn(followBtn, pid));
+            followBtn.onclick = () => rankToggleFollow(pid);
+          }
+        }
+        setupModalSocialLinks(pid);
+        setTimeout(() => {
+          if (window._rankModalLastPid === pid) rankLoadSocialStats(pid);
+        }, 250);
+      };
+      window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
+
+      const joinBtn = document.getElementById('pgi-join-btn');
+      if (joinBtn) joinBtn.onclick = guildInfoJoinRequest;
+    }, 0);
+  });
+})();
+</script>
+<script src="/platform.js"></script>
+<script src="/browser-guard.js"></script>
+<script src="no-zoom.js"></script>
+</body>
+</html>

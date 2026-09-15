@@ -1,0 +1,2405 @@
+import { supabase } from './supabaseClient.js'
+
+
+// =========================================================
+// >>> HELPER INDEXEDDB LOCAL (ZERO EGRESS) <<<
+// =========================================================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 47; 
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: "key" });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
+ */
+async function localSurgicalCacheUpdate(newItems, newTimestamp) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => store.put(item));
+        }
+
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => {
+                resolve();
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB localmente na Raid:", e);
+    }
+}
+
+// =========================================================
+// CACHES EM MEMÓRIA
+// =========================================================
+const monsterCache = new Map(); // Cache floor -> {name, base_health} (Imagem é gerada localmente)
+
+// =========================================================
+// CONFIGURAÇÕES GERAIS
+// =========================================================
+const MAX_ATTACKS = 3;
+const ATTACK_COOLDOWN_SECONDS = 60;
+const ATTEMPTS_CACHE_DURATION_MS = 15 * 60 * 1000;
+
+const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
+const BOSS_ATTACK_INTERVAL_SECONDS = 30;
+
+const BATCH_THRESHOLD = 3;
+const BATCH_DEBOUNCE_MS = 70000;
+
+// URLs de Mídia
+const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
+const BOSS_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossintro.webm";
+const BOSS_DEATH_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossoutro.webm";
+
+const BOSS_ATTACK_VIDEO_URLS = [
+    "https://aden-rpg.pages.dev/assets/tddbossatk01.webm", "https://aden-rpg.pages.dev/assets/tddbossatk02.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk03.webm", "https://aden-rpg.pages.dev/assets/tddbossatk04.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk05.webm", "https://aden-rpg.pages.dev/assets/tddbossatk06.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk07.webm", "https://aden-rpg.pages.dev/assets/tddbossatk08.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm", "https://aden-rpg.pages.dev/assets/tddbossatk10.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk11.webm", "https://aden-rpg.pages.dev/assets/tddbossatk12.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk13.webm"
+];
+
+const AMBIENT_AUDIO_URLS = [
+    "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
+];
+
+// Músicas de Fundo
+const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
+const NORMAL_FLOOR_MUSIC_URL = "https://aden-rpg.pages.dev/assets/tdd_bgm.mp3"; 
+
+// Variáveis de Estado
+let userId = null, userGuildId = null, userRank = "member", userName = null;
+let userAvatarUrl = "https://aden-rpg.pages.dev/avatar01.webp"; // Default Avatar
+let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1, playerMaxHealth = 1;
+let localPlayerHp = 1;
+let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
+
+// Intervals
+let uiSecondInterval = null, raidTimerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
+let shownRewardIds = new Set(); 
+
+// Death Notification Logic
+let deathNotificationQueue = [];
+let isDisplayingDeathNotification = false;
+let processedDeathTimestamps = new Set(); 
+
+// Visual/Logic Boss Timers
+let optimisticBossInterval = null;
+let nextBossAttackTime = 0;
+
+// Otimista & Batch Variables
+let playerStatsCache = null; 
+let pendingAttacksQueue = 0; 
+let batchSyncTimer = null; 
+let localDamageDealtInBatch = 0; 
+let isBatchSyncing = false; 
+
+let isSwitchingFloors = false; 
+
+// Ações e Mídia
+let actionQueue = [];
+let isProcessingAction = false;
+let isMediaUnlocked = false;
+
+// Audio Players
+let ambientAudioInterval = null;
+let ambientAudioPlayer = null; 
+let bossMusicPlayer = null;
+let normalMusicPlayer = null;
+
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
+const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
+
+// =========================================================
+// >>> ADEN GLOBAL DB (Cache Compartilhado: Ranking/Minas/Raid) <<<
+// =========================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const AUTH_STORE = 'auth_store';
+const OWNERS_STORE = 'owners_store'; // Store compartilhada de Avatares/Nomes
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME); // Deixa o navegador gerenciar a versão existente
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    // Busca um único dono/jogador pelo ID
+    getOwner: async function(id) {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) { resolve(null); return; }
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const req = tx.objectStore(OWNERS_STORE).get(id);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+  
+    // Salva dados do jogador no cache compartilhado (Versão Corrigida)
+    saveOwner: async function(playerData) {
+        if (!playerData || !playerData.id) return;
+        try {
+            const db = await this.open();
+            if (!db.objectStoreNames.contains(OWNERS_STORE)) return;
+            
+            const tx = db.transaction(OWNERS_STORE, 'readwrite');
+            const store = tx.objectStore(OWNERS_STORE);
+            
+            const getReq = store.get(playerData.id);
+            getReq.onsuccess = () => {
+                const existing = getReq.result || {};
+                
+                // CORREÇÃO: Mapeamento explícito para evitar "poluição" com undefined
+                // Só sobrescreve se o novo dado for válido (truthy), senão mantém o antigo
+                const toSave = {
+                    id: playerData.id, // ID é obrigatório
+                    name: playerData.name || existing.name, 
+                    avatar_url: playerData.avatar_url || existing.avatar_url,
+                    guild_id: playerData.guild_id || existing.guild_id,
+                    timestamp: Date.now() // Renova o TTL
+                };
+
+                // Proteção extra: Não salva se ficar sem nome (evita o bug do "Desconhecido")
+                if (toSave.name) {
+                    store.put(toSave);
+                }
+            };
+        } catch(e) { console.warn("Erro ao salvar no GlobalDB:", e); }
+    }
+};
+
+// Configura volumes
+audioNormal.volume = 0.6;
+audioCrit.volume = 0.1;
+
+function playHitSound(isCrit) {
+    if(!isMediaUnlocked) return;
+    try {
+        const audio = isCrit ? audioCrit : audioNormal;
+        audio.currentTime = 0;
+        audio.play().catch(()=>{});
+    } catch(e){ console.warn("playHitSound error", e); }
+}
+
+const $id = id => document.getElementById(id);
+
+// --- MODAL DE ALERTA ---
+function showRaidAlert(message) {
+  const modal = $id("raidAlertModal");
+  const msgEl = $id("raidAlertMessage");
+  const okBtn = $id("raidAlertOkBtn");
+
+  if (!modal || !msgEl || !okBtn) {
+    console.warn("Modal de alerta não encontrado.");
+    alert(message);
+    return;
+  }
+
+  msgEl.innerHTML = message;
+  modal.style.display = "flex";
+
+  okBtn.onclick = () => {
+    modal.style.display = "none";
+  };
+}
+
+// --- LOGICA DE IMAGEM LOCAL (Zero Egress) ---
+function getMonsterImageUrl(floor) {
+    if (!floor) return "https://aden-rpg.pages.dev/assets/tddandar01.webp"; // fallback
+    
+    // Se for múltiplo de 5, é chefe
+    if (floor % 5 === 0) {
+        return "https://aden-rpg.pages.dev/assets/tddchefe.webp";
+    }
+
+    // Pad com zero (ex: 1 -> 01, 12 -> 12)
+    const num = String(floor).padStart(2, '0');
+    return `https://aden-rpg.pages.dev/assets/tddandar${num}.webp`;
+}
+
+// --- BATCH STATE MANAGEMENT ---
+function saveBatchState() {
+    if (!currentRaidId) return;
+    const data = {
+        queue: pendingAttacksQueue,
+        dmg: localDamageDealtInBatch,
+        raidId: currentRaidId,
+        ts: Date.now()
+    };
+    localStorage.setItem('raid_batch_state', JSON.stringify(data));
+}
+
+function loadBatchState() {
+    try {
+        const raw = localStorage.getItem('raid_batch_state');
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        // Expira após 10 minutos
+        if (data.raidId === currentRaidId && (Date.now() - data.ts < 600000)) {
+            pendingAttacksQueue = data.queue || 0;
+            localDamageDealtInBatch = data.dmg || 0;
+            // Se tinha pendência, tenta sincronizar
+            if (pendingAttacksQueue > 0) {
+                 triggerBatchSync(); 
+            }
+        } else {
+            localStorage.removeItem('raid_batch_state');
+        }
+    } catch(e) {
+        console.warn("Erro ao carregar state batch", e);
+    }
+}
+
+// --- PLAYER STATS CACHE ---
+async function cachePlayerStats() {
+    if (playerStatsCache) return; 
+    if (!userId) return;
+    try {
+        const { data, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
+        if (data && !error) {
+            playerStatsCache = {
+                min_attack: Number(data.min_attack || 0),
+                attack: Number(data.attack || 0),
+                crit_chance: Number(data.crit_chance || 0),
+                crit_damage: Number(data.crit_damage || 0),
+                defense: Number(data.defense || 0),
+                evasion: Number(data.evasion || 0),
+                health: Number(data.health || 0)
+            };
+            playerMaxHealth = Math.max(1, playerStatsCache.health);
+        }
+    } catch(e) { console.warn("Erro ao cachear stats:", e); }
+}
+
+// --- ACTION QUEUE ---
+function processNextAction() {
+    if (isProcessingAction || actionQueue.length === 0) return;
+    isProcessingAction = true;
+    const nextAction = actionQueue.shift();
+    nextAction();
+}
+
+function queueAction(action) {
+    actionQueue.push(action);
+    processNextAction();
+}
+
+// --- MEDIA SYSTEM ---
+function createMediaPlayers() {
+    if (!$id('raidVideoOverlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'raidVideoOverlay';
+        // video.volume definido depois
+        overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 20000; display: none; justify-content: center; align-items: center;`;
+        const video = document.createElement('video');
+        video.id = 'raidVideoPlayer';
+        video.style.cssText = 'width: 100%; height: 100%; background: none; object-fit: cover; visibility: hidden;';
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('preload', 'auto');
+        
+        overlay.appendChild(video);
+        document.body.appendChild(overlay);
+    }
+    
+    if (!ambientAudioPlayer) {
+        ambientAudioPlayer = new Audio();
+        ambientAudioPlayer.volume = 1;
+    }
+    
+    if (!bossMusicPlayer) {
+        bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
+        bossMusicPlayer.volume = 0.1;
+        bossMusicPlayer.loop = true;
+    }
+    
+    if (!normalMusicPlayer) {
+        normalMusicPlayer = new Audio(NORMAL_FLOOR_MUSIC_URL);
+        normalMusicPlayer.volume = 0.06;
+        normalMusicPlayer.loop = true;
+    }
+}
+
+function playVideo(src, onVideoEndCallback) {
+    const videoOverlay = $id('raidVideoOverlay');
+    const videoPlayer = $id('raidVideoPlayer');
+    if (!videoOverlay || !videoPlayer) {
+        if (onVideoEndCallback) onVideoEndCallback();
+        return;
+    }
+
+    videoPlayer.style.visibility = 'hidden';
+    videoPlayer.src = src;
+    videoPlayer.load(); 
+
+    videoOverlay.style.display = 'flex';
+
+    const onCanPlay = () => {
+        videoPlayer.style.visibility = 'visible';
+        const playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                videoPlayer.muted = true;
+                videoPlayer.play();
+            });
+        }
+    };
+    
+    videoPlayer.addEventListener('canplay', onCanPlay, { once: true });
+
+    const endPlayback = () => {
+        videoPlayer.removeEventListener('ended', endPlayback);
+        videoPlayer.pause();
+        videoPlayer.currentTime = 0;
+        videoOverlay.style.display = 'none';
+        if (onVideoEndCallback) onVideoEndCallback();
+        isProcessingAction = false;
+        processNextAction();
+    };
+    videoPlayer.addEventListener('ended', endPlayback, { once: true });
+}
+
+function unlockMedia() {
+    if (isMediaUnlocked) return;
+    
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.warn(e));
+    }
+
+    const videoPlayer = $id('raidVideoPlayer');
+    if (videoPlayer) {
+        videoPlayer.muted = false;
+    }
+    
+    const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer, normalMusicPlayer];
+    audiosToUnlock.forEach(audio => {
+        if (audio && audio.paused) {
+            audio.play().then(() => audio.pause()).catch(() => {});
+        }
+    });
+    
+    isMediaUnlocked = true;
+}
+
+function primeMedia() {
+    unlockMedia(); 
+    const videoPlayer = $id('raidVideoPlayer');
+    if (videoPlayer) {
+        videoPlayer.src = RAID_INTRO_VIDEO_URL; 
+        videoPlayer.load();
+        videoPlayer.muted = true; 
+        const playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    videoPlayer.pause();
+                    if(isMediaUnlocked) videoPlayer.muted = false;
+                })
+                .catch(err => {
+                    console.warn("Falha ao preparar mídia.", err);
+                });
+        }
+    }
+}
+
+function playRandomAmbientAudio() {
+    if (!isMediaUnlocked || isProcessingAction || document.visibilityState !== 'visible') return;
+    const audioSrc = AMBIENT_AUDIO_URLS[Math.floor(Math.random() * AMBIENT_AUDIO_URLS.length)];
+    ambientAudioPlayer.src = audioSrc;
+    ambientAudioPlayer.play().catch(e => {});
+}
+
+function stopAllFloorMusic() {
+    if (ambientAudioInterval) {
+        clearInterval(ambientAudioInterval);
+        ambientAudioInterval = null;
+    }
+    if (bossMusicPlayer && !bossMusicPlayer.paused) {
+        bossMusicPlayer.pause();
+        bossMusicPlayer.currentTime = 0;
+    }
+    if (normalMusicPlayer && !normalMusicPlayer.paused) {
+        normalMusicPlayer.pause();
+        normalMusicPlayer.currentTime = 0;
+    }
+}
+
+function startFloorMusic() {
+    if (!isMediaUnlocked) return;
+
+    if (currentFloor % 5 === 0) {
+        // Andar do Chefe
+        if (normalMusicPlayer && !normalMusicPlayer.paused) {
+            normalMusicPlayer.pause();
+        }
+        if (ambientAudioInterval) {
+            clearInterval(ambientAudioInterval);
+            ambientAudioInterval = null;
+        }
+        if (bossMusicPlayer && bossMusicPlayer.paused) {
+            bossMusicPlayer.play().catch(e => {});
+        }
+    } else {
+        // Andar Normal
+        if (bossMusicPlayer && !bossMusicPlayer.paused) {
+            bossMusicPlayer.pause();
+        }
+        if (normalMusicPlayer && normalMusicPlayer.paused) {
+            normalMusicPlayer.play().catch(e => {});
+        }
+        // Som ambiente ocasional
+        if (!ambientAudioInterval) {
+            try { playRandomAmbientAudio(); } catch(e) {}
+            ambientAudioInterval = setInterval(playRandomAmbientAudio, AMBIENT_AUDIO_INTERVAL_MS);
+        }
+    }
+}
+
+let _raidStylesInjected = false;
+function _injectRaidEpicStyles() {
+    if (_raidStylesInjected) return;
+    _raidStylesInjected = true;
+    const s = document.createElement('style');
+    s.id = 'raid-epic-styles';
+    s.textContent = `
+        /* ── Floating numbers ── */
+        @keyframes raid-float-dmg  { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);}8%{opacity:1;transform:translateX(-50%) translateY(-18px) scale(1.4);}20%{opacity:1;transform:translateX(-50%) translateY(-30px) scale(1.0);}75%{opacity:1;transform:translateX(-50%) translateY(-110px) scale(1.0);}100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92);} }
+        @keyframes raid-float-crit { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-6deg);}7%{opacity:1;transform:translateX(-50%) translateY(-26px) scale(1.75) rotate(5deg);}18%{opacity:1;transform:translateX(-50%) translateY(-42px) scale(1.1) rotate(-1deg);}75%{opacity:1;transform:translateX(-50%) translateY(-130px) scale(1.0) rotate(0);}100%{opacity:0;transform:translateX(-50%) translateY(-180px) scale(0.92) rotate(0);} }
+        @keyframes raid-float-heal { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);}8%{opacity:1;transform:translateX(-50%) translateY(-18px) scale(1.3);}20%{opacity:1;transform:translateX(-50%) translateY(-30px) scale(1.0);}75%{opacity:1;transform:translateX(-50%) translateY(-110px) scale(1.0);}100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92);} }
+        @keyframes raid-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);}100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(1.15);} }
+        @keyframes raid-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);}18%{opacity:1;transform:translateX(-50%) scale(1.5);}65%{opacity:1;transform:translateX(-50%) scale(1.05);}100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+
+        .raid-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:2.4em;font-weight:bold;color:#fff;text-shadow:2px 2px 5px #000,0 0 22px rgba(255,100,0,0.75);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-dmg 3.4s ease-out forwards; }
+        .raid-crit-num { font-family:'Cinzel',Georgia,serif;font-size:3.2em;font-weight:bold;color:#ffdd00;text-shadow:-2px -2px 0 #900,2px -2px 0 #900,-2px 2px 0 #900,2px 2px 0 #900,0 0 22px #ff8800,0 0 44px #ff4400;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-crit 3.7s ease-out forwards; }
+        .raid-heal-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#e0aaff;text-shadow:2px 2px 5px #000,0 0 22px rgba(180,60,255,0.85),0 0 40px rgba(140,0,255,0.55);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-heal 3.4s ease-out forwards; }
+        .raid-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.8em;font-weight:bold;color:cyan;text-shadow:0 0 12px cyan,1px 1px 2px #000;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-evd 1.2s ease-out forwards; }
+        .raid-crit-lbl { font-family:'Cinzel',serif;font-size:1.05em;font-weight:bold;color:#ffdd00;text-shadow:0 0 12px #f80,1px 1px 2px #000;position:absolute;left:50%;z-index:1000;white-space:nowrap;pointer-events:none;animation:raid-crit-lbl 1.2s ease-out forwards; }
+
+        /* ── Monster flash ── */
+        @keyframes raid-monster-hit  { 0%,100%{filter:drop-shadow(0 0 0 transparent);}15%{filter:brightness(4) saturate(0.05) drop-shadow(0 0 28px white);}45%{filter:brightness(2.2) saturate(0.35);}80%{filter:brightness(1.5);} }
+        @keyframes raid-monster-crit { 0%{filter:brightness(1);}8%{filter:brightness(6) saturate(0) sepia(1) hue-rotate(12deg) drop-shadow(0 0 40px gold);}28%{filter:brightness(3.5) saturate(0.25) sepia(0.4) drop-shadow(0 0 25px orange);}65%{filter:brightness(2);}100%{filter:brightness(1);} }
+        @keyframes raid-monster-heal { 0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent);}20%{filter:brightness(1.8) saturate(1.3) hue-rotate(15deg) drop-shadow(0 0 26px #b060ff);}55%{filter:brightness(1.4) drop-shadow(0 0 18px #9020ff);}100%{filter:brightness(1);} }
+
+        /* ── Regeneração mística (rings) ── */
+        @keyframes raid-sw-heal { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.85;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.6);opacity:0;border-width:1px;} }
+        .raid-ring-heal { position:absolute;width:100px;height:100px;border-radius:50%;border:4px solid rgba(180,60,255,0.85);pointer-events:none;z-index:997;animation:raid-sw-heal 0.9s ease-out forwards; }
+
+        /* ── Player avatar flash ── */
+        @keyframes raid-player-hit  { 0%,100%{filter:brightness(1);}16%{filter:brightness(4.5) saturate(0) drop-shadow(0 0 24px red);}48%{filter:brightness(2.5) saturate(0.25);}82%{filter:brightness(1.6);} }
+        @keyframes raid-player-crit { 0%{filter:brightness(1);}8%{filter:brightness(6.5) saturate(0) sepia(1) hue-rotate(325deg) drop-shadow(0 0 36px gold);}26%{filter:brightness(3.5) saturate(0.4) drop-shadow(0 0 24px orange);}100%{filter:brightness(1);} }
+
+        /* ── Camera shake (boss crit) ── */
+        @keyframes raid-cam-shake { 0%,100%{transform:translate(0,0) rotate(0);}12%{transform:translate(-10px,5px) rotate(-1.2deg);}24%{transform:translate(10px,-5px) rotate(1.2deg);}36%{transform:translate(-7px,7px) rotate(-0.7deg);}50%{transform:translate(7px,-7px) rotate(0.7deg);}68%{transform:translate(-4px,3px);}82%{transform:translate(4px,-3px);} }
+        .raid-cam-shake { animation:raid-cam-shake 0.55s cubic-bezier(.36,.07,.19,.97) both !important; }
+
+        /* ── Shockwave rings ── */
+        @keyframes raid-sw  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.92;border-width:5px;}100%{transform:translate(-50%,-50%) scale(4.5);opacity:0;border-width:1px;} }
+        @keyframes raid-sw2 { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.56;border-width:3px;}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;border-width:1px;} }
+        @keyframes raid-sp  { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+        .raid-ring  { position:absolute;width:100px;height:100px;border-radius:50%;border:5px solid rgba(255,160,40,0.92);pointer-events:none;z-index:997;animation:raid-sw 0.58s ease-out forwards; }
+        .raid-ring2 { position:absolute;width:100px;height:100px;border-radius:50%;border:2px solid rgba(255,220,80,0.52);pointer-events:none;z-index:997;animation:raid-sw2 0.75s ease-out 0.09s forwards; }
+        .raid-ring.crit   { border-color:rgba(255,218,0,0.96);box-shadow:0 0 18px rgba(255,200,0,0.65); }
+        .raid-ring2.crit  { border-color:rgba(255,180,0,0.72); }
+        .raid-ring.boss   { border-color:rgba(255,55,55,0.92); }
+        .raid-ring2.boss  { border-color:rgba(220,20,20,0.56); }
+        .raid-ring.boss-crit  { border-color:rgba(255,218,0,0.96);box-shadow:0 0 22px rgba(255,200,0,0.85); }
+        .raid-ring2.boss-crit { border-color:rgba(255,170,0,0.72); }
+        .raid-spark { position:absolute;border-radius:50%;pointer-events:none;animation:raid-sp 0.5s ease-out forwards;z-index:998; }
+
+        /* ── Screen edge flash ── */
+        #raid-screen-flash { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:11999;opacity:0;transition:opacity 0.07s; }
+
+        /* ── Player avatar persistent glow ── */
+        #raidPlayerAvatarWrap { box-shadow:0 0 10px rgba(100,200,255,0.35),0 0 22px rgba(0,100,200,0.15) !important; border-radius:50% !important; transition:box-shadow 0.4s ease !important; }
+        #raidPlayerAvatarWrap.boss-hit { box-shadow:0 0 22px rgba(255,50,50,0.7),0 0 50px rgba(200,0,0,0.45) !important; }
+        #raidPlayerAvatarWrap.boss-crit-hit { box-shadow:0 0 30px rgba(255,200,0,0.85),0 0 65px rgba(255,100,0,0.6) !important; }
+    `;
+    document.head.appendChild(s);
+    if (!document.getElementById('raid-screen-flash')) {
+        const f = document.createElement('div'); f.id = 'raid-screen-flash';
+        document.body.appendChild(f);
+    }
+}
+
+// ── Epic player-attacks-monster ──────────────────────────
+function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
+    targetEl.style.position = targetEl.style.position || 'relative';
+
+    // Flash on monster image (só filter/drop-shadow — a respiração orgânica
+    // em JS continua controlando o transform o tempo todo, sem ser sobrescrita)
+    const monsterImg = document.getElementById('raidMonsterImage');
+    if (monsterImg) {
+        monsterImg.style.animation = isCrit
+            ? 'raid-monster-crit 0.65s ease-out'
+            : 'raid-monster-hit 0.42s ease-out';
+        setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, isCrit ? 680 : 460);
+    }
+
+    // Screen edge flash (player perspective - orange/gold glow on attack)
+    const sf = document.getElementById('raid-screen-flash');
+    if (sf) {
+        sf.style.boxShadow = isCrit
+            ? 'inset 0 0 140px rgba(255,200,0,0.38)'
+            : 'inset 0 0 100px rgba(255,90,0,0.28)';
+        sf.style.opacity = '1';
+        setTimeout(() => { sf.style.opacity = '0'; }, isCrit ? 460 : 290);
+    }
+
+    // Shockwave rings (centered on monster, upper portion of area)
+    const rTop = '38%', rLeft = '50%';
+    const r1 = document.createElement('div'); r1.className = 'raid-ring' + (isCrit ? ' crit' : '');
+    r1.style.top = rTop; r1.style.left = rLeft;
+    targetEl.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div'); r2.className = 'raid-ring2' + (isCrit ? ' crit' : '');
+    r2.style.top = rTop; r2.style.left = rLeft;
+    targetEl.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+
+    // Sparks radiating from monster impact point
+    const spN = isCrit ? 18 : 9;
+    const spCols = isCrit ? ['#ffdd00','#ff8800','#fff','#ffcc44','#ff4400'] : ['#fff','#ffbb55','#ff8833'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div'); sp.className = 'raid-spark';
+        const ang = (i / spN) * 360 + Math.random() * 20;
+        const dist = 50 + Math.random() * 85;
+        const sz = (isCrit ? 7 : 4) + Math.random() * 4;
+        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.top = rTop; sp.style.left = rLeft;
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.09) + 's';
+        targetEl.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    // Monster shake on crit
+    if (isCrit && monsterImg) {
+        monsterImg.classList.add('shake-animation');
+        setTimeout(() => monsterImg.classList.remove('shake-animation'), 750);
+    }
+
+    // Damage number
+    const dmgEl = document.createElement('div');
+    const topPos = isCrit ? '26%' : '31%';
+    if (isCrit) {
+        dmgEl.className = 'raid-crit-num';
+        dmgEl.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
+        dmgEl.style.top = topPos;
+        const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
+        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = '19%';
+        targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        dmgEl.className = 'raid-dmg-num';
+        dmgEl.textContent = Number(dmg).toLocaleString();
+        dmgEl.style.top = topPos;
+    }
+    targetEl.appendChild(dmgEl);
+    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 3900);
+}
+
+// ── Regeneração mística do chefe (habilidade do Imperador Veinur) ──
+// Usada sempre que o sync com o servidor revela que o HP do monstro
+// SUBIU em relação ao que estava sendo exibido localmente (drift do
+// dano otimista do cliente vs. o valor real). Em vez de simplesmente
+// "pular" a barra de vida pra cima sem explicação, mostramos como a
+// cura do chefe — visualmente distinta do dano (tom púrpura, sem o
+// impacto/tremida do golpe).
+function _epicRaidMonsterHeal(targetEl, healAmount) {
+    targetEl.style.position = targetEl.style.position || 'relative';
+
+    const monsterImg = document.getElementById('raidMonsterImage');
+    if (monsterImg) {
+        monsterImg.style.animation = 'raid-monster-heal 0.9s ease-out';
+        setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, 920);
+    }
+
+    const rTop = '38%', rLeft = '50%';
+    const ring = document.createElement('div');
+    ring.className = 'raid-ring-heal';
+    ring.style.top = rTop; ring.style.left = rLeft;
+    targetEl.appendChild(ring);
+    ring.addEventListener('animationend', () => ring.remove(), { once: true });
+
+    // Partículas místicas subindo (ao contrário do dano, que radia pra fora)
+    const spN = 10;
+    const spCols = ['#c060ff', '#e0aaff', '#9020ff', '#f0d0ff'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div');
+        sp.className = 'raid-spark';
+        const ang = -90 + (Math.random() * 70 - 35); // sobe em leque, não radia
+        const dist = 45 + Math.random() * 70;
+        const sz = 4 + Math.random() * 4;
+        sp.style.setProperty('--a', ang + 'deg');
+        sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.top = rTop; sp.style.left = rLeft;
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.boxShadow = '0 0 6px ' + spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.12) + 's';
+        targetEl.appendChild(sp);
+        sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    const healEl = document.createElement('div');
+    healEl.className = 'raid-heal-num';
+    healEl.innerHTML = '✚ +' + Number(healAmount).toLocaleString();
+    healEl.style.top = '31%';
+    targetEl.appendChild(healEl);
+    healEl.addEventListener('animationend', () => healEl.remove(), { once: true });
+    setTimeout(() => { if (healEl.parentNode) healEl.remove(); }, 3900);
+}
+
+// Chamar isto sempre que detectar que o HP do mob/chefe subiu no sync.
+function displayFloatingHealOver(targetEl, healAmount) {
+    if (!targetEl || !(healAmount > 0)) return;
+    _injectRaidEpicStyles();
+    _epicRaidMonsterHeal(targetEl, healAmount);
+}
+
+// ── Epic boss-attacks-player ──────────────────────────────
+function _epicRaidBossAttack(targetEl, val, isCrit, isEvade) {
+    targetEl.style.position = targetEl.style.position || 'relative';
+    const playerAvatar = document.getElementById('raidPlayerAvatar');
+    const avatarWrap   = document.getElementById('raidPlayerAvatarWrap');
+
+    if (isEvade) {
+        const evdEl = document.createElement('div'); evdEl.className = 'raid-evd-txt';
+        evdEl.textContent = 'Errou!'; evdEl.style.top = '18%';
+        targetEl.appendChild(evdEl); evdEl.addEventListener('animationend', () => evdEl.remove(), { once: true });
+        return;
+    }
+
+    // Flash on player avatar
+    if (playerAvatar) {
+        playerAvatar.style.animation = isCrit ? 'raid-player-crit 0.65s ease-out' : 'raid-player-hit 0.48s ease-out';
+        setTimeout(() => { if (playerAvatar) playerAvatar.style.animation = ''; }, isCrit ? 680 : 520);
+    }
+
+    // Avatar wrap glow burst then fade
+    if (avatarWrap) {
+        avatarWrap.classList.remove('boss-hit', 'boss-crit-hit');
+        void avatarWrap.offsetWidth;
+        avatarWrap.classList.add(isCrit ? 'boss-crit-hit' : 'boss-hit');
+        setTimeout(() => avatarWrap.classList.remove('boss-hit', 'boss-crit-hit'), isCrit ? 1400 : 900);
+    }
+
+    // Screen edge flash — big and dramatic for boss hit
+    const sf = document.getElementById('raid-screen-flash');
+    if (sf) {
+        sf.style.boxShadow = isCrit
+            ? 'inset 0 0 200px rgba(255,180,0,0.6)'
+            : 'inset 0 0 160px rgba(220,0,0,0.5)';
+        sf.style.opacity = '1';
+        setTimeout(() => { sf.style.opacity = '0'; }, isCrit ? 600 : 420);
+    }
+
+    // Camera shake on boss crit
+    if (isCrit) {
+        const modal = document.getElementById('raidCombatModal');
+        if (modal) {
+            modal.classList.remove('raid-cam-shake'); void modal.offsetWidth;
+            modal.classList.add('raid-cam-shake');
+            setTimeout(() => modal.classList.remove('raid-cam-shake'), 600);
+        }
+    }
+
+    // Player avatar shake
+    if (playerAvatar) {
+        playerAvatar.classList.add('shake-animation');
+        setTimeout(() => playerAvatar.classList.remove('shake-animation'), isCrit ? 1200 : 800);
+    }
+
+    // Rings around player avatar
+    const ringHost = avatarWrap || targetEl;
+    ringHost.style.position = ringHost.style.position || 'relative';
+    const r1 = document.createElement('div');
+    r1.className = 'raid-ring ' + (isCrit ? 'boss-crit' : 'boss');
+    r1.style.top = '50%'; r1.style.left = '50%'; r1.style.width = '64px'; r1.style.height = '64px';
+    ringHost.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div');
+    r2.className = 'raid-ring2 ' + (isCrit ? 'boss-crit' : 'boss');
+    r2.style.top = '50%'; r2.style.left = '50%'; r2.style.width = '64px'; r2.style.height = '64px';
+    ringHost.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+
+    // Sparks around player avatar
+    const spN = isCrit ? 16 : 8;
+    const spCols = isCrit ? ['#ffdd00','#ff4444','#fff','#ff8800'] : ['#ff4444','#ff8888','#fff','#ff6666'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div'); sp.className = 'raid-spark';
+        const ang = (i / spN) * 360 + Math.random() * 22;
+        const dist = 30 + Math.random() * 55;
+        const sz = (isCrit ? 5 : 3) + Math.random() * 3;
+        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.top = '50%'; sp.style.left = '50%';
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+        ringHost.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    // Damage number
+    const dmgEl = document.createElement('div');
+    if (isCrit) {
+        dmgEl.className = 'raid-crit-num';
+        dmgEl.innerHTML = '⚡ ' + Number(val).toLocaleString() + ' ⚡';
+        dmgEl.style.top = '10%';
+        const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
+        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = '3%';
+        targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        dmgEl.className = 'raid-dmg-num';
+        dmgEl.textContent = Number(val).toLocaleString();
+        dmgEl.style.top = '12%';
+    }
+    targetEl.appendChild(dmgEl);
+    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 3900);
+}
+
+function displayFloatingDamageOver(targetEl, val, isCrit) {
+    if (!targetEl) return;
+    _injectRaidEpicStyles();
+    const isPlayerTarget = targetEl.id === 'raidPlayerArea';
+    const isEvade = (String(val) === 'Errou!');
+    if (isPlayerTarget) {
+        _epicRaidBossAttack(targetEl, val, isCrit, isEvade);
+    } else {
+        _epicRaidPlayerAttack(targetEl, val, isCrit);
+    }
+}
+
+function ensurePlayerHpUi() {
+  const container = $id("raidMonsterArea");
+  if (!container) return;
+  if ($id("raidPlayerArea")) return;
+  const hr = document.createElement("hr");
+  hr.style.width = "90%";
+  hr.style.margin = "6px auto";
+  container.appendChild(hr);
+  const pArea = document.createElement("div");
+  pArea.id = "raidPlayerArea";
+  pArea.style.display = "flex";
+  pArea.style.flexDirection = "column";
+  pArea.style.alignItems = "center";
+  pArea.style.gap = "4px";
+  pArea.style.position = "relative";
+  pArea.style.width = "100%";
+  const reviveText = document.createElement("div");
+  reviveText.id = "raidPlayerReviveText";
+  reviveText.style.position = "absolute";
+  reviveText.style.top = "-20px";
+  reviveText.style.left = "50%";
+  reviveText.style.transform = "translateX(-50%)";
+  reviveText.style.color = "#ffdddd";
+  reviveText.style.fontWeight = "bold";
+  reviveText.style.fontSize = "0.9em";
+  reviveText.style.textShadow = "1px 1px 2px #000";
+  reviveText.style.zIndex = "1000";
+  pArea.appendChild(reviveText);
+  const avatarWrap = document.createElement("div");
+  avatarWrap.style.position = "relative";
+  avatarWrap.style.width = "48px";
+  avatarWrap.style.height = "48px";
+  avatarWrap.style.borderRadius = "50%";
+  avatarWrap.style.overflow = "hidden";
+  avatarWrap.style.display = "flex";
+  avatarWrap.style.alignItems = "center";
+  avatarWrap.style.justifyContent = "center";
+  avatarWrap.style.background = "#222";
+  avatarWrap.id = "raidPlayerAvatarWrap";
+  const avatar = document.createElement("img");
+  avatar.id = "raidPlayerAvatar";
+  // Alteração: Usa userAvatarUrl garantindo que não mostre placeholder se o dado já estiver disponível
+  avatar.src = userAvatarUrl || "https://aden-rpg.pages.dev/assets/avatar01.webp";
+  avatar.style.width = "48px";
+  avatar.style.height = "48px";
+  avatar.style.borderRadius = "50%";
+  avatar.style.objectFit = "cover";
+  avatarWrap.appendChild(avatar);
+  const reviveOverlay = document.createElement("div");
+  reviveOverlay.id = "raidPlayerReviveOverlay";
+  reviveOverlay.style.position = "absolute";
+  reviveOverlay.style.left = "0";
+  reviveOverlay.style.top = "0";
+  reviveOverlay.style.width = "100%";
+  reviveOverlay.style.height = "100%";
+  reviveOverlay.style.display = "none";
+  reviveOverlay.style.background = "rgba(0,0,0,0.6)";
+  avatarWrap.appendChild(reviveOverlay);
+  const pHpContainer = document.createElement("div");
+  pHpContainer.id = "raidPlayerHpBar";
+  pHpContainer.style.width = "70%";
+  pHpContainer.style.maxWidth = "220px";
+  pHpContainer.style.background = "#333";
+  pHpContainer.style.borderRadius = "10px";
+  pHpContainer.style.overflow = "hidden";
+  pHpContainer.style.position = "relative";
+  pHpContainer.style.height = "14px";
+  const pFill = document.createElement("div");
+  pFill.id = "raidPlayerHpFill";
+  pFill.style.height = "100%";
+  pFill.style.width = "100%";
+  pFill.style.transition = "width 300ms ease";
+  pFill.style.display = "flex";
+  pFill.style.alignItems = "center";
+  pFill.style.justifyContent = "center";
+  pFill.style.fontWeight = "bold";
+  pFill.style.color = "#000";
+  pFill.style.background = "linear-gradient(90deg,#ff6b6b,#ffb86b)";
+  const pText = document.createElement("span");
+  pText.id = "raidPlayerHpText";
+  pText.style.fontSize = "0.62em";
+  pText.style.color = "#000";
+  pFill.appendChild(pText);
+  pHpContainer.appendChild(pFill);
+  pArea.appendChild(avatarWrap);
+  pArea.appendChild(pHpContainer);
+  container.appendChild(pArea);
+}
+
+function updatePlayerHpUi(cur, max) {
+  ensurePlayerHpUi();
+  const fill = $id("raidPlayerHpFill");
+  const text = $id("raidPlayerHpText");
+  const avatar = $id("raidPlayerAvatar");
+  const overlay = $id("raidPlayerReviveOverlay");
+  const c = Math.max(0, Number(cur === null ? max : cur));
+  const m = Math.max(1, Number(max || 1));
+  const pct = Math.max(0, Math.min(100, (c / m) * 100));
+  if (fill) {
+    fill.style.width = `${pct}%`;
+    if (pct > 60) fill.style.background = 'linear-gradient(90deg,#005500,#00aa00,#55ff55)';
+    else if (pct > 30) fill.style.background = 'linear-gradient(90deg,#aa6600,#ffaa00,#ffdd44)';
+    else fill.style.background = 'linear-gradient(90deg,#880000,#cc2200,#ff5555)';
+  }
+  if (text) text.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
+  if (c <= 0) {
+    if (avatar) avatar.style.filter = "grayscale(80%)";
+    if (overlay) overlay.style.display = "flex";
+  } else {
+    if (avatar) avatar.style.filter = "";
+    if (overlay) { overlay.style.display = "none"; }
+  }
+}
+
+function setPlayerReviveOverlayText(remainingSeconds) {
+  const overlay = $id("raidPlayerReviveOverlay");
+  const reviveText = $id("raidPlayerReviveText");
+  if (!overlay || !reviveText) return;
+  if (remainingSeconds <= 0) {
+    overlay.style.display = "none";
+    reviveText.innerHTML = "";
+    return;
+  }
+  overlay.style.display = "flex";
+  reviveText.innerHTML = `Revivendo em: <strong>${remainingSeconds}s</strong>`;
+}
+
+function getDisplayedMonsterHp() {
+  const el = $id("raidMonsterHpText");
+  if (!el || !el.textContent) return null;
+  const n = Number(el.textContent.split('/')[0].replace(/[^\d]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function updateHpBar(cur, max) {
+  const fill = $id("raidMonsterHpFill");
+  const text = $id("raidMonsterHpText");
+  const c = Math.max(0, Number(cur || 0));
+  const m = Math.max(1, Number(max || 1));
+  const pct = Math.max(0, Math.min(100, (c / m) * 100));
+  if (fill) {
+    fill.style.width = `${pct}%`;
+    if (pct > 60) fill.style.background = 'linear-gradient(90deg,#850000,#cc0000,#ff4444)';
+    else if (pct > 30) fill.style.background = 'linear-gradient(90deg,#996600,#cc9900,#ffcc22)';
+    else fill.style.background = 'linear-gradient(90deg,#550000,#990000,#ff2200)';
+  }
+  if (text) {
+    text.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
+    text.style.position = "absolute";
+    text.style.left = "50%";
+    text.style.top = "50%";
+    text.style.transform = "translate(-50%,-50%)";
+    text.style.fontWeight = "bold";
+    text.style.color = "#fff";
+    text.style.textShadow = "0 1px 2px rgba(0,0,0,0.7)";
+  }
+}
+
+function formatTime(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  let result = "";
+  if (h > 0) result += `${h}h `;
+  if (m > 0) result += `${m}m `;
+  result += `${ss}s`;
+  return result.trim();
+}
+
+function setRaidTitleFloorAndTimer(floor, endsAt) {
+  const displayFloor = floor || currentFloor || 1;
+  let floorBox = $id("raidFloorInfo");
+  let timerBox = $id("raidTimerInfo");
+  if (!floorBox || !timerBox) {
+    const combatModal = $id("raidCombatModal");
+    if (combatModal) {
+      let header = $id("raidHeader");
+      if (!header) {
+        header = document.createElement("div");
+        header.id = "raidHeader";
+        header.style.position = "relative";
+        header.style.display = "flex";
+        header.style.justifyContent = "center";
+        header.style.alignItems = "center";
+        header.style.padding = "8px 0";
+        combatModal.insertBefore(header, combatModal.firstChild);
+      }
+      if (!floorBox) {
+        floorBox = document.createElement("div");
+        floorBox.id = "raidFloorInfo";
+        floorBox.style.position = "absolute";
+        floorBox.style.left = "3px";
+        floorBox.style.top = "2px";
+        floorBox.style.textAlign = "center";
+        header.appendChild(floorBox);
+      }
+      if (!timerBox) {
+        timerBox = document.createElement("div");
+        timerBox.id = "raidTimerInfo";
+        timerBox.style.fontWeight = "bold";
+        timerBox.style.fontSize = "1.1em";
+        header.appendChild(timerBox);
+      }
+    }
+  }
+  if (floorBox) {
+    floorBox.innerHTML = `<div style="text-align:center; line-height:1.1;">
+      <div style="font-weight:bold; font-size:0.9em;">${displayFloor}°</div>
+      <div style="font-size:0.6em; font-weight: bold;">Andar</div>
+    </div>`;
+  }
+  if (timerBox) {
+    if (endsAt) {
+      const diff = Math.max(0, Math.floor((new Date(endsAt) - new Date()) / 1000));
+      timerBox.textContent = formatTime(diff);
+    } else {
+      timerBox.textContent = "";
+    }
+  }
+}
+
+function createDeathNotificationUI() {
+    if ($id('raidDeathNotification')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'raidDeathNotification';
+
+    const style = document.createElement('style');
+    style.textContent = `
+        #raidDeathNotification {
+            position: fixed;
+            top: 10px;
+            transform: translateX(100%);
+            right: 0;
+            background-color: rgb(0, 0, 255);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px 0 0 5px;
+            z-index: 25000;
+            font-weight: bold;
+            white-space: nowrap;
+            text-shadow: 1px 1px 2px #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #raidDeathNotification.show {
+            opacity: 1;
+            animation: slideAcrossContinuous 15s linear forwards;
+        }
+        @keyframes slideAcrossContinuous {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(calc(-100% - 1%));
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+}
+
+function displayDeathNotification(playerName) {
+    const banner = $id('raidDeathNotification');
+    if (!banner) return;
+
+    const monsterNameEl = $id("raidMonsterName");
+    const bossName = monsterNameEl ? monsterNameEl.textContent : "Imperador Veinur";
+
+    banner.innerHTML = `<span style="color: yellow;">${playerName}</span> foi derrotado(a) pelo <span style="color: lightgreen;">${bossName}</span>!`;
+    
+    banner.classList.remove('show');
+    void banner.offsetWidth; // trigger reflow
+    banner.classList.add('show');
+
+    const onAnimationEnd = () => {
+        banner.classList.remove('show');
+        banner.removeEventListener('animationend', onAnimationEnd);
+        isDisplayingDeathNotification = false;
+        setTimeout(() => processDeathNotificationQueue(), 200);
+    };
+    banner.addEventListener('animationend', onAnimationEnd, { once: true });
+}
+
+function processDeathNotificationQueue() {
+    if (isDisplayingDeathNotification || deathNotificationQueue.length === 0) {
+        return;
+    }
+    isDisplayingDeathNotification = true;
+    const playerName = deathNotificationQueue.shift();
+    displayDeathNotification(playerName);
+}
+
+async function checkOtherPlayerDeaths(recentDeathsPayload) {
+    if (!recentDeathsPayload || !Array.isArray(recentDeathsPayload)) return;
+
+    const newDeaths = recentDeathsPayload.filter(death => !processedDeathTimestamps.has(death.timestamp));
+
+    if (newDeaths.length === 0) return;
+
+    newDeaths.forEach(death => {
+        processedDeathTimestamps.add(death.timestamp);
+        if (death.player_id !== userId && death.player_name) {
+            deathNotificationQueue.push(death.player_name);
+        }
+    });
+    
+    processDeathNotificationQueue();
+}
+
+function getLocalUserId() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const session = JSON.parse(localStorage.getItem(k));
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+function getLocalPlayerData() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data;
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+async function initSession() {
+  try {
+    // 1. Tenta pegar ID da sessão local do Supabase ou Cache
+    let localId = getLocalUserId();
+    
+    // Fallback: Tenta pegar do Auth do GlobalDB (caso ranking tenha salvo)
+    if (!localId) {
+         try {
+             const db = await GlobalDB.open();
+             if (db.objectStoreNames.contains(AUTH_STORE)) {
+                 const tx = db.transaction(AUTH_STORE, 'readonly');
+                 const req = tx.objectStore(AUTH_STORE).get('current_session');
+                 const res = await new Promise(r => { req.onsuccess = () => r(req.result); req.onerror = () => r(null); });
+                 if (res && res.user) localId = res.user.id;
+             }
+         } catch(e){}
+    }
+
+    if (!localId) {
+        const { data } = await supabase.auth.getSession({ cache: 'memory-only' });
+        if (data?.session) localId = data.session.user.id;
+    }
+
+    if (!localId) return; 
+    userId = localId;
+
+    // 2. >>> ESTRATÉGIA DE AVATAR (ZERO EGRESS) <<<
+    let foundInCache = false;
+
+    // A) Busca no GlobalDB (IndexedDB compartilhado)
+    const cachedGlobal = await GlobalDB.getOwner(userId);
+    if (cachedGlobal && cachedGlobal.name) {
+        userName = cachedGlobal.name;
+        userGuildId = cachedGlobal.guild_id; 
+        if (cachedGlobal.avatar_url) {
+            userAvatarUrl = cachedGlobal.avatar_url;
+        }
+        foundInCache = true;
+    }
+
+    // B) Se não achou completo no GlobalDB, tenta localStorage antigo
+    if (!foundInCache) {
+        const cachedLocal = getLocalPlayerData();
+        if (cachedLocal) {
+            userName = cachedLocal.name;
+            userGuildId = cachedLocal.guild_id;
+            userRank = cachedLocal.rank || "member";
+            if (cachedLocal.avatar_url) userAvatarUrl = cachedLocal.avatar_url;
+            foundInCache = true;
+            
+           GlobalDB.saveOwner({
+                id: userId,
+                name: cachedLocal.name,
+                avatar_url: cachedLocal.avatar_url,
+                guild_id: cachedLocal.guild_id
+            });
+        }
+    }
+
+    // 3. Busca autoritativa no Supabase (Atualiza cache se necessário)
+    const { data: player, error } = await supabase
+        .from("players")
+        .select("id, name, guild_id, rank, avatar_url")
+        .eq("id", userId)
+        .single();
+
+    if (!error && player) {
+      userName = player.name;
+      userGuildId = player.guild_id;
+      userRank = player.rank || "member";
+      if (player.avatar_url) {
+          userAvatarUrl = player.avatar_url;
+      }
+      
+      // Salva no GlobalDB para as Minas/Ranking usarem depois
+      GlobalDB.saveOwner({
+          id: player.id,
+          name: player.name,
+          avatar_url: player.avatar_url,
+          guild_id: player.guild_id
+      });
+    }
+    
+    // Atualiza visual se o elemento já existir (raro nesse ponto, mas seguro)
+    const av = $id("raidPlayerAvatar");
+    if (av) av.src = userAvatarUrl;
+
+  } catch (e) { console.error("initSession", e); }
+}
+
+function clearCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = null;
+}
+
+async function handleRaidCountdown(raidData) {
+    clearCountdown();
+    openCombatModal();
+    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+        const el = $id(id);
+        if (el) el.style.display = 'none';
+    });
+    const attackPara = $id('raidPlayerAttacks')?.parentNode;
+    if (attackPara) attackPara.style.display = 'none';
+    const countdownContainer = $id('raidCountdownContainer');
+    if (countdownContainer) countdownContainer.style.display = 'block';
+    
+    const msgEl = $id('raidCountdownMessage');
+    if (msgEl) msgEl.innerHTML = `A Raid foi iniciada.<br>A Torre da Desolação começará em:`;
+    const timerEl = $id('raidCountdownTimer');
+    const startTime = new Date(raidData.starts_at);
+    const updateTimer = () => {
+        const diff = Math.max(0, Math.floor((startTime - new Date()) / 1000));
+        const minutes = String(Math.floor(diff / 60)).padStart(2, '0');
+        const seconds = String(diff % 60).padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${minutes}:${seconds}`;
+        if (diff <= 0) {
+            clearCountdown();
+            //if (countdownContainer) countdownContainer.style.display = 'none';
+            if (timerEl) {
+        timerEl.innerHTML = '<div class="spinner"></div>'; // Você pode usar CSS para animar isso ou apenas texto
+        timerEl.textContent = "Carregando a batalha...";
+        timerEl.style.fontSize = "1.2em";
+        timerEl.style.color = "yellow";
+    }
+            queueAction(() => {
+                playVideo(RAID_INTRO_VIDEO_URL, () => {
+                    loadRaid(); 
+                });
+            });
+        }
+    };
+    updateTimer();
+    countdownInterval = setInterval(updateTimer, 1000);
+}
+
+async function loadRaid() {
+    if (!userGuildId) return;
+    stopAllFloorMusic();
+    isSwitchingFloors = false; 
+
+    try {
+        const { data, error } = await supabase
+            .from("guild_raids")
+            .select("*")
+            .eq("guild_id", userGuildId)
+            .eq("active", true)
+            .order("started_at", { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error || !data) {
+            currentRaidId = null;
+            closeCombatModal();
+            return;
+        }
+
+        const now = new Date();
+        const endsAt = new Date(data.ends_at);
+        const startTime = new Date(data.starts_at);
+
+        if (now >= endsAt) {
+            console.log("Detectada Raid expirada durante o load. Finalizando no servidor...");
+            await supabase.rpc('end_expired_raid', { p_raid_id: data.id });
+            showRaidAlert("A Raid anterior chegou ao fim.");
+            closeCombatModal();
+            return; 
+        }
+
+        if (now < startTime) {
+            await handleRaidCountdown(data);
+        } else {
+            const isNewFloor = data.current_floor !== currentFloor;
+            const isEnteringBossFloor = isNewFloor && (data.current_floor % 5 === 0);
+            
+            await continueLoadingRaid(data);
+            
+            if (isEnteringBossFloor) {
+                queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
+            }
+        }
+    } catch (e) {
+        console.error("loadRaid erro:", e);
+    }
+}
+
+async function continueLoadingRaid(raidData) {
+    currentRaidId = raidData.id;
+    currentFloor = raidData.current_floor || 1; 
+    maxMonsterHealth = Number(raidData.initial_monster_health) || 1;
+    raidEndsAt = raidData.ends_at;
+    $id('raidCountdownContainer').style.display = 'none';
+    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+        const el = $id(id);
+        if (el) el.style.display = ''; 
+    });
+    const attackPara = $id('raidPlayerAttacks')?.parentNode;
+    if (attackPara) attackPara.style.display = '';
+    
+    setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
+    updateHpBar(raidData.monster_health, maxMonsterHealth);
+    
+    await loadMonsterForFloor(currentFloor);
+    await loadAttempts();
+    await loadInitialPlayerState();
+    await cachePlayerStats(); 
+    loadBatchState(); 
+
+    await checkPendingRaidRewards();
+
+    deathNotificationQueue = [];
+    isDisplayingDeathNotification = false;
+    processedDeathTimestamps.clear(); 
+    
+    const rankEl = $id("raidDamageRankingList");
+    if(rankEl) rankEl.innerHTML = "";
+
+    startUISecondTicker();
+    startRaidTimer();
+    startOptimisticBossCombat();
+    startFloorMusic();
+    openCombatModal();
+}
+
+async function loadMonsterForFloor(floor) {
+  if (!floor) return;
+  
+  // 1. Gera URL da imagem localmente (ZERO EGRESS)
+  const imageUrl = getMonsterImageUrl(floor);
+  const img = $id("raidMonsterImage");
+  if (img) img.src = imageUrl;
+
+  // 2. Verifica Cache de Stats (Nome/HP)
+  if (monsterCache.has(floor)) {
+      updateMonsterNameAndHp(monsterCache.get(floor));
+      return;
+  }
+
+  // 3. Busca apenas Stats no banco (payload reduzido, sem image_url)
+  try {
+    const { data, error } = await supabase.from("guild_raid_monsters")
+        .select("base_health, name")
+        .eq("floor", floor)
+        .single();
+    if (!error && data) {
+      monsterCache.set(floor, data);
+      updateMonsterNameAndHp(data);
+    }
+  } catch (e) {
+    console.error("loadMonsterForFloor", e);
+  }
+}
+
+function updateMonsterNameAndHp(data) {
+    let monsterNameEl = $id("raidMonsterName");
+    if (!monsterNameEl) {
+        monsterNameEl = document.createElement("div");
+        monsterNameEl.id = "raidMonsterName";
+        monsterNameEl.style.cssText = "text-align: center; font-weight: bold; font-size: 1em; color: #fff; margin-top: -5px; text-shadow: 2px 2px 4px #000;";
+        const monsterArea = $id("raidMonsterArea");
+        if (monsterArea) {
+            monsterArea.insertBefore(monsterNameEl, monsterArea.firstChild);
+        }
+    }
+    monsterNameEl.textContent = data.name || "Monstro";
+    if (data.base_health) maxMonsterHealth = Number(data.base_health);
+}
+
+function saveAttemptsCache(left, last) {
+    if (!userId) return;
+    const cacheKey = `raid_attempts_${userId}`;
+    const data = {
+        left: left,
+        last: last,
+        ts: Date.now()
+    };
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+}
+
+async function loadAttempts() {
+  if (!currentRaidId || !userId) return;
+  
+  try {
+      const cacheKey = `raid_attempts_${userId}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+          const cached = JSON.parse(raw);
+          if (Date.now() - cached.ts < ATTEMPTS_CACHE_DURATION_MS) {
+              attacksLeft = cached.left;
+              lastAttackAt = cached.last ? new Date(cached.last) : null;
+              updateAttackUI();
+              return;
+          }
+      }
+  } catch(e) {}
+
+  try {
+    const { data, error } = await supabase.from("guild_raid_attempts").select("attempts_left, last_attack_at").eq("raid_id", currentRaidId).eq("player_id", userId).single();
+    if (error || !data) {
+      attacksLeft = MAX_ATTACKS;
+      lastAttackAt = null;
+    } else {
+      attacksLeft = Number(data.attempts_left || 0);
+      lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+    }
+    saveAttemptsCache(attacksLeft, lastAttackAt);
+    updateAttackUI();
+  } catch (e) {
+    console.error("loadAttempts", e);
+  }
+}
+
+function computeShownAttacksAndRemaining() {
+  const now = new Date();
+  
+  if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
+      return { shownAttacks: attacksLeft, secondsToNext: ATTACK_COOLDOWN_SECONDS };
+  }
+
+  if (!lastAttackAt) {
+    return { shownAttacks: attacksLeft, secondsToNext: 0 };
+  }
+  const elapsed = Math.floor((now - new Date(lastAttackAt)) / 1000);
+  const recovered = Math.floor(elapsed / ATTACK_COOLDOWN_SECONDS);
+  if (Number(attacksLeft || 0) > MAX_ATTACKS) {
+    return { shownAttacks: Number(attacksLeft || 0), secondsToNext: 0 };
+  }
+  let shown = Math.min(MAX_ATTACKS, Number(attacksLeft || 0) + recovered);
+  let secondsToNext = 0;
+  if (shown < MAX_ATTACKS) {
+    const sinceLast = elapsed % ATTACK_COOLDOWN_SECONDS;
+    secondsToNext = ATTACK_COOLDOWN_SECONDS - sinceLast;
+  }
+  return { shownAttacks: shown, secondsToNext };
+}
+
+function updateAttackUI() {
+  const attacksEl = $id("raidPlayerAttacks");
+  const cooldownEl = $id("raidAttackCooldown");
+  const attackBtn = $id("raidAttackBtn");
+  if (!attacksEl || !cooldownEl || !attackBtn) return;
+  
+  const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
+  
+  const visualAttacksLeft = Math.max(0, shownAttacks - pendingAttacksQueue);
+
+  attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
+  
+  if (visualAttacksLeft < MAX_ATTACKS && secondsToNext <= 0) {
+      cooldownEl.textContent = "Recuperando...";
+  } else {
+      cooldownEl.textContent = (secondsToNext > 0 && visualAttacksLeft < MAX_ATTACKS) 
+          ? `+ 1 em ${formatTime(secondsToNext)}` 
+          : "";
+  }
+  
+  if (visualAttacksLeft <= 0) {
+      attackBtn.style.opacity = '0.4';
+  } else {
+      attackBtn.style.opacity = '1';
+  }
+  
+  const playerDead = isPlayerDeadLocal();
+  if (playerDead || isProcessingAction || isSwitchingFloors) { 
+    attackBtn.style.pointerEvents = "none";
+    attackBtn.style.filter = "grayscale(80%)";
+  } else {
+    attackBtn.style.pointerEvents = visualAttacksLeft > 0 ? "" : "none";
+    attackBtn.style.filter = visualAttacksLeft > 0 ? "" : "grayscale(60%)";
+  }
+}
+
+let _playerReviveUntil = null;
+function isPlayerDeadLocal() {
+  if (!_playerReviveUntil) return false;
+  return new Date(_playerReviveUntil) > new Date();
+}
+
+async function loadInitialPlayerState() {
+  if (!userId) return;
+  try {
+    const { data: playerDetails, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
+    if (error || !playerDetails) {
+        return;
+    }
+    playerMaxHealth = playerDetails.health || 1;
+
+    // >>> ATUALIZAÇÃO DO AVATAR <<<
+    if (playerDetails.avatar_url) {
+        userAvatarUrl = playerDetails.avatar_url;
+        const av = $id("raidPlayerAvatar");
+        if (av) av.src = userAvatarUrl;
+
+        // Atualiza cache GlobalDB
+        GlobalDB.saveOwner({
+            id: userId,
+            name: playerDetails.name || userName, 
+            avatar_url: userAvatarUrl,
+            guild_id: playerDetails.guild_id || userGuildId
+        });
+    }
+
+    const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until").eq("id", userId).single();
+    if(pData) {
+        localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
+        _playerReviveUntil = pData.revive_until;
+    } else {
+        localPlayerHp = playerMaxHealth;
+    }
+    
+    updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+
+    if (isPlayerDeadLocal()) {
+        if (!reviveUITickerInterval) startReviveUITicker();
+    }
+
+  } catch (e) {
+    console.error("loadInitialPlayerState", e);
+  }
+}
+
+async function performAttackOptimistic() {
+    if (!currentRaidId || !userId || isProcessingAction) return;
+    if (isPlayerDeadLocal()) { showRaidAlert("Você está morto."); return; }
+    if (isSwitchingFloors) return; 
+    
+    const { shownAttacks } = computeShownAttacksAndRemaining();
+    const visualAttacksLeft = shownAttacks - pendingAttacksQueue; 
+
+    if (visualAttacksLeft <= 0) {
+        showRaidAlert("Sem ataques. Aguarde regeneração.");
+        return;
+    }
+
+    if (!playerStatsCache) await cachePlayerStats();
+    
+    const { min_attack, attack, crit_chance, crit_damage } = playerStatsCache || { min_attack: 1, attack: 5, crit_chance: 0, crit_damage: 0 };
+    const isCrit = (Math.random() * 100) < crit_chance;
+    let damage = Math.floor(Math.random() * ((attack - min_attack) + 1) + min_attack);
+    if (isCrit) damage = Math.floor(damage * (1 + crit_damage / 100.0));
+    damage = Math.max(1, damage);
+
+    displayFloatingDamageOver($id("raidMonsterArea"), damage, isCrit);
+    playHitSound(isCrit);
+    
+    const currentMonsterHp = getDisplayedMonsterHp() ?? maxMonsterHealth;
+    const newVisualHp = Math.max(0, currentMonsterHp - damage);
+    updateHpBar(newVisualHp, maxMonsterHealth);
+
+    pendingAttacksQueue++;
+    localDamageDealtInBatch += damage;
+    
+    if (attacksLeft >= MAX_ATTACKS && lastAttackAt === null) {
+         lastAttackAt = new Date(); 
+    }
+    
+    updateAttackUI(); 
+    saveBatchState(); 
+    saveAttemptsCache(attacksLeft, lastAttackAt);
+
+    if (batchSyncTimer) clearTimeout(batchSyncTimer);
+    
+    if (newVisualHp <= 0) {
+        isSwitchingFloors = true; 
+        updateAttackUI(); 
+        stopOptimisticBossCombat(); 
+        triggerBatchSync(); 
+    } else if (pendingAttacksQueue >= BATCH_THRESHOLD) {
+        triggerBatchSync();
+    } else {
+        batchSyncTimer = setTimeout(triggerBatchSync, BATCH_DEBOUNCE_MS);
+    }
+}
+
+async function triggerBatchSync() {
+    if (pendingAttacksQueue === 0 || isBatchSyncing) return;
+    isBatchSyncing = true;
+
+    const attacksToSend = pendingAttacksQueue;
+    const expectedDamage = localDamageDealtInBatch; 
+
+    pendingAttacksQueue = 0;
+    localDamageDealtInBatch = 0;
+    saveBatchState(); 
+    if (batchSyncTimer) clearTimeout(batchSyncTimer);
+
+    updateAttackUI();
+
+    try {
+        const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
+            p_player_id: userId,
+            p_raid_id: currentRaidId,
+            p_attack_count: attacksToSend
+        });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (data.revive_until && new Date(data.revive_until) > new Date()) {
+             _playerReviveUntil = data.revive_until;
+             localPlayerHp = 0;
+             updatePlayerHpUi(0, playerMaxHealth);
+             
+             if (!reviveUITickerInterval) startReviveUITicker();
+             displayDeathNotification(userName || "Você");
+             
+             if (data.attacks_left !== undefined) {
+                 attacksLeft = data.attacks_left;
+                 lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+                 saveAttemptsCache(attacksLeft, lastAttackAt);
+             }
+             updateAttackUI();
+             
+             if (data.boss_action && data.boss_action.damage) {
+                 displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
+                 playHitSound(data.boss_action.boss_crit); 
+             }
+
+             if (data.recent_deaths) {
+                 checkOtherPlayerDeaths(data.recent_deaths);
+             }
+             
+             isBatchSyncing = false;
+             return;
+        }
+
+        if (!data.success) {
+            throw new Error(data.message || "Erro no sync");
+        }
+
+        // Detecta drift do dano otimista: se o servidor devolveu um HP
+        // MAIOR do que o exibido localmente, ilustramos isso como a
+        // habilidade de regeneração do chefe, em vez de só corrigir a
+        // barra em silêncio.
+        const previousDisplayedHp = getDisplayedMonsterHp();
+        updateHpBar(data.monster_health, data.max_monster_health);
+        if (data.monster_health > 0 && previousDisplayedHp !== null && data.monster_health > previousDisplayedHp) {
+            displayFloatingHealOver($id("raidMonsterArea"), data.monster_health - previousDisplayedHp);
+        }
+        
+        if (data.player_health !== undefined) {
+             localPlayerHp = Math.min(localPlayerHp, data.player_health);
+             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+        }
+        
+        if (data.boss_action && data.boss_action.damage) {
+             displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
+             playHitSound(data.boss_action.boss_crit); 
+        }
+
+        attacksLeft = data.attacks_left;
+        lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+        
+        if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
+            lastAttackAt = new Date();
+        }
+
+        saveAttemptsCache(attacksLeft, lastAttackAt);
+        updateAttackUI();
+
+        if (data.inventory_updates && data.new_timestamp) {
+             await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+        
+        if (data.recent_deaths) {
+             checkOtherPlayerDeaths(data.recent_deaths);
+        }
+
+        // --- DERROTA DO MONSTRO ---
+        if (data.monster_health <= 0) {
+             const floorDefeated = currentFloor; 
+             const wasBoss = floorDefeated % 5 === 0;
+             const rewardCallback = () => {
+                showRewardModal(data.xp_reward, data.crystals_reward, () => {
+                    // Transição Otimizada (Next Monster vindo do Payload)
+                    if (data.next_monster && data.next_floor) {
+                        currentFloor = data.next_floor;
+                        
+                        // Define imagem LOCALMENTE
+                        const newImageUrl = getMonsterImageUrl(currentFloor);
+                        const img = $id("raidMonsterImage");
+                        if (img) img.src = newImageUrl;
+
+                        // Atualiza Cache com nome/hp vindos do server
+                        monsterCache.set(currentFloor, {
+                            name: data.next_monster.name,
+                            base_health: data.max_monster_health
+                        });
+                        
+                        setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
+                        updateMonsterNameAndHp({
+                            name: data.next_monster.name,
+                            base_health: data.max_monster_health
+                        });
+                        updateHpBar(data.max_monster_health, data.max_monster_health);
+                        
+                        const isEnteringBossFloor = (currentFloor % 5 === 0);
+                        if (isEnteringBossFloor) {
+                            queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
+                        }
+                        
+                        stopAllFloorMusic();
+                        startOptimisticBossCombat();
+                        startFloorMusic();
+                        isSwitchingFloors = false;
+                        updateAttackUI();
+
+                    } else {
+                        setTimeout(() => loadRaid().catch(()=>{}), 200);
+                    }
+                }, undefined, data.items_dropped);
+             };
+
+             if (wasBoss) {
+                queueAction(() => playVideo(BOSS_DEATH_VIDEO_URL, rewardCallback));
+             } else {
+                rewardCallback();
+             }
+        } else {
+             isSwitchingFloors = false;
+             updateAttackUI();
+        }
+
+    } catch (e) {
+        console.error("Falha no Sync Batch:", e);
+        pendingAttacksQueue += attacksToSend;
+        localDamageDealtInBatch += expectedDamage;
+        isSwitchingFloors = false;
+        saveBatchState();
+        updateAttackUI();
+        batchSyncTimer = setTimeout(() => { isBatchSyncing = false; triggerBatchSync(); }, 5000);
+        return; 
+    }
+    isBatchSyncing = false;
+}
+
+function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
+  const xpEl = $id("rewardXpText");
+  const crEl = $id("rewardCrystalsText");
+  const modal = $id("raidRewardModal");
+  const okBtn = $id("rewardOkBtn");
+  if (!modal) {
+    if (onOk) onOk();
+    return;
+  }
+  if (xpEl) {
+    xpEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;"><img src="https://aden-rpg.pages.dev/assets/exp.webp" alt="XP" style="width:70px;height:70px;object-fit:contain;"> x <span style="font-weight:bold; font-size: 1.3em;">${Number(xp || 0).toLocaleString()}</span></div>`;
+  }
+  if (crEl) {
+    crEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width:70px;height:70px;object-fit:contain;"> x <span style="font-weight:bold; font-size: 1.3em;">${Number(crystals || 0).toLocaleString()}</span></div>`;
+  }
+  const itemsContainerId = "rewardItemsContainer";
+  let itemsContainer = $id(itemsContainerId);
+  if (!itemsContainer) {
+    itemsContainer = document.createElement("div");
+    itemsContainer.id = itemsContainerId;
+    itemsContainer.style.cssText = "margin-top: 8px; display: none; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;";
+    if (okBtn?.parentNode) {
+      okBtn.parentNode.insertBefore(itemsContainer, okBtn);
+    } else {
+      modal.appendChild(itemsContainer);
+    }
+  }
+  itemsContainer.innerHTML = "";
+  let itemsArray = itemsDropped;
+  try {
+    if (typeof itemsDropped === "string") itemsArray = JSON.parse(itemsDropped);
+    if (!Array.isArray(itemsArray)) itemsArray = [];
+  } catch (e) {
+    itemsArray = [];
+  }
+  if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+    itemsContainer.style.display = "block";
+    const ul = document.createElement("ul");
+    ul.style.cssText = "list-style: none; padding: 0; margin: 6px 0 0 0;";
+    itemsArray.forEach(it => {
+      const li = document.createElement("li");
+      li.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 6px 0;";
+      const img = document.createElement("img");
+      img.src = "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+      img.style.cssText = "width: 70px; height: 70px; object-fit: contain;";
+      img.alt = `Item ${it.item_id}`;
+      const span = document.createElement("span");
+      span.style.fontWeight = "bold";
+      span.textContent = `x ${it.quantity}`;
+      li.appendChild(img);
+      li.appendChild(span);
+      ul.appendChild(li);
+    });
+    itemsContainer.appendChild(ul);
+    try {
+      const ids = itemsArray.map(i => i.item_id);
+      supabase.from('items').select('item_id, display_name, name').in('item_id', ids).then(res => {
+        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
+          const map = {};
+          res.data.forEach(r => { map[r.item_id] = { name: r.name, display_name: r.display_name || r.name || (`#${r.item_id}`) }; });
+          const lis = ul.querySelectorAll('li');
+          itemsArray.forEach((it, idx) => {
+            const entry = map[it.item_id];
+            const li = lis[idx];
+            if (!li) return;
+            const img = li.querySelector('img');
+            const imageUrl = entry?.name ? `https://aden-rpg.pages.dev/assets/itens/${entry.name}.webp` : "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+            if (img) img.src = imageUrl;
+          });
+        }
+      });
+    } catch(e) { console.warn('Erro ao processar itemsDropped:', e); }
+  } else {
+    itemsContainer.style.display = "none";
+  }
+  modal.style.display = "flex";
+  if (okBtn) {
+    okBtn.onclick = async () => {
+      modal.style.display = "none";
+      try {
+        if (rewardId) {
+          await supabase.from("guild_raid_rewards").update({ claimed: true, claimed_at: new Date().toISOString() }).eq("id", rewardId);
+        } else if (currentRaidId && userId) {
+          await supabase.from("guild_raid_rewards").update({ claimed: true, claimed_at: new Date().toISOString() }).eq("raid_id", currentRaidId).eq("player_id", userId).eq("claimed", false);
+        }
+      } catch (e) {
+        console.error("Erro ao marcar reward como claimed:", e);
+      }
+      if (onOk) onOk();
+    };
+  }
+}
+
+function startOptimisticBossCombat() {
+    stopOptimisticBossCombat();
+    if ((currentFloor % 5) !== 0) return;
+
+    const now = Date.now();
+    nextBossAttackTime = now + (BOSS_ATTACK_INTERVAL_SECONDS * 1000);
+
+    optimisticBossInterval = setInterval(async () => {
+        if (isProcessingAction || isPlayerDeadLocal()) return;
+        
+        const now = Date.now();
+        if (now >= nextBossAttackTime) {
+            await simulateLocalBossAttackLogic();
+            nextBossAttackTime = now + (BOSS_ATTACK_INTERVAL_SECONDS * 1000);
+        }
+    }, 1000); 
+}
+
+function stopOptimisticBossCombat() {
+    if (optimisticBossInterval) clearInterval(optimisticBossInterval);
+    optimisticBossInterval = null;
+}
+
+async function simulateLocalBossAttackLogic() {
+    const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
+    if (currentMonsterHp <= 0) return;
+
+    if (!playerStatsCache) await cachePlayerStats();
+    
+    const randomAttackVideo = BOSS_ATTACK_VIDEO_URLS[Math.floor(Math.random() * BOSS_ATTACK_VIDEO_URLS.length)];
+    queueAction(() => {
+        playVideo(randomAttackVideo, () => {
+             const stats = playerStatsCache || { defense: 0, evasion: 0, health: 1 };
+             const isEvaded = (Math.random() * 100) < stats.evasion;
+             
+             if (isEvaded) {
+                 displayFloatingDamageOver($id("raidPlayerArea"), "Errou!", false);
+                 return;
+             }
+             const isCrit = (Math.random() * 100 < 10);
+             let damageMult = 1.0;
+             if (isCrit) {
+                 damageMult = 1.8 + (Math.random() * 0.5); 
+             }
+             let baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
+             baseDmg = Math.floor(baseDmg * damageMult);
+             const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
+             localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
+             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isCrit);
+             playHitSound(isCrit);
+
+             if (localPlayerHp <= 0) {
+                 handleOptimisticDeath();
+             }
+        });
+    });
+}
+
+function handleOptimisticDeath() {
+    const reviveTimeMs = 62000; 
+    _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
+    updateAttackUI(); 
+    displayDeathNotification(userName || "Você"); 
+    startReviveUITicker();
+}
+
+function startReviveUITicker() {
+    stopReviveUITicker();
+    reviveUITickerInterval = setInterval(() => {
+        if (!_playerReviveUntil) {
+            stopReviveUITicker();
+            return;
+        }
+        const remaining = Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000);
+        setPlayerReviveOverlayText(Math.max(0, remaining));
+
+        if (remaining <= 0) {
+            _playerReviveUntil = null;
+            localPlayerHp = playerMaxHealth;
+            updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+            setPlayerReviveOverlayText(0);
+            updateAttackUI(); 
+            stopReviveUITicker();
+        }
+    }, 1000);
+}
+
+function stopReviveUITicker() {
+    if (reviveUITickerInterval) clearInterval(reviveUITickerInterval);
+    reviveUITickerInterval = null;
+    setPlayerReviveOverlayText(0);
+}
+
+async function checkPendingRaidRewards() {
+  if (!currentRaidId || !userId) return;
+  try {
+    const { data, error } = await supabase.from("guild_raid_rewards").select("id, xp, crystals, items_dropped").eq("raid_id", currentRaidId).eq("player_id", userId).eq("claimed", false).order("created_at", { ascending: true });
+    if (error) {
+      return;
+    }
+    for (const reward of (data || [])) {
+      if (shownRewardIds.has(reward.id)) continue;
+      shownRewardIds.add(reward.id);
+      await new Promise(resolve => {
+        showRewardModal(reward.xp, reward.crystals, () => {
+          resolve();
+        }, reward.id, reward.items_dropped);
+      });
+    }
+  } catch (e) { console.error("checkPendingRaidRewards", e); }
+}
+
+function startUISecondTicker() {
+  stopUISecondTicker();
+  uiSecondInterval = setInterval(async () => {
+    updateAttackUI();
+  }, 1000);
+}
+
+function stopUISecondTicker() { if (uiSecondInterval) clearInterval(uiSecondInterval); uiSecondInterval = null; }
+
+function startRaidTimer() {
+  clearRaidTimer();
+  if (!raidEndsAt) return;
+  raidTimerInterval = setInterval(() => {
+    const diff = Math.floor((new Date(raidEndsAt) - new Date()) / 1000);
+    if (diff <= 0) {
+      clearRaidTimer();
+      const m = $id("raidCombatModal");
+      if(m && m.style.display !== 'none') {
+        closeCombatModal();
+        showRaidAlert("A Raid terminou.");
+      }
+      return;
+    }
+    setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
+  }, 1000);
+}
+
+function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterval); raidTimerInterval = null; }
+
+function closeCombatModal(){ 
+  const m = $id("raidCombatModal"); 
+  if (m) m.style.display = "none"; 
+  _exitRaidFullscreen();
+
+  const banner = $id('raidDeathNotification');
+  if (banner) {
+      banner.classList.remove('show');
+      banner.style.animation = 'none';
+      banner.offsetHeight;
+      banner.style.animation = null; 
+  }
+  deathNotificationQueue = [];
+  isDisplayingDeathNotification = false;
+  processedDeathTimestamps.clear();
+
+  if (pendingAttacksQueue > 0) triggerBatchSync();
+
+  stopUISecondTicker(); 
+  clearRaidTimer(); 
+  stopOptimisticBossCombat();
+  stopReviveUITicker();
+  stopAllFloorMusic();
+  clearCountdown();
+  actionQueue = [];
+  isProcessingAction = false;
+  isSwitchingFloors = false;
+}
+
+function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = "flex"; }
+function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }
+// ── Fullscreen (esconde a barra de endereço do navegador durante a Raid) ──
+function _requestRaidFullscreen() {
+  try {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) {
+      const p = req.call(el);
+      if (p && p.catch) p.catch(() => {});
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(() => {});
+    }
+  } catch (e) { /* fullscreen indisponível — ignora silenciosamente */ }
+}
+
+function _exitRaidFullscreen() {
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exit) {
+        const p = exit.call(document);
+        if (p && p.catch) p.catch(() => {});
+      }
+    }
+  } catch (e) { /* ignora */ }
+}
+
+function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; _requestRaidFullscreen(); }
+
+function bindEvents() {
+  const tdd = $id("tdd");
+  if (tdd) {
+    tdd.addEventListener("click", async () => {
+      try { primeMedia(); } catch(e) {}
+      _requestRaidFullscreen();
+
+      if (!userGuildId) return;
+
+      const { data: activeRaid } = await supabase
+        .from("guild_raids")
+        .select("id, current_floor")
+        .eq("guild_id", userGuildId)
+        .eq("active", true)
+        .limit(1)
+        .single();
+
+      if (activeRaid) {
+        await loadRaid();
+      } else {
+        const { data: lastRaid } = await supabase
+          .from("guild_raids")
+          .select("current_floor, active")
+          .eq("guild_id", userGuildId)
+          .order("ends_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (lastRaid && !lastRaid.active) {
+          const modal = $id("lastRaidResultModal");
+          if (modal) {
+            $id("lastRaidFloorResult").textContent = `Andar ${lastRaid.current_floor || 0}`;
+            modal.style.display = "flex";
+          }
+        } else {
+          openRaidModal();
+        }
+      }
+    });
+  }
+
+  $id("startNewRaidFromLastResultBtn")?.addEventListener("click", () => {
+    openRaidModal();
+    const m = $id("lastRaidResultModal"); if (m) m.style.display = "none";
+  });
+  $id("closeLastResultBtn")?.addEventListener("click", () => { const m = $id("lastRaidResultModal"); if (m) m.style.display = "none"; });
+
+  $id("startRaidBtn")?.addEventListener("click", async () => {
+    try { primeMedia(); } catch(e) {}
+    _requestRaidFullscreen();
+
+    if (userRank !== "leader" && userRank !== "co-leader") { showRaidAlert("Apenas líder/co-líder"); return; }
+    const startBtn = $id("startRaidBtn");
+    startBtn.disabled = true;
+    try {
+        const { error } = await supabase.rpc("start_guild_raid", { p_guild_id: userGuildId, p_player_id: userId, p_name: "Torre da Desolação" });
+        if (error) {
+            showRaidAlert(error.message || "Erro ao iniciar raid");
+            return;
+        }
+        closeRaidModal();
+        await loadRaid();
+    } catch(e) {
+      console.error("startRaid", e);
+      showRaidAlert("Erro ao iniciar raid");
+    } finally {
+      startBtn.disabled = false;
+    }
+  });
+
+  $id("raidAttackBtn")?.addEventListener("click", async (e) => {
+    try { unlockMedia(); } catch(e) {}
+    try { await performAttackOptimistic(); } catch(err) { console.error('performAttackOptimistic error', err); }
+});
+
+  $id("cancelRaidBtn")?.addEventListener("click", closeRaidModal);
+  $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
+  
+  window.addEventListener('beforeunload', () => {
+      if (pendingAttacksQueue > 0) triggerBatchSync();
+  });
+}
+
+// =================================================================
+// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO DO MONSTRO DA RAID
+// -----------------------------------------------------------------
+// Em vez de um @keyframes fixo (que repete sempre o mesmo padrão e
+// fica robótico), a respiração é calculada quadro a quadro: a
+// velocidade e a "profundidade" do fôlego derivam lentamente ao
+// longo do tempo, a curva de inspiração/expiração é assimétrica
+// (como uma respiração real) e, de tempos em tempos, o monstro dá
+// uma respirada mais funda (um "suspiro"), quebrando a repetição.
+// Além disso há um leve balanço de peso (rotação + deslocamento
+// horizontal mínimos) para parecer vivo — nunca usamos translateY,
+// então ele não flutua, só respira e balança sutilmente.
+// IMPORTANTE: esta função controla `raidMonsterImage.style.transform`
+// sem parar. O flash de dano (_epicRaidPlayerAttack) usa apenas
+// `style.animation` sobre `filter`/`drop-shadow`, nunca sobre
+// `transform`, então os dois nunca brigam pelo mesmo controle.
+// =================================================================
+function initOrganicBreathing(elementId) {
+  const img = document.getElementById(elementId);
+  if (!img) return;
+
+  let breathPhase = Math.random() * Math.PI * 2;
+  let swayPhase = Math.random() * Math.PI * 2;
+
+  let breathSpeed = 1, breathDepth = 1, swaySpeed = 0.35;
+  let targetBreathSpeed = breathSpeed, targetBreathDepth = breathDepth, targetSwaySpeed = swaySpeed;
+  let nextDriftChange = 0;
+
+  let nextDeepBreath = 4000 + Math.random() * 5000;
+  let deepBreathBoost = 0;
+  let deepBreathTarget = 0;
+  let deepBreathHold = 0;
+
+  let lastTime = performance.now();
+
+  function pickNewDriftTargets() {
+    targetBreathSpeed = 0.82 + Math.random() * 0.4;   // ~0.82x–1.22x
+    targetBreathDepth = 0.75 + Math.random() * 0.55;  // ~0.75x–1.3x
+    targetSwaySpeed = 0.25 + Math.random() * 0.25;
+    nextDriftChange = 3000 + Math.random() * 5000;    // novo alvo a cada 3–8s
+  }
+  pickNewDriftTargets();
+
+  function tick(now) {
+    const dt = Math.min(now - lastTime, 100); // evita saltos ao voltar de aba oculta
+    lastTime = now;
+
+    if (document.hidden || img.offsetParent === null) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    // Não brigar com a animação de "tremida" ao levar dano
+    if (img.classList.contains("shake-animation")) {
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    nextDriftChange -= dt;
+    if (nextDriftChange <= 0) pickNewDriftTargets();
+
+    breathSpeed += (targetBreathSpeed - breathSpeed) * 0.0015 * dt;
+    breathDepth += (targetBreathDepth - breathDepth) * 0.0015 * dt;
+    swaySpeed += (targetSwaySpeed - swaySpeed) * 0.0015 * dt;
+
+    nextDeepBreath -= dt;
+    if (nextDeepBreath <= 0) {
+      deepBreathTarget = 1;
+      deepBreathHold = 900; // ms segurando o pico antes de soltar o ar
+      nextDeepBreath = 7000 + Math.random() * 8000;
+    }
+    if (deepBreathTarget > 0) {
+      deepBreathHold -= dt;
+      if (deepBreathHold <= 0) deepBreathTarget = 0;
+    }
+    // Sobe e desce suavemente (sem saltos) — simula inspirar fundo e soltar o ar aos poucos
+    deepBreathBoost += (deepBreathTarget - deepBreathBoost) * 0.005 * dt;
+
+    breathPhase += (dt / 1000) * breathSpeed * ((Math.PI * 2) / 4.2);
+    swayPhase += (dt / 1000) * swaySpeed * (Math.PI * 2);
+
+    // Curva assimétrica: inspiração mais rápida, expiração mais lenta
+    const raw = Math.sin(breathPhase);
+    const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+    const breathAmount = asym * 0.012 * breathDepth * (1 + deepBreathBoost * 0.9);
+    const scaleY = 1 + breathAmount;
+    const scaleX = 1 + breathAmount * 0.43; // o "peito" também expande um pouco na largura
+
+    // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
+    const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;
+    const rotateDeg = sway * 0.12;
+    const translateXpx = sway * 0.3;
+
+    img.style.transform =
+      `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +
+      `scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+
+    requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+}
+
+async function mainInit() {
+  createMediaPlayers();
+  createDeathNotificationUI();
+  await initSession();
+  bindEvents();
+  closeCombatModal();
+  initOrganicBreathing('raidMonsterImage');
+}
+
+document.addEventListener("DOMContentLoaded", mainInit);
+
+let raidBuyQty = 1;
+let raidBuyPlayerGold = 0;
+let raidBuyBaseBoughtCount = 0;
+
+function calcRaidTotalCost(qty, baseCount) {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    const cost = 10 + (Math.floor((baseCount + i) / 5) * 5);
+    total += cost;
+  }
+  return total;
+}
+
+function refreshRaidBuyModalUI() {
+  const buyModal = $id("buyModal");
+  if (!buyModal) return;
+  const qtyEl = $id("buyAttackQty");
+  const costEl = $id("buyAttackCostInfo");
+  const goldEl = $id("buyPlayerGoldInfo");
+  const confirmBtn = $id("buyConfirmBtn");
+  if (qtyEl) qtyEl.textContent = String(raidBuyQty);
+  const total = calcRaidTotalCost(raidBuyQty, raidBuyBaseBoughtCount);
+  if (costEl) costEl.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
+  if (goldEl) goldEl.innerHTML = `Você tem:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(raidBuyPlayerGold || 0).toLocaleString()}</strong>`;
+  if (confirmBtn) confirmBtn.disabled = (total > (raidBuyPlayerGold || 0));
+}
+
+async function openRaidBuyModal() {
+  if (!userId) { showRaidAlert("Faça login para comprar."); return; }
+  try {
+    const { data: player, error } = await supabase.from("players").select("gold, raid_attacks_bought_count, raid_last_attack_time").eq("id", userId).single();
+    if (error) { console.error("openRaidBuyModal", error); showRaidAlert("Erro ao abrir modal de compra."); return; }
+    raidBuyPlayerGold = player.gold || 0;
+    const lastDate = player.raid_last_attack_time ? new Date(player.raid_last_attack_time).toDateString() : null;
+    raidBuyBaseBoughtCount = (lastDate === new Date().toDateString()) ? (player.raid_attacks_bought_count || 0) : 0;
+    raidBuyQty = 1;
+    refreshRaidBuyModalUI();
+    const buyModal = $id("buyModal");
+    if (buyModal) buyModal.style.display = "flex";
+  } catch (e) {
+    console.error("[raid] openRaidBuyModal erro:", e);
+    showRaidAlert("Erro ao abrir modal de compra.");
+  }
+}
+
+function closeRaidBuyModal() { const m = $id("buyModal"); if (m) m.style.display = "none"; }
+
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    const launchBtn = $id("raidBuyAttackBtn");
+    if (launchBtn) launchBtn.addEventListener("click", openRaidBuyModal);
+    const inc = $id("buyIncreaseQtyBtn");
+    if (inc) inc.addEventListener("click", () => { raidBuyQty++; refreshRaidBuyModalUI(); });
+    const dec = $id("buyDecreaseQtyBtn");
+    if (dec) dec.addEventListener("click", () => { if (raidBuyQty > 1) raidBuyQty--; refreshRaidBuyModalUI(); });
+    const cancel = $id("buyCancelBtn");
+    if (cancel) cancel.addEventListener("click", closeRaidBuyModal);
+    const confirm = $id("buyConfirmBtn");
+    if (confirm) confirm.addEventListener("click", async () => {
+      closeRaidBuyModal();
+      let purchased = 0;
+      let spent = 0;
+      try {
+        for (let i = 0; i < raidBuyQty; i++) {
+          const { data, error } = await supabase.rpc("buy_raid_attack", { p_player_id: userId });
+          if (error || !(data && (data.success === true || data.success === 't'))) {
+            if (purchased === 0) showRaidAlert(error?.message || (data && data.message) || "Compra não pôde ser concluída.");
+            break;
+          }
+          const payload = Array.isArray(data) ? data[0] : data;
+          purchased++;
+          spent += (payload.cost || 0);
+          raidBuyPlayerGold = Math.max(0, (raidBuyPlayerGold || 0) - (payload.cost || 0));
+        }
+        if (purchased > 0) {
+          showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
+          attacksLeft += purchased; 
+          saveAttemptsCache(attacksLeft, lastAttackAt);
+          updateAttackUI();
+        }
+      } catch (e) {
+        console.error("[raid] buyConfirm erro:", e);
+        showRaidAlert("Erro inesperado na compra.");
+      }
+    });
+  } catch (e) {
+    console.error("[raid] buy modal attach erro", e);
+  }
+});
+
+async function checkActiveRaidOnEntry() {
+  try {
+    let waited = 0;
+    while (!userGuildId && waited < 3000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
+    }
+    if (!userGuildId) return;
+
+    const { data: activeRaid, error } = await supabase
+      .from("guild_raids")
+      .select("id")
+      .eq("guild_id", userGuildId)
+      .eq("active", true)
+      .limit(1)
+      .single();
+
+    if (error || !activeRaid) return;
+
+    await new Promise(r => setTimeout(r, 300));
+
+    try {
+      showRaidAlert("Há uma Raid em andamento. Vá verificar!");
+    } catch (e) {
+      console.warn('alert falhou:', e);
+    }
+
+  } catch (e) {
+    console.error("checkActiveRaidOnEntry error:", e);
+  }
+}
+
+setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);

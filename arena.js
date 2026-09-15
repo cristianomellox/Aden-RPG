@@ -1,0 +1,2420 @@
+import { supabase } from './supabaseClient.js'
+
+// ═══════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (Arena PvP)
+// Cache compartilhado: skin_modal_v1_${pid} (24h), mesmo do ranking e minas
+// ═══════════════════════════════════════════════════════════════════
+
+function _arGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+
+function _arSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+function _arApplyFrame(containerEl, frameUrl) {
+    if (!containerEl) return;
+    const frameImg  = containerEl.querySelector('.arena-frame-overlay');
+    const sheenEl   = containerEl.querySelector('.arena-frame-sheen');
+    const avatarImg = containerEl.querySelector('.player-avatar-pvp');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '3px solid #ffd700';
+    }
+}
+
+function _arResetFrame(containerEl) {
+    _arApplyFrame(containerEl, null);
+}
+
+async function _arFetchAndApplyFrame(pid, containerEl) {
+    if (!pid || !containerEl) return;
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { _arApplyFrame(containerEl, null); return; }
+        _arApplyFrame(containerEl, data?.frame_url || null);
+    } catch(e) { _arApplyFrame(containerEl, null); }
+}
+
+
+// =======================================================================
+// 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 7; // Versão alinhada com mines.js
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store'; // Store compartilhada de perfis
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+                console.log("⚡ [Arena] GlobalDB atualizado parcialmente:", changes);
+            }
+        } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
+    },
+    // --- Lógica Compartilhada de Leitura de Donos/Perfis ---
+    getAllOwners: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const store = tx.objectStore(OWNERS_STORE);
+                const req = store.getAll();
+                req.onsuccess = () => {
+                    const result = req.result || [];
+                    const map = {};
+                    result.forEach(o => map[o.id] = o);
+                    resolve(map);
+                };
+                req.onerror = () => resolve({});
+            });
+        } catch(e) { return {}; }
+    },
+    // --- Salva e Atualiza Timestamp (Keep-Alive para Cache) ---
+    saveOwners: async function(ownersList) {
+        if (!ownersList || ownersList.length === 0) return;
+        try {
+            const db = await this.open();
+            const tx = db.transaction(OWNERS_STORE, 'readwrite');
+            const store = tx.objectStore(OWNERS_STORE);
+            const now = Date.now();
+
+            ownersList.forEach(o => {
+                // Salva ID, Nome, Avatar e GuildID. 
+                const cacheObj = {
+                    id: o.id,
+                    name: o.name,
+                    avatar_url: o.avatar_url,
+                    guild_id: o.guild_id, 
+                    timestamp: now 
+                };
+                store.put(cacheObj);
+            });
+            return new Promise(resolve => { tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
+        } catch(e) { console.warn("Erro ao salvar donos no cache global:", e); }
+    }
+};
+
+// =======================================================================
+// 2. HELPER INDEXEDDB INVENTORY (Surgical Update com Hidratação)
+// =======================================================================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 47;
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// >>> INCLUI hidratação de itens crus <<<
+async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => {
+                // Tenta hidratar se o item estiver "pelado" (veio do RPC sem JOIN)
+                if (!item.items || !item.items.name) {
+                    if (window.itemDefinitions) {
+                        const def = window.itemDefinitions.get(item.item_id);
+                        if (def) item.items = def;
+                    } else if (localStorage.getItem('item_definitions_full_v1')) {
+                        // Fallback: lê do storage se a RAM não tiver
+                        try {
+                             const cached = JSON.parse(localStorage.getItem('item_definitions_full_v1'));
+                             const map = new Map(cached.data || cached);
+                             const def = map.get(item.item_id);
+                             if(def) item.items = def;
+                        } catch(e){}
+                    }
+                }
+                store.put(item);
+            });
+        }
+
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        if (updatedStats) {
+            const req = meta.get("player_stats");
+            req.onsuccess = () => {
+                const currentStats = req.result ? req.result.value : {};
+                const finalStats = { ...currentStats, ...updatedStats };
+                meta.put({ key: "player_stats", value: finalStats });
+            };
+            await GlobalDB.updatePlayerPartial(updatedStats);
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => {
+                console.log("✅ [Arena Surgical Update] Caches locais atualizados.");
+                resolve();
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB via arena.js:", e);
+    }
+}
+
+// =======================================================================
+// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS & SAFETY)
+// =======================================================================
+/**
+ * Recebe uma lista de objetos "esqueleto" (com id ou opponent_id).
+ * 1. Verifica o cache GlobalDB (owners_store).
+ * 2. Baixa apenas os perfis faltantes via RPC `get_missing_profiles`.
+ * 3. Garante que nenhum objeto fique com nome undefined.
+ */
+async function hydrateProfiles(skeletonList) {
+    if (!skeletonList || skeletonList.length === 0) return [];
+
+    // 1. Ler Cache Global
+    const globalCacheMap = await GlobalDB.getAllOwners();
+    const missingIds = [];
+    const idsToUpdateTimestamp = [];
+    const hydratedList = [];
+
+    // 2. Cruzamento (Cache Hit vs Miss)
+    skeletonList.forEach(item => {
+        // Suporta tanto item.id (ranking) quanto item.opponent_id (histórico) quanto item.id (oponente)
+        const targetId = item.id || item.opponent_id; 
+        
+        if(!targetId) {
+             // Se não tiver ID, mantém o item como está (segurança)
+             hydratedList.push(item);
+             return;
+        }
+
+        const cached = globalCacheMap[targetId];
+        if (cached && cached.name) {
+            // Temos no cache!
+            hydratedList.push({
+                ...item,
+                name: cached.name,
+                avatar_url: cached.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp',
+                // Mantém o guild_id do esqueleto se existir (prioridade), ou usa do cache
+                guild_id: item.guild_id || cached.guild_id
+            });
+            idsToUpdateTimestamp.push(cached);
+        } else {
+            // Não temos, marcar para baixar
+            missingIds.push(targetId);
+            hydratedList.push({ ...item, _needsFetch: true });
+        }
+    });
+
+    // 3. Fetch dos faltantes (Delta Fetch)
+    if (missingIds.length > 0) {
+        try {
+            const { data: freshProfiles } = await supabase
+                .rpc('get_missing_profiles', { p_user_ids: missingIds });
+
+            if (freshProfiles) {
+                const toSave = [];
+                freshProfiles.forEach(fp => {
+                    // Encontra todos os itens na lista hidratada que precisam desse perfil
+                    hydratedList.forEach(hItem => {
+                       const tId = hItem.id || hItem.opponent_id;
+                       if(tId === fp.id && hItem._needsFetch) {
+                           hItem.name = fp.name || "Desconhecido";
+                           hItem.avatar_url = fp.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+                           if (!hItem.guild_id) hItem.guild_id = fp.guild_id; 
+                           delete hItem._needsFetch;
+                       }
+                    });
+                    toSave.push(fp);
+                });
+                // Salva novos perfis no cache global
+                await GlobalDB.saveOwners(toSave);
+            }
+        } catch(e) {
+            console.warn("Erro ao buscar perfis faltantes:", e);
+        }
+    }
+
+    // 4. Fallback de Segurança (Se falhou fetch ou ID não existe mais)
+    // Evita crash de 'undefined reading name'
+    hydratedList.forEach(hItem => {
+        if (hItem._needsFetch) {
+            hItem.name = "Desconhecido";
+            hItem.avatar_url = "https://aden-rpg.pages.dev/avatar01.webp";
+            delete hItem._needsFetch;
+        }
+    });
+
+    // 5. Renova TTL dos caches usados (Keep-alive para Minas/Ranking CP)
+    if (idsToUpdateTimestamp.length > 0) {
+        await GlobalDB.saveOwners(idsToUpdateTimestamp);
+    }
+
+    return hydratedList;
+}
+
+/**
+ * Prepara linhas de arena_attack_logs para hydrateProfiles().
+ * As linhas têm seu próprio "id" (chave primária do log), que não é
+ * o ID do jogador. Isso fazia hydrateProfiles() usar item.id (id do log)
+ * em vez de attacker_id, nunca encontrando o perfil e caindo em "Desconhecido".
+ * Aqui guardamos o id do log em log_id e expomos attacker_id como "id"
+ * para que a hidratação busque o jogador correto.
+ */
+function mapLogsForHydration(logs) {
+    return (logs || []).map(l => {
+        const { id: log_id, ...rest } = l;
+        return { ...rest, log_id, id: l.attacker_id };
+    });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    // =======================================================================
+    // 4. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
+    // =======================================================================
+    let userId = null;
+    
+    // --- CACHE DE DEFINIÇÕES DE ITENS (Lê do LocalStorage gerado pelo script.js) ---
+    let localItemDefinitions = new Map();
+
+    function loadLocalItemDefinitions() {
+        try {
+            const cached = localStorage.getItem('item_definitions_full_v1');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && Array.isArray(parsed.data)) {
+                    localItemDefinitions = new Map(parsed.data);
+                } else if (Array.isArray(parsed)) { // Formato array simples
+                    localItemDefinitions = new Map(parsed);
+                }
+                // Expor globalmente para o surgicalCacheUpdate usar
+                if (!window.itemDefinitions) window.itemDefinitions = localItemDefinitions;
+                console.log(`📦 [Arena] Definições de itens carregadas: ${localItemDefinitions.size}`);
+            }
+        } catch (e) {
+            console.warn("Erro ao ler item_definitions_full_v1:", e);
+        }
+    }
+    // Carrega imediatamente ao iniciar
+    loadLocalItemDefinitions();
+
+    function getItemName(id) {
+        const def = localItemDefinitions.get(parseInt(id));
+        return def ? def.name : 'unknown'; // Retorna o nome do arquivo (ex: 'pocao_vida')
+    }
+    
+    function getItemDisplayName(id) {
+        const def = localItemDefinitions.get(parseInt(id));
+        return def ? (def.display_name || def.name.replace(/_/g, ' ')) : 'Item Desconhecido';
+    }
+
+    async function getLocalUserId() {
+        const globalAuth = await GlobalDB.getAuth();
+        if (globalAuth && globalAuth.value && globalAuth.value.user) {
+            return globalAuth.value.user.id;
+        }
+        try {
+            const cached = localStorage.getItem('player_data_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                    return parsed.data.id;
+                }
+            }
+        } catch (e) {}
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                    const sessionStr = localStorage.getItem(k);
+                    const session = JSON.parse(sessionStr);
+                    if (session && session.user && session.user.id) {
+                        return session.user.id;
+                    }
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // --- RASTREADOR DE CONSUMO DE POÇÕES ---
+    let sessionConsumedPotions = {}; 
+    let sessionOpponentsConsumed = {};
+
+    function trackConsumedPotion(itemId) {
+        const id = parseInt(itemId);
+        if (!sessionConsumedPotions[id]) sessionConsumedPotions[id] = 0;
+        sessionConsumedPotions[id]++;
+    }
+
+    function trackOpponentConsumption(opponentId, itemId) {
+        const id = parseInt(itemId);
+        if (!sessionOpponentsConsumed[opponentId]) {
+            sessionOpponentsConsumed[opponentId] = {};
+        }
+        if (!sessionOpponentsConsumed[opponentId][id]) {
+            sessionOpponentsConsumed[opponentId][id] = 0;
+        }
+        sessionOpponentsConsumed[opponentId][id]++;
+    }
+
+    function syncSessionLoadout(itemId, newQuantity) {
+        if (!currentSession || !currentSession.loadout) return;
+        currentSession.loadout.forEach(p => {
+            if (parseInt(p.item_id) === parseInt(itemId)) {
+                p.quantity = newQuantity;
+            }
+        });
+        localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
+    }
+
+    // --- ENGINE DE BATALHA LOCAL ---
+    class ArenaEngine {
+        constructor(playerStats, opponentData, playerLoadout) {
+            // SAFETY CHECK: Previne crash se playerStats for nulo
+            const pStats = playerStats || { 
+                name: "Você", 
+                health: 1000, 
+                min_attack: 10, 
+                attack: 20, 
+                crit_chance: 5, 
+                crit_damage: 5 
+            };
+            
+            this.player = {
+                id: userId,
+                name: pStats.name || 'Você',
+                stats: pStats,
+                hp: parseInt(pStats.health || 1000),
+                maxHp: parseInt(pStats.health || 1000),
+                buffs: {},
+                potions: []
+            };
+
+            const uniquePotions = {};
+            if (Array.isArray(playerLoadout)) {
+                playerLoadout.forEach(p => {
+                    const pId = parseInt(p.item_id);
+                    if (!uniquePotions[pId]) {
+                        uniquePotions[pId] = { ...p, cd: 0, quantity: parseInt(p.quantity) };
+                    }
+                });
+            }
+            this.player.potions = Object.values(uniquePotions);
+            
+            const oppStats = opponentData.combat_stats || {};
+            const uniqueOppPotions = {};
+            (opponentData.potions || []).forEach(p => {
+                const pId = parseInt(p.item_id || p.itemId); // Fallback para compatibilidade
+                if(!uniqueOppPotions[pId]) {
+                    uniqueOppPotions[pId] = { 
+                        item_id: pId, 
+                        cd: 0, 
+                        quantity: parseInt(p.qty || p.quantity || 1) 
+                    };
+                }
+            });
+
+            this.opponent = {
+                id: opponentData.id,
+                name: opponentData.name || 'Oponente',
+                stats: oppStats,
+                hp: parseInt(oppStats.health || 1000),
+                maxHp: parseInt(oppStats.health || 1000),
+                buffs: {},
+                potions: Object.values(uniqueOppPotions)
+            };
+
+            this.turn = 1;
+            this.finished = false;
+            this.playerWon = false;
+            this.turnLimit = 100;
+        }
+
+        random(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+        hasBuff(entity, type) { return entity.buffs[type] && entity.buffs[type].ends_at >= this.turn; }
+        getBuffId(entity, type) { return entity.buffs[type] ? entity.buffs[type].item_id : 0; }
+
+        processTurn(actionType, itemId = null) {
+            if (this.finished) return this.getState();
+
+            if (actionType === 'ATTACK') {
+                this.player.potions.forEach(p => { if(p.cd > 0) p.cd--; });
+            }
+
+            let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
+            let enemyActions = [];
+
+            if (actionType === 'POTION') {
+                const targetId = parseInt(itemId);
+                const pot = this.player.potions.find(p => parseInt(p.item_id) === targetId);
+                
+                if (pot && pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
+                    this.applyEffect(this.player, pot.item_id);
+                    pot.quantity--; 
+                    trackConsumedPotion(pot.item_id); 
+                    syncSessionLoadout(pot.item_id, pot.quantity);
+                    // Recarga: Cura (0), Buffs (1 turno para evitar spam instantaneo visual)
+                    pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
+                    actionResult.heal = 1; 
+                } else {
+                    return { ...this.getState(), actionResult, enemyActions };
+                }
+                return { ...this.getState(), actionResult, enemyActions };
+            }
+
+            if (actionType === 'ATTACK') {
+                let dmgResult = this.calculateDamage(this.player, this.opponent);
+                actionResult.dmg = dmgResult.value;
+                actionResult.crit = dmgResult.isCrit;
+
+                this.opponent.hp = Math.max(0, this.opponent.hp - dmgResult.value);
+                
+                if (this.opponent.hp <= 0) {
+                    this.finished = true;
+                    this.playerWon = true;
+                    return { ...this.getState(), actionResult, enemyActions };
+                }
+                
+                enemyActions = this.processEnemyAI();
+                this.turn++;
+
+                if (this.player.hp <= 0) {
+                    this.finished = true;
+                    this.playerWon = false;
+                } else if (this.turn >= this.turnLimit) {
+                    this.finished = true;
+                    const pHp = this.player.hp / this.player.maxHp;
+                    const oHp = this.opponent.hp / this.opponent.maxHp;
+                    this.playerWon = pHp > oHp;
+                }
+            }
+            return { ...this.getState(), actionResult, enemyActions };
+        }
+
+        processEnemyAI() {
+            let actions = [];
+            this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
+
+            for (let pot of this.opponent.potions) {
+                if (pot.quantity > 0 && pot.cd <= 0) {
+                    const pId = parseInt(pot.item_id);
+                    // Lógica simples de IA
+                    if ([43,44].includes(pId)) { // Cura
+                        if (this.opponent.hp < (this.opponent.maxHp * 0.65)) {
+                            let oldHp = this.opponent.hp;
+                            this.applyEffect(this.opponent, pId);
+                            let healedAmount = this.opponent.hp - oldHp;
+                            pot.quantity--; pot.cd = 7; 
+                            trackOpponentConsumption(this.opponent.id, pId);
+                            actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
+                        }
+                    } else { // Buffs
+                        let type = 'ATK';
+                        if ([45,46].includes(pId)) type = 'FURY';
+                        if ([47,48].includes(pId)) type = 'DEX';
+                        if ([49,50].includes(pId)) type = 'ATK';
+                        if (!this.hasBuff(this.opponent, type)) {
+                             this.applyEffect(this.opponent, pId);
+                             pot.quantity--; pot.cd = 15;
+                             trackOpponentConsumption(this.opponent.id, pId);
+                             actions.push({ type: 'POTION', itemId: pId });
+                        }
+                    }
+                }
+            }
+            let dmgResult = this.calculateDamage(this.opponent, this.player);
+            this.player.hp = Math.max(0, this.player.hp - dmgResult.value);
+            actions.push({ type: 'ATTACK', dmg: dmgResult.value, crit: dmgResult.isCrit });
+            return actions;
+        }
+
+        calculateDamage(attacker, defender) {
+            // Base de dano: range completo entre min_attack e attack (espelhando simulate_pvp_battle)
+            const atkMin = parseInt(attacker.stats.min_attack) || 0;
+            const atkMax = parseInt(attacker.stats.attack) || atkMin;
+            let dmg = Math.floor(Math.random() * (atkMax - atkMin + 1)) + atkMin;
+
+            // Poção de Ataque: +5% (R, id 49) ou +10% (SR, id 50)
+            let mult = 1.0;
+            if (this.hasBuff(attacker, 'ATK')) mult += (this.getBuffId(attacker, 'ATK') === 49 ? 0.05 : 0.10);
+            dmg = Math.floor(dmg * mult);
+
+            // Subtrai defesa do defensor (mínimo 1 de dano)
+            const def = parseInt(defender.stats.defense) || 0;
+            dmg = Math.max(1, dmg - def);
+
+            // Poção de Destreza: +5% chance de crítico (R, id 47) ou +10% (SR, id 48)
+            let critChance = (parseFloat(attacker.stats.crit_chance) || 5);
+            if (this.hasBuff(attacker, 'DEX')) critChance += (this.getBuffId(attacker, 'DEX') === 47 ? 5 : 10);
+
+            // Multiplicador de crítico baseado no stat real de crit_damage do jogador
+            // crit_damage = 240 → critMult = 1 + 240/100 = 3.4x
+            // Redução de crítico do defensor é subtraída do crit_damage do atacante (mínimo 0)
+            const rawCritDmg = parseFloat(attacker.stats.crit_damage) || 50;
+            const critReduction = parseFloat(defender.stats.crit_reduction) || 0;
+            const effectiveCritDmg = Math.max(0, rawCritDmg - critReduction);
+            let critMult = 1 + (effectiveCritDmg / 100);
+
+            // Poção de Fúria: soma +50% ao dano crítico (R, id 45) ou +100% (SR, id 46)
+            if (this.hasBuff(attacker, 'FURY')) critMult += (this.getBuffId(attacker, 'FURY') === 45 ? 0.5 : 1.0);
+
+            let isCrit = false;
+            if (Math.random() * 100 < critChance) {
+                dmg = Math.floor(dmg * critMult);
+                isCrit = true;
+            }
+            return { value: dmg, isCrit: isCrit };
+        }
+
+        applyEffect(target, itemId) {
+            const id = parseInt(itemId);
+            // Poções de cura agora curam por porcentagem do HP máximo:
+            // R (id 43) = 4% do HP máx. | SR (id 44) = 10% do HP máx.
+            if (id === 43) target.hp = Math.min(target.maxHp, target.hp + Math.ceil(target.maxHp * 0.04));
+            else if (id === 44) target.hp = Math.min(target.maxHp, target.hp + Math.ceil(target.maxHp * 0.10));
+            else {
+                let type = 'ATK';
+                if ([45,46].includes(id)) type = 'FURY';
+                if ([47,48].includes(id)) type = 'DEX';
+                if ([49,50].includes(id)) type = 'ATK';
+                target.buffs[type] = { item_id: id, ends_at: this.turn + 5 };
+            }
+        }
+
+        skipBattle() {
+            let safety = 0;
+            while (!this.finished && safety < 200) { this.processTurn('ATTACK'); safety++; }
+            return this.getState();
+        }
+
+        getState() {
+            return {
+                attacker_hp: this.player.hp,
+                attacker_max_hp: this.player.maxHp,
+                defender_hp: this.opponent.hp,
+                defender_max_hp: this.opponent.maxHp,
+                attacker_potions: this.player.potions,
+                defender_potions: this.opponent.potions,
+                attacker_buffs: this.player.buffs,
+                defender_buffs: this.opponent.buffs,
+                turn_count: this.turn,
+                finished: this.finished,
+                win: this.playerWon,
+                opponent_id: this.opponent.id
+            };
+        }
+    }
+
+    // Variáveis de Sessão
+    let currentSession = null;
+    let currentOpponentIndex = 0;
+    let sessionResults = [];
+    let currentBattleEngine = null;
+
+    let turnTimerInterval = null;
+    let turnTimeLeft = 10;
+    let isMyTurn = false;
+
+    // Elementos DOM
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const challengeBtn = document.getElementById("challengeBtn");
+    const arenaAttemptsLeftSpan = document.getElementById("arenaAttemptsLeft");
+    const skipBtn = document.getElementById("skip");
+
+    const pvpCombatModal = document.getElementById("pvpCombatModal");
+    const confirmModal = document.getElementById("confirmModal");
+    const confirmMessage = document.getElementById("confirmMessage");
+    const confirmTitle = document.getElementById("confirmTitle");
+    let confirmActionBtn = document.getElementById("confirmActionBtn");
+
+    const rankingModal = document.getElementById("rankingModal");
+    const openRankingBtn = document.getElementById("openRankingBtn");
+    const closeRankingBtn = document.getElementById("closeRankingBtn");
+    const rankingList = document.getElementById("rankingList");
+    const rankingPodium = document.getElementById("rankingPodium");
+    const rankingPodiumPast = document.getElementById("rankingPodiumPast");
+    const seasonInfoSpan = document.getElementById("seasonInfo");
+    const rankingListPast = document.getElementById("rankingListPast");
+    const rankingHistoryList = document.getElementById("rankingHistoryList");
+    const seasonInfoContainer = document.getElementById("seasonInfoContainer");
+    const seasonPastInfoSpan = document.getElementById("seasonPastInfo");
+
+    const pvpCountdown = document.getElementById("pvpCountdown");
+    const challengerSide = document.getElementById("challengerSide");
+    const defenderSide = document.getElementById("defenderSide");
+    const challengerName = document.getElementById("challengerName");
+    const defenderName = document.getElementById("defenderName");
+    const challengerAvatar = document.getElementById("challengerAvatar");
+    const defenderAvatar = document.getElementById("defenderAvatar");
+    const challengerHpFill = document.getElementById("challengerHpFill");
+    const defenderHpFill = document.getElementById("defenderHpFill");
+    const challengerHpText = document.getElementById("challengerHpText");
+    const defenderHpText = document.getElementById("defenderHpText");
+    
+    const potionSelectModal = document.getElementById("potionSelectModal");
+    const closePotionModalBtn = document.getElementById("closePotionModal");
+    const potionListGrid = document.getElementById("potionListGrid");
+    const potionSlots = document.querySelectorAll(".potion-slot");
+
+    // =======================================================================
+    // 5. SISTEMA DE ÁUDIO
+    // =======================================================================
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffers = {};
+    let backgroundMusic = null;
+    let musicStarted = false;
+
+    const audioFiles = {
+        normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
+        critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
+        evade: "https://aden-rpg.pages.dev/assets/evade.mp3",
+        streak3: "https://aden-rpg.pages.dev/assets/killingspree.mp3",
+        streak4: "https://aden-rpg.pages.dev/assets/implacavel.mp3",
+        streak5: "https://aden-rpg.pages.dev/assets/dominando.mp3",
+        background: "https://aden-rpg.pages.dev/assets/arena.mp3",
+        heal: "https://aden-rpg.pages.dev/assets/pot_cura.mp3",
+        dex: "https://aden-rpg.pages.dev/assets/pot_dex.mp3",
+        fury: "https://aden-rpg.pages.dev/assets/pot_furia.mp3",
+        atk: "https://aden-rpg.pages.dev/assets/pot_atk.mp3",
+        win: "https://aden-rpg.pages.dev/assets/win.mp3", 
+        loss: "https://aden-rpg.pages.dev/assets/loss.mp3"
+    };
+
+    async function preload(name) {
+        try {
+            const url = audioFiles[name];
+            if (!url) return;
+            const res = await fetch(url);
+            const ab = await res.arrayBuffer();
+            audioBuffers[name] = await new Promise((resolve, reject) => {
+                audioContext.decodeAudioData(ab, resolve, reject);
+            });
+        } catch (e) { audioBuffers[name] = null; }
+    }
+    Object.keys(audioFiles).forEach(key => preload(key));
+
+    function playSound(name, opts = {}) {
+        const vol = typeof opts.volume === 'number' ? opts.volume : 1;
+        const buf = audioBuffers[name];
+        if (buf && audioContext.state !== 'closed') {
+            try {
+                const source = audioContext.createBufferSource();
+                source.buffer = buf;
+                const gain = audioContext.createGain();
+                gain.gain.value = vol;
+                source.connect(gain).connect(audioContext.destination);
+                source.start(0);
+                return;
+            } catch (err) {}
+        }
+        try {
+            const a = new Audio(audioFiles[name] || audioFiles.normal);
+            a.volume = Math.min(1, Math.max(0, vol));
+            a.play().catch(e => {});
+        } catch (e) {}
+    }
+
+    let sfxUnlocked = false;
+    async function unlockSfx() {
+        if (sfxUnlocked) return;
+        sfxUnlocked = true;
+        if (audioContext.state === 'suspended') { try { await audioContext.resume(); } catch(e){} }
+    }
+
+    function startBackgroundMusic() {
+        if (musicStarted) return;
+        if (!backgroundMusic) {
+            backgroundMusic = new Audio(audioFiles.background);
+            backgroundMusic.volume = 0.015;
+            backgroundMusic.loop = true;
+        }
+        backgroundMusic.play().then(() => { musicStarted = true; }).catch(err => { musicStarted = false; });
+    }
+
+    function addCapturedListener(target, evt, handler, opts = {}) {
+        try { target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts)); } catch (e) {}
+    }
+    function resumeAudioContext() {
+        if (audioContext.state === 'suspended') { audioContext.resume().catch(e => {}); }
+    }
+    const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+    for (const ev of primaryEvents) {
+        addCapturedListener(window, ev, () => {
+            resumeAudioContext(); startBackgroundMusic(); unlockSfx();
+        }, { once: true });
+    }
+
+    // =======================================================================
+    // 6. UTILITÁRIOS E UI
+    // =======================================================================
+    function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
+    function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
+    const esc = (s) => (s === 0 || s) ? String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])) : "";
+
+    function showModalAlert(message, title = "Aviso") {
+        if (!confirmModal) { alert(message); return; }
+        if (confirmTitle) confirmTitle.textContent = title;
+        if (confirmMessage) confirmMessage.innerHTML = message;
+        const newBtn = confirmActionBtn.cloneNode(true);
+        confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn);
+        confirmActionBtn = newBtn;
+        confirmActionBtn.textContent = "Ok";
+        confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
+        confirmModal.style.display = 'flex';
+    }
+
+    const CACHE_TTL_24H_MIN = 4320;
+    function setCache(key, data, ttlMinutes = CACHE_TTL_24H_MIN) {
+        try { localStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttlMinutes * 60000, data })); } catch {}
+    }
+    function getCache(key) {
+        try {
+            const item = localStorage.getItem(key);
+            if (!item) return null;
+            const parsed = JSON.parse(item);
+            if (Date.now() > parsed.expires) { localStorage.removeItem(key); return null; }
+            return parsed.data;
+        } catch { return null; }
+    }
+
+    function getMinutesToMidnightUTC() {
+        const now = new Date();
+        const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+        const diffMs = midnight - now;
+        return Math.max(1, Math.floor(diffMs / 60000));
+    }
+    function getMinutesToNextMonthUTC() {
+        const now = new Date();
+        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
+        const diffMs = nextMonth - now;
+        return Math.max(1, Math.floor(diffMs / 60000));
+    }
+
+    function normalizeRpcResult(data) {
+        try {
+            if (!data) return null;
+            if (Array.isArray(data)) {
+                const first = data[0];
+                if (first && typeof first === 'object') {
+                    const keys = Object.keys(first);
+                    if (keys.length === 1 && typeof first[keys[0]] === 'object') return first[keys[0]];
+                    return first;
+                }
+            }
+            if (typeof data === 'string') { try { return normalizeRpcResult(JSON.parse(data)); } catch {} }
+            return data;
+        } catch (e) { return null; }
+    }
+
+    async function updateAttemptsUI() {
+        if (!userId) return;
+        try {
+            if (currentSession && currentSession.attempts_left !== undefined) {
+                if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = currentSession.attempts_left - currentOpponentIndex;
+            } else {
+                const { data } = await supabase.from('players').select('arena_attempts_left').eq('id', userId).single();
+                const attempts = data?.arena_attempts_left ?? 0;
+                if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = attempts;
+                
+                if (challengeBtn) {
+                    if (attempts <= 0) {
+                        challengeBtn.disabled = true;
+                        challengeBtn.textContent = "Volte à meia-noite UTC";
+                        challengeBtn.style.filter = "grayscale(1)";
+                        challengeBtn.style.cursor = "not-allowed";
+                    } else {
+                        challengeBtn.disabled = false;
+                        challengeBtn.textContent = "Desafiar";
+                        challengeBtn.style.filter = "none";
+                        challengeBtn.style.cursor = "pointer";
+                    }
+                }
+            }
+        } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
+    }
+
+    const STREAK_KEY = 'arena_win_streak';
+    const STREAK_DATE_KEY = 'arena_win_streak_date'; 
+    function getTodayUTCDateString() {
+        const now = new Date();
+        return now.getUTCFullYear() + '-' + String(now.getUTCMonth()+1).padStart(2,'0') + '-' + String(now.getUTCDate()).padStart(2,'0');
+    }
+    function loadStreak() {
+        try {
+            const raw = localStorage.getItem(STREAK_KEY);
+            const dateRaw = localStorage.getItem(STREAK_DATE_KEY);
+            const today = getTodayUTCDateString();
+            if (!dateRaw || dateRaw !== today) {
+                localStorage.setItem(STREAK_KEY, "0");
+                localStorage.setItem(STREAK_DATE_KEY, today);
+                return 0;
+            }
+            return parseInt(raw, 10) || 0;
+        } catch (e) { return 0; }
+    }
+    function saveStreak(n) {
+        try {
+            const today = getTodayUTCDateString();
+            localStorage.setItem(STREAK_KEY, String(Math.max(0, Math.floor(n))));
+            localStorage.setItem(STREAK_DATE_KEY, today);
+        } catch (e) {}
+    }
+    let currentStreak = loadStreak();
+    function ensureStreakDate() {
+        try {
+            const dateRaw = localStorage.getItem(STREAK_DATE_KEY);
+            const today = getTodayUTCDateString();
+            if (!dateRaw || dateRaw !== today) { currentStreak = 0; saveStreak(0); }
+        } catch(e){}
+    }
+    ensureStreakDate();
+
+    // =======================================================================
+    // 7. LOADOUT E POÇÕES (OTIMIZADO COM DEFINITIONS LOCAIS)
+    // =======================================================================
+    async function loadArenaLoadout() {
+        if (!userId) return;
+        
+        // RPC get_my_arena_loadout retorna item_id e slot_type. 
+        // O restante (imagem) montamos aqui.
+        const { data, error } = await supabase.rpc('get_my_arena_loadout');
+        
+        document.querySelectorAll('.potion-slot').forEach(el => {
+            el.innerHTML = '<span style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size:2em; color:#555; pointer-events:none;">+</span>';
+            el.dataset.itemId = "";
+            el.style.border = "1px dashed #555";
+        });
+
+        if (error) return console.error("Erro loadout:", error);
+        
+        if (data && Array.isArray(data)) {
+            data.forEach(item => {
+                const typeMap = item.slot_type.toLowerCase() === 'attack' ? 'atk' : 'def';
+                const slotEl = document.getElementById(`slot-${typeMap}-${item.slot_index}`);
+                if (slotEl) {
+                    const itemName = getItemName(item.item_id);
+                    const imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+                    slotEl.innerHTML = `<img src="${imgUrl}" onerror="this.style.display='none'" style="width:100%; height:100%; object-fit:contain; border-radius:4px;">`;
+                    slotEl.dataset.itemId = item.item_id;
+                    slotEl.style.border = "1px solid gold";
+                }
+            });
+        }
+    }
+
+    potionSlots.forEach(slot => {
+        slot.addEventListener('click', async () => {
+            if (!potionSelectModal) return;
+            potionSelectModal.style.display = 'flex';
+            potionListGrid.innerHTML = '<p style="color:#fff;">Carregando...</p>';
+            
+            const allowedIds = [43, 44, 45, 46, 47, 48, 49, 50];
+            
+            // OTIMIZAÇÃO: Busca apenas ID e Quantidade
+            const { data: items, error } = await supabase
+                .from('inventory_items')
+                .select('item_id, quantity')
+                .in('item_id', allowedIds)
+                .eq('player_id', userId)
+                .gt('quantity', 0);
+
+            potionListGrid.innerHTML = "";
+            
+            // Botão Remover
+            const unequipBtn = document.createElement('div');
+            unequipBtn.className = "inventory-item"; 
+            unequipBtn.style.border = "1px solid red";
+            unequipBtn.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Remover" style="width: 50px; height: 50px; margin-bottom: 5px;"><small>Remover</small>';
+            unequipBtn.onclick = async () => {
+                showLoading();
+                await supabase.rpc('unequip_arena_potion', { p_slot_type: slot.dataset.type.toUpperCase(), p_slot_index: parseInt(slot.dataset.index) });
+                hideLoading();
+                potionSelectModal.style.display = 'none';
+                await loadArenaLoadout();
+            };
+            potionListGrid.appendChild(unequipBtn);
+
+            if (!items || items.length === 0) {
+                const msg = document.createElement('p');
+                msg.textContent = "Sem poções de batalha.";
+                msg.style.color = "#ccc";
+                potionListGrid.appendChild(msg);
+                return;
+            }
+
+            items.forEach(inv => {
+                const div = document.createElement('div');
+                div.className = "inventory-item";
+                div.style.cursor = "pointer";
+                
+                // Usa Definições Locais
+                const itemName = getItemName(inv.item_id);
+                const displayName = getItemDisplayName(inv.item_id);
+                
+                div.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/itens/${itemName}.webp" style="width:50px; height:50px;">
+                    <span class="item-quantity">${inv.quantity}</span>
+                    <div style="font-size:0.7em; margin-top:5px; color:#fff;">${displayName}</div>
+                `;
+                div.onclick = async () => {
+                    showLoading();
+                    const { data: res, error: rpcErr } = await supabase.rpc('equip_arena_potion', { 
+                        p_slot_type: slot.dataset.type.toUpperCase(), 
+                        p_slot_index: parseInt(slot.dataset.index), 
+                        p_item_id: inv.item_id 
+                    });
+                    hideLoading();
+                    const result = normalizeRpcResult(res);
+                    if (rpcErr || (result && result.success === false)) {
+                        showModalAlert(result?.message || "Erro ao equipar poção.");
+                    } else {
+                        potionSelectModal.style.display = 'none';
+                        await loadArenaLoadout();
+                    }
+                };
+                potionListGrid.appendChild(div);
+            });
+        });
+    });
+    
+    if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
+
+    // =======================================================================
+    // 8. LÓGICA DE COMBATE E UI
+    // =======================================================================
+    const style = document.createElement('style');
+    style.innerHTML = `
+        #attackBtnContainer:active { transform: scale(0.95); }
+        .attack-anim { animation: attack-pulse 0.2s ease-in-out; }
+        @keyframes attack-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .battle-potion-slot { transition: transform 0.2s; border: 1px solid #777; background: #000; border-radius: 4px; overflow: hidden; width: 40px; height: 40px; position: relative; }
+        .potion-clickable:hover { transform: scale(1.1); border-color: gold; cursor: pointer; }
+        .potion-disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.5; }
+        @keyframes floatUpPotion { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); } 20% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+        @keyframes blinkPotion { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    `;
+    document.head.appendChild(style);
+
+    const btnContainer = document.getElementById("attackBtnContainer");
+    if (btnContainer) {
+        const newBtn = btnContainer.cloneNode(true);
+        btnContainer.parentNode.replaceChild(newBtn, btnContainer);
+        newBtn.addEventListener("click", async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (isMyTurn) await performAction('ATTACK');
+        });
+        newBtn.style.cursor = "pointer";
+        newBtn.style.pointerEvents = "auto";
+    }
+
+    if (skipBtn) {
+        skipBtn.addEventListener("click", (e) => {
+            if (skipBtn.disabled || skipBtn.style.opacity === "0.5") return;
+            if (confirmTitle) confirmTitle.textContent = "Pular Combate?";
+            if (confirmMessage) confirmMessage.innerHTML = "O sistema irá simular o restante da luta instantaneamente.<br>Isso não garante vitória!";
+            const newBtn = confirmActionBtn.cloneNode(true);
+            confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn); 
+            confirmActionBtn = newBtn;
+            confirmActionBtn.textContent = "Sim, Pular";
+            confirmActionBtn.onclick = async () => {
+                confirmModal.style.display = 'none';
+                showLoading();
+                try {
+                    if (currentBattleEngine) {
+                        const res = currentBattleEngine.skipBattle();
+                        updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
+                        updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
+                        finishLocalFight(res);
+                    }
+                } catch (e) {
+                    showModalAlert("Erro na simulação local.");
+                } finally { hideLoading(); }
+            };
+            confirmModal.style.display = 'flex';
+        });
+    }
+    
+    // --- LÓGICA DE SESSÃO COM HIDRATAÇÃO ---
+    async function handleChallengeClick() {
+        if (!challengeBtn || challengeBtn.disabled) return;
+        if (arenaAttemptsLeftSpan.textContent === '0') return;
+
+        challengeBtn.disabled = true;
+        showLoading();
+        try {
+            const savedSession = localStorage.getItem('arena_session_v1');
+            if (savedSession) {
+                currentSession = JSON.parse(savedSession);
+                sessionResults = currentSession.results || [];
+                currentOpponentIndex = sessionResults.length;
+                startNextFight();
+            } else {
+                // RPC LEVE: Retorna ID e Stats
+                const { data, error } = await supabase.rpc('get_arena_daily_session');
+                const result = normalizeRpcResult(data);
+                
+                if (error || !result?.success) {
+                    challengeBtn.disabled = false;
+                    return showModalAlert(result?.message || "Erro ao buscar oponentes.");
+                }
+
+                // HIDRATAÇÃO: Busca nomes e avatares no Cache Global
+                // Isso economiza banda baixando apenas o que falta
+                const hydratedOpponents = await hydrateProfiles(result.opponents);
+
+                currentSession = { ...result, opponents: hydratedOpponents };
+                currentSession.results = [];
+                currentOpponentIndex = 0;
+                sessionResults = [];
+                localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
+                
+                startNextFight();
+            }
+        } catch (e) {
+            console.error("Erro no desafio:", e);
+            challengeBtn.disabled = false;
+            showModalAlert("Erro inesperado: " + (e?.message || e));
+            hideLoading();
+        } finally { hideLoading(); }
+    }
+
+    function startNextFight() {
+        if (!currentSession || currentOpponentIndex >= currentSession.opponents.length) {
+            commitSession();
+            return;
+        }
+
+        const opponent = currentSession.opponents[currentOpponentIndex];
+        const playerStats = currentSession.player_stats || { name: 'Você', health: 1000 };
+        const loadout = currentSession.loadout; 
+
+        currentBattleEngine = new ArenaEngine(playerStats, opponent, loadout);
+        const myInfo = { name: playerStats.name, avatar_url: playerStats.avatar_url };
+        const oppInfo = { name: opponent.name, avatar_url: opponent.avatar_url };
+        
+        setupBattleUI(currentBattleEngine.getState(), myInfo, oppInfo);
+        if (pvpCountdown) {
+            pvpCountdown.style.display = 'block';
+            pvpCountdown.textContent = `Luta ${currentOpponentIndex + 1} de ${currentSession.opponents.length}`;
+            setTimeout(() => { pvpCountdown.style.display = 'none'; startPlayerTurn(); }, 2000);
+        } else { startPlayerTurn(); }
+    }
+
+    function setupBattleUI(state, me, opp) {
+        pvpCombatModal.style.display = "flex";
+        document.getElementById("turnTimerContainer").style.display = "block";
+        document.getElementById("combatControls").style.display = "flex";
+        
+        const defAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
+        challengerName.textContent = me?.name || "Você";
+        challengerAvatar.src = me?.avatar_url || defAvatar;
+        defenderName.textContent = opp?.name || "Oponente";
+        defenderAvatar.src = opp?.avatar_url || defAvatar;
+
+        // Aplica molduras (busca do cache compartilhado ou do servidor)
+        const challContainer = document.getElementById('challengerAvatarContainer');
+        const defContainer   = document.getElementById('defenderAvatarContainer');
+        _arResetFrame(challContainer);
+        _arResetFrame(defContainer);
+        if (userId && challContainer)
+            _arFetchAndApplyFrame(userId, challContainer);
+        if (currentBattleEngine?.opponent?.id && defContainer)
+            _arFetchAndApplyFrame(currentBattleEngine.opponent.id, defContainer);
+
+        updateBattleStateUI(state);
+        renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
+        renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
+        
+        // Intro slide animations
+        _injectArenaEpicStyles();
+        [challengerSide, defenderSide].forEach(s => {
+            s.classList.remove('ar-intro-l','ar-intro-r','ar-winner','ar-loser');
+            s.style.filter = s.style.opacity = s.style.transform = '';
+        });
+        void challengerSide.offsetWidth;
+        challengerSide.classList.add('ar-intro-l');
+        defenderSide.classList.add('ar-intro-r');
+
+        if (skipBtn) {
+            skipBtn.disabled = true;
+            skipBtn.style.opacity = "0.5";
+            skipBtn.style.cursor = "not-allowed";
+        }
+    }
+
+    function startPlayerTurn() {
+        isMyTurn = true;
+        turnTimeLeft = 10; 
+        
+        if (skipBtn) {
+            skipBtn.disabled = false;
+            skipBtn.style.opacity = "1";
+            skipBtn.style.cursor = "pointer";
+        }
+
+        const timerContainer = document.getElementById("turnTimerContainer");
+        const attackBtn = document.getElementById("attackBtnContainer");
+        if (timerContainer) timerContainer.style.opacity = "1";
+        if (attackBtn) {
+            attackBtn.style.filter = "none";
+            attackBtn.style.opacity = "1";
+            attackBtn.style.pointerEvents = "auto";
+            attackBtn.classList.remove("attack-anim");
+        }
+        updateTimerUI();
+        togglePlayerPotions(true);
+
+        clearInterval(turnTimerInterval);
+        turnTimerInterval = setInterval(() => {
+            turnTimeLeft--;
+            updateTimerUI();
+            if (turnTimeLeft <= 0) { performAction('ATTACK'); }
+        }, 1000);
+    }
+
+    function updateTimerUI() {
+        const el = document.getElementById("turnTimerValue");
+        const circle = document.getElementById("turnTimerCircle");
+        if(el) el.textContent = turnTimeLeft;
+        if(circle) circle.style.borderColor = (turnTimeLeft <= 3) ? "red" : "#FFC107";
+    }
+
+    function playPotionSound(itemId) {
+        const id = parseInt(itemId);
+        if ([43,44].includes(id)) playSound('heal');
+        else if ([45,46].includes(id)) playSound('fury');
+        else if ([47,48].includes(id)) playSound('dex');
+        else if ([49,50].includes(id)) playSound('atk');
+        else playSound('heal');
+    }
+
+    async function performAction(type, itemId = null) {
+        if (!isMyTurn || !currentBattleEngine) return;
+        
+        if (type === 'ATTACK') {
+            clearInterval(turnTimerInterval);
+            isMyTurn = false;
+            const attackBtn = document.getElementById("attackBtnContainer");
+            if (attackBtn) {
+                attackBtn.classList.add("attack-anim");
+                attackBtn.style.pointerEvents = "none";
+                attackBtn.style.filter = "grayscale(1)";
+                attackBtn.style.opacity = "0.5"; 
+            }
+            if(skipBtn) skipBtn.disabled = true; 
+            document.getElementById("turnTimerContainer").style.opacity = "0.3";
+            togglePlayerPotions(false);
+            animateActorMove(challengerSide);
+        }
+
+        try {
+            const preState = currentBattleEngine.getState();
+            const resultData = currentBattleEngine.processTurn(type, itemId);
+            const newState = resultData; 
+            const playerResult = resultData.actionResult;
+            const enemyActions = resultData.enemyActions; 
+
+            if (type === 'POTION') {
+                updateBattleStateUI(newState);
+                flashPotionIcon(itemId, challengerSide); 
+                playPotionSound(itemId);
+                renderBattlePotions(challengerSide, newState.attacker_potions, 'left', true);
+                return; 
+            }
+
+            if (type === 'ATTACK') {
+                const dmgDealt = playerResult.dmg || 0;
+                await new Promise(r => setTimeout(r, 400));
+
+                // ── Epic hit on defender ──
+                if (dmgDealt > 0 || (newState.finished && newState.win)) {
+                    const defAv = defenderSide.querySelector('.player-avatar-pvp');
+                    if (defAv) {
+                        defAv.style.animation = playerResult.crit ? 'ar-crit-f 0.55s ease-out' : 'ar-hit-f 0.38s ease-out';
+                        setTimeout(() => { defAv.style.animation = ''; }, playerResult.crit ? 560 : 400);
+                    }
+                    const _asf = document.getElementById('arena-screen-flash');
+                    if (_asf) {
+                        _asf.style.boxShadow = playerResult.crit ? 'inset 0 0 90px rgba(255,200,0,0.4)' : 'inset 0 0 70px rgba(200,20,20,0.3)';
+                        _asf.style.opacity = '1'; setTimeout(() => { _asf.style.opacity = '0'; }, playerResult.crit ? 420 : 260);
+                    }
+                    const r1 = document.createElement('div'); r1.className = 'ar-ring'  + (playerResult.crit ? ' crit' : ''); defenderSide.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+                    const r2 = document.createElement('div'); r2.className = 'ar-ring2' + (playerResult.crit ? ' crit' : ''); defenderSide.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+                    const spCols = playerResult.crit ? ['#ffdd00','#ff8800','#fff','#ffcc44'] : ['#fff','#ff8888','#ffbb55'];
+                    const spN = playerResult.crit ? 12 : 6;
+                    for (let _si = 0; _si < spN; _si++) {
+                        const sp = document.createElement('div'); sp.className = 'ar-spark';
+                        const ang = (_si / spN) * 360 + Math.random() * 28, dist = 28 + Math.random() * 42, sz = (playerResult.crit ? 5 : 3) + Math.random() * 3;
+                        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+                        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+                        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+                        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+                        defenderSide.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+                    }
+                    if (playerResult.crit) {
+                        defenderSide.style.animation = 'ar-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                        setTimeout(() => { defenderSide.style.animation = ''; }, 460);
+                    }
+                    displayDamageNumber(dmgDealt, playerResult.crit, false, defenderSide);
+                    updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
+                }
+
+                if (newState.finished && newState.win) {
+                    finishLocalFight(newState);
+                    return;
+                }
+
+                if (enemyActions && enemyActions.length > 0) {
+                    await new Promise(r => setTimeout(r, 800)); 
+                    for (const action of enemyActions) {
+                        if (action.type === 'POTION') {
+                            flashPotionIcon(action.itemId, defenderSide);
+                            playPotionSound(action.itemId);
+                            updateBattleStateUI(currentBattleEngine.getState());
+                            if (action.healed) {
+                                displayDamageNumber(`+${action.healed}`, false, false, defenderSide);
+                            }
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                        else if (action.type === 'ATTACK') {
+                            animateActorMove(defenderSide);
+                            await new Promise(r => setTimeout(r, 260));
+                            const dmgReceived = action.dmg || 0;
+                            // Epic hit on challenger
+                            const chAv = challengerSide.querySelector('.player-avatar-pvp');
+                            if (chAv) {
+                                chAv.style.animation = action.crit ? 'ar-crit-f 0.55s ease-out' : 'ar-hit-f 0.38s ease-out';
+                                setTimeout(() => { chAv.style.animation = ''; }, action.crit ? 560 : 400);
+                            }
+                            const _asf2 = document.getElementById('arena-screen-flash');
+                            if (_asf2) {
+                                _asf2.style.boxShadow = action.crit ? 'inset 0 0 90px rgba(200,50,255,0.35)' : 'inset 0 0 70px rgba(200,20,20,0.28)';
+                                _asf2.style.opacity = '1'; setTimeout(() => { _asf2.style.opacity = '0'; }, action.crit ? 420 : 260);
+                            }
+                            const r1b = document.createElement('div'); r1b.className = 'ar-ring'  + (action.crit ? ' crit' : ''); challengerSide.appendChild(r1b); r1b.addEventListener('animationend', () => r1b.remove(), { once: true });
+                            const r2b = document.createElement('div'); r2b.className = 'ar-ring2' + (action.crit ? ' crit' : ''); challengerSide.appendChild(r2b); r2b.addEventListener('animationend', () => r2b.remove(), { once: true });
+                            const spN2 = action.crit ? 10 : 5;
+                            const spC2 = action.crit ? ['#ffdd00','#ff8800','#fff'] : ['#fff','#ff7777','#ffbb55'];
+                            for (let _si2 = 0; _si2 < spN2; _si2++) {
+                                const sp2 = document.createElement('div'); sp2.className = 'ar-spark';
+                                const a2 = (_si2 / spN2) * 360 + Math.random() * 28, d2 = 24 + Math.random() * 38, s2 = (action.crit ? 4 : 2.5) + Math.random() * 3;
+                                sp2.style.setProperty('--a', a2 + 'deg'); sp2.style.setProperty('--d', d2 + 'px');
+                                sp2.style.width = s2 + 'px'; sp2.style.height = s2 + 'px';
+                                sp2.style.background = spC2[Math.floor(Math.random() * spC2.length)];
+                                sp2.style.animationDelay = (Math.random() * 0.07) + 's';
+                                challengerSide.appendChild(sp2); sp2.addEventListener('animationend', () => sp2.remove(), { once: true });
+                            }
+                            if (action.crit) {
+                                challengerSide.style.animation = 'ar-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                                setTimeout(() => { challengerSide.style.animation = ''; }, 460);
+                            }
+                            displayDamageNumber(dmgReceived, action.crit, false, challengerSide);
+                            updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
+                        }
+                    }
+                }
+
+                if (newState.finished) {
+                    await new Promise(r => setTimeout(r, 500));
+                    finishLocalFight(newState);
+                } else {
+                    updateBattleStateUI(newState);
+                    startPlayerTurn();
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            challengeBtn.disabled = false;
+        }
+    }
+
+    function finishLocalFight(finalState) {
+        clearInterval(turnTimerInterval);
+        if (finalState.win) {
+            playSound('win');
+            try {
+                ensureStreakDate();
+                currentStreak++;
+                saveStreak(currentStreak);
+                if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
+                else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
+                else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
+            } catch(e){}
+        } else {
+            playSound('loss');
+            currentStreak = 0;
+            saveStreak(0);
+        }
+
+        sessionResults.push({
+            opponent_id: finalState.opponent_id,
+            win: finalState.win,
+            turn_count: finalState.turn_count
+        });
+        
+        currentSession.results = sessionResults;
+        localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
+        currentOpponentIndex++;
+
+        // Winner / loser visuals
+        _injectArenaEpicStyles();
+        if (finalState.win) {
+            challengerSide.classList.add('ar-winner'); defenderSide.classList.add('ar-loser');
+            // Victory particles
+            const vcols = ['#ffd700','#ffaa00','#fff','#ffcc44'];
+            for (let _vi = 0; _vi < 18; _vi++) setTimeout(() => {
+                const vp = document.createElement('div'); const vsz = 4 + Math.random() * 5;
+                vp.style.cssText = `position:absolute;width:${vsz}px;height:${vsz}px;border-radius:50%;background:${vcols[Math.floor(Math.random()*vcols.length)]};top:${15+Math.random()*65}%;left:${15+Math.random()*65}%;pointer-events:none;z-index:12;animation:ar-sp 0.9s ease-out forwards;`;
+                vp.style.setProperty('--a', Math.random()*360+'deg'); vp.style.setProperty('--d', 42+Math.random()*60+'px');
+                challengerSide.appendChild(vp); vp.addEventListener('animationend', () => vp.remove(), { once: true });
+            }, _vi * 55);
+        } else {
+            defenderSide.classList.add('ar-winner'); challengerSide.classList.add('ar-loser');
+        }
+
+        setTimeout(() => {
+            // showModalAlert clones confirmActionBtn internally — capture AFTER the clone
+            showModalAlert(
+                finalState.win ? 
+                `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
+                `<strong style="color:#f44336;">Derrota!</strong><br>Prepare-se para a próxima luta.`,
+                "Resultado da Luta"
+            );
+            // confirmActionBtn now points to the fresh clone — set onclick here
+            if (currentOpponentIndex >= currentSession.opponents.length) {
+                confirmActionBtn.textContent = "Ver Resultados Finais";
+                confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; commitSession(); };
+            } else {
+                confirmActionBtn.textContent = "Próxima Luta >>";
+                confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; startNextFight(); };
+            }
+        }, finalState.win ? 900 : 500);
+    }
+
+    async function commitSession() {
+        pvpCombatModal.style.display = "none";
+        showLoading();
+        try {
+            const consumedArray = Object.keys(sessionConsumedPotions).map(k => ({
+                item_id: parseInt(k),
+                qty: sessionConsumedPotions[k]
+            }));
+
+            let opponentsConsumedArray = [];
+            Object.keys(sessionOpponentsConsumed).forEach(oppId => {
+                const itemsMap = sessionOpponentsConsumed[oppId];
+                Object.keys(itemsMap).forEach(itemId => {
+                    opponentsConsumedArray.push({
+                        opponent_id: oppId,
+                        item_id: parseInt(itemId),
+                        qty: itemsMap[itemId]
+                    });
+                });
+            });
+
+            const { data, error } = await supabase.rpc('commit_arena_session_results', { 
+                p_results: sessionResults,
+                p_consumed_items: consumedArray,
+                p_opponents_consumed: opponentsConsumedArray
+            });
+
+            if (error) throw error;
+            const res = normalizeRpcResult(data);
+            
+            // =======================================================
+            // ATUALIZAÇÃO CIRÚRGICA DE CACHE (ZERO EGRESS)
+            // =======================================================
+            if (res.timestamp && res.inventory_updates) {
+                let currentCrystals = 0;
+
+                // 1. Atualiza Stats Globais no Cache (LocalStorage - Legacy)
+                const cached = localStorage.getItem('player_data_cache');
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (parsed && parsed.data) {
+                            if (typeof res.crystals === 'number') {
+                                parsed.data.crystals = (parsed.data.crystals || 0) + res.crystals;
+                                currentCrystals = parsed.data.crystals; 
+                            }
+                            localStorage.setItem('player_data_cache', JSON.stringify(parsed));
+                        }
+                    } catch(e) {}
+                }
+
+                // 2. Atualiza GlobalDB
+                let updateData = {};
+                if (currentCrystals > 0) {
+                     updateData.crystals = currentCrystals;
+                } else {
+                     const gPlayer = await GlobalDB.getPlayer();
+                     if (gPlayer) {
+                         updateData.crystals = (gPlayer.crystals || 0) + (res.crystals || 0);
+                     }
+                }
+
+                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, updateData);
+            }
+            
+            localStorage.removeItem('arena_session_v1');
+            currentSession = null;
+            sessionResults = [];
+            currentBattleEngine = null;
+            sessionConsumedPotions = {}; 
+            sessionOpponentsConsumed = {};
+
+            let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
+            let itemsHTML = [];
+            const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
+            const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
+            if(res.crystals > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${res.crystals}</div>`);
+            if(res.items_common > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${res.items_common}</div>`);
+            if(res.items_rare > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${res.items_rare}</div>`);
+            
+            let rewardsHTML = itemsHTML.length ? `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${itemsHTML.join('')}</div>` : "";
+            showModalAlert(msg + rewardsHTML, "Resumo Diário");
+            
+            challengeBtn.disabled = false;
+            await loadArenaLoadout();
+            await updateAttemptsUI();
+        } catch (e) { showModalAlert("Erro ao salvar resultados: " + e.message); } finally { hideLoading(); }
+    }
+
+    // --- Helpers Visuais ---
+    function updateBattleStateUI(state) {
+        if (!state) return;
+        updatePvpHpBar(challengerHpFill, challengerHpText, state.attacker_hp, state.attacker_max_hp);
+        updatePvpHpBar(defenderHpFill, defenderHpText, state.defender_hp, state.defender_max_hp);
+        renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
+        renderActiveBuffs(defenderSide, state.defender_buffs, state.turn_count);
+        if (state.attacker_potions) renderBattlePotions(challengerSide, state.attacker_potions, 'left', true);
+    }
+
+    function renderActiveBuffs(container, buffs, currentTurn) {
+        const old = container.querySelector('.active-buffs-row');
+        if (old) old.remove();
+        if (!buffs) return;
+        const row = document.createElement('div');
+        row.className = 'active-buffs-row';
+        row.style.cssText = 'position:absolute; top: 115px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 10; pointer-events: none;';
+        Object.keys(buffs).forEach(key => {
+            const buff = buffs[key];
+            if (buff.ends_at > currentTurn) { 
+                const img = document.createElement('img');
+                const itemId = parseInt(buff.item_id);
+                // USA CACHE LOCAL
+                const itemName = getItemName(itemId);
+                img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+                img.style.width = '35px'; img.style.height = '35px';
+                img.style.animation = 'blinkPotion 1s infinite alternate';
+                img.title = key;
+                row.appendChild(img);
+            }
+        });
+        if (row.children.length > 0) container.appendChild(row);
+    }
+
+    function renderBattlePotions(container, potions, side, interactive) {
+        const old = container.querySelector('.battle-potions-container');
+        if (old) old.remove();
+        if (!potions || !potions.length) return;
+        const ct = document.createElement('div');
+        ct.className = 'battle-potions-container';
+        ct.style.cssText = "position:absolute; top:60px; display:flex; flex-direction:column; gap:8px; z-index:20; background:rgba(0,0,0,0.5); padding:4px; border-radius:6px;";
+        if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
+        potions.forEach(p => {
+            const qty = parseInt(p.quantity || 0);
+            if (qty <= 0) return; 
+            const slot = document.createElement('div');
+            slot.className = 'battle-potion-slot';
+            const cd = parseInt(p.cd || 0);
+            if (interactive && cd <= 0) {
+                slot.classList.add('potion-clickable');
+                slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
+            } else if (interactive) {
+                slot.classList.add('potion-disabled');
+            } else {
+                 slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
+            }
+            const itemId = parseInt(p.item_id);
+            // USA CACHE LOCAL
+            const name = getItemName(itemId);
+            const cdHeight = (cd > 0) ? "100%" : "0%";
+            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
+            ct.appendChild(slot);
+        });
+        container.appendChild(ct);
+    }
+
+    function togglePlayerPotions(enable) {
+        const slots = document.querySelectorAll('.battle-potion-slot.potion-clickable');
+        slots.forEach(s => { s.style.pointerEvents = enable ? 'auto' : 'none'; s.style.filter = enable ? 'none' : 'grayscale(0.5)'; });
+    }
+
+    function updatePvpHpBar(el, txt, cur, max) {
+        if (!el) return;
+        const pct = Math.max(0, Math.min(100, (cur / (max || 1)) * 100));
+        el.style.width = pct + '%';
+        if      (pct > 60) el.style.background = 'linear-gradient(90deg,#127a22,#1ec938)';
+        else if (pct > 30) el.style.background = 'linear-gradient(90deg,#a05e00,#e08800)';
+        else               el.style.background = 'linear-gradient(90deg,#7a1212,#cc2828)';
+        if (txt) txt.textContent = `${Math.floor(cur).toLocaleString()} / ${max.toLocaleString()}`;
+    }
+
+    let _arenaStylesInjected = false;
+    function _injectArenaEpicStyles() {
+        if (_arenaStylesInjected) return;
+        _arenaStylesInjected = true;
+        const s = document.createElement('style');
+        s.id = 'arena-epic-styles';
+        s.textContent = `
+            /* ── Damage numbers ── */
+            @keyframes ar-float-dmg  { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);} 8%{opacity:1;transform:translateX(-50%) translateY(-14px) scale(1.35);} 20%{opacity:1;transform:translateX(-50%) translateY(-24px) scale(1.0);} 75%{opacity:1;transform:translateX(-50%) translateY(-95px) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) translateY(-135px) scale(0.92);} }
+            @keyframes ar-float-crit { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-8deg);} 7%{opacity:1;transform:translateX(-50%) translateY(-20px) scale(1.55) rotate(6deg);} 18%{opacity:1;transform:translateX(-50%) translateY(-32px) scale(1.05) rotate(-2deg);} 75%{opacity:1;transform:translateX(-50%) translateY(-115px) scale(1.0) rotate(0);} 100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92) rotate(0);} }
+            @keyframes ar-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);} 100%{opacity:0;transform:translateX(-50%) translateY(-55px) scale(1.1);} }
+            @keyframes ar-float-heal { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-6px) scale(1.2);} 100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(0.9);} }
+            @keyframes ar-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 18%{opacity:1;transform:translateX(-50%) scale(1.28);} 65%{opacity:1;transform:translateX(-50%) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+
+            .ar-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:1.6em;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55);position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-dmg 3.4s ease-out forwards; }
+            .ar-crit-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#ffdd00;text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;position:absolute;left:50%;top:26%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-crit 3.7s ease-out forwards; }
+            .ar-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.2em;font-weight:bold;color:#88ddff;text-shadow:0 0 10px #0af,1px 1px 2px #000;position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-evd 1.35s ease-out forwards; }
+            .ar-heal-num { font-family:'Cinzel',Georgia,serif;font-size:1.5em;font-weight:bold;color:#44ff88;text-shadow:0 0 10px rgba(50,255,100,0.7),1px 1px 2px #000;position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-heal 1.35s ease-out forwards; }
+            .ar-crit-lbl { font-family:'Cinzel',serif;font-size:0.72em;font-weight:bold;color:#ffdd00;text-shadow:0 0 8px #f80,1px 1px 2px #000;position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:16;white-space:nowrap;pointer-events:none;animation:ar-crit-lbl 0.95s ease-out forwards; }
+
+            /* ── Hit & lunge ── */
+            @keyframes ar-lunge-l  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(32px) scale(1.12) rotate(3deg);}65%{transform:translateX(12px) scale(1.05) rotate(1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+            @keyframes ar-lunge-r  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(-32px) scale(1.12) rotate(-3deg);}65%{transform:translateX(-12px) scale(1.05) rotate(-1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+            @keyframes ar-hit-f    { 0%,100%{filter:brightness(1) saturate(1);}20%{filter:brightness(3.2) saturate(0.1);}45%{filter:brightness(1.9) saturate(0.5);} }
+            @keyframes ar-crit-f   { 0%{filter:brightness(1);}12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);}30%{filter:brightness(2.8) saturate(0.3) sepia(0.4);}100%{filter:brightness(1);} }
+            @keyframes ar-shake    { 0%,100%{transform:translateX(0);}20%{transform:translateX(-8px) rotate(-3deg);}40%{transform:translateX(8px) rotate(3deg);}60%{transform:translateX(-5px);}80%{transform:translateX(5px);} }
+
+            /* ── Shockwave & sparks ── */
+            @keyframes ar-sw   { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.9;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.0);opacity:0;border-width:1px;} }
+            @keyframes ar-sw2  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.55;border-width:3px;}100%{transform:translate(-50%,-50%) scale(2.0);opacity:0;border-width:1px;} }
+            @keyframes ar-sp   { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+            .ar-ring  { position:absolute;width:65px;height:65px;border-radius:50%;border:3px solid rgba(255,175,50,0.88);top:38%;left:50%;pointer-events:none;z-index:12;animation:ar-sw 0.48s ease-out forwards; }
+            .ar-ring2 { position:absolute;width:65px;height:65px;border-radius:50%;border:2px solid rgba(255,220,100,0.48);top:38%;left:50%;pointer-events:none;z-index:12;animation:ar-sw2 0.65s ease-out 0.07s forwards; }
+            .ar-ring.crit  { border-color:rgba(255,220,0,0.95);box-shadow:0 0 10px rgba(255,200,0,0.55); }
+            .ar-ring2.crit { border-color:rgba(255,180,0,0.62); }
+            .ar-spark { position:absolute;border-radius:50%;top:38%;left:50%;pointer-events:none;animation:ar-sp 0.42s ease-out forwards;z-index:13; }
+
+            /* ── Potion float ── */
+            @keyframes ar-pot-float { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.4);} 18%{opacity:1;transform:translate(-50%,-65px) scale(1.25);} 100%{opacity:0;transform:translate(-50%,-100px) scale(0.9);} }
+            .ar-pot-flash { position:absolute;top:50%;left:50%;width:52px;height:52px;z-index:25;pointer-events:none;object-fit:contain;animation:ar-pot-float 1.1s ease-out forwards; filter:drop-shadow(0 0 8px rgba(255,220,50,0.8)); }
+
+            /* ── VS separator ── */
+            .vs-separator { animation: ar-vs-pulse 1.9s ease-in-out infinite !important; }
+            @keyframes ar-vs-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.22);text-shadow:0 0 22px gold,0 0 48px rgba(255,200,0,0.5);} }
+
+            /* ── HP bar sheen ── */
+            .player-hp-fill { position:relative !important; transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease !important; }
+            .player-hp-fill::after { content:''; position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,0.2) 0%,transparent 100%);border-radius:6px 6px 0 0;pointer-events:none; }
+
+            /* ── Avatar glow (battle) ── */
+            .player-avatar-pvp { transition: filter 0.5s ease, transform 0.5s ease, opacity 0.5s ease !important; }
+
+            /* ── Winner / Loser ── */
+            @keyframes ar-w-pulse { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,0.9),0 0 40px rgba(255,150,0,0.5);}50%{box-shadow:0 0 36px rgba(255,215,0,1),0 0 70px rgba(255,150,0,0.7);} }
+            .ar-winner .player-avatar-pvp { border-color:#ffd700 !important; animation:ar-w-pulse 1.0s ease-in-out infinite !important; }
+            .ar-loser  { filter:grayscale(88%) brightness(0.38) !important; transform:scale(0.87) translateY(8px) !important; opacity:0.45 !important; }
+
+            /* ── Intro slide ── */
+            @keyframes ar-sl-l { 0%{transform:translateX(-85px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+            @keyframes ar-sl-r { 0%{transform:translateX(85px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+            .ar-intro-l { animation:ar-sl-l 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+            .ar-intro-r { animation:ar-sl-r 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+            /* ── pvpCountdown epic text ── */
+            #pvpCountdown { color:#ffcc44 !important; text-shadow:0 0 10px #f80,0 0 22px #f40 !important; animation:ar-cntdn 0.9s ease-in-out infinite; }
+            @keyframes ar-cntdn { 0%,100%{transform:scale(1);}50%{transform:scale(1.08);} }
+
+            /* ── Combat modal content: subtle glass, no dark bg ── */
+            #pvpCombatModal .modal-content {
+                background: rgba(0,0,0,0.12) !important;
+                backdrop-filter: blur(1px);
+                -webkit-backdrop-filter: blur(1px);
+            }
+        `;
+        document.head.appendChild(s);
+
+        // Ensure screen flash element exists
+        if (!document.getElementById('arena-screen-flash')) {
+            const f = document.createElement('div');
+            f.id = 'arena-screen-flash';
+            f.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:8888;opacity:0;transition:opacity 0.07s;';
+            document.body.appendChild(f);
+        }
+    }
+
+    function displayDamageNumber(dmg, crit, evd, target) {
+        if (!target) return;
+        _injectArenaEpicStyles();
+        const isHeal = typeof dmg === 'string' && String(dmg).startsWith('+');
+        const el = document.createElement('div');
+        if (evd) {
+            el.className = 'ar-evd-txt';
+            el.textContent = 'Desviou!';
+            try { playSound('evade', { volume: 0.3 }); } catch(_) {}
+        } else if (isHeal) {
+            el.className = 'ar-heal-num';
+            el.textContent = dmg;
+        } else if (crit) {
+            el.className = 'ar-crit-num';
+            el.innerHTML = '⚡ ' + (typeof dmg === 'number' ? dmg.toLocaleString() : dmg) + ' ⚡';
+            const lbl = document.createElement('div');
+            lbl.className = 'ar-crit-lbl'; lbl.textContent = '✦ CRÍTICO! ✦';
+            target.appendChild(lbl);
+            lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+            try { playSound('critical', { volume: 0.1 }); } catch(_) {}
+        } else {
+            el.className = 'ar-dmg-num';
+            el.textContent = (typeof dmg === 'number') ? dmg.toLocaleString() : dmg;
+            try { playSound('normal', { volume: 0.5 }); } catch(_) {}
+        }
+        target.appendChild(el);
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
+    }
+
+    function flashPotionIcon(itemId, sideElement) {
+        _injectArenaEpicStyles();
+        const img = document.createElement('img');
+        const iId = parseInt(itemId);
+        const itemName = getItemName(iId);
+        img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+        img.className = 'ar-pot-flash';
+        sideElement.appendChild(img);
+        img.addEventListener('animationend', () => img.remove(), { once: true });
+        setTimeout(() => { if (img.parentNode) img.remove(); }, 1200);
+    }
+    
+    function animateActorMove(element) {
+        _injectArenaEpicStyles();
+        const isLeft = element === challengerSide;
+        // Anima o avatar-container inteiro para que a moldura (frame overlay + sheen)
+        // acompanhe o movimento junto com o avatar.
+        const container = element.querySelector('.avatar-container');
+        if (container) {
+            container.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
+            setTimeout(() => { container.style.animation = ''; }, 480);
+        } else {
+            const av = element.querySelector('.player-avatar-pvp');
+            if (av) {
+                av.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
+                setTimeout(() => { av.style.animation = ''; }, 480);
+            } else {
+                element.style.transition = 'transform 0.1s';
+                element.style.transform = 'scale(1.1) translateY(-10px)';
+                setTimeout(() => { element.style.transform = 'scale(1) translateY(0)'; }, 160);
+            }
+        }
+    }
+
+    // =======================================================================
+    // 9. RANKING E SISTEMA
+    // =======================================================================
+
+    function renderFixedFooter(playerData) {
+        const container = document.getElementById('fixedArenaRank');
+        if (!container) return;
+
+        if (!playerData) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const avatar = playerData.avatar_url || playerData.avatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        
+        container.innerHTML = `
+            <div class="fixed-rank-inner">
+                 <span class="fixed-rank-pos">${playerData.rank}º</span>
+                 <img class="fixed-rank-avatar" src="${esc(avatar)}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
+                 <div class="fixed-rank-info">
+                     <span class="fixed-rank-name">${esc(playerData.name)}</span>
+                     <span class="fixed-rank-guild">${esc(playerData.guild_name || 'Sem Guilda')}</span>
+                 </div>
+                 <span class="fixed-rank-points">${Number(playerData.ranking_points || 0).toLocaleString()} pts</span>
+            </div>
+        `;
+        container.style.display = 'block';
+    }
+
+    async function fetchAndRenderRanking() {
+        showLoading();
+        // Esconde barra fixa ao começar a carregar
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
+        try {
+            if (seasonInfoContainer) seasonInfoContainer.style.display = 'block'; 
+            
+            // Limpa cache antigo se não tiver ID (para migração)
+            let rawCache = localStorage.getItem('arena_top_100_cache');
+            if(rawCache && !rawCache.includes('"id"')) {
+                localStorage.removeItem('arena_top_100_cache');
+            }
+
+            let rankingData = getCache('arena_top_100_cache');
+            if (!rankingData) { 
+                // RPC Skeleton
+                const { data: rpcData, error: rpcError } = await supabase.rpc('get_arena_top_100');
+                if (rpcError) rankingData = await fallbackFetchTopPlayers();
+                else {
+                    const result = normalizeRpcResult(rpcData);
+                    if (result?.success && Array.isArray(result.ranking)) {
+                        // Hydrate
+                        rankingData = await hydrateProfiles(result.ranking);
+                        if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
+                    } else rankingData = await fallbackFetchTopPlayers();
+                }
+            }
+            renderRanking(rankingData || []); 
+
+            // === LÓGICA DO RODAPÉ FIXO (ATUAL) ===
+            if (userId) {
+                let myRankObj = null;
+                // 1. Verifica se estou no Top 100 baixado
+                const myIndex = rankingData.findIndex(p => p.id === userId);
+                
+                if (myIndex !== -1) {
+                    myRankObj = { ...rankingData[myIndex], rank: myIndex + 1 };
+                } else {
+                    // 2. Se não estiver no Top 100, busca meus dados e calcula rank via Count no DB
+                    try {
+                        const { data: me } = await supabase
+                            .from('players')
+                            .select('id, name, avatar_url, ranking_points, guild_id')
+                            .eq('id', userId)
+                            .single();
+                        
+                        if (me) {
+                            // Conta quantos têm mais pontos que eu
+                            const { count } = await supabase
+                                .from('players')
+                                .select('*', { count: 'exact', head: true })
+                                .gt('ranking_points', me.ranking_points)
+                                .neq('is_banned', true);
+                            
+                            let gName = 'Sem Guilda';
+                            if (me.guild_id) {
+                                const { data: g } = await supabase.from('guilds').select('name').eq('id', me.guild_id).single();
+                                if(g) gName = g.name;
+                            }
+
+                            myRankObj = {
+                                name: me.name,
+                                avatar_url: me.avatar_url,
+                                ranking_points: me.ranking_points,
+                                guild_name: gName,
+                                rank: (count || 0) + 1
+                            };
+                        }
+                    } catch(e) { console.warn("Erro ao calcular rank pessoal", e); }
+                }
+                
+                if (myRankObj) renderFixedFooter(myRankObj);
+            }
+
+            if (rankingModal) rankingModal.style.display = 'flex';
+        } catch (e) { showModalAlert("Erro ao carregar ranking."); } finally { hideLoading(); }
+    }
+
+    async function fallbackFetchTopPlayers() {
+        try {
+            const { data: players } = await supabase.from('players').select('id, name, avatar_url, avatar, ranking_points, guild_id').neq('is_banned', true).order('ranking_points', { ascending: false }).limit(10);
+            if (!players || players.length === 0) return [];
+            const guildIds = [...new Set(players.map(p => p.guild_id).filter(Boolean))];
+            let guildsMap = {};
+            if (guildIds.length) {
+                const { data: guilds } = await supabase.from('guilds').select('id, name').in('id', guildIds);
+                if (guilds) guildsMap = Object.fromEntries(guilds.map(g => [g.id, g.name]));
+            }
+            return players.map(p => ({
+                id: p.id,
+                name: p.name,
+                avatar_url: p.avatar_url || p.avatar || 'https://aden-rpg.pages.dev/avatar01.webp',
+                ranking_points: p.ranking_points,
+                guild_name: p.guild_id ? (guildsMap[p.guild_id] || 'Sem Guilda') : 'Sem Guilda'
+            }));
+        } catch { return []; }
+    }
+
+    // Constrói o HTML do pódio (Top 3) no padrão AAA — usado nas abas "Atual" e "Passada"
+    function buildArenaPodiumHTML(top3, defaultAvatar) {
+        defaultAvatar = defaultAvatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        const order = [2, 1, 3]; // ordem visual: 2º, 1º (centro), 3º
+        let html = "";
+        for (const rank of order) {
+            const p = top3[rank - 1];
+            if (!p) continue;
+            const avatar = p.avatar_url || p.avatar || defaultAvatar;
+            html += `
+            <div class="ar-podium-place ar-podium-${rank}">
+                ${rank === 1 ? '<div class="ar-podium-crown">👑</div>' : ''}
+                <div class="ar-podium-avatar-wrap">
+                    <img class="ar-podium-avatar" src="${esc(avatar)}" onerror="this.src='${defaultAvatar}'">
+                    <div class="ar-podium-badge">${rank}</div>
+                </div>
+                <div class="ar-podium-name">${esc(p.name)}</div>
+                <div class="ar-podium-guild">${esc(p.guild_name) || 'Sem Guilda'}</div>
+                <div class="ar-podium-value">${Number(p.ranking_points || 0).toLocaleString()} pts</div>
+                <div class="ar-podium-step">${rank}</div>
+            </div>`;
+        }
+        return html;
+    }
+
+    function renderRanking(data) {
+        if (seasonInfoSpan) {
+            const now = new Date();
+            const month = now.toLocaleString('pt-BR', { month: 'long' });
+            seasonInfoSpan.innerHTML = `<strong>Temporada<br> ${month[0].toUpperCase() + month.slice(1)} / ${now.getFullYear()}</strong>`;
+        }
+        if (!rankingList) return;
+        rankingList.innerHTML = "";
+        if (rankingPodium) rankingPodium.innerHTML = "";
+        if (!data || !data.length) { rankingList.innerHTML = "<li style='text-align:center; padding: 20px; color: #aaa;'>Nenhum jogador classificado ainda.</li>"; return; }
+        const defaultAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
+
+        // Top 3 vira pódio; do 4º em diante continua em lista
+        if (rankingPodium) rankingPodium.innerHTML = buildArenaPodiumHTML(data.slice(0, 3), defaultAvatar);
+
+        const rest = data.slice(3);
+        for (const [idx, p] of rest.entries()) {
+            const i = idx + 3;
+            const avatar = p.avatar_url || p.avatar || defaultAvatar;
+            const li = document.createElement("li");
+            li.innerHTML = `<span class="rank-position">${i + 1}.</span><img src="${esc(avatar)}" onerror="this.src='${defaultAvatar}'" class="rank-avatar"><div class="rank-player-info"><span class="rank-player-name">${esc(p.name)}</span><span class="rank-guild-name">${esc(p.guild_name) || 'Sem Guilda'}</span></div><span class="rank-points">${Number(p.ranking_points || 0).toLocaleString()} pts</span>`;
+            rankingList.appendChild(li);
+        }
+    }
+
+    async function fetchPastSeasonRanking() {
+        showLoading();
+        // Esconde barra fixa ao trocar de aba
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
+        try {
+            if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
+            if (rankingListPast) rankingListPast.innerHTML = "";
+            if (seasonPastInfoSpan) seasonPastInfoSpan.textContent = "Carregando...";
+
+            let d = getCache('arena_last_season_cache');
+            let snap = null;
+            if (!d) {
+                try {
+                    const { data: rpcData } = await supabase.rpc('get_arena_top_100_past');
+                    let r = normalizeRpcResult(rpcData);
+                    let candidate = null;
+                    if (Array.isArray(r)) candidate = r;
+                    else if (r?.ranking && Array.isArray(r.ranking)) candidate = r.ranking;
+                    else if (r?.result?.ranking) candidate = r.result.ranking;
+                    if (Array.isArray(candidate) && candidate.length) {
+                        d = await hydrateProfiles(candidate);
+                        setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
+                    }
+                } catch {}
+                
+                if (!d) {
+                    const { data: snaps } = await supabase.from('arena_season_snapshots').select('ranking, season_year, season_month, created_at').order('created_at', { ascending: false }).limit(1);
+                    if (snaps && snaps.length > 0) {
+                        snap = snaps[0];
+                        let rv = snap.ranking;
+                        if (typeof rv === 'string') try { rv = JSON.parse(rv); } catch {}
+                        if (Array.isArray(rv)) { 
+                            d = await hydrateProfiles(rv); 
+                            setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC()); 
+                        }
+                    }
+                }
+            }
+            
+            let seasonInfoText = "Temporada Anterior";
+            if (snap && snap.season_month) {
+                const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                seasonInfoText = `Temporada: ${monthNames[snap.season_month - 1] || snap.season_month} / ${snap.season_year}`;
+            }
+            if (seasonPastInfoSpan) seasonPastInfoSpan.textContent = seasonInfoText;
+
+            if (!d || !d.length) {
+                if (rankingPodiumPast) rankingPodiumPast.innerHTML = "";
+                if (rankingListPast) rankingListPast.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Ainda não houve temporada passada.</li>";
+            } else {
+                rankingListPast.innerHTML = "";
+                const defAv = 'https://aden-rpg.pages.dev/avatar01.webp';
+
+                // Top 3 vira pódio; do 4º em diante continua em lista
+                if (rankingPodiumPast) rankingPodiumPast.innerHTML = buildArenaPodiumHTML(d.slice(0, 3), defAv);
+
+                d.slice(3).forEach((p, idx) => {
+                    const i = idx + 3;
+                    const av = p.avatar_url || p.avatar || defAv;
+                    rankingListPast.innerHTML += `<li style="width:100%;box-sizing:border-box;"><span style="width:40px;flex-shrink:0;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%;flex-shrink:0;"><div style="flex-grow:1;min-width:0;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
+                });
+
+                // === LÓGICA DO RODAPÉ FIXO (PASSADO) ===
+                if (userId) {
+                    const myIndex = d.findIndex(p => p.id === userId);
+                    if (myIndex !== -1) {
+                        const myRankObj = { ...d[myIndex], rank: myIndex + 1 };
+                        renderFixedFooter(myRankObj);
+                    }
+                }
+            }
+            // === VERIFICA RECOMPENSAS DE TEMPORADA ===
+            checkArenaSeasonRewards(d);
+
+            if (rankingModal) rankingModal.style.display = 'flex';
+        } catch { showModalAlert("Erro ao carregar temporada passada."); } finally { hideLoading(); }
+    }
+
+    // =======================================================================
+    // 9b. SISTEMA DE RECOMPENSAS DE TEMPORADA DA ARENA
+    // =======================================================================
+
+    /** Retorna a chave YYYY_MM do mês anterior (UTC) */
+    function getArenaSeasonRewardKey() {
+        const now = new Date();
+        let y = now.getUTCFullYear(), m = now.getUTCMonth() + 1; // 1-12
+        if (m === 1) { y--; m = 12; } else { m--; }
+        return `${y}_${String(m).padStart(2, '0')}`;
+    }
+
+    /** Verifica se as recompensas da temporada anterior ainda não foram resolvidas */
+    function isArenaRewardPending() {
+        return !localStorage.getItem(`arena_season_reward_${getArenaSeasonRewardKey()}`);
+    }
+
+    /** Marca as recompensas como resolvidas (claimed ou dispensadas) */
+    function markArenaRewardDone() {
+        localStorage.setItem(`arena_season_reward_${getArenaSeasonRewardKey()}`, '1');
+    }
+
+    /** Remove o efeito de glow do botão de ranking e da aba Passada */
+    function removeArenaRewardGlow() {
+        const wrap = document.getElementById('rankingBtnWrap');
+        if (wrap) wrap.classList.remove('has-reward');
+        const pastTab = document.querySelector('.ranking-tab[data-tab="past"]');
+        if (pastTab) pastTab.classList.remove('has-reward');
+    }
+
+    /** Adiciona o efeito glow no botão de ranking e na aba Passada enquanto houver recompensa pendente */
+    function checkAndShowArenaRewardGlow() {
+        if (!isArenaRewardPending()) return;
+
+        const wrap = document.getElementById('rankingBtnWrap');
+        if (wrap) wrap.classList.add('has-reward');
+
+        const pastTab = document.querySelector('.ranking-tab[data-tab="past"]');
+        if (pastTab) pastTab.classList.add('has-reward');
+    }
+
+    /**
+     * Chamada quando o ranking do mês passado é carregado.
+     * Verifica se o jogador está no top 3 e mostra o modal de recompensa.
+     * Se não estiver, remove o glow e marca como dispensado.
+     */
+    function checkArenaSeasonRewards(rankingData) {
+        if (!isArenaRewardPending()) return;
+
+        // Sem dados: dispensa o glow
+        if (!rankingData || !rankingData.length || !userId) {
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            return;
+        }
+
+        // Verifica se o snapshot tem campo 'id' (novo formato)
+        const hasIds = rankingData.some(p => p.id);
+        if (!hasIds) {
+            // Snapshot antigo sem ID — não dispensa, não mostra modal
+            // (aguarda próximo mês quando snapshot já terá o campo id)
+            return;
+        }
+
+        // Busca o jogador no top 3
+        const myIndex = rankingData.findIndex(p => p.id === userId);
+        if (myIndex === -1 || myIndex > 2) {
+            // Não está no top 3 — dispensa glow silenciosamente
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            return;
+        }
+
+        // Está no top 3 — exibe modal de recompensa
+        showArenaRewardModal(myIndex + 1);
+    }
+
+    /** Exibe o modal de recompensa de temporada para o rank informado */
+    function showArenaRewardModal(rank) {
+        const rewardDefs = {
+            1: {
+                label: '🥇 1° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank1.webp', name: 'Moldura Rank 1 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 10 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 50 }
+                ]
+            },
+            2: {
+                label: '🥈 2° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank2.webp', name: 'Moldura Rank 2 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 5 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 25 }
+                ]
+            },
+            3: {
+                label: '🥉 3° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank3.webp', name: 'Moldura Rank 3 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 3 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 10 }
+                ]
+            }
+        };
+
+        const def = rewardDefs[rank];
+        if (!def) return;
+
+        const modal        = document.getElementById('arenaRewardModal');
+        const rankText     = document.getElementById('arenaRewardRankText');
+        const itemsEl      = document.getElementById('arenaRewardItems');
+        const claimBtn     = document.getElementById('arenaRewardClaimBtn');
+
+        if (!modal) return;
+
+        if (rankText) rankText.textContent = def.label;
+
+        if (itemsEl) {
+            itemsEl.innerHTML = '';
+            def.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'arena-reward-item';
+                div.innerHTML = `
+                    <img src="${item.img}" alt="${esc(item.name)}">
+                    <div class="arena-reward-item-qty">x${item.qty}</div>
+                    <div class="arena-reward-item-name">${esc(item.name)}</div>
+                `;
+                itemsEl.appendChild(div);
+            });
+        }
+
+        // Armazena o rank no dataset para o botão de resgatar
+        modal.dataset.pendingRank = rank;
+
+        // Reseta estado do botão (caso modal tenha sido aberto antes)
+        if (claimBtn) {
+            claimBtn.disabled = false;
+            claimBtn.textContent = '⚔ Resgatar ⚔';
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    /** Chama o backend para resgatar as recompensas e atualiza os caches locais */
+    async function claimArenaSeasonRewards() {
+        const modal    = document.getElementById('arenaRewardModal');
+        const claimBtn = document.getElementById('arenaRewardClaimBtn');
+
+        if (claimBtn) { claimBtn.disabled = true; claimBtn.textContent = 'Resgatando...'; }
+        showLoading();
+
+        try {
+            const { data, error } = await supabase.rpc('claim_arena_season_rewards');
+            const res = normalizeRpcResult(data);
+
+            if (error || !res?.success) {
+                if (res?.already_claimed) {
+                    // Já havia sido resgatado antes (ex: jogador limpou o cache/localStorage).
+                    // Apenas sincroniza o estado local — não é um erro de verdade,
+                    // então não trava o jogador no modal nem mantém o glow ativo.
+                    markArenaRewardDone();
+                    removeArenaRewardGlow();
+                    if (modal) modal.style.display = 'none';
+                    return;
+                }
+                showModalAlert(res?.message || 'Erro ao resgatar recompensas.');
+                if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+                return;
+            }
+
+            // Marca como concluído e remove glows
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            if (modal) modal.style.display = 'none';
+
+            // Atualização cirúrgica do inventário (Zero Egress — igual ao commitSession)
+            if (res.timestamp && res.inventory_updates) {
+                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, null);
+            }
+
+            // Atualiza ouro no cache do player (LocalStorage legado)
+            if (res.gold) {
+                try {
+                    const cached = localStorage.getItem('player_data_cache');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (parsed?.data) {
+                            parsed.data.gold = (parsed.data.gold || 0) + res.gold;
+                            localStorage.setItem('player_data_cache', JSON.stringify(parsed));
+                        }
+                    }
+                } catch(e) {}
+                // Atualiza GlobalDB
+                const gPlayer = await GlobalDB.getPlayer();
+                if (gPlayer) {
+                    await GlobalDB.updatePlayerPartial({ gold: (gPlayer.gold || 0) + res.gold });
+                }
+            }
+
+            showModalAlert(
+                `Recompensas de temporada resgatadas! 🏆<br>` +
+                `<strong style="color:#ffd700;">+${res.gold} Ouro</strong> · ` +
+                `<strong style="color:#8cf;">+${res.hourglasses} Ampulhetas</strong> · ` +
+                `<strong style="color:#fa0;">Moldura Rank ${res.rank}</strong>`,
+                'Parabéns!'
+            );
+
+        } catch(e) {
+            console.error("Erro ao resgatar recompensas de temporada:", e);
+            showModalAlert('Erro inesperado ao resgatar recompensas.');
+            if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function fetchAttackHistory() {
+        showLoading();
+        // Esconde footer no histórico
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
+        try {
+            if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
+            if (rankingHistoryList) rankingHistoryList.innerHTML = "";
+            const cacheKey = 'arena_attack_history_v2';
+            let h = getCache(cacheKey);
+            if (!h) {
+                supabase.rpc('cleanup_old_arena_logs').then(()=>{});
+                const { data } = await supabase.rpc('get_arena_attack_logs');
+                const r = normalizeRpcResult(data);
+                if (r?.success && Array.isArray(r.logs) && r.logs.length) {
+                    h = await hydrateProfiles(mapLogsForHydration(r.logs)); // Hidrata logs
+                    setCache(cacheKey, h, getMinutesToMidnightUTC());
+                } else if (userId) {
+                    const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(5);
+                    if (logsDirect) { 
+                        h = await hydrateProfiles(mapLogsForHydration(logsDirect)); // Hidrata logs
+                        setCache(cacheKey, h, getMinutesToMidnightUTC()); 
+                    }
+                }
+            }
+            if (!h || !h.length) rankingHistoryList.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Sem registros.</li>";
+            else {
+                rankingHistoryList.innerHTML = "";
+                h.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).forEach(l => {
+                    const date = new Date(l.created_at).toLocaleString('pt-BR');
+                    const attackerWon = String(l.attacker_won) === 'true' || l.attacker_won === true;
+                    // Usa nome hidratado (l.name) ou o original (l.attacker_name) como fallback
+                    const attName = l.name || l.attacker_name;
+                    const msg = attackerWon ? `${esc(attName)} atacou você e venceu. Você perdeu ${Number(l.points_taken).toLocaleString()} pts.` : `${esc(attName)} atacou você e perdeu. Você tomou ${Number(l.points_taken).toLocaleString()} pts.`;
+                    rankingHistoryList.innerHTML += `<li style='padding:8px;border-bottom:1px solid #444;color:#ddd;'><strong>${date}</strong><br>${msg}</li>`;
+                });
+            }
+            if (rankingModal) rankingModal.style.display = 'flex';
+        } catch { showModalAlert("Erro ao carregar histórico."); } finally { hideLoading(); }
+    }
+
+    function initRankingTabs() {
+        const tabs = document.querySelectorAll(".ranking-tab");
+        if (!tabs.length) return;
+        tabs.forEach(tab => {
+            tab.addEventListener("click", async () => {
+                // Esconde footer ao trocar de aba
+                const footer = document.getElementById('fixedArenaRank');
+                if(footer) footer.style.display = 'none';
+
+                tabs.forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
+                tab.classList.add("active"); tab.style.background = "#c9a94a"; tab.style.color = "#000";
+                document.querySelectorAll(".tab-panel").forEach(p => { p.classList.remove("active"); p.style.display = 'none'; });
+                const tn = tab.dataset.tab;
+                if (tn === 'current') { document.getElementById('rankingCurrent').style.display = 'block'; await fetchAndRenderRanking(); }
+                else if (tn === 'past') { document.getElementById('rankingPast').style.display = 'block'; await fetchPastSeasonRanking(); }
+                else { document.getElementById('rankingHistory').style.display = 'block'; await fetchAttackHistory(); }
+            });
+        });
+    }
+
+    async function checkAndResetArenaSeason() {
+        try {
+            const now = new Date();
+            const currentYear = now.getUTCFullYear();
+            const currentMonth = now.getUTCMonth() + 1;
+            const lastResetRaw = localStorage.getItem('arena_last_season_reset');
+            const keyData = lastResetRaw ? JSON.parse(lastResetRaw) : null;
+            // Antes isso só rodava no dia 1 UTC — se ninguém abrisse o jogo
+            // exatamente naquele dia, o reset da temporada nunca acontecia
+            // e ficava impossível resgatar a recompensa do mês anterior.
+            // Agora tenta em qualquer dia; a função no banco é idempotente
+            // (só reseta de fato uma vez por transição de mês), então é
+            // seguro chamar sempre até confirmar sucesso.
+            // Também comparamos o ANO, não só o mês, pra não pular o reset
+            // por engano no mesmo mês do ano seguinte.
+            if (keyData && keyData.month === currentMonth && keyData.year === currentYear) return;
+            localStorage.removeItem('arena_top_100_cache');
+            localStorage.removeItem('arena_last_season_cache');
+            const { data } = await supabase.rpc('reset_arena_season');
+            const r = normalizeRpcResult(data);
+            if (r?.success) localStorage.setItem('arena_last_season_reset', JSON.stringify({ year: currentYear, month: currentMonth }));
+        } catch {}
+    }
+
+    async function checkAndResetDailyAttempts() {
+        const todayKey = getTodayUTCDateString();
+        const lastCheck = localStorage.getItem('arena_last_daily_check');
+        if (lastCheck !== todayKey) {
+            try {
+                await supabase.rpc('reset_arena_daily_attempts');
+                localStorage.setItem('arena_last_daily_check', todayKey);
+            } catch(e) { console.error("Falha ao resetar tentativas diárias", e); }
+        }
+    }
+
+    async function boot() {
+        showLoading();
+        try {
+            userId = await getLocalUserId();
+            if (!userId) {
+                if (!session) { window.location.href = "index.html"; return; }
+                userId = session.user.id;
+            }
+
+            if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
+            await checkAndResetArenaSeason();
+            await checkAndResetDailyAttempts();
+            await updateAttemptsUI();
+            ensureStreakDate();
+            await loadArenaLoadout();
+            // Notificação de recompensa de temporada (dia 1 do mês)
+            checkAndShowArenaRewardGlow();
+        } catch (e) {
+            console.error("Erro no boot:", e);
+            if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) { window.location.href = "index.html"; }
+        } finally { hideLoading(); }
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {}
+    });
+
+    if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);
+    if (openRankingBtn) openRankingBtn.addEventListener("click", () => { document.querySelector(".ranking-tab[data-tab='current']").click(); });
+    
+    // Listener do botão de resgatar recompensas de temporada
+    const arenaRewardClaimBtn = document.getElementById('arenaRewardClaimBtn');
+    if (arenaRewardClaimBtn) arenaRewardClaimBtn.addEventListener('click', claimArenaSeasonRewards);
+
+    // Botão de fechar do modal de recompensa — garante que o jogador NUNCA
+    // fique preso na tela caso o resgate falhe (ex: erro de rede/servidor).
+    // Fechar aqui NÃO marca como concluído: o glow/modal voltarão a aparecer
+    // depois, permitindo tentar resgatar novamente mais tarde.
+    const closeArenaRewardBtn = document.getElementById('closeArenaRewardBtn');
+    if (closeArenaRewardBtn) closeArenaRewardBtn.addEventListener('click', () => {
+        const modal = document.getElementById('arenaRewardModal');
+        const claimBtn = document.getElementById('arenaRewardClaimBtn');
+        if (modal) modal.style.display = 'none';
+        if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+    });
+    
+    if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { 
+        if (rankingModal) rankingModal.style.display = 'none';
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+    });
+    
+    initRankingTabs();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === 'hidden' && backgroundMusic && !backgroundMusic.paused) backgroundMusic.pause();
+      else if (document.visibilityState === 'visible' && musicStarted && backgroundMusic && backgroundMusic.paused) backgroundMusic.play().catch(()=>{});
+    });
+
+    boot();
+});

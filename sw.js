@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v52'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v53'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -54,8 +54,28 @@ self.addEventListener('install', event => {
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status} ao buscar asset crítico: ${url}`);
                     }
-                    await cache.put(url, response);
-                    console.log(`✅ [SW] Offline asset cacheado: ${url}`);
+
+                    // IMPORTANTE: se esse fetch passou por QUALQUER redirecionamento
+                    // (normalização de URL, http->https, barra final, etc.), o Chrome
+                    // marca a Response como "redirected". Uma Response redirecionada
+                    // NÃO pode, depois, ser usada pra responder a uma NAVEGAÇÃO — o
+                    // Chrome recusa com "a redirected response was used for a request
+                    // whose redirect mode is not follow" e cai no erro padrão do
+                    // navegador (era exatamente o nosso bug). Por isso reconstituímos
+                    // a resposta do zero (mesmo corpo/status/headers, sem a marcação
+                    // de redirecionamento) antes de guardar no cache.
+                    const body = await response.blob();
+                    const cacheableResponse = new Response(body, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers
+                    });
+
+                    await cache.put(url, cacheableResponse);
+                    console.log(
+                        `✅ [SW] Offline asset cacheado: ${url}` +
+                        (response.redirected ? ' (era redirecionado — normalizado antes de cachear)' : '')
+                    );
                 })
             );
 

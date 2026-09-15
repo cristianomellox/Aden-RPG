@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v50'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v52'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -39,25 +39,29 @@ const ASSETS_TO_PRECACHE = [
 self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
-        caches.open(CACHE_NAME).then(async cache => {
-            // IMPORTANTE: usamos cache.add() individual (em Promise.all), e NÃO
-            // cache.addAll(). O addAll() é tudo-ou-nada: se UM único arquivo da
-            // lista falhar (404, redirect, timeout, CDN lento no deploy...), a
-            // lista inteira falha e NADA é salvo no cache — inclusive o
-            // offline.html, que é justamente o motivo desse mecanismo existir.
-            // Cacheando um por um, uma falha isolada não derruba os outros.
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
 
-            // 1) Primeiro os arquivos da tela offline (críticos).
+            // 1) Assets críticos da tela offline: se QUALQUER um destes falhar,
+            //    cancelamos a instalação inteira (deixamos o erro propagar).
+            //    É proposital: é melhor manter o Service Worker anterior
+            //    funcionando do que ativar uma versão nova sem offline.html.
+            //    cache: 'reload' ignora qualquer cópia guardada no cache HTTP
+            //    do navegador/CDN, forçando buscar os bytes atuais da rede.
             await Promise.all(
-                CRITICAL_OFFLINE_ASSETS.map(url =>
-                    cache.add(url).then(
-                        () => console.log(`✅ [SW] Offline asset cacheado: ${url}`),
-                        err => console.error(`🚨 [SW] FALHA AO CACHEAR ASSET CRÍTICO (${url}):`, err)
-                    )
-                )
+                CRITICAL_OFFLINE_ASSETS.map(async url => {
+                    const response = await fetch(url, { cache: 'reload' });
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status} ao buscar asset crítico: ${url}`);
+                    }
+                    await cache.put(url, response);
+                    console.log(`✅ [SW] Offline asset cacheado: ${url}`);
+                })
             );
 
-            // 2) Depois o resto da UI essencial.
+            // 2) Demais arquivos essenciais de UI. Aqui sim, uma falha isolada
+            //    NÃO derruba os outros nem cancela a instalação — não são
+            //    críticos pra tela offline funcionar.
             await Promise.all(
                 ASSETS_TO_PRECACHE.map(url =>
                     cache.add(url).catch(err =>
@@ -67,6 +71,9 @@ self.addEventListener('install', event => {
             );
 
             console.log('🔥 [SW] Precache concluído.');
+        })().catch(err => {
+            console.error('🚨 [SW] Instalação CANCELADA — asset crítico não pôde ser cacheado:', err);
+            throw err; // propaga: SW novo fica "redundant", o anterior continua ativo
         })
     );
 });
@@ -104,20 +111,33 @@ self.addEventListener('fetch', event => {
     // página que o jogador tentou abrir, então o botão "Recarregar" da
     // offline.html tenta essa mesma página de novo.
     if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request).catch(err => {
-                console.warn('📡 [SW] Navegação falhou (provavelmente offline):', err);
-                return caches.match('/offline.html', { ignoreSearch: true }).then(offlinePage => {
-                    if (!offlinePage) {
-                        console.error('🚨 [SW] offline.html NÃO estava no cache! Verifique o precache no install.');
-                    }
-                    return offlinePage || new Response('Sem conexão com a internet.', {
-                        status: 503,
-                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                    });
+        event.respondWith((async () => {
+            const showOfflinePage = async () => {
+                const cache = await caches.open(CACHE_NAME);
+                const offlinePage = await cache.match('/offline.html');
+                if (!offlinePage) {
+                    console.error('🚨 [SW] offline.html NÃO estava no cache! Verifique o precache no install.');
+                }
+                return offlinePage || new Response('Sem conexão com a internet.', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
                 });
-            })
-        );
+            };
+
+            try {
+                const response = await fetch(request);
+                // Servidor respondeu, mas com erro (ex: 500/502/503) — trata
+                // como "sem conexão" também, não só falha total de rede.
+                if (response.status >= 500) {
+                    console.warn(`📡 [SW] Servidor retornou ${response.status} na navegação.`);
+                    return await showOfflinePage();
+                }
+                return response;
+            } catch (err) {
+                console.warn('📡 [SW] Navegação falhou (provavelmente offline):', err);
+                return await showOfflinePage();
+            }
+        })());
         return;
     }
 

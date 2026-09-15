@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v42'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v43'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 const DEBUG_LOG_CACHE = 'aden-rpg-debug-log'; // TEMPORÁRIO — só pra diagnosticar o problema da página offline, pode remover depois
 
@@ -101,7 +101,7 @@ self.addEventListener('fetch', event => {
         event.respondWith((async () => {
             await logDebug({ evento: 'navigate-start', url: request.url });
             try {
-                const resp = await fetch(request);
+                const resp = await fetch(request.url);
                 await logDebug({ evento: 'navigate-fetch-ok', url: request.url, status: resp.status });
                 return resp;
             } catch (fetchErr) {

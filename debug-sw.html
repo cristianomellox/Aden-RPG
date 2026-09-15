@@ -11,6 +11,7 @@
 </style>
 </head>
 <body>
+<button onclick="limparLog()" style="font-family:monospace; background:#333; color:#0f0; border:1px solid #0f0; padding:8px 16px; margin-bottom:10px;">Limpar log</button>
 <div id="out">Carregando...</div>
 <script>
 async function run() {
@@ -71,7 +72,37 @@ async function run() {
         add('ERRO ao tentar: ' + e.message);
     }
 
+    add('');
+    add('--- Log de navegações da Service Worker (mais recentes primeiro) ---');
+    try {
+        const debugCache = await caches.open('aden-rpg-debug-log');
+        const resp = await debugCache.match('https://internal.local/debug-log');
+        if (!resp) {
+            add('Nenhum log registrado ainda (a SW nunca processou uma navegação, ou o log foi limpo).');
+        } else {
+            const entries = await resp.json();
+            if (!entries.length) {
+                add('Log vazio.');
+            } else {
+                entries.slice().reverse().forEach(e => {
+                    add(JSON.stringify(e));
+                });
+            }
+        }
+    } catch (e) {
+        add('ERRO ao ler o log: ' + e.message);
+    }
+
     document.getElementById('out').textContent = linhas.join('\n');
+}
+
+async function limparLog() {
+    try {
+        await caches.delete('aden-rpg-debug-log');
+        alert('Log apagado. Recarregue a página.');
+    } catch (e) {
+        alert('Erro ao apagar: ' + e.message);
+    }
 }
 
 run().catch(e => {

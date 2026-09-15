@@ -1,0 +1,36 @@
+name: Cirurgia no Historico (Preservar Commits)
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  cirurgia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install git-filter-repo
+
+      - name: Clonar Repositorio (Modo Espelho)
+        run: git clone --bare https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git repo.git
+
+      - name: Exterminar Audios e Videos (100%)
+        run: |
+          cd repo.git
+          # Apaga todos os áudios e vídeos da história, independente do tamanho
+          git filter-repo --path-glob '*.mp3' --path-glob '*.MP4' --path-glob '*.mp4' --path-glob '*.wav' --path-glob '*.webm' --invert-paths
+          
+      - name: Exterminar Imagens Pesadas (> 310KB)
+        run: |
+          cd repo.git
+          # Apaga qualquer arquivo maior que 310KB (Protege seus itens e ícones atuais)
+          git filter-repo --strip-blobs-bigger-than 310K
+
+      - name: Forçar Atualizacao no GitHub
+        run: |
+          cd repo.git
+          # Sobrescreve o servidor mantendo as datas e mensagens de commit!
+          git push --mirror https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git

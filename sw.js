@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v49'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v50'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -15,7 +15,15 @@ const ALLOWED_EXTENSIONS = [
     '.png', '.jpg', '.jpeg', '.gif', '.svg'
 ];
 
-// Apenas arquivos essenciais de UI que continuam existindo no repositório (não são zipados).
+// Assets da tela offline: são os MAIS importantes de todos. Cacheados
+// separadamente e primeiro, pra garantir que entrem no cache mesmo que
+// algum outro arquivo da lista abaixo falhe.
+const CRITICAL_OFFLINE_ASSETS = [
+    '/offline.html',
+    '/assets/offline.webp',
+];
+
+// Demais arquivos essenciais de UI que continuam existindo no repositório (não são zipados).
 const ASSETS_TO_PRECACHE = [
     '/assets/goldcoin.webp',
     '/assets/cristais.webp',
@@ -26,18 +34,39 @@ const ASSETS_TO_PRECACHE = [
     '/assets/icon-512.png',
     '/assets/notification-icon-192.png',
     '/assets/badge-icon.png',
-    '/offline.html',
-    '/assets/offline.webp',
 ];
 
 self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
-            console.log('🔥 [SW] Precache de UI essencial...');
-            return cache.addAll(ASSETS_TO_PRECACHE).catch(err =>
-                console.warn('⚠️ Erro no precache:', err)
+        caches.open(CACHE_NAME).then(async cache => {
+            // IMPORTANTE: usamos cache.add() individual (em Promise.all), e NÃO
+            // cache.addAll(). O addAll() é tudo-ou-nada: se UM único arquivo da
+            // lista falhar (404, redirect, timeout, CDN lento no deploy...), a
+            // lista inteira falha e NADA é salvo no cache — inclusive o
+            // offline.html, que é justamente o motivo desse mecanismo existir.
+            // Cacheando um por um, uma falha isolada não derruba os outros.
+
+            // 1) Primeiro os arquivos da tela offline (críticos).
+            await Promise.all(
+                CRITICAL_OFFLINE_ASSETS.map(url =>
+                    cache.add(url).then(
+                        () => console.log(`✅ [SW] Offline asset cacheado: ${url}`),
+                        err => console.error(`🚨 [SW] FALHA AO CACHEAR ASSET CRÍTICO (${url}):`, err)
+                    )
+                )
             );
+
+            // 2) Depois o resto da UI essencial.
+            await Promise.all(
+                ASSETS_TO_PRECACHE.map(url =>
+                    cache.add(url).catch(err =>
+                        console.warn(`⚠️ [SW] Falha ao precachear ${url}:`, err)
+                    )
+                )
+            );
+
+            console.log('🔥 [SW] Precache concluído.');
         })
     );
 });
@@ -76,8 +105,12 @@ self.addEventListener('fetch', event => {
     // offline.html tenta essa mesma página de novo.
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request).catch(() => {
+            fetch(request).catch(err => {
+                console.warn('📡 [SW] Navegação falhou (provavelmente offline):', err);
                 return caches.match('/offline.html', { ignoreSearch: true }).then(offlinePage => {
+                    if (!offlinePage) {
+                        console.error('🚨 [SW] offline.html NÃO estava no cache! Verifique o precache no install.');
+                    }
                     return offlinePage || new Response('Sem conexão com a internet.', {
                         status: 503,
                         headers: { 'Content-Type': 'text/plain; charset=utf-8' }

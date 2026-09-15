@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v43'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v44'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 const DEBUG_LOG_CACHE = 'aden-rpg-debug-log'; // TEMPORÁRIO — só pra diagnosticar o problema da página offline, pode remover depois
 
@@ -22,6 +22,23 @@ async function logDebug(entry) {
         }));
     } catch (e) {
         // se até logar falhar, não tem o que fazer aqui dentro
+    }
+}
+
+async function servirPaginaOffline() {
+    try {
+        const offlinePage = await caches.match('/offline.html');
+        await logDebug({ evento: 'offline-html-lookup', encontrado: !!offlinePage });
+        return offlinePage || new Response('Sem conexão com a internet.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+    } catch (cacheErr) {
+        await logDebug({ evento: 'cache-match-falhou', erro: String(cacheErr) });
+        return new Response('Sem conexão com a internet.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
     }
 }
 
@@ -100,26 +117,30 @@ self.addEventListener('fetch', event => {
     if (request.mode === 'navigate') {
         event.respondWith((async () => {
             await logDebug({ evento: 'navigate-start', url: request.url });
+
+            // Se o navegador já sabe que está offline, nem tenta a rede —
+            // evita esperar o timeout de conexão, que pode ser mais longo
+            // que a paciência do próprio Chrome pra aguardar a Service
+            // Worker responder (e aí ele mostra a tela de erro dele antes
+            // da gente conseguir devolver a offline.html a tempo).
+            if (!self.navigator.onLine) {
+                await logDebug({ evento: 'offline-detectado-direto' });
+                return await servirPaginaOffline();
+            }
+
             try {
-                const resp = await fetch(request.url);
+                // Corrida contra um timeout curto: se a rede não responder
+                // rápido (ex: wifi "conectado" mas sem internet de verdade),
+                // desistimos ANTES que o navegador desista primeiro.
+                const resp = await Promise.race([
+                    fetch(request.url),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout de 3s')), 3000))
+                ]);
                 await logDebug({ evento: 'navigate-fetch-ok', url: request.url, status: resp.status });
                 return resp;
             } catch (fetchErr) {
                 await logDebug({ evento: 'navigate-fetch-falhou', url: request.url, erro: String(fetchErr) });
-                try {
-                    const offlinePage = await caches.match('/offline.html');
-                    await logDebug({ evento: 'offline-html-lookup', encontrado: !!offlinePage });
-                    return offlinePage || new Response('Sem conexão com a internet.', {
-                        status: 503,
-                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                    });
-                } catch (cacheErr) {
-                    await logDebug({ evento: 'cache-match-falhou', erro: String(cacheErr) });
-                    return new Response('Sem conexão com a internet.', {
-                        status: 503,
-                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                    });
-                }
+                return await servirPaginaOffline();
             }
         })());
         return;

@@ -50,16 +50,16 @@
     // auth_skybox.js e map_effects.js). Valores iniciais deliberadamente
     // discretos (o mapa é visto de longe/de cima, não precisa de um bloom
     // forte tipo o sol da tela de login). ──────────────────────────────────
-    const MAP_BLOOM_STRENGTH  = 0.65;
+    const MAP_BLOOM_STRENGTH  = 0.62;
     const MAP_BLOOM_RADIUS    = 0.20;
-    const MAP_BLOOM_THRESHOLD = 0.85;
+    const MAP_BLOOM_THRESHOLD = 0.82;
 
     // Mesmos números que map_effects.js já usa pro grading da camada DOM
     // (hotspots/nuvens/badge) — repetidos aqui pra a ARTE do mapa (que agora
     // vive no canvas) ficar visualmente consistente com eles. Se você mudar
     // um lado, mude o outro também (ver applyShaderGrading em
     // map_effects.js).
-    const MAP_CONTRAST   = 1.03;
+    const MAP_CONTRAST   = 1.06;
     const MAP_SATURATION = 1.03;
 
     // Tamanho "natural" do mapa (mesmo valor de #mapImage no style.css e do

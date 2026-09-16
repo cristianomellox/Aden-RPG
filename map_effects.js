@@ -8,10 +8,10 @@
 
     /* ─── NUVENS ─────────────────────────────────────────────────────── */
     var CLOUDS = [
-        { src: CLOUD_1, top: '2%',  size: '800px', dur: 155, delay:   0, op: 0.45 },
-        { src: CLOUD_2, top: '18%', size: '880px', dur: 180, delay: -20, op: 0.45 },
-        { src: CLOUD_3, top: '42%', size: '800px', dur: 145, delay: -40, op: 0.45 },
-        { src: CLOUD_1, top: '65%', size: '720px', dur: 195, delay: -10, op: 0.45 },
+        { src: CLOUD_1, top: '2%',  size: '700px', dur: 155, delay:   0, op: 0.55 },
+        { src: CLOUD_2, top: '18%', size: '780px', dur: 180, delay: -20, op: 0.55 },
+        { src: CLOUD_3, top: '42%', size: '700px', dur: 145, delay: -40, op: 0.55 },
+        { src: CLOUD_1, top: '65%', size: '620px', dur: 195, delay: -10, op: 0.55 },
        
     ];
 

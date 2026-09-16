@@ -237,6 +237,12 @@
                 imgUrl,
                 (tex) => {
                     if (!_map3d || _map3d.mapEl !== mapEl) return; // tela trocada antes de a imagem terminar de carregar
+                    // flipY = false: compensa o flip de eixo Y da câmera
+                    // (applyCameraFrustum usa top=0/bottom=h de propósito,
+                    // pra bater com o Y "pra baixo" do CSS). Sem isso, o
+                    // flipY=true padrão do Three.js some com o flip da
+                    // câmera e a imagem aparece de cabeça pra baixo.
+                    tex.flipY = false;
                     tex.colorSpace = THREE.SRGBColorSpace;
                     tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
                     material.map = tex;

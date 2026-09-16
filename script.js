@@ -4343,9 +4343,9 @@ function enableMapInteraction() {
 
     // ── Estado de posição e escala ──────────────────────────────────────────
     let currentX = 0, currentY = 0;
-    let currentScale = 1;
-    let MIN_SCALE = 0.45; // recalculado dinamicamente para preencher a tela
-    const MAX_SCALE = 1.2;  // limite máximo de zoom-in
+    let currentScale = 1.1;
+    let MIN_SCALE = 0.35; // recalculado dinamicamente para preencher a tela
+    const MAX_SCALE = 1.1;  // limite máximo de zoom-in
 
     // ── Inércia ─────────────────────────────────────────────────────────────
     let velocityX = 0, velocityY = 0;

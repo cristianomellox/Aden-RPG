@@ -218,7 +218,14 @@
         // ver applyCameraFrustum sobre a convenção de eixos usada aqui.
         const geometry = new THREE.PlaneGeometry(MAP_NATURAL_W, MAP_NATURAL_H);
         geometry.translate(MAP_NATURAL_W / 2, MAP_NATURAL_H / 2, 0);
-        const material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        // side: THREE.DoubleSide — necessário por causa do frustum com
+        // top/bottom invertidos em applyCameraFrustum (Y crescendo pra
+        // baixo): isso inverte a "handedness" da projeção e faz a face
+        // frontal do plane ser tratada como back-face pelo culling padrão
+        // (FrontSide), sumindo o plano (canvas fica preto). DoubleSide
+        // resolve sem precisar desfazer o flip de eixo usado no resto do
+        // arquivo (hotspots/transform já dependem dessa convenção).
+        const material = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
         const plane = new THREE.Mesh(geometry, material);
         scene.add(plane);
 

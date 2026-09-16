@@ -18,16 +18,16 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.50,   // intensidade do brilho
-        radius: 0.45,     // o quanto o brilho "espalha"
-        threshold: 0.62,  // só pixels mais claros que isso brilham (0-1)
+        strength: 0.63,   // intensidade do brilho
+        radius: 0.20,     // o quanto o brilho "espalha"
+        threshold: 0.82,  // só pixels mais claros que isso brilham (0-1)
     },
     // "Iluminação ambiente global" (tint de cor) + contraste/saturação + vinheta.
     colorGrade: {
         enabled: true,
         tint: [1.0, 0.965, 0.9],  // cor da luz ambiente (levemente quente/dourada)
         tintStrength: 0.16,        // 0 = neutro, 1 = tint total
-        contrast: 1.04,
+        contrast: 1.06,
         saturation: 1.2,
         vignetteStrength: 0.22,
     },

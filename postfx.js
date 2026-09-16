@@ -18,7 +18,7 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.35,   // intensidade do brilho
+        strength: 0.50,   // intensidade do brilho
         radius: 0.45,     // o quanto o brilho "espalha"
         threshold: 0.62,  // só pixels mais claros que isso brilham (0-1)
     },

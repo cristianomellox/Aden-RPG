@@ -52,15 +52,15 @@
     // forte tipo o sol da tela de login). ──────────────────────────────────
     const MAP_BLOOM_STRENGTH  = 0.35;
     const MAP_BLOOM_RADIUS    = 0.40;
-    const MAP_BLOOM_THRESHOLD = 0.78;
+    const MAP_BLOOM_THRESHOLD = 0.65;
 
     // Mesmos números que map_effects.js já usa pro grading da camada DOM
     // (hotspots/nuvens/badge) — repetidos aqui pra a ARTE do mapa (que agora
     // vive no canvas) ficar visualmente consistente com eles. Se você mudar
     // um lado, mude o outro também (ver applyShaderGrading em
     // map_effects.js).
-    const MAP_CONTRAST   = 1.12;
-    const MAP_SATURATION = 1.35;
+    const MAP_CONTRAST   = 1.08;
+    const MAP_SATURATION = 1.10;
 
     // Tamanho "natural" do mapa (mesmo valor de #mapImage no style.css e do
     // fallback usado em enableMapInteraction/recalcLimits). Se um dia mudar

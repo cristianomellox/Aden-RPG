@@ -608,9 +608,9 @@ function startAuthSkybox() {
     // própria cópia do postfx.js). O threshold padrão (0.72) foi calibrado
     // pra cenas de interior da Floresta e só pegava o sol nesta imagem —
     // baixando ele, os raios do céu também brilham.
-    POSTFX_CONFIG.bloom.threshold = 0.42;
-    POSTFX_CONFIG.bloom.strength  = 0.94;
-    POSTFX_CONFIG.bloom.radius    = 0.45;
+    POSTFX_CONFIG.bloom.threshold = 0.60;
+    POSTFX_CONFIG.bloom.strength  = 0.64;
+    POSTFX_CONFIG.bloom.radius    = 0.40;
 
     try {
         _sky.pfx = initPostFX({ scene, camera, renderer, cont });

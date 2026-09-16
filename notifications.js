@@ -411,7 +411,21 @@
   // estar guardada nas Configurações do sistema OU nas do Chrome — o jogador
   // não precisa saber qual; assim que ficar "granted" por qualquer caminho,
   // a gente credita a recompensa e fecha qualquer tutorial aberto).
+  //
+  // IMPORTANTE: essa checagem roda assim que o script carrega, o que pode
+  // ser ANTES do login (ex: jogador desloga, fecha o app, habilita a
+  // notificação nas Configurações do sistema e reabre — a tela de login
+  // ainda está de pé quando notifications.js sobe). Por isso ela não pode
+  // dar recompensa nem abrir o modal de preferências sem saber quem é o
+  // jogador: `playerKnown` só vira true quando 'aden_player_ready' dispara
+  // (login concluído). Enquanto isso, a checagem só fecha qualquer overlay
+  // órfão e NÃO atualiza o último estado conhecido — assim, assim que o
+  // jogador realmente logar, a re-checagem seguinte ainda enxerga a
+  // transição como "grant novo" e mostra o modal de preferências na hora
+  // certa (depois do login, não antes).
   // ─────────────────────────────────────────────
+  let playerKnown = false;
+
   function closeAnyOpenModal() {
     const el = document.getElementById('adennotif-overlay');
     if (el) el.remove();
@@ -422,6 +436,14 @@
     if (Notification.permission === 'granted') {
       const wasGrantedBefore = getLastKnownPermissionState() === 'granted';
       closeAnyOpenModal();
+
+      if (!playerKnown) {
+        // Ainda não sabemos se há alguém logado (checagem rodando na tela
+        // de login). Não mexe em recompensa/estado/modal agora — quando o
+        // jogador logar, 'aden_player_ready' manda rodar de novo.
+        return;
+      }
+
       await grantRewardIfFirstTime();
       await subscribeToPush().catch(() => {});
       setLastKnownPermissionState('granted');
@@ -567,6 +589,12 @@
   // Roda depois que o jogador carrega (precisamos do id pra dar a recompensa)
   window.addEventListener('aden_player_ready', (e) => {
     lastKnownPlayer = e.detail || null;
+    playerKnown = true;
+    // Login concluído: se a checagem automática rodou antes (na tela de
+    // login) e ficou pendente por falta de jogador conhecido, roda de novo
+    // agora — é o que efetivamente credita a recompensa e mostra o modal
+    // de preferências, já com o jogador certo e depois do login.
+    recheckPermission();
     scheduleMaybeShowFlow();
   });
 

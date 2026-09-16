@@ -51,7 +51,7 @@
     // discretos (o mapa é visto de longe/de cima, não precisa de um bloom
     // forte tipo o sol da tela de login). ──────────────────────────────────
     const MAP_BLOOM_STRENGTH  = 0.45;
-    const MAP_BLOOM_RADIUS    = 0.20;
+    const MAP_BLOOM_RADIUS    = 0.30;
     const MAP_BLOOM_THRESHOLD = 0.65;
 
     // Mesmos números que map_effects.js já usa pro grading da camada DOM

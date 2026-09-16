@@ -19,7 +19,7 @@ export const POSTFX_CONFIG = {
     bloom: {
         enabled: true,
         strength: 0.63,   // intensidade do brilho
-        radius: 0.20,     // o quanto o brilho "espalha"
+        radius: 0.26,     // o quanto o brilho "espalha"
         threshold: 0.82,  // só pixels mais claros que isso brilham (0-1)
     },
     // "Iluminação ambiente global" (tint de cor) + contraste/saturação + vinheta.

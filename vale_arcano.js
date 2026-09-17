@@ -1161,7 +1161,7 @@ const MOB_WALK_SHEETS = {
         side: { cols: 6, rows: 4, frames: 22 },
     },
     quar: {
-        down: { cols: 6, rows: 6, frames: 36 },
+        down: { cols: 6, rows: 6, frames: 36, scale: 0.9 },
         up: { cols: 5, rows: 5, frames: 23 },
         side: { cols: 6, rows: 4, frames: 22 },
     },
@@ -1244,7 +1244,12 @@ function _mobAnimInit(state, baseImgUrl) {
                 // diferente do sprite estático original (ver uso em
                 // _mobAnimWorldWidth, no tick de initMobAvatarBreathing).
                 const cellAspect = (tex.image.width / gcfg.cols) / (tex.image.height / gcfg.rows);
-                state.animMaster[group] = { tex, cols: gcfg.cols, rows: gcfg.rows, frames: gcfg.frames, cellAspect };
+                // `scale` (opcional, default 1) é um ajuste fino manual pra quando a
+                // arte de uma sheet tem mais/menos margem ao redor do personagem do
+                // que as outras — como a célula inteira sempre mapeia pra mesma altura
+                // (visual.baseH), menos margem = personagem aparentando maior. Ajuste
+                // aqui em vez de precisar re-cortar a imagem.
+                state.animMaster[group] = { tex, cols: gcfg.cols, rows: gcfg.rows, frames: gcfg.frames, cellAspect, scale: gcfg.scale || 1 };
             },
             () => { /* sem sheet pra esse grupo — fallback automático */ }
         );
@@ -1317,6 +1322,14 @@ function _mobAnimWorldWidth(state, group, baseH) {
     const masterKey = (group === 'sideL' || group === 'sideR') ? 'side' : group;
     const m = state.animMaster && state.animMaster[masterKey];
     return m ? baseH * m.cellAspect : null;
+}
+
+// Fator de escala manual (ver comentário em _mobAnimInit) do grupo animado
+// atual — 1 se não configurado ou sem sheet carregada.
+function _mobAnimGroupScale(state, group) {
+    const masterKey = (group === 'sideL' || group === 'sideR') ? 'side' : group;
+    const m = state.animMaster && state.animMaster[masterKey];
+    return m ? m.scale : 1;
 }
 
 // Fator de velocidade da passada REAL (spritesheet) em relação a
@@ -3696,7 +3709,8 @@ function initMobAvatarBreathing() {
                     // estático já setado por _mobApplyDirSprite.
                     if (st.animActive && st.animGroup) _mobAnimApplyFrame(visual, st.animGroup, st);
                     const animW = st.animActive && st.animGroup ? _mobAnimWorldWidth(visual, st.animGroup, visual.baseH) : null;
-                    visual.sprite.scale.set((animW != null ? animW : visual.baseW) * scaleXFinal, visual.baseH * scaleY, 1);
+                    const animScale = st.animActive && st.animGroup ? _mobAnimGroupScale(visual, st.animGroup) : 1;
+                    visual.sprite.scale.set((animW != null ? animW : visual.baseW) * scaleXFinal * animScale, visual.baseH * scaleY * animScale, 1);
                     visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
                 }
                 if (wrap) {

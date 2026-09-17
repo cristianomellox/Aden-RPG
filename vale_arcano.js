@@ -1130,6 +1130,188 @@ function enableMapInteraction() {
 // planejamento de rota falhe, dois mobs nunca chegam a se sobrepor.
 // ═══════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════
+// Spritesheets de caminhada (passada real, quadro-a-quadro) — OPCIONAL
+// por tipo de mob. Se o tipo não tiver entrada aqui, ou se os arquivos
+// `_walkdown`/`_walkup`/`_walkside` não existirem no servidor, o mob
+// cai automaticamente de volta no sistema antigo (bounce/tilt
+// procedural sobre o sprite estático), sem quebrar nada.
+//
+// Convenção de arquivo, ao lado do sprite base (ex.: duende.webp):
+//   duende_walkdown.webp  — grade cols×rows, mob de FRENTE (andando pra
+//                            baixo na tela / em direção à câmera)
+//   duende_walkup.webp    — grade cols×rows, mob de COSTAS (andando pra
+//                            cima na tela / se afastando)
+//   duende_walkside.webp  — grade cols×rows, mob de PERFIL virado pra
+//                            DIREITA; usado espelhado (mesma técnica de
+//                            repeat.x negativo já usada no resto do
+//                            arquivo) quando o mob anda pra esquerda.
+// Cada grade é lida da esquerda pra direita, cima pra baixo, ex. 4×2 =
+// frames 1-4 na fileira de cima, 5-8 embaixo. Células vazias no fim da
+// grade (quando frames < cols*rows) ficam transparentes e são ignoradas.
+// ═══════════════════════════════════════════════════════════════════
+// cols/rows/frames descrevem só a GRADE da imagem (não a velocidade — a
+// velocidade da passada continua vindo de `stepSpeed`, já sorteado por mob
+// em _mobBreathNewState; um ciclo completo de stepPhase = uma passada
+// completa pelos `frames` dessa sheet).
+const MOB_WALK_SHEETS = {
+    duende: {
+        down: { cols: 4, rows: 2, frames: 8 },
+        up: { cols: 4, rows: 2, frames: 8 },
+        side: { cols: 6, rows: 4, frames: 22 },
+    },
+};
+
+// Extrai o "nome-base" do mob a partir da URL do sprite (ex.:
+// ".../assets/duende.webp" -> "duende"), pra bater com MOB_WALK_SHEETS.
+function _mobWalkTypeKey(baseSrc) {
+    const m = String(baseSrc || '').match(/([^\/]+)\.[a-zA-Z0-9]+(?:\?.*)?$/);
+    return m ? m[1] : null;
+}
+
+// Monta a URL de uma das 3 sheets de caminhada a partir do sprite base.
+function _mobWalkSheetSrc(baseSrc, group) {
+    const m = String(baseSrc || '').match(/^(.*?)(\.[a-zA-Z0-9]+)(\?.*)?$/);
+    if (!m) return null;
+    return `${m[1]}_walk${group}${m[2]}${m[3] || ''}`;
+}
+
+// Cache das texturas MESTRE das sheets (uma por URL, nunca usada
+// diretamente num material — sempre clonada por mob, ver
+// _mobAnimGetClone, pra cada mob poder estar num frame diferente ao
+// mesmo tempo sem re-baixar a imagem). `failed=true` quando o arquivo
+// não existe (404) — nesse caso o mob correspondente simplesmente não
+// usa animação por frames, sem erro visível pro jogador.
+const _mobWalkSheetCache = new Map(); // url -> {tex, failed, waiters:[]}
+function _mobGetWalkSheetTexture(url, onReady, onFail) {
+    let entry = _mobWalkSheetCache.get(url);
+    if (entry) {
+        if (entry.failed) { onFail(); return; }
+        if (entry.tex) { onReady(entry.tex); return; }
+        entry.waiters.push({ onReady, onFail });
+        return;
+    }
+    entry = { tex: null, failed: false, waiters: [] };
+    _mobWalkSheetCache.set(url, entry);
+    new THREE.TextureLoader().load(
+        url,
+        (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            entry.tex = tex;
+            onReady(tex);
+            entry.waiters.forEach(w => w.onReady(tex));
+            entry.waiters.length = 0;
+        },
+        undefined,
+        () => {
+            // Silencioso de propósito: ausência da sheet é um estado normal
+            // (mob ainda não migrado pro sistema de passada real).
+            entry.failed = true;
+            onFail();
+            entry.waiters.forEach(w => w.onFail());
+            entry.waiters.length = 0;
+        }
+    );
+}
+
+// Dispara (uma vez, em background) o carregamento das até 3 sheets de
+// caminhada do tipo do mob, guardando o resultado em `state.animMaster`.
+// Não faz nada se o tipo não estiver em MOB_WALK_SHEETS — zero
+// requisições extras pros mobs ainda não migrados.
+function _mobAnimInit(state, baseImgUrl) {
+    const key = _mobWalkTypeKey(baseImgUrl);
+    const cfg = key && MOB_WALK_SHEETS[key];
+    state.animMaster = { down: null, up: null, side: null };
+    state.animClones = {};
+    if (!cfg) return;
+    ['down', 'up', 'side'].forEach(group => {
+        const gcfg = cfg[group];
+        if (!gcfg) return;
+        const url = _mobWalkSheetSrc(baseImgUrl, group);
+        if (!url) return;
+        _mobGetWalkSheetTexture(url,
+            (tex) => {
+                // Proporção de UMA célula da grade (não da imagem inteira) —
+                // guardada já pronta pra recalcular a largura do sprite sem
+                // esticar, já que cada sheet pode ter proporção de célula
+                // diferente do sprite estático original (ver uso em
+                // _mobAnimWorldWidth, no tick de initMobAvatarBreathing).
+                const cellAspect = (tex.image.width / gcfg.cols) / (tex.image.height / gcfg.rows);
+                state.animMaster[group] = { tex, cols: gcfg.cols, rows: gcfg.rows, frames: gcfg.frames, cellAspect };
+            },
+            () => { /* sem sheet pra esse grupo — fallback automático */ }
+        );
+    });
+}
+
+// Clone de textura dedicado a ESTE mob para o grupo pedido ('down' |
+// 'up' | 'sideR' | 'sideL'), pra poder ter offset/repeat (= frame atual)
+// independente dos outros mobs do mesmo tipo, sem re-baixar a imagem
+// (clone() em three.js >= r152 compartilha os dados da imagem na GPU).
+function _mobAnimGetClone(state, group) {
+    if (state.animClones[group]) return state.animClones[group];
+    const masterKey = (group === 'sideL' || group === 'sideR') ? 'side' : group;
+    const master = state.animMaster[masterKey];
+    if (!master) return null;
+    const tex = master.tex.clone();
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.needsUpdate = true;
+    state.animClones[group] = tex;
+    return tex;
+}
+
+// Aplica no clone o retângulo (offset/repeat) do frame atual, calculado
+// a partir da MESMA fase contínua (`st.stepPhase`) que já dirigia o
+// bounce procedural — assim a perna real fica sincronizada com o
+// "thump" da sombra e o resto do sistema de passada, de graça.
+// Devolve `true` se conseguiu aplicar (sheet carregada), `false` caso
+// contrário (chamador deve cair no sprite estático de sempre).
+function _mobAnimApplyFrame(state, group, st) {
+    const masterKey = (group === 'sideL' || group === 'sideR') ? 'side' : group;
+    const master = state.animMaster[masterKey];
+    if (!master) return false;
+    const clone = _mobAnimGetClone(state, group);
+    if (!clone) return false;
+    if (state.material.map !== clone) {
+        state.material.map = clone;
+        state.material.needsUpdate = true;
+    }
+    const frames = master.frames, cols = master.cols;
+    // Parado (walkAmp ~0): descansa no frame 0 (pose de contato) em vez
+    // de congelar no meio de uma passada.
+    const phase = ((st.stepPhase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const frame = st.walkAmp > 0.04 ? Math.floor((phase / (Math.PI * 2)) * frames) % frames : 0;
+    const col = frame % cols, row = Math.floor(frame / cols);
+    const cw = 1 / master.cols, ch = 1 / master.rows;
+    if (group === 'sideL') {
+        // Mesma técnica de espelhamento já usada em _mobGetTexture (flip),
+        // mas aplicada só dentro da célula do frame atual (ver nota de
+        // composição de UV): repeat.x negativo + offset no canto oposto.
+        clone.repeat.x = -cw;
+        clone.offset.x = (col + 1) * cw;
+    } else {
+        clone.repeat.x = cw;
+        clone.offset.x = col * cw;
+    }
+    clone.repeat.y = ch;
+    clone.offset.y = 1 - (row + 1) * ch;
+    return true;
+}
+
+// Largura mundial (world units) a usar quando o grupo animado atual tiver
+// célula com proporção diferente da imagem estática original (a altura,
+// visual.baseH, é sempre preservada — só a largura se ajusta), evitando
+// esticar/achatar o goblin ao trocar pro spritesheet. Devolve null se o
+// grupo não tiver sheet carregada (chamador cai em visual.baseW).
+function _mobAnimWorldWidth(state, group, baseH) {
+    const masterKey = (group === 'sideL' || group === 'sideR') ? 'side' : group;
+    const m = state.animMaster && state.animMaster[masterKey];
+    return m ? baseH * m.cellAspect : null;
+}
+
 const _mobTexCache = new Map(); // key -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
 // IMPORTANTE: THREE.Sprite ignora o SINAL da escala — o renderer extrai a
 // escala a partir do comprimento (sempre positivo) das colunas da matriz do
@@ -1214,6 +1396,7 @@ const MOB_HEIGHT_FRAC = 0.09;
 
 function _mobCreateVisual(spot, baseImgUrl) {
     const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };
+    _mobAnimInit(state, baseImgUrl); // dispara (em paralelo) o load das sheets de passada real, se existirem pra esse mob
     _mobGetTexture(baseImgUrl, false, (tex) => {
         if (!_sky) return;
         const aspect = tex.image.width / tex.image.height;
@@ -3267,6 +3450,10 @@ function _mobBreathNewState() {
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
         vertical: null, verticalApplied: undefined, flipApplied: undefined,
+        // Passada real por spritesheet (ver MOB_WALK_SHEETS): animGroup é
+        // 'up'/'down'/'sideR'/'sideL'; animActive só fica true quando a
+        // sheet correspondente já carregou pra esse tipo de mob.
+        animGroup: null, animActive: false,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -3306,14 +3493,26 @@ function _mobDirSrc(baseSrc, dir) {
 // quando o estado realmente muda, nunca a cada frame.
 function _mobApplyDirSprite(el, img, st) {
     const wantFlip = !st.vertical && st.facingTarget > 0;
+    // Grupo de animação (independe do guard de "mudou?" abaixo — o tick de
+    // _mobAnimApplyFrame roda toda hora e precisa disso sempre atualizado):
+    // 'up'/'down' quando o passo é vertical, senão 'sideR'/'sideL' conforme
+    // a mesma direção que decidiria o flip no sistema antigo.
+    st.animGroup = st.vertical ? st.vertical : (wantFlip ? 'sideR' : 'sideL');
+    const visual = el && el.__mobVisual;
+    const masterKey = st.vertical ? st.vertical : 'side';
+    // Passada real (spritesheet) só fica ativa se a sheet desse grupo já
+    // carregou pra esse tipo de mob; senão, fallback total pro sprite
+    // estático + bounce procedural, como sempre foi.
+    st.animActive = !!(visual && visual.animMaster && visual.animMaster[masterKey]);
     if (st.verticalApplied === st.vertical && st.flipApplied === wantFlip) return;
     st.verticalApplied = st.vertical;
     st.flipApplied = wantFlip;
+    if (st.animActive) return; // troca de textura por frame passa a ser feita a cada tick (ver initMobAvatarBreathing)
     const base = img.dataset.baseSrc || _mobStripDirSuffix(img.getAttribute('src') || img.src);
     img.dataset.baseSrc = base;
     const url = _mobDirSrc(base, st.vertical);
     img.src = url; // <img> continua só como "cérebro" (invisível), sem precisar espelhar via CSS
-    if (el && el.__mobVisual) _mobSetTexture(el.__mobVisual, url, wantFlip);
+    if (visual) _mobSetTexture(visual, url, wantFlip);
 }
 
 // Chamado por startWander quando o mob começa a andar até um novo ponto.
@@ -3432,8 +3631,14 @@ function initMobAvatarBreathing() {
                 const stepRaw = Math.abs(Math.sin(st.stepPhase)); // 0 = pé no chão, 1 = meio do passo (mais alto)
                 const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
                 const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão
-                const bobY = -liftAmt * st.bobAmp;                 // px — negativo sobe na tela
-                const stepSquash = contactAmt * 0.010;             // pequeno "thump" extra a cada passada
+                // Quando o mob já tem passada real (spritesheet com pernas
+                // alternando de verdade — ver MOB_WALK_SHEETS), o bounce/tilt
+                // procedural de baixo fica REDUNDANTE (as pernas do frame já
+                // mostram o passo) e só atrapalharia, então é zerado aqui.
+                // O resto (respiração, sway, squash de início/fim de passo,
+                // sombra) continua valendo normalmente pros dois sistemas.
+                const bobY = st.animActive ? 0 : -liftAmt * st.bobAmp; // px — negativo sobe na tela
+                const stepSquash = st.animActive ? 0 : contactAmt * 0.010; // pequeno "thump" extra a cada passada
                 scaleY *= (1 - stepSquash);
                 scaleX *= (1 + stepSquash * 0.6);
 
@@ -3443,8 +3648,8 @@ function initMobAvatarBreathing() {
                 // inclinação sempre pro mesmo lado (o que ficava "robótico").
                 const stepSigned = Math.sin(st.stepPhase);
                 const stepTiltAmt = stepSigned * st.walkAmp;
-                const tiltZ = st.vertical ? stepTiltAmt * st.stepTiltZAmp : 0;
-                const tiltX = st.vertical ? 0 : stepTiltAmt * st.stepTiltXAmp;
+                const tiltZ = (st.vertical && !st.animActive) ? stepTiltAmt * st.stepTiltZAmp : 0;
+                const tiltX = (!st.vertical && !st.animActive) ? stepTiltAmt * st.stepTiltXAmp : 0;
 
                 // tiltX (báscula frente/trás) não tem equivalente direto num billboard
                 // (que sempre encara a câmera) — dobramos seu efeito num leve extra de
@@ -3462,7 +3667,14 @@ function initMobAvatarBreathing() {
                 // o céu, diferente do CSS antigo que dependia da caixa pai aproximada.
                 const visual = wrap ? wrap.__mobVisual : null;
                 if (visual && visual.ready) {
-                    visual.sprite.scale.set(visual.baseW * scaleXFinal, visual.baseH * scaleY, 1);
+                    // Passada real: troca o retângulo (offset/repeat) do frame
+                    // atual no clone de textura deste mob, a cada tick, ANTES
+                    // de aplicar escala/rotação — se a sheet do grupo atual
+                    // não estiver disponível, cai automaticamente pro sprite
+                    // estático já setado por _mobApplyDirSprite.
+                    if (st.animActive && st.animGroup) _mobAnimApplyFrame(visual, st.animGroup, st);
+                    const animW = st.animActive && st.animGroup ? _mobAnimWorldWidth(visual, st.animGroup, visual.baseH) : null;
+                    visual.sprite.scale.set((animW != null ? animW : visual.baseW) * scaleXFinal, visual.baseH * scaleY, 1);
                     visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
                 }
                 if (wrap) {

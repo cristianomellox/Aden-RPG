@@ -168,9 +168,9 @@ const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/vale_arcano.png';
 // cada spot e faz um clique no céu logar (e mostrar na tela) o yaw/pitch
 // exato daquele ponto, pra você copiar aqui.
 const SPOTS = [
-    { id:'quar',   name:'Quar',   yaw:-13, pitch:28, width:500, height:380,
+    { id:'quar',   name:'Quar',   yaw:-13, pitch:18, width:520, height:300,
       itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/quar.webp', labelColor:'silver' },
-    { id:'limut',  name:'Limut',  yaw:168,  pitch:14, width:487, height:350,
+    { id:'limut',  name:'Limut',  yaw:168,  pitch:10, width:487, height:290,
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/limut.webp',     labelColor:'lightgreen' },
     { id:'duende', name:'Duende', yaw:42,   pitch:-50, width:480, height:390,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/duende.webp',    labelColor:'orange' },

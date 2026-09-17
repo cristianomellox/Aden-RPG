@@ -346,14 +346,13 @@ async function extractZipToCache(blob, cache, nomePacote, onFiles) {
             const zipEntry = entries[indice++];
             const assetUrl = `/assets/${zipEntry.name}`;
 
-            const jaExiste = await cache.match(assetUrl);
-            if (!jaExiste) {
+            
                 const fileData = await zipEntry.async('blob');
                 const responseToCache = new Response(fileData, {
                     headers: { 'Content-Type': getContentType(zipEntry.name) }
                 });
                 await cache.put(assetUrl, responseToCache);
-            }
+            
 
             concluidos++;
             setStatusText(`Extraindo (${nomePacote})... ${concluidos} / ${total} arquivos`);

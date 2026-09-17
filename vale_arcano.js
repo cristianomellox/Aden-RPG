@@ -1161,7 +1161,7 @@ const MOB_WALK_SHEETS = {
         side: { cols: 6, rows: 4, frames: 22 },
     },
     quar: {
-        down: { cols: 5, rows: 5, frames: 25 },
+        down: { cols: 6, rows: 6, frames: 36 },
         up: { cols: 5, rows: 5, frames: 23 },
         side: { cols: 6, rows: 4, frames: 22 },
     },

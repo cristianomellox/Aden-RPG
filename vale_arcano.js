@@ -1281,8 +1281,10 @@ function _mobAnimApplyFrame(state, group, st) {
     }
     const frames = master.frames, cols = master.cols;
     // Parado (walkAmp ~0): descansa no frame 0 (pose de contato) em vez
-    // de congelar no meio de uma passada.
-    const phase = ((st.stepPhase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    // de congelar no meio de uma passada. Usa `animPhase` (própria, mais
+    // lenta — ver MOB_ANIM_SPEED_SCALE), não `stepPhase` (esse continua no
+    // ritmo antigo, usado só pela sombra e pelo fallback sem spritesheet).
+    const phase = ((st.animPhase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const frame = st.walkAmp > 0.04 ? Math.floor((phase / (Math.PI * 2)) * frames) % frames : 0;
     const col = frame % cols, row = Math.floor(frame / cols);
     const cw = 1 / master.cols, ch = 1 / master.rows;
@@ -1311,6 +1313,14 @@ function _mobAnimWorldWidth(state, group, baseH) {
     const m = state.animMaster && state.animMaster[masterKey];
     return m ? baseH * m.cellAspect : null;
 }
+
+// Fator de velocidade da passada REAL (spritesheet) em relação a
+// `stepSpeed` (que continua no ritmo antigo, usado pelo bounce procedural
+// de fallback e pela sombra). stepPhase por si só passava por todos os
+// frames rápido demais — reduzir aqui deixa só a perna-de-verdade mais
+// lenta sem mexer no timing de quem ainda usa o sistema antigo. Ajuste
+// este número pra calibrar a "cadência" da caminhada (menor = mais lenta).
+const MOB_ANIM_SPEED_SCALE = 0.4;
 
 const _mobTexCache = new Map(); // key -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
 // IMPORTANTE: THREE.Sprite ignora o SINAL da escala — o renderer extrai a
@@ -3453,7 +3463,7 @@ function _mobBreathNewState() {
         // Passada real por spritesheet (ver MOB_WALK_SHEETS): animGroup é
         // 'up'/'down'/'sideR'/'sideL'; animActive só fica true quando a
         // sheet correspondente já carregou pra esse tipo de mob.
-        animGroup: null, animActive: false,
+        animGroup: null, animActive: false, animPhase: Math.random() * Math.PI * 2,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -3497,7 +3507,11 @@ function _mobApplyDirSprite(el, img, st) {
     // _mobAnimApplyFrame roda toda hora e precisa disso sempre atualizado):
     // 'up'/'down' quando o passo é vertical, senão 'sideR'/'sideL' conforme
     // a mesma direção que decidiria o flip no sistema antigo.
-    st.animGroup = st.vertical ? st.vertical : (wantFlip ? 'sideR' : 'sideL');
+    // NOTA: invertido de propósito (wantFlip -> 'sideL', !wantFlip -> 'sideR')
+    // porque a sheet lateral nova ficou espelhada em relação à convenção do
+    // sprite estático antigo — sem isso o goblin andava pra direita mostrando
+    // o sprite virado pra esquerda (e vice-versa).
+    st.animGroup = st.vertical ? st.vertical : (wantFlip ? 'sideL' : 'sideR');
     const visual = el && el.__mobVisual;
     const masterKey = st.vertical ? st.vertical : 'side';
     // Passada real (spritesheet) só fica ativa se a sheet desse grupo já
@@ -3628,6 +3642,9 @@ function initMobAvatarBreathing() {
                 const walkAmpRate = st.walking ? 0.006 : 0.026;
                 st.walkAmp += ((st.walking ? 1 : 0) - st.walkAmp) * walkAmpRate * dt;
                 st.stepPhase += (dt / 1000) * st.stepSpeed * (Math.PI * 2);
+                // Fase própria da passada real (spritesheet), mais lenta que
+                // stepPhase de propósito — ver MOB_ANIM_SPEED_SCALE.
+                st.animPhase += (dt / 1000) * st.stepSpeed * MOB_ANIM_SPEED_SCALE * (Math.PI * 2);
                 const stepRaw = Math.abs(Math.sin(st.stepPhase)); // 0 = pé no chão, 1 = meio do passo (mais alto)
                 const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
                 const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão

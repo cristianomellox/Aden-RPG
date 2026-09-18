@@ -1156,19 +1156,19 @@ function enableMapInteraction() {
 // completa pelos `frames` dessa sheet).
 const MOB_WALK_SHEETS = {
     duende: {
-        down: { cols: 4, rows: 2, frames: 8, scale: 1.2 },
-        up: { cols: 4, rows: 2, frames: 8, scale: 1.2 },
-        side: { cols: 6, rows: 4, frames: 22, scale: 1.2 },
+        down: { cols: 4, rows: 2, frames: 8 },
+        up: { cols: 4, rows: 2, frames: 8 },
+        side: { cols: 6, rows: 4, frames: 22 },
     },
     quar: {
-        down: { cols: 6, rows: 6, frames: 36, scale: 1.0 },
-        up: { cols: 5, rows: 5, frames: 23, scale: 1.2 },
-        side: { cols: 6, rows: 4, frames: 22, scale: 1.2 },
+        down: { cols: 6, rows: 6, frames: 36, scale: 0.9 },
+        up: { cols: 5, rows: 5, frames: 23 },
+        side: { cols: 6, rows: 4, frames: 22 },
     },
     limut: {
-        down: { cols: 6, rows: 6, frames: 36, scale: 1.15 },
-        up: { cols: 6, rows: 6, frames: 36, scale: 1.2 },
-        side: { cols: 5, rows: 4, frames: 19, scale: 1.2 },
+        down: { cols: 6, rows: 6, frames: 36 },
+        up: { cols: 6, rows: 6, frames: 36 },
+        side: { cols: 5, rows: 4, frames: 19 },
     },
 };
 

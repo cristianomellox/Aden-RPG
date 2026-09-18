@@ -174,7 +174,7 @@ const SPOTS = [
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp', labelColor:'lightgreen' },
     { id:'satiro', name:'Sátiro', yaw:-23, pitch:-40, width:600, height:480,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp', labelColor:'orange' },
-    { id:'tigrenix', name:'Tigre Nix', yaw:-127, pitch:-49, width:440, height:360,
+    { id:'tigrenix', name:'Tigre Nix', yaw:88, pitch:-15, width:440, height:660,
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'gray' },
 ];
 

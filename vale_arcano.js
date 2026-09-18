@@ -1165,6 +1165,11 @@ const MOB_WALK_SHEETS = {
         up: { cols: 5, rows: 5, frames: 23 },
         side: { cols: 6, rows: 4, frames: 22 },
     },
+    limut: {
+        down: { cols: 6, rows: 6, frames: 36 },
+        up: { cols: 6, rows: 6, frames: 36 },
+        side: { cols: 5, rows: 4, frames: 19 },
+    },
 };
 
 // Extrai o "nome-base" do mob a partir da URL do sprite (ex.:

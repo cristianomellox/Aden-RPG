@@ -168,13 +168,13 @@ const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/desfiladeiro.png';
 // cada spot e faz um clique no céu logar (e mostrar na tela) o yaw/pitch
 // exato daquele ponto, pra você copiar aqui.
 const SPOTS = [
-    { id:'daz_momu', name:'Daz-Momu', yaw:27, pitch:8, width:550, height:350,
+    { id:'daz_momu', name:'Daz-Momu', yaw:27, pitch:-1, width:550, height:450,
       itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/daz_momu.webp', labelColor:'silver' },
     { id:'daz_ignis', name:'Daz-Ignis', yaw:-134, pitch:-15, width:400, height:400,
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/daz_ignis.webp', labelColor:'lightgreen' },
-    { id:'daz_kiton', name:'Daz-Kiton', yaw:100, pitch:-4, width:590, height:420,
+    { id:'daz_kiton', name:'Daz-Kiton', yaw:31, pitch:-52, width:590, height:420,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/daz_kiton.webp', labelColor:'orange' },
-    { id:'daz_fandra', name:'Daz-Fandra', yaw:-80, pitch:-71, width:500, height:410,
+    { id:'daz_fandra', name:'Daz-Fandra', yaw:100, pitch:-4, width:590, height:420,
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/daz_fandra.webp', labelColor:'gray' },
 ];
 

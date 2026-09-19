@@ -1160,7 +1160,7 @@ caveira: {
       down: { 
         cols: 7, rows: 6, frames: 36, scale: 0.9 }, 
         side: { 
-            cols: 5, rows: 3, frames: 15 } 
+            cols: 5, rows: 3, frames: 15 },
   up: { 
             cols: 5, rows: 3, frames: 15, scale: 0.9 }
 },

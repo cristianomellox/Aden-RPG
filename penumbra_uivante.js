@@ -1171,9 +1171,9 @@ const MOB_WALK_SHEETS = {
             
             vampiro: { 
       down: { 
-        cols: 6, rows: 6, frames: 36 }, up: { 
-          cols: 6, rows: 6, frames: 36 }, side: { 
-            cols: 5, rows: 5, frames: 23 } },
+        cols: 6, rows: 6, frames: 36, 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, 1.1 }, side: { 
+            cols: 5, rows: 5, frames: 23, 1.2 } },
 
 };
 

@@ -1166,12 +1166,12 @@ const MOB_WALK_SHEETS = {
       down: { 
         cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
           cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 6, rows: 6, frames: 36, 1.2 } },
+            cols: 6, rows: 6, frames: 36, scale: 1.2 } },
             
             tigre_nix: { 
       down: { 
         cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, 1.1 }, side: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
             cols: 6, rows: 6, frames: 36, scale: 1.2 } },
 };
 

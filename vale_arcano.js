@@ -1161,12 +1161,12 @@ const MOB_WALK_SHEETS = {
         side: { cols: 6, rows: 4, frames: 22 },
     },
     quar: {
-        down: { cols: 6, rows: 6, frames: 36 },
-        up: { cols: 5, rows: 5, frames: 23, scale: 1.08 },
-        side: { cols: 6, rows: 4, frames: 22, scale: 1.2 },
+        down: { cols: 6, rows: 6, frames: 36, scale: 1.05 },
+        up: { cols: 5, rows: 5, frames: 23, scale: 1.18 },
+        side: { cols: 6, rows: 4, frames: 22, scale: 1.3 },
     },
     limut: {
-        down: { cols: 6, rows: 6, frames: 36, scale: 1.1 },
+        down: { cols: 6, rows: 6, frames: 36 },
         up: { cols: 6, rows: 6, frames: 36, scale: 1.1 },
         side: { cols: 5, rows: 4, frames: 19, scale: 1.2 },
     },

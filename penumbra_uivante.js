@@ -1158,11 +1158,9 @@ const MOB_WALK_SHEETS = {
 
 caveira: { 
       down: { 
-        cols: 7, rows: 6, frames: 36, scale: 0.8 }, 
+        cols: 7, rows: 6, frames: 36 }, 
         side: { 
-            cols: 5, rows: 3, frames: 15 },
-  up: { 
-            cols: 5, rows: 3, frames: 15, scale: 0.8 }
+            cols: 5, rows: 3, frames: 15, scale: 1.1 }
 },
             
             zumbi: { 

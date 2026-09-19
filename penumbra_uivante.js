@@ -750,9 +750,9 @@ async function handleActivateHourglass(){
 
 let _sky = null; // { scene, camera, renderer, canvas, cont }
 let _lightDir = { yaw: 200, pitch: 55 }; // atualizado quando o skybox termina de carregar (ver initSkybox) — usado pra orientar a sombra 3D dos mobs
-let camYaw = 0, camPitch = -6, camFov = 120;
+let camYaw = 0, camPitch = -6, camFov = 90;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
-const FOV_MIN = 120, FOV_MAX = 140;     // limites de zoom (menor FOV = mais zoom)
+const FOV_MIN = 90, FOV_MAX = 120;     // limites de zoom (menor FOV = mais zoom)
 const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
 const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
 

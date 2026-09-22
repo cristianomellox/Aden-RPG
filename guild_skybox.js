@@ -171,7 +171,12 @@ function updateOrbiters() {
 // ═══════════════════════════════════════════════════════════════════════
 function enableDragControl() {
     const cont = _sky.cont;
-    let sx = 0, sy = 0;
+    const DRAG_THRESHOLD_PX = 6; // abaixo disso ainda é considerado um "toque", não um arrasto
+
+    let sx = 0, sy = 0;      // último ponto (usado pra calcular delta durante o arrasto)
+    let startX = 0, startY = 0; // ponto onde o dedo/mouse desceu (usado só pra medir o threshold)
+    let pending = false;     // dedo/mouse baixo, mas ainda não passou do threshold
+    let ignoring = false;    // pointerdown começou em cima de um avatar (.player-link) — deixa o clique em paz
 
     function degPerPx() { return CAM_FOV / (cont.clientHeight || window.innerHeight); }
 
@@ -187,42 +192,63 @@ function enableDragControl() {
         if (_pitchTween) { _pitchTween.stop(); _pitchTween = null; }
     }
 
-    function startDrag(x, y) {
-        dragging = true;
-        autoRotating = false;
-        cancelIdleAndTween();
-        sx = x; sy = y;
+    function pointerDown(target, x, y) {
+        // Clicar num avatar de membro não deve iniciar um arrasto da câmera —
+        // senão o próximo touchmove/mousemove chama preventDefault() e, em
+        // telas touch, isso cancela o clique sintético que abriria o modal.
+        if (target && target.closest && target.closest('.player-link')) {
+            ignoring = true;
+            return;
+        }
+        ignoring = false;
+        pending = true;
+        dragging = false;
+        startX = sx = x;
+        startY = sy = y;
     }
 
-    function moveDrag(x, y) {
-        if (!dragging) return;
+    function pointerMove(x, y, preventDefaultFn) {
+        if (ignoring) return;
+        if (!pending && !dragging) return;
+
+        if (!dragging) {
+            const moved = Math.hypot(x - startX, y - startY);
+            if (moved < DRAG_THRESHOLD_PX) return; // ainda é só um toque, não confirma arrasto ainda
+            // Passou do threshold agora: promove pra arrasto de verdade.
+            dragging = true;
+            autoRotating = false;
+            cancelIdleAndTween();
+        }
+
+        if (preventDefaultFn) preventDefaultFn();
         applyDelta(x - sx, y - sy);
         sx = x; sy = y;
     }
 
-    function endDrag() {
-        if (!dragging) return;
+    function pointerUp() {
+        const wasDragging = dragging;
+        pending = false;
         dragging = false;
-        scheduleIdleRealign();
+        ignoring = false;
+        if (wasDragging) scheduleIdleRealign();
     }
 
     // Mouse
-    cont.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY), { passive: true });
-    window.addEventListener('mousemove', (e) => { if (dragging) { e.preventDefault(); moveDrag(e.clientX, e.clientY); } }, { passive: false });
-    window.addEventListener('mouseup', endDrag, { passive: true });
+    cont.addEventListener('mousedown', (e) => pointerDown(e.target, e.clientX, e.clientY), { passive: true });
+    window.addEventListener('mousemove', (e) => pointerMove(e.clientX, e.clientY, () => e.preventDefault()), { passive: false });
+    window.addEventListener('mouseup', pointerUp, { passive: true });
 
     // Touch
     cont.addEventListener('touchstart', (e) => {
         if (e.touches.length !== 1) return;
-        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        pointerDown(e.target, e.touches[0].clientX, e.touches[0].clientY);
     }, { passive: true });
     window.addEventListener('touchmove', (e) => {
-        if (!dragging || e.touches.length !== 1) return;
-        e.preventDefault();
-        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.touches.length !== 1) return;
+        pointerMove(e.touches[0].clientX, e.touches[0].clientY, () => e.preventDefault());
     }, { passive: false });
-    window.addEventListener('touchend', () => endDrag(), { passive: true });
-    window.addEventListener('touchcancel', () => endDrag(), { passive: true });
+    window.addEventListener('touchend', pointerUp, { passive: true });
+    window.addEventListener('touchcancel', pointerUp, { passive: true });
 }
 
 // ── Ferramenta de calibração (?debugGuildSky=1) ──────────────────────────

@@ -22,10 +22,11 @@
   const TRANSITION_MS = 350;
   const TRANSITION = `${TRANSITION_MS / 1000}s cubic-bezier(.4,0,.2,1)`;
 
-  // .modal (inclui #playerModal) usa z-index:100, e alguns modais especiais
-  // (tutoriais etc.) sobem até 12000/13000. O botão só precisa ficar acima
-  // do conteúdo normal da página — nunca por cima de um modal.
-  const BTN_Z_INDEX = 60;
+  // .modal (inclui #playerModal) usa z-index:100. O skybox sobe pra
+  // z-index:90 quando o HUD está recolhido (ver GuildSkybox.setForeground)
+  // — o botão precisa ficar acima disso pra não sumir atrás do skybox,
+  // mas continuar abaixo de qualquer modal.
+  const BTN_Z_INDEX = 95;
 
   function init() {
     const topbar  = document.getElementById('playerTopBar');

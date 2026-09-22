@@ -2884,22 +2884,13 @@ hr {
    PATCH v2 — Correções pós-review
    ═══════════════════════════════════════════════════════════ */
 
-/* 1. BACKGROUND — guildhall com blur + brightness ─────────── */
+/* 1. BACKGROUND — antigo guildhall.webp estático foi substituído pelo   */
+/* skybox 360° (ver guild_skybox.js), que ocupa a mesma camada visual   */
+/* (fixa, atrás de tudo). Mantemos só uma cor de fallback pro instante  */
+/* entre o carregamento da página e a textura do skybox terminar.       */
 body {
-  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp') !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  background-attachment: fixed !important;
+  background-image: none !important;
   background-color: #0d0b08 !important;
-}
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: inherit;
-  filter: blur(0px) brightness(0.90);
-  z-index: -1;
 }
 
 /* 2. NOME DA GUILDA — gradiente com !important ─────────────── */

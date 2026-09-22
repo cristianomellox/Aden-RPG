@@ -155,6 +155,12 @@ const ALL_DROPS = {
 // ═══════════════════════════════════════════════════════════
 const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/queda_fontana.png';
 
+// Água animada (flow map): máscara (branco = onde a água corre, preto = resto
+// do skybox) e flow map (direção do fluxo codificada em RG, técnica clássica
+// de "duas fases" com crossfade — ver createWaterFlowMaterial()).
+const WATER_MASK_URL = 'https://aden-rpg.pages.dev/assets/water_mask_queda_fontana.png';
+const FLOW_MAP_URL   = 'https://aden-rpg.pages.dev/assets/flow_map_queda_fontana.png';
+
 // SPOTS agora usam coordenadas ESFÉRICAS em vez de px num mapa plano:
 //   yaw   → ângulo horizontal em graus (-180 a 180, "para onde olhar")
 //   pitch → ângulo vertical em graus (-89 a 89, negativo = olhar para baixo)
@@ -749,9 +755,9 @@ async function handleActivateHourglass(){
 
 let _sky = null; // { scene, camera, renderer, canvas, cont }
 let _lightDir = { yaw: 200, pitch: 55 }; // atualizado quando o skybox termina de carregar (ver initSkybox) — usado pra orientar a sombra 3D dos mobs
-let camYaw = 0, camPitch = -6, camFov = 120;
+let camYaw = 0, camPitch = -6, camFov = 110;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
-const FOV_MIN = 120, FOV_MAX = 120;     // limites de zoom (menor FOV = mais zoom)
+const FOV_MIN = 70, FOV_MAX = 110;     // limites de zoom (menor FOV = mais zoom)
 const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
 const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
 
@@ -766,6 +772,92 @@ function yawPitchToVector(yawDeg, pitchDeg, radius = 1) {
         radius * Math.sin(pitch),
         radius * Math.cos(yaw) * Math.cos(pitch)
     );
+}
+
+// ── Material de água animada (flow map) para o skybox ───────────────────
+// Substitui o MeshBasicMaterial simples da esfera por um ShaderMaterial que:
+//   1. Mostra a textura do skybox normalmente onde o water mask é preto.
+//   2. Onde o water mask é branco, distorce as coordenadas de UV usadas pra
+//      amostrar essa MESMA textura, seguindo a direção gravada no flow map
+//      (canais R/G, decodificados de 0..1 para -1..1 → vetor de direção).
+//   3. Usa a técnica clássica de "duas fases com crossfade" (a mesma do
+//      talk clássico da Valve sobre water flow) pra evitar que a distorção
+//      "estoure" ao acumular offset — cada fase é resetada e cross-fadeada
+//      com a outra antes de ficar visível demais.
+// Enquanto as texturas ainda não carregaram, a esfera fica com a cor sólida
+// de fallback (mesmo comportamento de antes).
+function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            map:           { value: null },
+            flowMap:       { value: null },
+            maskMap:       { value: null },
+            hasMap:        { value: false },
+            hasWater:      { value: false },
+            fallbackColor: { value: new THREE.Color(fallbackColor) },
+            time:          { value: 0 },
+            flowSpeed:     { value: 0.35 },  // ciclos por segundo de cada fase
+            flowStrength:  { value: 0.10 },  // quão longe (em UV) a água "escorre" antes de resetar
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D map;
+            uniform sampler2D flowMap;
+            uniform sampler2D maskMap;
+            uniform bool hasMap;
+            uniform bool hasWater;
+            uniform vec3 fallbackColor;
+            uniform float time;
+            uniform float flowSpeed;
+            uniform float flowStrength;
+            varying vec2 vUv;
+
+            void main() {
+                if (!hasMap) {
+                    gl_FragColor = vec4(fallbackColor, 1.0);
+                    return;
+                }
+
+                vec4 baseColor = texture2D(map, vUv);
+
+                if (hasWater) {
+                    float mask = texture2D(maskMap, vUv).r;
+                    if (mask > 0.02) {
+                        // Direção do fluxo: RG do flow map, de [0,1] pra [-1,1].
+                        vec2 flowDir = texture2D(flowMap, vUv).rg * 2.0 - 1.0;
+
+                        // Duas fases defasadas em meio ciclo, cada uma "escorregando"
+                        // a UV na direção do fluxo e voltando ao início — o crossfade
+                        // entre elas esconde o "salto" do reset.
+                        float phase0 = fract(time * flowSpeed);
+                        float phase1 = fract(time * flowSpeed + 0.5);
+
+                        vec2 uv0 = vUv - flowDir * phase0 * flowStrength;
+                        vec2 uv1 = vUv - flowDir * phase1 * flowStrength;
+
+                        vec4 tex0 = texture2D(map, uv0);
+                        vec4 tex1 = texture2D(map, uv1);
+
+                        // Peso 0 no meio do ciclo de cada fase, 1 nas bordas (onde a
+                        // outra fase está no meio, "escondendo" o reset dela).
+                        float w = abs(phase0 - 0.5) * 2.0;
+                        vec4 flowColor = mix(tex0, tex1, w);
+
+                        baseColor = mix(baseColor, flowColor, mask);
+                    }
+                }
+
+                gl_FragColor = baseColor;
+            }
+        `,
+    });
+    return material;
 }
 
 function initSkybox() {
@@ -786,16 +878,18 @@ function initSkybox() {
     // ficar visível de dentro, como um skybox tradicional.
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x0d1a0d });
+    const material = createWaterFlowMaterial(0x0d1a0d);
     const sphere = new THREE.Mesh(geometry, material);
     scene.add(sphere);
 
-    new THREE.TextureLoader().load(
+    const texLoader = new THREE.TextureLoader();
+
+    texLoader.load(
         MAP_IMAGE_URL,
         (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
-            material.map = tex;
-            material.color.set(0xffffff);
+            material.uniforms.map.value = tex;
+            material.uniforms.hasMap.value = true;
             material.needsUpdate = true;
 
             // Detecta o ponto mais claro do skybox pra orientar a sombra dos
@@ -812,6 +906,31 @@ function initSkybox() {
         },
         undefined,
         (err) => console.error('[Vale Arcano] Falha ao carregar a imagem 360 do mapa:', err)
+    );
+
+    // Máscara e flow map: são dados (direção/força), não cor — não passam
+    // por conversão sRGB. Só ativa o efeito de água (hasWater) quando os
+    // dois tiverem carregado; se algum falhar, o skybox continua normal
+    // (estático), sem quebrar o resto da cena.
+    let maskTex = null, flowTex = null;
+    function tryEnableWater() {
+        if (maskTex && flowTex) {
+            material.uniforms.maskMap.value = maskTex;
+            material.uniforms.flowMap.value = flowTex;
+            material.uniforms.hasWater.value = true;
+        }
+    }
+    texLoader.load(
+        WATER_MASK_URL,
+        (tex) => { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; maskTex = tex; tryEnableWater(); },
+        undefined,
+        (err) => console.error('[Vale Arcano] Falha ao carregar o water mask:', err)
+    );
+    texLoader.load(
+        FLOW_MAP_URL,
+        (tex) => { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; flowTex = tex; tryEnableWater(); },
+        undefined,
+        (err) => console.error('[Vale Arcano] Falha ao carregar o flow map:', err)
     );
 
     _sky = { scene, camera, renderer, canvas, cont };
@@ -847,6 +966,7 @@ function initSkybox() {
         TWEEN.update(ts); // avança a caminhada dos mobs (ver _mobWalkPath) — mesmo relógio do render, nunca dessincroniza
         _updateMobSeparation(dt); // rede de segurança física — nunca deixa dois mobs se sobreporem visualmente
         updateAllMobVisuals(); // reprojeta cada mob individualmente no mundo 3D (billboard, nunca inclina/flutua)
+        material.uniforms.time.value = ts * 0.001; // anima o flow map da água (queda d'água/fonte no skybox)
 
         if (_sky.pfx) {
             try {
@@ -1507,7 +1627,11 @@ function updateAllMobVisuals() {
         // do centro da tela — perto das bordas (câmera bem aberta, 120° de
         // FOV) o erro crescia, exatamente onde o problema ainda aparecia.
         _mobCamUpScratch.setFromMatrixColumn(_sky.camera.matrixWorld, 1).normalize();
-        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * 1.05);
+        // state.animScale (setado no tick de respiração) reflete o `scale` configurado
+        // em MOB_WALK_SHEETS pra esse mob/grupo — sem isso, aumentar o scale deixava o
+        // sprite mais alto mas o nome continuava na altura antiga (baseH sem ajuste),
+        // parecendo "descer" pro pescoço/cabeça.
+        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * (state.animScale || 1) * 1.05);
         const screenHead = _mobProjectScreen(headWorld);
         if (screenHead) {
             el.style.display = '';
@@ -3704,6 +3828,7 @@ function initMobAvatarBreathing() {
                     if (st.animActive && st.animGroup) _mobAnimApplyFrame(visual, st.animGroup, st);
                     const animW = st.animActive && st.animGroup ? _mobAnimWorldWidth(visual, st.animGroup, visual.baseH) : null;
                     const animScale = st.animActive && st.animGroup ? _mobAnimGroupScale(visual, st.animGroup) : 1;
+                    visual.animScale = animScale; // guardado pra updateAllMobVisuals reposicionar o nome corretamente (ver headWorld)
                     visual.sprite.scale.set((animW != null ? animW : visual.baseW) * scaleXFinal * animScale, visual.baseH * scaleY * animScale, 1);
                     visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
                 }

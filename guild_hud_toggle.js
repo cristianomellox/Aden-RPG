@@ -56,7 +56,12 @@
       color          : '#e8cf7a',
       cursor         : 'pointer',
       padding        : '0',
-      transition     : `top ${TRANSITION}, background .2s`,
+      // Sem transição no "top": durante o realinhamento (snapLoop) o alvo
+      // muda a cada frame enquanto o menu de abas ainda está animando pra
+      // posição final — animar o botão atrás de um alvo em movimento é
+      // exatamente o que causava o botão "derivar"/sumir depois de vários
+      // toggles seguidos.
+      transition     : 'background .2s',
       pointerEvents  : 'auto',
     });
     btn.style.setProperty('background', '#000', 'important');
@@ -70,13 +75,40 @@
 
     let collapsed = false;
     let hideTimer = null;
+    let snapRaf = null;
 
-    function snapToTabMenu() {
-      if (collapsed) return;
+    function snapToTabMenuOnce() {
       const rect = tabMenu.getBoundingClientRect();
-      btn.style.top = rect.bottom + 'px';
+      let top = rect.bottom;
+      // Blindagem: nunca deixa o botão ir pra um valor absurdo (fora da
+      // tela) por causa de alguma medição feita num instante ruim.
+      if (!isFinite(top) || top < 0) top = 0;
+      const maxTop = Math.max(0, window.innerHeight - 34);
+      if (top > maxTop) top = maxTop;
+      btn.style.top = top + 'px';
     }
-    snapToTabMenu();
+
+    // Re-mede em todo frame por um tempinho depois de expandir, em vez de
+    // confiar numa única medição atrasada — assim, mesmo que o layout do
+    // menu de abas ainda esteja se ajustando (transição do #mainContainer,
+    // imagens carregando etc.), o botão converge pra posição certa em vez
+    // de ficar preso numa leitura intermediária/errada.
+    function startSnapLoop(durationMs) {
+      if (snapRaf) cancelAnimationFrame(snapRaf);
+      const start = performance.now();
+      function step(ts) {
+        if (collapsed) { snapRaf = null; return; }
+        snapToTabMenuOnce();
+        if (ts - start < durationMs) {
+          snapRaf = requestAnimationFrame(step);
+        } else {
+          snapRaf = null;
+        }
+      }
+      snapRaf = requestAnimationFrame(step);
+    }
+
+    startSnapLoop(50); // posição inicial (sem animação nenhuma acontecendo ainda)
 
     btn.addEventListener('mouseenter', () => btn.style.setProperty('background', '#241b08', 'important'));
     btn.addEventListener('mouseleave', () => btn.style.setProperty('background', '#000', 'important'));
@@ -84,6 +116,7 @@
     btn.addEventListener('click', () => {
       collapsed = !collapsed;
       clearTimeout(hideTimer);
+      if (snapRaf) { cancelAnimationFrame(snapRaf); snapRaf = null; }
 
       if (collapsed) {
         // Impede clique nelas já de cara (durante a animação de saída)...
@@ -122,11 +155,11 @@
 
         btn.innerHTML = SVG_UP;
         btn.title = 'Recolher interface';
-        setTimeout(snapToTabMenu, TRANSITION_MS + 20);
+        startSnapLoop(TRANSITION_MS + 100);
       }
     });
 
-    window.addEventListener('resize', snapToTabMenu);
+    window.addEventListener('resize', () => { if (!collapsed) startSnapLoop(50); });
   }
 
   if (document.readyState === 'loading') {

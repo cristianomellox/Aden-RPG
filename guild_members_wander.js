@@ -127,10 +127,28 @@ function applyFrame(fr, sh, url) {
     }
 }
 
+// Abre o modal de perfil do jogador. Mesma lógica de openPlayerModalById()
+// do guild.js (usada pela lista de ranking, presenteadores etc.) — só que
+// chamada diretamente aqui, sem depender de bubbling do evento de clique
+// chegar até o listener global de .player-link (não temos acesso ao
+// playerModal.js pra confirmar se ele exige algo além disso).
+function openPlayerModal(pid) {
+    if (!pid) return;
+    const modal = document.getElementById('playerModal');
+    if (modal) modal.style.display = 'flex';
+    window._guildModalLastPid = pid;
+    if (typeof window.fetchPlayerData === 'function') {
+        window.fetchPlayerData(pid);
+    } else {
+        console.warn('[GuildMembersWander] window.fetchPlayerData não encontrado — o modal abriu mas pode não preencher os dados do jogador.');
+    }
+}
+
 function buildAvatarEl(member) {
     const wrap = document.createElement('div');
     wrap.className = 'gw-avatar player-link';
     wrap.dataset.playerId = member.id;
+    wrap.addEventListener('click', () => openPlayerModal(member.id));
 
     const frameWrap = document.createElement('div');
     frameWrap.className = 'gw-frame-wrap';

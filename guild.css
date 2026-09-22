@@ -3212,3 +3212,11 @@ body {
   position: relative;
   z-index: 2;
 }
+/* ═══════════════════════════════════════════════════════════
+   PATCH v5 — respiro entre o botão de recolher HUD e o
+   conteúdo da aba (bandeira/banner da guilda ficava colado
+   embaixo do botão de toggle).
+   ═══════════════════════════════════════════════════════════ */
+#tabContent {
+  margin-top: 50px;
+}

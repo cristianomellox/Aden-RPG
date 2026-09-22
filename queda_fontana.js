@@ -796,8 +796,15 @@ function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
             hasWater:      { value: false },
             fallbackColor: { value: new THREE.Color(fallbackColor) },
             time:          { value: 0 },
-            flowSpeed:     { value: 0.35 },  // ciclos por segundo de cada fase
-            flowStrength:  { value: 0.10 },  // quão longe (em UV) a água "escorre" antes de resetar
+            flowSpeed:     { value: 0.25 },  // ciclos por segundo de cada fase
+            flowStrength:  { value: 0.012 }, // quão longe (em UV) a água "escorre" antes de resetar
+            // ⚠️ Isso é uma FRAÇÃO da largura/altura da textura equiretangular
+            // inteira (ex.: 0.10 = 10% da imagem, ou seja, ~170px numa textura
+            // de ~1774px de largura). Se ficar grande demais, a amostra "escorrega"
+            // pra FORA da própria faixa de água pintada e passa a mostrar pedra/
+            // rocha/vegetação vizinha — é isso que parece "derreter o terreno" ou
+            // "girar o skybox" junto com a água. Mantenha esse valor BEM menor que
+            // a largura (em UV) da própria área de água pintada no mask.
         },
         vertexShader: `
             varying vec2 vUv;

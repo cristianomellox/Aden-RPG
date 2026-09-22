@@ -86,7 +86,7 @@ function injectCSS() {
         .gw-avatar { position: fixed; text-align: center; user-select: none; -webkit-user-select: none; cursor: pointer; pointer-events: auto; z-index: 1; }
         .gw-frame-wrap { position: relative; width: ${AVATAR_PX}px; height: ${AVATAR_PX}px; margin: 0 auto; }
         .gw-avatar-img {
-            width: ${AVATAR_PX}px; height: ${AVATAR_PX}px; border-radius: 10px; object-fit: cover;
+            width: ${AVATAR_PX}px; height: ${AVATAR_PX}px; border-radius: 50%; object-fit: cover;
             border: 2px solid #6b5a2a; box-shadow: 0 2px 8px rgba(0,0,0,.7); display: block;
         }
         .gw-frame-ol, .gw-frame-sh {

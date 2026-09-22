@@ -19,7 +19,13 @@
     <polyline points="6 9 12 15 18 9"/>
   </svg>`;
 
-  const TRANSITION = '0.35s cubic-bezier(.4,0,.2,1)';
+  const TRANSITION_MS = 350;
+  const TRANSITION = `${TRANSITION_MS / 1000}s cubic-bezier(.4,0,.2,1)`;
+
+  // .modal (inclui #playerModal) usa z-index:100, e alguns modais especiais
+  // (tutoriais etc.) sobem até 12000/13000. O botão só precisa ficar acima
+  // do conteúdo normal da página — nunca por cima de um modal.
+  const BTN_Z_INDEX = 60;
 
   function init() {
     const topbar  = document.getElementById('playerTopBar');
@@ -37,7 +43,7 @@
       position       : 'fixed',
       left           : '50%',
       transform      : 'translateX(-50%)',
-      zIndex         : '1200',
+      zIndex         : String(BTN_Z_INDEX),
       display        : 'flex',
       alignItems     : 'center',
       justifyContent : 'center',
@@ -62,6 +68,7 @@
     });
 
     let collapsed = false;
+    let hideTimer = null;
 
     function snapToTabMenu() {
       if (collapsed) return;
@@ -75,35 +82,47 @@
 
     btn.addEventListener('click', () => {
       collapsed = !collapsed;
+      clearTimeout(hideTimer);
 
       if (collapsed) {
+        // Impede clique nelas já de cara (durante a animação de saída)...
         targets.forEach((el) => {
-          el.style.transform     = 'translateY(-120%)';
-          el.style.opacity       = '0';
-          el.style.pointerEvents = 'none';
+          el.style.setProperty('pointer-events', 'none', 'important');
+          el.style.transform = 'translateY(-120%)';
+          el.style.opacity   = '0';
         });
+        // ...e, quando a transição termina, tira do fluxo/hit-test de vez.
+        // display:none é o que garante que o arrastar-pra-girar o skybox
+        // funcione em 100% da tela (nada mais fica "por cima", mesmo que
+        // alguma regra de CSS da página force pointer-events:auto em algum
+        // elemento interno específico).
+        hideTimer = setTimeout(() => {
+          targets.forEach((el) => { el.style.display = 'none'; });
+        }, TRANSITION_MS + 30);
+
         btn.style.top = '0px';
         btn.innerHTML = SVG_DOWN;
         btn.title = 'Mostrar interface';
       } else {
+        // Primeiro volta pro fluxo (senão não há o que animar)...
+        targets.forEach((el) => { el.style.display = ''; });
+        // ...força um reflow pra garantir que a transição de opacity/transform
+        // realmente rode a partir do estado "escondido" em vez de pular direto
+        // pro estado final.
+        void main.offsetHeight;
         targets.forEach((el) => {
-          el.style.transform     = '';
-          el.style.opacity       = '1';
-          el.style.pointerEvents = '';
+          el.style.transform = '';
+          el.style.opacity   = '1';
+          el.style.removeProperty('pointer-events');
         });
+
         btn.innerHTML = SVG_UP;
         btn.title = 'Recolher interface';
-        setTimeout(snapToTabMenu, 360);
+        setTimeout(snapToTabMenu, TRANSITION_MS + 20);
       }
     });
 
     window.addEventListener('resize', snapToTabMenu);
-
-    // O conteúdo das abas muda de altura dinamicamente (dados carregando,
-    // troca de aba etc.) — mantém o botão colado no rodapé do menu de abas.
-    const mo = new MutationObserver(() => snapToTabMenu());
-    mo.observe(main, { attributes: true, attributeFilter: ['style', 'class'] });
-    mo.observe(tabMenu, { attributes: true, attributeFilter: ['style', 'class'] });
   }
 
   if (document.readyState === 'loading') {

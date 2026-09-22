@@ -100,12 +100,15 @@
           targets.forEach((el) => { el.style.display = 'none'; });
         }, TRANSITION_MS + 30);
 
+        if (window.GuildSkybox) window.GuildSkybox.setForeground(true);
+
         btn.style.top = '0px';
         btn.innerHTML = SVG_DOWN;
         btn.title = 'Mostrar interface';
       } else {
         // Primeiro volta pro fluxo (senão não há o que animar)...
         targets.forEach((el) => { el.style.display = ''; });
+        if (window.GuildSkybox) window.GuildSkybox.setForeground(false);
         // ...força um reflow pra garantir que a transição de opacity/transform
         // realmente rode a partir do estado "escondido" em vez de pular direto
         // pro estado final.

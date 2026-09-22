@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
-import { initPostFX, POSTFX_CONFIG } from './postfx.js';
+// postfx.js é importado dinamicamente (ver startGuildSkybox) — assim, se
+// por qualquer motivo ele falhar em carregar, só o pós-processamento é
+// perdido; a cena, a câmera e o controle de arrastar continuam
+// funcionando normalmente (um `import` estático que falhasse derrubaria
+// o módulo inteiro, e junto com ele TODA a interação).
 
 // ═══════════════════════════════════════════════════════════════════════
 // SKYBOX 360° DA PÁGINA DA GUILDA (Three.js) ──────────────────────────────
@@ -75,7 +79,7 @@ function injectCSS() {
             inset: 0;
             overflow: hidden;
             z-index: -1;
-            pointer-events: auto;
+            pointer-events: auto !important;
             background: #0d0b08;
             touch-action: none;
         }
@@ -88,7 +92,7 @@ function injectCSS() {
         #guildOrbitLayer {
             position: absolute;
             inset: 0;
-            pointer-events: none; /* os filhos (avatares) reativam individualmente */
+            pointer-events: none !important; /* os filhos (avatares) reativam individualmente */
         }
     `;
     const s = document.createElement('style');
@@ -345,20 +349,6 @@ function startGuildSkybox() {
 
     _sky = { scene, camera, renderer, canvas, cont, layer, orbitLayer, running: true, raf: 0, pfx: null, _onResize: null };
 
-    // Mesmo grading "AAA" (bloom/contraste/saturação) usado no skybox da
-    // tela de login — só nesta instância do módulo (cada página carrega
-    // sua própria cópia do postfx.js, não afeta nenhuma outra tela).
-    POSTFX_CONFIG.bloom.threshold = 0.60;
-    POSTFX_CONFIG.bloom.strength  = 0.64;
-    POSTFX_CONFIG.bloom.radius    = 0.40;
-
-    try {
-        _sky.pfx = initPostFX({ scene, camera, renderer, cont });
-    } catch (e) {
-        console.error('[GuildSkybox] Falha ao iniciar pós-processamento, usando renderização padrão:', e);
-        _sky.pfx = null;
-    }
-
     updateCameraLook();
     camera.updateMatrixWorld(true);
 
@@ -373,6 +363,8 @@ function startGuildSkybox() {
     _sky._onResize = onResize;
     window.addEventListener('resize', onResize);
 
+    // Interação (arrastar/girar) e o loop de renderização NÃO dependem do
+    // pós-processamento — ficam de pé mesmo que o postfx.js abaixo falhe.
     enableDragControl();
     initSkyDebugTool();
 
@@ -385,6 +377,34 @@ function startGuildSkybox() {
 
     _lastTs = performance.now();
     _sky.raf = requestAnimationFrame(loop);
+    console.log('[GuildSkybox] inicializado — arraste a tela pra girar.');
+
+    // Pós-processamento (bloom/grading — mesmo visual do skybox da tela de
+    // login) é best-effort: importado dinamicamente pra que uma falha aqui
+    // (arquivo ausente, erro de rede etc.) nunca derrube o resto do módulo.
+    import('./postfx.js').then((mod) => {
+        if (!_sky) return;
+        // Mesmo grading "AAA" (bloom/contraste/saturação) usado no skybox da
+        // tela de login — só nesta instância do módulo (cada página carrega
+        // sua própria cópia do postfx.js, não afeta nenhuma outra tela).
+        mod.POSTFX_CONFIG.bloom.threshold = 0.60;
+        mod.POSTFX_CONFIG.bloom.strength  = 0.64;
+        mod.POSTFX_CONFIG.bloom.radius    = 0.40;
+        _sky.pfx = mod.initPostFX({ scene, camera, renderer, cont });
+    }).catch((e) => {
+        console.error('[GuildSkybox] Falha ao carregar postfx.js — seguindo sem pós-processamento:', e);
+    });
+}
+
+// Enquanto o HUD está recolhido, sobe o z-index da camada bem acima do
+// conteúdo normal da página (mas ainda abaixo de qualquer .modal, que usa
+// z-index 100+) — garante que a camada do skybox é sempre a coisa mais "no
+// topo" nesse estado, mesmo que algum elemento avulso da página (ex.: um
+// ícone com pointer-events forçado via !important em outro CSS) ainda
+// esteja de alguma forma no viewport.
+function setForeground(fg) {
+    if (!_sky) return;
+    _sky.layer.style.zIndex = fg ? '90' : '-1';
 }
 
 // ── API pública ──────────────────────────────────────────────────────
@@ -392,6 +412,7 @@ window.GuildSkybox = {
     registerOrbiter,
     unregisterOrbiter,
     yawPitchToVector,
+    setForeground,
     // "Pronto" aqui significa "câmera/cena existem e dá pra registrar
     // orbitadores" — não depende da textura do skybox já ter carregado
     // (registerOrbiter não usa a textura, só camera/cont).

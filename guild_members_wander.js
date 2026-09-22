@@ -83,7 +83,7 @@ function injectCSS() {
     const s = document.createElement('style');
     s.id = 'gw-css';
     s.textContent = `
-        .gw-avatar { position: fixed; text-align: center; user-select: none; -webkit-user-select: none; cursor: pointer; pointer-events: auto; z-index: 1; }
+        .gw-avatar { position: fixed; text-align: center; user-select: none; -webkit-user-select: none; cursor: pointer; pointer-events: auto !important; z-index: 1; }
         .gw-frame-wrap { position: relative; width: ${AVATAR_PX}px; height: ${AVATAR_PX}px; margin: 0 auto; }
         .gw-avatar-img {
             width: ${AVATAR_PX}px; height: ${AVATAR_PX}px; border-radius: 50%; object-fit: cover;
@@ -225,6 +225,8 @@ function rebuild() {
         _active.push({ orbiterHandle: handle, el });
         scheduleWander(state, i * 700 + Math.random() * WANDER_FIRST_DELAY_MAX);
     });
+
+    console.log(`[GuildMembersWander] ${_active.length} membro(s) passeando pelo skybox.`);
 }
 
 // ── Observa mudanças na lista de membros (guild.js a repopula async) ─────

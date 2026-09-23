@@ -3183,7 +3183,7 @@ function showStarterPackModal(onClose) {
                 margin: 0 0 4px;
             }
             #starterPackModal .sp-subtitle {
-                font-size: 0.82em; color: #9a8456;
+                font-size: 0.82em; color: #fff;
                 margin: 0 0 18px;
                 line-height: 1.4;
             }
@@ -3218,14 +3218,14 @@ function showStarterPackModal(onClose) {
                 font-size: 0.78em; color: #c9a94a; font-weight: bold;
             }
             #starterPackModal .sp-item .sp-name {
-                font-size: 0.6em; color: #888;
+                font-size: 0.6em; color: #fff;
                 line-height: 1.2; text-align: center;
             }
             #starterPackModal .sp-bag-hint {
-                font-size: 0.78em; color: #6a5c38;
+                font-size: 0.78em; color: #fff;
                 margin-bottom: 18px;
             }
-            #starterPackModal .sp-bag-hint strong { color: #c9a94a; }
+            #starterPackModal .sp-bag-hint strong { color: #fff; }
             #starterPackModal .sp-btn {
                 width: 100%; padding: 13px;
                 background: linear-gradient(180deg, #d4b050 0%, #8a6f22 100%);

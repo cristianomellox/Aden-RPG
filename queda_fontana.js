@@ -797,7 +797,7 @@ function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
             fallbackColor: { value: new THREE.Color(fallbackColor) },
             time:          { value: 0 },
             flowSpeed:     { value: 0.30 },  // ciclos por segundo de cada fase
-            flowStrength:  { value: 0.02 }, // quão longe (em UV) a água "escorre" antes de resetar
+            flowStrength:  { value: 0.05 }, // quão longe (em UV) a água "escorre" antes de resetar
             // ⚠️ Isso é uma FRAÇÃO da largura/altura da textura equiretangular
             // inteira (ex.: 0.10 = 10% da imagem, ou seja, ~170px numa textura
             // de ~1774px de largura). Se ficar grande demais, a amostra "escorrega"

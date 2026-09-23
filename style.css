@@ -3422,7 +3422,7 @@ button, .btn {
     font-size: 0.72em;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #9c9075;
+    color: #fff;
     margin-bottom: 5px;
 }
 .aaa-input-group input {
@@ -3479,7 +3479,7 @@ button, .btn {
 .pem-subtitle {
     margin: 0;
     font-size: 0.76em;
-    color: #a99f83;
+    color: #fff;
     letter-spacing: 0.02em;
 }
 
@@ -3526,7 +3526,7 @@ button, .btn {
     font-size: 0.72em;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #9c9075;
+    color: #fff;
     margin-bottom: 5px;
 }
 .pem-field input,

@@ -5,22 +5,32 @@
   // ─────────────────────────────────────────────
   // CONFIGURAÇÃO
   // ─────────────────────────────────────────────
-  const DOWNLOAD_URL   = '/download.html';
+  // IMPORTANTE: o Cloudflare Pages redireciona sozinho /pagina.html -> /pagina
+  // (remove a extensão) a nível de servidor, antes de qualquer JS rodar. Por
+  // isso todas as comparações abaixo usam nomes de página SEM ".html" — do
+  // contrário, quem chega pela URL limpa (ex: /download) cai fora das listas
+  // de isenção/bloqueio e o guard manda redirecionar de volta pra "/download.html",
+  // que o Cloudflare imediatamente re-redireciona pra "/download" de novo,
+  // causando um loop infinito de redirecionamento (ERR_TOO_MANY_REDIRECTS) —
+  // foi esse loop que impediu o Google de indexar a página de download.
+  const DOWNLOAD_URL   = '/download'; // sem .html: evita o hop extra do Cloudflare
   const SESSION_KEY    = 'aden_browser_warning_shown';
   const INTRO_LS_KEY   = 'aden_intro_seen_v32';   // mesmo do script.js
 
   // Páginas "pesadas" que exigem o app instalado (PWA ou TWA).
+  // Sempre sem ".html" — normalizamos currentPage abaixo pra bater com isso
+  // não importa se a URL acessada tinha extensão ou não.
   const BLOCKED_PAGES  = [
-    'capital2.html',
+    'capital2',
   ];
 
-  // ── Alcance do redirecionamento pra /download.html no navegador comum ──
+  // ── Alcance do redirecionamento pra /download no navegador comum ──
   // false (padrão) = só as páginas de BLOCKED_PAGES redirecionam pro download.
   // true  = QUALQUER página do jogo redireciona pro download se acessada por
   //         navegador comum (sem PWA/TWA instalado). Ajuste aqui se quiser esse
   //         comportamento mais restritivo.
   const REDIRECT_ALL_PAGES_IF_BROWSER = true;
-  const PAGES_EXEMPT_FROM_REDIRECT = ['download.html']; // só usado se a flag acima for true
+  const PAGES_EXEMPT_FROM_REDIRECT = ['download']; // sem ".html" — só usado se a flag acima for true
 
   // ─────────────────────────────────────────────
   // DETECÇÃO DE PLATAFORMA (definida em platform.js — inclua-o ANTES deste arquivo)
@@ -30,9 +40,14 @@
     isLegacyApk: false, isApp: false, showsStoreComingSoon: false
   };
 
-  const currentPage   = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  // Nome do arquivo da URL atual, SEMPRE sem ".html", pra que /download e
+  // /download.html (e /capital2 e /capital2.html) sejam tratados como a
+  // mesma página nas comparações abaixo.
+  const currentPage   = (location.pathname.split('/').pop() || 'index.html')
+                          .toLowerCase()
+                          .replace(/\.html$/, '');
   const isBlockedPage = BLOCKED_PAGES.includes(currentPage);
-  const isIndex       = currentPage === 'index.html' || currentPage === '';
+  const isIndex       = currentPage === 'index' || currentPage === '';
 
   // ─────────────────────────────────────────────
   // CONFIGURAÇÃO DE PAGAMENTOS
@@ -614,7 +629,7 @@
   // 1. GATE DE ACESSO ─ navegador comum é redirecionado pro download
   // ─────────────────────────────────────────────
   // PWA e TWA (e o APK legado) nunca caem aqui — acesso total liberado.
-  if (platform.isBrowser && currentPage !== 'download.html') {
+  if (platform.isBrowser && currentPage !== 'download') {
     const mustRedirect = REDIRECT_ALL_PAGES_IF_BROWSER
       ? !PAGES_EXEMPT_FROM_REDIRECT.includes(currentPage)
       : isBlockedPage;

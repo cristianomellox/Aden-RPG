@@ -796,8 +796,8 @@ function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
             hasWater:      { value: false },
             fallbackColor: { value: new THREE.Color(fallbackColor) },
             time:          { value: 0 },
-            flowSpeed:     { value: 0.25 },  // ciclos por segundo de cada fase
-            flowStrength:  { value: 0.012 }, // quão longe (em UV) a água "escorre" antes de resetar
+            flowSpeed:     { value: 0.30 },  // ciclos por segundo de cada fase
+            flowStrength:  { value: 0.02 }, // quão longe (em UV) a água "escorre" antes de resetar
             // ⚠️ Isso é uma FRAÇÃO da largura/altura da textura equiretangular
             // inteira (ex.: 0.10 = 10% da imagem, ou seja, ~170px numa textura
             // de ~1774px de largura). Se ficar grande demais, a amostra "escorrega"
@@ -838,6 +838,11 @@ function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
                     if (mask > 0.02) {
                         // Direção do fluxo: RG do flow map, de [0,1] pra [-1,1].
                         vec2 flowDir = texture2D(flowMap, vUv).rg * 2.0 - 1.0;
+                        // A ferramenta de pintura grava a direção em coordenadas de
+                        // canvas (Y cresce pra BAIXO), mas vUv.y cresce pra CIMA —
+                        // sem inverter aqui, "arrastar pra baixo" vira offset pra
+                        // cima na textura. Inverte só o componente vertical.
+                        flowDir.y = -flowDir.y;
 
                         // Duas fases defasadas em meio ciclo, cada uma "escorregando"
                         // a UV na direção do fluxo e voltando ao início — o crossfade

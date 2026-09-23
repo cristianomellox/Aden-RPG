@@ -593,7 +593,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
   --dark-glass:  rgba(8,6,4,0.82);
   --dark-glass2: rgba(14,10,6,0.92);
   --text-bright: #f5edd8;
-  --text-muted:  #9a8d6e;
+  --text-muted:  #fff;
   --border-line: lightblue;
 }
 
@@ -3233,7 +3233,7 @@ button, .btn {
 .notif-pref-checkbox:checked ~ .notif-pref-check-box {
     background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark));
     border-color: var(--aaa-gold);
-    color: #241a05;
+    color: #fff;
 }
 .notif-pref-checkbox:disabled ~ .notif-pref-check-box {
     opacity: 0.5;

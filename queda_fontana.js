@@ -1286,10 +1286,31 @@ function enableMapInteraction() {
 // em _mobBreathNewState; um ciclo completo de stepPhase = uma passada
 // completa pelos `frames` dessa sheet).
 const MOB_WALK_SHEETS = {
-    // Ex.: nomemob: { down: { cols: 4, rows: 2, frames: 8 }, up: { cols: 4, rows: 2, frames: 8 }, side: { cols: 6, rows: 4, frames: 22 } },
-    // Nenhum mob desta região tem sheets de passada real ainda — todos caem
-    // no fallback procedural (bounce/tilt sobre o sprite estático) até que
-    // as imagens _walkdown/_walkup/_walkside correspondentes sejam adicionadas.
+ 
+ naga: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+            
+            harpia: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+            
+            lider_porifero: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+            
+            orium: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+ 
 };
 
 // Extrai o "nome-base" do mob a partir da URL do sprite (ex.:

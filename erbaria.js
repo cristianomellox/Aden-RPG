@@ -751,9 +751,9 @@ async function handleActivateHourglass(){
 
 let _sky = null; // { scene, camera, renderer, canvas, cont }
 let _lightDir = { yaw: 200, pitch: 55 }; // atualizado quando o skybox termina de carregar (ver initSkybox) — usado pra orientar a sombra 3D dos mobs
-let camYaw = 0, camPitch = -6, camFov = 120;
+let camYaw = 0, camPitch = -6, camFov = 110;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
-const FOV_MIN = 120, FOV_MAX = 120;     // limites de zoom (menor FOV = mais zoom)
+const FOV_MIN = 70, FOV_MAX = 110;     // limites de zoom (menor FOV = mais zoom)
 const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
 const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
 
@@ -1156,10 +1156,25 @@ function enableMapInteraction() {
 // em _mobBreathNewState; um ciclo completo de stepPhase = uma passada
 // completa pelos `frames` dessa sheet).
 const MOB_WALK_SHEETS = {
-    // Ex.: nomemob: { down: { cols: 4, rows: 2, frames: 8 }, up: { cols: 4, rows: 2, frames: 8 }, side: { cols: 6, rows: 4, frames: 22 } },
-    // Nenhum mob desta região tem sheets de passada real ainda — todos caem
-    // no fallback procedural (bounce/tilt sobre o sprite estático) até que
-    // as imagens _walkdown/_walkup/_walkside correspondentes sejam adicionadas.
+ 
+ guardiao_elora: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 5, rows: 5, frames: 21, scale: 1.3 } },
+            
+            guardiao_galdra: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.3 } },
+            
+            guardiao_rutus: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 5, rows: 5, frames: 23, scale: 1.3 } },
+ 
 };
 
 // Extrai o "nome-base" do mob a partir da URL do sprite (ex.:
@@ -1509,7 +1524,11 @@ function updateAllMobVisuals() {
         // do centro da tela — perto das bordas (câmera bem aberta, 120° de
         // FOV) o erro crescia, exatamente onde o problema ainda aparecia.
         _mobCamUpScratch.setFromMatrixColumn(_sky.camera.matrixWorld, 1).normalize();
-        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * 1.05);
+        // state.animScale (setado no tick de respiração) reflete o `scale` configurado
+        // em MOB_WALK_SHEETS pra esse mob/grupo — sem isso, aumentar o scale deixava o
+        // sprite mais alto mas o nome continuava na altura antiga (baseH sem ajuste),
+        // parecendo "descer" pro pescoço/cabeça.
+        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * (state.animScale || 1) * 1.05);
         const screenHead = _mobProjectScreen(headWorld);
         if (screenHead) {
             el.style.display = '';
@@ -3706,6 +3725,7 @@ function initMobAvatarBreathing() {
                     if (st.animActive && st.animGroup) _mobAnimApplyFrame(visual, st.animGroup, st);
                     const animW = st.animActive && st.animGroup ? _mobAnimWorldWidth(visual, st.animGroup, visual.baseH) : null;
                     const animScale = st.animActive && st.animGroup ? _mobAnimGroupScale(visual, st.animGroup) : 1;
+                    visual.animScale = animScale; // guardado pra updateAllMobVisuals reposicionar o nome corretamente (ver headWorld)
                     visual.sprite.scale.set((animW != null ? animW : visual.baseW) * scaleXFinal * animScale, visual.baseH * scaleY * animScale, 1);
                     visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
                 }

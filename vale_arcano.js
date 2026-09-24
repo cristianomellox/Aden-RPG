@@ -1290,18 +1290,26 @@ const MOB_WALK_SHEETS = {
     duende: {
         down: { cols: 4, rows: 2, frames: 8, scale: 1.03 },
         up: { cols: 4, rows: 2, frames: 8, scale: 1.03 },
-        side: { cols: 6, rows: 4, frames: 22 },
+        side: { cols: 6, rows: 4, frames: 22 }
     },
     quar: {
         down: { cols: 6, rows: 6, frames: 36, scale: 1.05 },
         up: { cols: 5, rows: 5, frames: 23, scale: 1.18 },
-        side: { cols: 6, rows: 4, frames: 22, scale: 1.3 },
+        side: { cols: 6, rows: 4, frames: 22, scale: 1.3 }
     },
     limut: {
         down: { cols: 6, rows: 6, frames: 36 },
         up: { cols: 6, rows: 6, frames: 36, scale: 1.1 },
-        side: { cols: 5, rows: 4, frames: 19, scale: 1.2 },
+        side: { cols: 5, rows: 4, frames: 19, scale: 1.2 }
     },
+    
+    pixie: {
+        down: { cols: 6, rows: 6, frames: 36 },
+        up: { cols: 6, rows: 6, frames: 36, scale: 1.0 },
+        side: { cols: 6, rows: 6, frames: 36, scale: 1.0 }
+    },
+    
+    
 };
 
 // Extrai o "nome-base" do mob a partir da URL do sprite (ex.:

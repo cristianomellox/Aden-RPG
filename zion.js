@@ -27,6 +27,13 @@ import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, 
 
 const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/zion.png'; // mesmo nome de arquivo — só troque o PNG no repositório
 
+// Água animada (flow map) de rios/canais de Zion: mesma técnica da Queda
+// Fontana/Capital — ver createWaterFlowMaterial(). Se Zion não tiver água
+// visível, deixe esses dois PNGs em branco/sem subir: o skybox continua
+// funcionando normal (hasWater fica false e nada é distorcido).
+const WATER_MASK_URL = 'https://aden-rpg.pages.dev/assets/water_mask_zion.png';
+const FLOW_MAP_URL   = 'https://aden-rpg.pages.dev/assets/flow_map_zion.png';
+
 let camYaw = 0, camPitch = -6, camFov = 120;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
 const FOV_MIN = 120, FOV_MAX = 120;   // limites de zoom normal (arrastar/pinch)
@@ -55,6 +62,82 @@ function yawPitchToVector(yawDeg, pitchDeg, radius = 1) {
 
 let _sky = null;
 
+// ── Material de água animada (flow map) para o skybox de Zion ───────────
+// Mesma técnica usada na Queda Fontana/Capital: mostra a textura normal
+// onde o mask é preto; onde é branco, distorce a UV de amostragem seguindo
+// a direção gravada no flow map (RG, decodificado de 0..1 pra -1..1), com
+// crossfade de duas fases pra não "estourar" o offset acumulado.
+function createWaterFlowMaterial(fallbackColor = 0x0d1a0d) {
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            map:           { value: null },
+            flowMap:       { value: null },
+            maskMap:       { value: null },
+            hasMap:        { value: false },
+            hasWater:      { value: false },
+            fallbackColor: { value: new THREE.Color(fallbackColor) },
+            time:          { value: 0 },
+            flowSpeed:     { value: 0.18 },
+            flowStrength:  { value: 0.03 }, // fração da UV — mantenha bem menor que a faixa de água pintada
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D map;
+            uniform sampler2D flowMap;
+            uniform sampler2D maskMap;
+            uniform bool hasMap;
+            uniform bool hasWater;
+            uniform vec3 fallbackColor;
+            uniform float time;
+            uniform float flowSpeed;
+            uniform float flowStrength;
+            varying vec2 vUv;
+
+            void main() {
+                if (!hasMap) {
+                    gl_FragColor = vec4(fallbackColor, 1.0);
+                    return;
+                }
+
+                vec4 baseColor = texture2D(map, vUv);
+
+                if (hasWater) {
+                    float mask = texture2D(maskMap, vUv).r;
+                    if (mask > 0.02) {
+                        vec2 flowDir = texture2D(flowMap, vUv).rg * 2.0 - 1.0;
+                        // A ferramenta de pintura grava a direção em coordenadas de
+                        // canvas (Y cresce pra baixo); vUv.y cresce pra cima.
+                        flowDir.y = -flowDir.y;
+
+                        float phase0 = fract(time * flowSpeed);
+                        float phase1 = fract(time * flowSpeed + 0.5);
+
+                        vec2 uv0 = vUv - flowDir * phase0 * flowStrength;
+                        vec2 uv1 = vUv - flowDir * phase1 * flowStrength;
+
+                        vec4 tex0 = texture2D(map, uv0);
+                        vec4 tex1 = texture2D(map, uv1);
+
+                        float w = abs(phase0 - 0.5) * 2.0;
+                        vec4 flowColor = mix(tex0, tex1, w);
+
+                        baseColor = mix(baseColor, flowColor, mask);
+                    }
+                }
+
+                gl_FragColor = baseColor;
+            }
+        `,
+    });
+    return material;
+}
+
 function initSkybox() {
     const cont   = document.getElementById('mapContainer');
     const canvas = document.getElementById('skyboxCanvas');
@@ -71,20 +154,45 @@ function initSkybox() {
 
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1); // normais invertidas: textura visível de dentro
-    const material = new THREE.MeshBasicMaterial({ color: 0x0d1a0d });
+    const material = createWaterFlowMaterial(0x0d1a0d);
     const sphere = new THREE.Mesh(geometry, material);
     scene.add(sphere);
 
-    new THREE.TextureLoader().load(
+    const texLoader = new THREE.TextureLoader();
+
+    texLoader.load(
         MAP_IMAGE_URL,
         (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
-            material.map = tex;
-            material.color.set(0xffffff);
+            material.uniforms.map.value = tex;
+            material.uniforms.hasMap.value = true;
             material.needsUpdate = true;
         },
         undefined,
         (err) => console.error('[Zion] Falha ao carregar a imagem 360 do mapa:', err)
+    );
+
+    // Mask e flow map da água: só ativa o efeito quando os dois carregarem;
+    // se algum faltar/errar, o skybox continua normal (estático).
+    let maskTex = null, flowTex = null;
+    function tryEnableWater() {
+        if (maskTex && flowTex) {
+            material.uniforms.maskMap.value = maskTex;
+            material.uniforms.flowMap.value = flowTex;
+            material.uniforms.hasWater.value = true;
+        }
+    }
+    texLoader.load(
+        WATER_MASK_URL,
+        (tex) => { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; maskTex = tex; tryEnableWater(); },
+        undefined,
+        (err) => console.error('[Zion] Falha ao carregar o water mask:', err)
+    );
+    texLoader.load(
+        FLOW_MAP_URL,
+        (tex) => { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; flowTex = tex; tryEnableWater(); },
+        undefined,
+        (err) => console.error('[Zion] Falha ao carregar o flow map:', err)
     );
 
     _sky = { scene, camera, renderer, canvas, cont };
@@ -112,7 +220,8 @@ function initSkybox() {
     }
     window.addEventListener('resize', onResize);
 
-    (function loop() {
+    (function loop(ts) {
+        material.uniforms.time.value = ts * 0.001; // anima o flow map da água de Zion
         if (_sky.pfx) {
             try {
                 _sky.pfx.render(scene, camera);

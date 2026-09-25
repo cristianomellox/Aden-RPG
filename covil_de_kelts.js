@@ -1158,14 +1158,14 @@ const MOB_WALK_SHEETS = {
  
  tenente_kelt: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
             cols: 6, rows: 6, frames: 36, scale: 1.3 } },
             
             soldado_kelt: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
             cols: 6, rows: 6, frames: 36, scale: 1.3 } },
             
             rainha_kelt: { 

@@ -1174,6 +1174,12 @@ const MOB_WALK_SHEETS = {
         cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
           cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
             cols: 5, rows: 5, frames: 23, scale: 1.3 } },
+            
+            guardiao_lumina: { 
+      down: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
  
 };
 

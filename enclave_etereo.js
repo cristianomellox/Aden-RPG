@@ -1158,9 +1158,9 @@ const MOB_WALK_SHEETS = {
  
  anjo: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.0 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.0 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.0 } },
+        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
             
             arcanjo: { 
       down: { 
@@ -1172,7 +1172,7 @@ const MOB_WALK_SHEETS = {
       down: { 
         cols: 6, rows: 6, frames: 36, scale: 1.2 }, up: { 
           cols: 6, rows: 6, frames: 36, scale: 1.2 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.2 } },
+            cols: 7, rows: 5, frames: 35, scale: 1.2 } },
             
             serafim: { 
       down: { 

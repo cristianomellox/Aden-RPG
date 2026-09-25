@@ -1295,15 +1295,15 @@ const MOB_WALK_SHEETS = {
             
             harpia: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.3 } },
             
             lider_porifero: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.3 } },
             
             orium: { 
       down: { 

@@ -1170,9 +1170,9 @@ const MOB_WALK_SHEETS = {
             
             fenrir_montanhes: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
           cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
+            cols: 6, rows: 6, frames: 36, scale: 1.3 } },
             
             golem_de_gelo: { 
       down: { 

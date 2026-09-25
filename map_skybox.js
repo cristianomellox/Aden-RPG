@@ -136,6 +136,22 @@
     // ── Descobre a URL da imagem atual do mapa sem precisar saber o nome
     // da variável CSS (--bg-mapa-aden ou outra) nem duplicar caminho algum:
     // lê exatamente o que o navegador já resolveu pro background-image. ───
+    // ── Espera a URL do background-image ficar disponível ──────────────────
+    // Descobrimos que --bg-mapa-aden (usada por #mapImage) só é preenchida
+    // DEPOIS de uma busca assíncrona (região/sub-mapa atual do jogador) —
+    // que em conexões mais lentas pode não terminar a tempo dos 350ms de
+    // atraso do hookRender. Checar getMapImageUrl() uma vez só e desistir
+    // deixava hasMap sempre false (e por isso a água nunca aparecia — ver
+    // debugLog "Não encontrei background-image"). Em vez disso, tenta de
+    // novo a cada 150ms por até ~6s antes de desistir de vez.
+    function waitForMapImageUrl(mapEl, cb, attemptsLeft) {
+        if (attemptsLeft === undefined) attemptsLeft = 40; // 40 × 150ms ≈ 6s
+        const url = getMapImageUrl(mapEl);
+        if (url) { cb(url); return; }
+        if (attemptsLeft <= 0) { cb(null); return; }
+        setTimeout(() => waitForMapImageUrl(mapEl, cb, attemptsLeft - 1), 150);
+    }
+
     function getMapImageUrl(mapEl) {
         const bg = window.getComputedStyle(mapEl).backgroundImage;
         const m = /url\(["']?(.*?)["']?\)/.exec(bg || '');
@@ -386,34 +402,37 @@
 
         _map3d = { scene, camera, renderer, canvas, cont: mapContainer, mapEl, plane, material, pfx: null, running: true, raf: 0, _onResize: null };
 
-        const imgUrl = getMapImageUrl(mapEl);
-        if (imgUrl) {
-            new THREE.TextureLoader().load(
-                imgUrl,
-                (tex) => {
-                    if (!_map3d || _map3d.mapEl !== mapEl) return; // tela trocada antes de a imagem terminar de carregar
-                    // flipY = false: compensa o flip de eixo Y da câmera
-                    // (applyCameraFrustum usa top=0/bottom=h de propósito,
-                    // pra bater com o Y "pra baixo" do CSS). Sem isso, o
-                    // flipY=true padrão do Three.js some com o flip da
-                    // câmera e a imagem aparece de cabeça pra baixo.
-                    tex.flipY = false;
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                    material.uniforms.map.value = tex;
-                    material.uniforms.hasMap.value = true;
-                    material.needsUpdate = true;
-                    debugLog('arte do mapa (textura principal) carregada OK: ' + imgUrl);
-                    // Só esconde o background CSS depois que a textura do
-                    // plane 3D está garantidamente pronta pra substitui-lo.
-                    mapEl.classList.add('mapsky-hide-bg');
-                },
-                undefined,
-                (err) => debugLog('FALHA ao carregar a arte do mapa (' + imgUrl + '): ' + (err && err.message ? err.message : err), true)
-            );
-        } else {
-            debugLog('Não encontrei background-image em #mapImage — mantendo o mapa como estava (sem o plane 3D).', true);
-        }
+        waitForMapImageUrl(mapEl, (imgUrl) => {
+            if (!_map3d || _map3d.mapEl !== mapEl) return; // tela trocada enquanto esperava
+            if (imgUrl) {
+                debugLog('background-image encontrado: ' + imgUrl);
+                new THREE.TextureLoader().load(
+                    imgUrl,
+                    (tex) => {
+                        if (!_map3d || _map3d.mapEl !== mapEl) return; // tela trocada antes de a imagem terminar de carregar
+                        // flipY = false: compensa o flip de eixo Y da câmera
+                        // (applyCameraFrustum usa top=0/bottom=h de propósito,
+                        // pra bater com o Y "pra baixo" do CSS). Sem isso, o
+                        // flipY=true padrão do Three.js some com o flip da
+                        // câmera e a imagem aparece de cabeça pra baixo.
+                        tex.flipY = false;
+                        tex.colorSpace = THREE.SRGBColorSpace;
+                        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        material.uniforms.map.value = tex;
+                        material.uniforms.hasMap.value = true;
+                        material.needsUpdate = true;
+                        debugLog('arte do mapa (textura principal) carregada OK: ' + imgUrl);
+                        // Só esconde o background CSS depois que a textura do
+                        // plane 3D está garantidamente pronta pra substitui-lo.
+                        mapEl.classList.add('mapsky-hide-bg');
+                    },
+                    undefined,
+                    (err) => debugLog('FALHA ao carregar a arte do mapa (' + imgUrl + '): ' + (err && err.message ? err.message : err), true)
+                );
+            } else {
+                debugLog('Não encontrei background-image em #mapImage mesmo após ~6s de espera — mantendo o mapa como estava (sem o plane 3D).', true);
+            }
+        });
 
         // Máscara e flow map: são dados (direção/força), não cor — não
         // passam por conversão sRGB. mesmo flipY=false da textura de cor,

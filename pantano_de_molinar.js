@@ -1160,7 +1160,7 @@ const MOB_WALK_SHEETS = {
  gorgomo: { 
       down: { 
         cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.4 }, side: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.6 }, side: { 
             cols: 6, rows: 6, frames: 36, scale: 1.1 } },
             
             javali: { 

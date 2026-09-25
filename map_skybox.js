@@ -68,6 +68,15 @@
     const MAP_NATURAL_W = 1500;
     const MAP_NATURAL_H = 1600;
 
+    // ── Água animada (flow map) no mapa-múndi — mesma técnica usada nos
+    // skyboxes de cada região (ver createWaterFlowMaterial em queda_fontana.js
+    // e nos demais arquivos de região: máscara branco/preto + flow map RG).
+    // Os dois PNGs abaixo precisam ser pintados PIXEL A PIXEL em cima da
+    // MESMA arte que hoje entra em --bg-mapa-aden (1500×1600) — mesma
+    // resolução, mesmo enquadramento. Troque as URLs depois de gerá-los.
+    const WATER_MASK_URL = 'https://aden-rpg.pages.dev/assets/water_mask_index.png';
+    const FLOW_MAP_URL   = 'https://aden-rpg.pages.dev/assets/flow_map_index.png';
+
     let _map3d = null; // { scene, camera, renderer, canvas, cont, mapEl, pfx, running, raf, _onResize }
 
     // ── CSS ──────────────────────────────────────────────────────────────
@@ -150,6 +159,9 @@
             const { x, y, s } = parseMapTransform(mapEl.style.transform);
             _map3d.plane.position.set(x, y, 0);
             _map3d.plane.scale.set(s, s, 1);
+            if (_map3d.material && _map3d.material.uniforms) {
+                _map3d.material.uniforms.time.value = ts * 0.001; // anima o flow map da água do mapa-múndi
+            }
 
             if (_map3d.pfx) {
                 try {
@@ -165,6 +177,107 @@
         }
 
         _map3d.raf = requestAnimationFrame(loop);
+    }
+
+    // ── Material de água animada (flow map) para o plane do mapa-múndi ──────
+    // Mesma técnica de createWaterFlowMaterial em queda_fontana.js (máscara +
+    // flow map RG, duas fases com crossfade), só que aplicada num PlaneGeometry
+    // em vez da esfera do skybox — troca o MeshBasicMaterial simples do plane.
+    //
+    // ⚠️ DIFERENÇA IMPORTANTE em relação à versão da esfera: lá, flowDir.y
+    // precisa ser invertido porque a UV da esfera cresce pra CIMA enquanto a
+    // ferramenta de pintura grava a direção em coordenadas de canvas (Y pra
+    // BAIXO). Aqui NÃO: o plane usa tex.flipY=false + câmera ortográfica com
+    // top=0/bottom=h (mesma convenção Y-pra-baixo do CSS — ver
+    // applyCameraFrustum), então a UV do plane (vUv.y) já cresce pra BAIXO,
+    // na mesma direção do canvas da ferramenta de pintura. Por isso o sinal
+    // de flowDir.y NÃO é invertido aqui. Se a água visualmente "escorrer" ao
+    // contrário do esperado depois de pintar o flow map, inverta o sinal de
+    // flowDir.y logo abaixo (troque `flowDir.y` por `-flowDir.y`) em vez de
+    // mexer na ferramenta de pintura ou no asset.
+    // ⚠️ THREE é recebido por parâmetro (não é global aqui): vem do
+    // `import('three')` DINÂMICO dentro de startMapSkybox(), então só
+    // existe como variável LOCAL naquela função — uma função declarada
+    // fora dela (como esta) não enxerga esse THREE por escopo léxico.
+    // Chamar THREE.ShaderMaterial direto aqui (sem parâmetro) estourava
+    // "ReferenceError: THREE is not defined" toda vez que essa função
+    // era chamada, o que quebrava a inicialização INTEIRA do canvas 3D —
+    // e o mapa caía de volta pro <div> com background-image CSS normal
+    // (por isso a água "não tinha efeito nenhum": o canvas 3D com a
+    // água nem chegava a existir).
+    function createWaterFlowMaterial(THREE, fallbackColor = 0x000000) {
+        const material = new THREE.ShaderMaterial({
+            side: THREE.DoubleSide, // mesmo motivo do MeshBasicMaterial original (ver comentário no plane)
+            uniforms: {
+                map:           { value: null },
+                flowMap:       { value: null },
+                maskMap:       { value: null },
+                hasMap:        { value: false },
+                hasWater:      { value: false },
+                fallbackColor: { value: new THREE.Color(fallbackColor) },
+                time:          { value: 0 },
+                flowSpeed:     { value: 0.18 },  // ciclos por segundo de cada fase
+                flowStrength:  { value: 0.03 },  // fração da UV que a água "escorre" antes de resetar
+                // ⚠️ Mantenha bem menor que a largura/altura (em UV) da própria
+                // área de água pintada no mask — senão a amostra "escorrega" pra
+                // fora da faixa d'água e mostra o terreno vizinho (ver aviso
+                // idêntico em queda_fontana.js).
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D map;
+                uniform sampler2D flowMap;
+                uniform sampler2D maskMap;
+                uniform bool hasMap;
+                uniform bool hasWater;
+                uniform vec3 fallbackColor;
+                uniform float time;
+                uniform float flowSpeed;
+                uniform float flowStrength;
+                varying vec2 vUv;
+
+                void main() {
+                    if (!hasMap) {
+                        gl_FragColor = vec4(fallbackColor, 1.0);
+                        return;
+                    }
+
+                    vec4 baseColor = texture2D(map, vUv);
+
+                    if (hasWater) {
+                        float mask = texture2D(maskMap, vUv).r;
+                        if (mask > 0.02) {
+                            // Direção do fluxo: RG do flow map, de [0,1] pra [-1,1].
+                            // (Sem flip de Y aqui — ver comentário grande acima da função.)
+                            vec2 flowDir = texture2D(flowMap, vUv).rg * 2.0 - 1.0;
+
+                            float phase0 = fract(time * flowSpeed);
+                            float phase1 = fract(time * flowSpeed + 0.5);
+
+                            vec2 uv0 = vUv - flowDir * phase0 * flowStrength;
+                            vec2 uv1 = vUv - flowDir * phase1 * flowStrength;
+
+                            vec4 tex0 = texture2D(map, uv0);
+                            vec4 tex1 = texture2D(map, uv1);
+
+                            float w = abs(phase0 - 0.5) * 2.0;
+                            vec4 flowColor = mix(tex0, tex1, w);
+
+                            baseColor = mix(baseColor, flowColor, mask);
+                        }
+                    }
+
+                    gl_FragColor = baseColor;
+                }
+            `,
+        });
+        return material;
     }
 
     function applyCameraFrustum(camera, w, h) {
@@ -225,11 +338,11 @@
         // (FrontSide), sumindo o plano (canvas fica preto). DoubleSide
         // resolve sem precisar desfazer o flip de eixo usado no resto do
         // arquivo (hotspots/transform já dependem dessa convenção).
-        const material = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+        const material = createWaterFlowMaterial(THREE, 0x000000);
         const plane = new THREE.Mesh(geometry, material);
         scene.add(plane);
 
-        _map3d = { scene, camera, renderer, canvas, cont: mapContainer, mapEl, plane, pfx: null, running: true, raf: 0, _onResize: null };
+        _map3d = { scene, camera, renderer, canvas, cont: mapContainer, mapEl, plane, material, pfx: null, running: true, raf: 0, _onResize: null };
 
         const imgUrl = getMapImageUrl(mapEl);
         if (imgUrl) {
@@ -245,8 +358,8 @@
                     tex.flipY = false;
                     tex.colorSpace = THREE.SRGBColorSpace;
                     tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                    material.map = tex;
-                    material.color.set(0xffffff);
+                    material.uniforms.map.value = tex;
+                    material.uniforms.hasMap.value = true;
                     material.needsUpdate = true;
                     // Só esconde o background CSS depois que a textura do
                     // plane 3D está garantidamente pronta pra substitui-lo.
@@ -258,6 +371,34 @@
         } else {
             console.warn('[MapSkybox] Não encontrei background-image em #mapImage — mantendo o mapa como estava (sem o plane 3D).');
         }
+
+        // Máscara e flow map: são dados (direção/força), não cor — não
+        // passam por conversão sRGB. mesmo flipY=false da textura de cor,
+        // pra ficarem pixel-alinhados com ela (ver comentário grande em
+        // createWaterFlowMaterial). Só liga o efeito de água (hasWater)
+        // quando os dois tiverem carregado; se algum falhar, o plane
+        // continua mostrando a arte normal, sem quebrar o resto da cena.
+        let maskTex = null, flowTex = null;
+        function tryEnableWater() {
+            if (!_map3d || _map3d.mapEl !== mapEl) return;
+            if (maskTex && flowTex) {
+                material.uniforms.maskMap.value = maskTex;
+                material.uniforms.flowMap.value = flowTex;
+                material.uniforms.hasWater.value = true;
+            }
+        }
+        new THREE.TextureLoader().load(
+            WATER_MASK_URL,
+            (tex) => { tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; maskTex = tex; tryEnableWater(); },
+            undefined,
+            (err) => console.error('[MapSkybox] Falha ao carregar o water mask do mapa-múndi:', err)
+        );
+        new THREE.TextureLoader().load(
+            FLOW_MAP_URL,
+            (tex) => { tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; flowTex = tex; tryEnableWater(); },
+            undefined,
+            (err) => console.error('[MapSkybox] Falha ao carregar o flow map do mapa-múndi:', err)
+        );
 
         // ── Pós-processamento SÓ PARA O MAPA ─────────────────────────────
         // domLayer e motionBlur ficam DESLIGADOS aqui de propósito:
@@ -310,7 +451,16 @@
         try {
             _map3d.scene.traverse((obj) => {
                 if (obj.material) {
-                    if (obj.material.map) obj.material.map.dispose();
+                    // ShaderMaterial não tem .map — as texturas (arte, mask,
+                    // flow) ficam nos uniforms (ver createWaterFlowMaterial).
+                    const u = obj.material.uniforms;
+                    if (u) {
+                        if (u.map && u.map.value) u.map.value.dispose();
+                        if (u.maskMap && u.maskMap.value) u.maskMap.value.dispose();
+                        if (u.flowMap && u.flowMap.value) u.flowMap.value.dispose();
+                    } else if (obj.material.map) {
+                        obj.material.map.dispose();
+                    }
                     obj.material.dispose();
                 }
                 if (obj.geometry) obj.geometry.dispose();

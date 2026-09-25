@@ -1158,27 +1158,27 @@ const MOB_WALK_SHEETS = {
   
   unicornio: { 
       down: { 
-        cols: 7, rows: 5, frames: 35 }, up: { 
-          cols: 6, rows: 6, frames: 36 }, side: { 
-            cols: 6, rows: 6, frames: 36 } },
+        cols: 7, rows: 5, frames: 35, scale: 1.2 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.2 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.2 } },
             
             satiro: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
             cols: 5, rows: 3, frames: 13, scale: 1.3 } },
             
             tigre_nix: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 5, rows: 5, frames: 22, scale: 1.3 } },
+        cols: 6, rows: 6, frames: 36, scale: 1.2 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.2 }, side: { 
+            cols: 5, rows: 5, frames: 22, scale: 1.2 } },
             
             fenix: { 
       down: { 
-        cols: 6, rows: 6, frames: 36, scale: 1.1 }, up: { 
-          cols: 6, rows: 6, frames: 36, scale: 1.1 }, side: { 
-            cols: 6, rows: 6, frames: 36, scale: 1.3 } },
+        cols: 6, rows: 6, frames: 36, scale: 1.3 }, up: { 
+          cols: 6, rows: 6, frames: 36, scale: 1.3 }, side: { 
+            cols: 6, rows: 6, frames: 36, scale: 1.1 } },
 };
 
 // Extrai o "nome-base" do mob a partir da URL do sprite (ex.:

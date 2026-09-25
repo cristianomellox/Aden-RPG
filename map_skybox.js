@@ -79,27 +79,9 @@
 
     let _map3d = null; // { scene, camera, renderer, canvas, cont, mapEl, pfx, running, raf, _onResize }
 
-    // ── Painel de log NA TELA (?debugWaterMask=1) ───────────────────────────
-    // Sem devtools (celular sem PC), não dá pra ler o console — então, no
-    // modo debug, a gente escreve as mesmas mensagens direto num <div>
-    // fixo no canto da tela, visível no próprio app.
-    let _debugOn = false;
+    // Pequeno helper de log — mantém as mensagens padronizadas com [MapSkybox].
     function debugLog(msg, isError) {
         console[isError ? 'error' : 'log']('[MapSkybox]', msg);
-        if (!_debugOn) return;
-        let box = document.getElementById('mapsky-debug-box');
-        if (!box) {
-            box = document.createElement('div');
-            box.id = 'mapsky-debug-box';
-            box.style.cssText = 'position:fixed;left:4px;top:4px;right:4px;max-height:45vh;overflow:auto;' +
-                'background:rgba(0,0,0,0.85);color:#0f0;font:11px/1.4 monospace;padding:8px;z-index:999999;' +
-                'border-radius:6px;white-space:pre-wrap;pointer-events:none;';
-            document.body.appendChild(box);
-        }
-        const line = document.createElement('div');
-        line.style.color = isError ? '#ff5555' : '#7fff7f';
-        line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
-        box.appendChild(line);
     }
 
     // ── CSS ──────────────────────────────────────────────────────────────
@@ -253,7 +235,6 @@
                 maskMap:       { value: null },
                 hasMap:        { value: false },
                 hasWater:      { value: false },
-                debugMask:     { value: false }, // ?debugWaterMask=1 — pinta o mask em vermelho por cima da arte, pra confirmar visualmente que carregou/alinhou
                 fallbackColor: { value: new THREE.Color(fallbackColor) },
                 time:          { value: 0 },
                 flowSpeed:     { value: 0.18 },  // ciclos por segundo de cada fase
@@ -276,7 +257,6 @@
                 uniform sampler2D maskMap;
                 uniform bool hasMap;
                 uniform bool hasWater;
-                uniform bool debugMask;
                 uniform vec3 fallbackColor;
                 uniform float time;
                 uniform float flowSpeed;
@@ -315,15 +295,6 @@
                     }
 
                     gl_FragColor = baseColor;
-
-                    // ?debugWaterMask=1 — pinta em vermelho translúcido onde o
-                    // mask está branco, IGNORANDO hasWater/flow, só pra provar
-                    // visualmente que a textura do mask carregou e está
-                    // alinhada com a arte (mesmo se o resto da água não animar).
-                    if (debugMask) {
-                        float m = texture2D(maskMap, vUv).r;
-                        gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0, 0.0, 0.0), m * 0.6);
-                    }
                 }
             `,
         });
@@ -348,15 +319,9 @@
     async function startMapSkybox() {
         if (_map3d) return; // já rodando
 
-        _debugOn = new URLSearchParams(location.search).get('debugWaterMask') === '1';
-        if (_debugOn) debugLog('iniciando startMapSkybox()...');
-
         const mapContainer = document.getElementById('mapContainer');
         const mapEl = document.getElementById('mapImage');
-        if (!mapContainer || !mapEl) {
-            if (_debugOn) debugLog('#mapContainer ou #mapImage não encontrado no DOM — abortando.', true);
-            return;
-        }
+        if (!mapContainer || !mapEl) return;
 
         let THREE, postfx;
         try {
@@ -395,8 +360,6 @@
         // resolve sem precisar desfazer o flip de eixo usado no resto do
         // arquivo (hotspots/transform já dependem dessa convenção).
         const material = createWaterFlowMaterial(THREE, 0x000000);
-        material.uniforms.debugMask.value = _debugOn;
-        debugLog('plane 3D + shader de água inicializados. debugWaterMask = ' + _debugOn);
         const plane = new THREE.Mesh(geometry, material);
         scene.add(plane);
 

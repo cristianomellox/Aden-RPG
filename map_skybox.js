@@ -79,6 +79,29 @@
 
     let _map3d = null; // { scene, camera, renderer, canvas, cont, mapEl, pfx, running, raf, _onResize }
 
+    // ── Painel de log NA TELA (?debugWaterMask=1) ───────────────────────────
+    // Sem devtools (celular sem PC), não dá pra ler o console — então, no
+    // modo debug, a gente escreve as mesmas mensagens direto num <div>
+    // fixo no canto da tela, visível no próprio app.
+    let _debugOn = false;
+    function debugLog(msg, isError) {
+        console[isError ? 'error' : 'log']('[MapSkybox]', msg);
+        if (!_debugOn) return;
+        let box = document.getElementById('mapsky-debug-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'mapsky-debug-box';
+            box.style.cssText = 'position:fixed;left:4px;top:4px;right:4px;max-height:45vh;overflow:auto;' +
+                'background:rgba(0,0,0,0.85);color:#0f0;font:11px/1.4 monospace;padding:8px;z-index:999999;' +
+                'border-radius:6px;white-space:pre-wrap;pointer-events:none;';
+            document.body.appendChild(box);
+        }
+        const line = document.createElement('div');
+        line.style.color = isError ? '#ff5555' : '#7fff7f';
+        line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+        box.appendChild(line);
+    }
+
     // ── CSS ──────────────────────────────────────────────────────────────
     function injectCSS() {
         if (document.getElementById('mapsky-css')) return;
@@ -214,6 +237,7 @@
                 maskMap:       { value: null },
                 hasMap:        { value: false },
                 hasWater:      { value: false },
+                debugMask:     { value: false }, // ?debugWaterMask=1 — pinta o mask em vermelho por cima da arte, pra confirmar visualmente que carregou/alinhou
                 fallbackColor: { value: new THREE.Color(fallbackColor) },
                 time:          { value: 0 },
                 flowSpeed:     { value: 0.18 },  // ciclos por segundo de cada fase
@@ -236,6 +260,7 @@
                 uniform sampler2D maskMap;
                 uniform bool hasMap;
                 uniform bool hasWater;
+                uniform bool debugMask;
                 uniform vec3 fallbackColor;
                 uniform float time;
                 uniform float flowSpeed;
@@ -274,6 +299,15 @@
                     }
 
                     gl_FragColor = baseColor;
+
+                    // ?debugWaterMask=1 — pinta em vermelho translúcido onde o
+                    // mask está branco, IGNORANDO hasWater/flow, só pra provar
+                    // visualmente que a textura do mask carregou e está
+                    // alinhada com a arte (mesmo se o resto da água não animar).
+                    if (debugMask) {
+                        float m = texture2D(maskMap, vUv).r;
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0, 0.0, 0.0), m * 0.6);
+                    }
                 }
             `,
         });
@@ -298,9 +332,15 @@
     async function startMapSkybox() {
         if (_map3d) return; // já rodando
 
+        _debugOn = new URLSearchParams(location.search).get('debugWaterMask') === '1';
+        if (_debugOn) debugLog('iniciando startMapSkybox()...');
+
         const mapContainer = document.getElementById('mapContainer');
         const mapEl = document.getElementById('mapImage');
-        if (!mapContainer || !mapEl) return;
+        if (!mapContainer || !mapEl) {
+            if (_debugOn) debugLog('#mapContainer ou #mapImage não encontrado no DOM — abortando.', true);
+            return;
+        }
 
         let THREE, postfx;
         try {
@@ -309,7 +349,7 @@
                 import('./postfx.js'),
             ]);
         } catch (e) {
-            console.error('[MapSkybox] Falha ao carregar three/postfx.js — mapa continua com o background CSS normal:', e);
+            debugLog('Falha ao carregar three/postfx.js — mapa continua com o background CSS normal: ' + e, true);
             return;
         }
 
@@ -339,6 +379,8 @@
         // resolve sem precisar desfazer o flip de eixo usado no resto do
         // arquivo (hotspots/transform já dependem dessa convenção).
         const material = createWaterFlowMaterial(THREE, 0x000000);
+        material.uniforms.debugMask.value = _debugOn;
+        debugLog('plane 3D + shader de água inicializados. debugWaterMask = ' + _debugOn);
         const plane = new THREE.Mesh(geometry, material);
         scene.add(plane);
 
@@ -361,15 +403,16 @@
                     material.uniforms.map.value = tex;
                     material.uniforms.hasMap.value = true;
                     material.needsUpdate = true;
+                    debugLog('arte do mapa (textura principal) carregada OK: ' + imgUrl);
                     // Só esconde o background CSS depois que a textura do
                     // plane 3D está garantidamente pronta pra substitui-lo.
                     mapEl.classList.add('mapsky-hide-bg');
                 },
                 undefined,
-                (err) => console.error('[MapSkybox] Falha ao carregar a imagem do mapa (mantendo o background CSS original):', err)
+                (err) => debugLog('FALHA ao carregar a arte do mapa (' + imgUrl + '): ' + (err && err.message ? err.message : err), true)
             );
         } else {
-            console.warn('[MapSkybox] Não encontrei background-image em #mapImage — mantendo o mapa como estava (sem o plane 3D).');
+            debugLog('Não encontrei background-image em #mapImage — mantendo o mapa como estava (sem o plane 3D).', true);
         }
 
         // Máscara e flow map: são dados (direção/força), não cor — não
@@ -385,19 +428,30 @@
                 material.uniforms.maskMap.value = maskTex;
                 material.uniforms.flowMap.value = flowTex;
                 material.uniforms.hasWater.value = true;
+                debugLog('água HABILITADA (hasWater=true) — mask + flow carregados com sucesso.');
             }
         }
         new THREE.TextureLoader().load(
             WATER_MASK_URL,
-            (tex) => { tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; maskTex = tex; tryEnableWater(); },
+            (tex) => {
+                tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+                maskTex = tex;
+                debugLog('water mask OK: ' + WATER_MASK_URL + ' (' + tex.image.width + 'x' + tex.image.height + ')');
+                tryEnableWater();
+            },
             undefined,
-            (err) => console.error('[MapSkybox] Falha ao carregar o water mask do mapa-múndi:', err)
+            (err) => debugLog('FALHA water mask: ' + WATER_MASK_URL + ' — ' + (err && err.message ? err.message : err), true)
         );
         new THREE.TextureLoader().load(
             FLOW_MAP_URL,
-            (tex) => { tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; flowTex = tex; tryEnableWater(); },
+            (tex) => {
+                tex.flipY = false; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+                flowTex = tex;
+                debugLog('flow map OK: ' + FLOW_MAP_URL + ' (' + tex.image.width + 'x' + tex.image.height + ')');
+                tryEnableWater();
+            },
             undefined,
-            (err) => console.error('[MapSkybox] Falha ao carregar o flow map do mapa-múndi:', err)
+            (err) => debugLog('FALHA flow map: ' + FLOW_MAP_URL + ' — ' + (err && err.message ? err.message : err), true)
         );
 
         // ── Pós-processamento SÓ PARA O MAPA ─────────────────────────────

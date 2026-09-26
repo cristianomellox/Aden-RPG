@@ -32,6 +32,12 @@
   const REDIRECT_ALL_PAGES_IF_BROWSER = true;
   const PAGES_EXEMPT_FROM_REDIRECT = ['download']; // sem ".html" — só usado se a flag acima for true
 
+  // ── Chave-mestra pra desativar a recarga (Pix/PayPal) quando você não ──
+  // estiver disponível pra confirmar os comprovantes. Com true, ao clicar
+  // em Pix ou PayPal o jogador vê um modal avisando que está indisponível,
+  // em vez de abrir o fluxo normal de pagamento.
+  const RECHARGE_DISABLED = false;
+
   // ─────────────────────────────────────────────
   // DETECÇÃO DE PLATAFORMA (definida em platform.js — inclua-o ANTES deste arquivo)
   // ─────────────────────────────────────────────
@@ -357,6 +363,21 @@
   }
 
   // ─────────────────────────────────────────────
+  // MODAL 0 — Recarga indisponível (RECHARGE_DISABLED = true)
+  // ─────────────────────────────────────────────
+  function showRechargeUnavailableModal() {
+    _createPayOverlay(`
+      <h3><strong>Recarga indisponível no momento.</strong></h3>
+      <p class="pay-desc">
+        A recarga está indisponível no momento. Tente novamente mais tarde.
+      </p>
+      <button class="pay-btn pay-btn-understood" id="pay-unavailable-ok">Entendi</button>
+    `);
+
+    document.getElementById('pay-unavailable-ok').addEventListener('click', _removePayOverlay);
+  }
+
+  // ─────────────────────────────────────────────
   // MODAL 1 — Confirmação de compra
   // ─────────────────────────────────────────────
   function showPayConfirmModal(pkgIndex, method) {
@@ -510,6 +531,9 @@
       </p>
       <p class="pay-gold-notice">
         O prazo de finalização é dentro do horário do Brasil (GMT -3) das 08:00 às 22:00.
+      </p>
+      <p class="pay-gold-notice">
+        O prazo para a entrega do ouro é de 15 a 30 minutos, podendo aumentar caso haja muita demanda.
       </p>
       <button class="pay-btn pay-btn-understood" id="pay-success-ok">Entendido</button>
     `);
@@ -996,6 +1020,10 @@
     };
 
     card.addEventListener('click', () => {
+      if (RECHARGE_DISABLED) {
+        showRechargeUnavailableModal();
+        return;
+      }
       showPayConfirmModal(pkgIndex, method);
     });
 

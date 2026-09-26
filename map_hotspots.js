@@ -1,8 +1,8 @@
 (function() {
     const hotspots = [
         // Adicione novos locais aqui seguindo o padrão:
-        { id: 'zion', name: 'Zion', top: 400, left: 70, width: 100, height: 90, url: '/zion.html', color: '#84e000' },
-        { id: 'dg_ruinas', name: 'Ruínas Ancestrais', top: 280, left: 85, width: 100, height: 100, url: '/dg_ruinas.html', color: '#b7a5ff' },
+        { id: 'zion', name: 'Zion', top: 280, left: 85, width: 100, height: 90, url: '/zion.html', color: '#84e000' },
+        { id: 'dg_ruinas', name: 'Ruínas Ancestrais', top: 400, left: 75, width: 100, height: 100, url: '/dg_ruinas.html', color: '#b7a5ff' },
         { id: 'solaris', name: 'Solaris', top: 365, left: 325, width: 100, height: 110, url: '/solaris.html', color: '#b7a5ff' },
         { id: 'floresta_mistica', name: 'Floresta Mística', top: 845, left: 130, width: 190, height: 180, url: '/floresta_mistica.html', color: '#ffc3c3' },
         { id: 'vale_arcano', name: 'Vale Arcano', top: 495, left: 320, width: 190, height: 120, url: '/vale_arcano.html', color: '#ffc3c3' },
@@ -23,7 +23,7 @@
         { id: 'arena', name: 'Arena', top: 665, left: 210, width: 148, height: 120, url: '/arena.html', color: '#b7a5ff' },
         { id: 'tdd', name: 'Torre da Desolação', top: 1180, left: 120, width: 148, height: 180, url: '/tdd.html', color: '#b7a5ff' },
         { id: 'capital', name: 'Capital', top: 515, left: 667, width: 220, height: 140, url: '/capital.html', color: '#84e000' },
-        { id: 'tavernas', name: '', top: 1070, left: 26, width: 58, height: 180, url: '/tavernas', color: '#b7a5ff' },
+        
     ];
 
     // ── Mapeamento: REGION_NAME (gravado no ACTIVITY_KEY) → URL da página ──────

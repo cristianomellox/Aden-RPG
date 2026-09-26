@@ -2515,7 +2515,7 @@ button, .btn {
     font-family: 'Cinzel', cursive, sans-serif; /* Ou outra fonte do seu jogo */
     text-align: center;
     pointer-events: none; /* Garante que o clique passe para o link <a> */
-    font-size: 1.1em!important;
+    font-size: 1.3em!important;
     text-transform: uppercase;
 }
 .footer-submenu-btn {

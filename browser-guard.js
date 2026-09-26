@@ -36,7 +36,7 @@
   // estiver disponível pra confirmar os comprovantes. Com true, ao clicar
   // em Pix ou PayPal o jogador vê um modal avisando que está indisponível,
   // em vez de abrir o fluxo normal de pagamento.
-  const RECHARGE_DISABLED = false;
+  const RECHARGE_DISABLED = true;
 
   // ─────────────────────────────────────────────
   // DETECÇÃO DE PLATAFORMA (definida em platform.js — inclua-o ANTES deste arquivo)

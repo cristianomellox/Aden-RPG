@@ -41,6 +41,46 @@
         'Vale Arcano'               : '/vale_arcano.html',
     };
 
+    // ── Legibilidade dos nomes dos hotspots ─────────────────────────────────────
+    // Causa do "apagado": (1) a camada de nuvens do map_effects.js (z-index 15,
+    // opacity .55) e a vinheta do postfx passavam POR CIMA dos hotspots (z 10);
+    // (2) o texto claro ficava sobre áreas claras (neve/neblina) sem contraste.
+    // Solução 100% CSS (custo de GPU ~zero): sobe o hotspot acima das camadas
+    // de efeito, adiciona contorno + halo escuro suave atrás de cada nome.
+    if (!document.getElementById('hotspot-label-style')) {
+        const st = document.createElement('style');
+        st.id = 'hotspot-label-style';
+        st.textContent = `
+            #mapImage .map-hotspot { z-index: 30 !important; }
+            #mapImage .hotspot-label {
+                position: relative;
+                isolation: isolate;
+                white-space: nowrap;
+                letter-spacing: 0.04em;
+                -webkit-text-stroke: 0.7px rgba(0, 0, 0, 0.9);
+                paint-order: stroke fill;
+                text-shadow:
+                    0 1px 2px rgba(0,0,0,1),
+                    0 0 4px rgba(0,0,0,1),
+                    0 0 9px rgba(0,0,0,0.95),
+                    0 0 16px rgba(0,0,0,0.7) !important;
+                filter: brightness(1.18) saturate(1.1);
+            }
+            #mapImage .hotspot-label::before {
+                content: '';
+                position: absolute;
+                inset: -10px -22px;
+                z-index: -1;
+                pointer-events: none;
+                background: radial-gradient(ellipse at center,
+                    rgba(0,0,0,0.55) 0%,
+                    rgba(0,0,0,0.32) 45%,
+                    rgba(0,0,0,0) 75%);
+            }
+        `;
+        document.head.appendChild(st);
+    }
+
     const ACTIVITY_KEY = 'aden_activity_state';
     const GPS_BADGE_ID = 'hunting-gps-badge';
 

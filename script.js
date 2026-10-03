@@ -4208,127 +4208,140 @@ cancelPurchaseBtn.addEventListener('click', () => {
 });
 
 // =======================================================================
-// === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
+// === CHECK-IN DIÁRIO (substitui o antigo "Assistir Vídeo" / AppCreator24) ===
+// =======================================================================
+// Regras:
+//  - 1 recompensa por dia (UTC) à escolha, de graça.
+//  - "Recolher tudo" custa 5 de ouro, entrega as recompensas restantes e
+//    pode ser usado mesmo depois de já ter recebido uma. Uso único por dia.
+// Estado do dia fica em players.daily_rewards_log.counts:
+//    checkin_crystals / checkin_common_card / checkin_sr_fragment /
+//    checkin_reforge_stone / checkin_all  (valor 1 = já resgatado)
 // =======================================================================
 
-async function checkRewardLimit() {
-    try {
-        let logData = null;
+const CHECKIN_TYPES = ['crystals', 'common_card', 'sr_fragment', 'reforge_stone'];
+const CHECKIN_ALL_COST = 5;
+const checkinButtons = document.querySelectorAll('.checkin-btn');
+const checkinClaimAllBtn = document.getElementById('checkinClaimAllBtn');
+let checkinBusy = false;
 
-        // 1. Tenta usar os dados já carregados na memória (ZERO EGRESS - Ideal)
-        if (currentPlayerData && currentPlayerData.daily_rewards_log) {
-            logData = currentPlayerData.daily_rewards_log;
-        } else {
-            // 2. Fallback: Tenta pegar do GlobalDB (IndexedDB)
-            // Alterado para evitar GET direto na tabela players e economizar egress
+async function getCheckinCounts() {
+    let logData = null;
+
+    if (currentPlayerData && currentPlayerData.daily_rewards_log) {
+        logData = currentPlayerData.daily_rewards_log;
+    } else {
+        try {
             const cachedPlayer = await GlobalDB.getPlayer();
             if (cachedPlayer && cachedPlayer.daily_rewards_log) {
-                 logData = cachedPlayer.daily_rewards_log;
+                logData = cachedPlayer.daily_rewards_log;
             } else {
-                 // Se não tiver no DB Global, tenta LocalStorage Legacy
-                 try {
-                     const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
-                     if (legacyCache && legacyCache.data && legacyCache.data.daily_rewards_log) {
-                        logData = legacyCache.data.daily_rewards_log;
-                     }
-                 } catch(e) {}
+                const legacy = JSON.parse(localStorage.getItem('player_data_cache'));
+                if (legacy && legacy.data && legacy.data.daily_rewards_log) {
+                    logData = legacy.data.daily_rewards_log;
+                }
             }
-            // Se ainda assim não achar, não faz requisição de rede para isso.
-            // O fetchAndDisplayPlayerInfo principal cuidará de buscar e atualizar a UI depois.
-        }
+        } catch (e) {}
+    }
 
-        const log = logData || {}; 
-        const counts = (log && log.counts) ? log.counts : {};
-        const logDateStr = log && log.date ? String(log.date) : null;
+    const todayUtc = new Date().toISOString().split('T')[0];
+    const logDate = logData && logData.date ? String(logData.date).split('T')[0] : null;
+    if (!logData || logDate !== todayUtc) return {};   // log de outro dia = nada resgatado hoje
+    return logData.counts || {};
+}
 
-        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+async function renderCheckin() {
+    try {
+        const counts = await getCheckinCounts();
+        const isClaimed = (t) => parseInt(counts['checkin_' + t], 10) === 1;
+        const allUsed = parseInt(counts['checkin_all'], 10) === 1;
+        const anyClaimed = CHECKIN_TYPES.some(isClaimed);
+        const everythingClaimed = CHECKIN_TYPES.every(isClaimed);
 
-        // Helpers visuais
-        const enableBtn = (btn) => {
-            btn.disabled = false;
-            btn.style.filter = "";
-            btn.style.pointerEvents = "";
-            if (btn.getAttribute('data-original-text')) {
-                btn.textContent = btn.getAttribute('data-original-text');
-            } else {
-                btn.setAttribute('data-original-text', btn.textContent);
-            }
-        };
-
-        const disableBtn = (btn) => {
-             btn.disabled = true;
-             btn.style.filter = "grayscale(100%) brightness(60%)";
-             btn.style.pointerEvents = "none";
-             btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
-             btn.textContent = "Limite atingido";
-        };
-
-        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
-            watchVideoButtons.forEach(btn => enableBtn(btn));
-            return;
-        }
-
-        watchVideoButtons.forEach(btn => {
+        checkinButtons.forEach(btn => {
             const type = btn.getAttribute('data-reward');
-            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
-            if (isNaN(count) || count < 5) {
-                enableBtn(btn);
-            } else {
-                disableBtn(btn);
-            }
+            const card = btn.closest('.video-reward-card');
+            const claimed = isClaimed(type);
+
+            btn.disabled = claimed || anyClaimed || allUsed;
+            btn.textContent = claimed ? 'Recebido' : 'Receber';
+
+            // Cards que NÃO foram recebidos ficam cinza assim que o check-in é feito
+            const grayOut = !claimed && (anyClaimed || allUsed);
+            if (card) card.classList.toggle('checkin-disabled', grayOut);
+            if (card) card.classList.toggle('checkin-claimed', claimed);
         });
+
+        if (checkinClaimAllBtn) {
+            checkinClaimAllBtn.disabled = allUsed || everythingClaimed;
+        }
     } catch (e) {
-        console.error("Erro ao verificar limites de vídeo:", e);
+        console.error('Erro ao renderizar check-in:', e);
     }
 }
 
-const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+// Aplica o retorno da RPC no cache/UI sem refetch (zero egress)
+async function applyCheckinResult(data) {
+    const updates = {};
+    if (typeof data.new_crystals === 'number') updates.crystals = data.new_crystals;
+    if (typeof data.new_gold === 'number') updates.gold = data.new_gold;
+    if (data.new_log) updates.daily_rewards_log = data.new_log;
 
-watchVideoButtons.forEach(button => {
-    button.addEventListener('click', async () => {
-        const rewardType = button.getAttribute('data-reward');
-        button.disabled = true;
-        showFloatingMessage('Preparando sua recompensa...');
+    if (Object.keys(updates).length > 0) updateLocalPlayerData(updates);
 
-        try {
-            const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
-                p_reward_type: rewardType
-            });
+    if (data.inventory_updates && data.inventory_updates.length > 0 && data.new_timestamp) {
+        await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+    }
+    await renderCheckin();
+}
 
-            if (rpcError) {
-                if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
-                    showFloatingMessage('Você já atingiu o limite diário para esta recompensa.');
-                    checkRewardLimit();
-                } else {
-                    showFloatingMessage(`Erro: ${rpcError.message}`);
-                }
-                button.disabled = false;
-                return;
-            }
+async function claimCheckin(rewardType) {
+    if (checkinBusy) return;
+    checkinBusy = true;
+    checkinButtons.forEach(b => b.disabled = true);
+    if (checkinClaimAllBtn) checkinClaimAllBtn.disabled = true;
 
-            localStorage.setItem('pending_reward_token', token); //
+    try {
+        const { data, error } = await supabaseClient.rpc('claim_daily_checkin', {
+            p_reward_type: rewardType
+        });
+        if (error) throw error;
 
-            const triggerId = `trigger-${rewardType}-ad`;
-            const triggerLink = document.getElementById(triggerId);
+        showFloatingMessage(data.message || 'Recompensa recebida!');
+        await applyCheckinResult(data);
+    } catch (error) {
+        showFloatingMessage(`Erro: ${error.message || 'Desconhecido'}`);
+        await renderCheckin(); // restaura o estado real dos botões
+    } finally {
+        checkinBusy = false;
+    }
+}
 
-            if (triggerLink) {
-                triggerLink.click();
-            } else {
-                throw new Error(`Gatilho para recompensa '${rewardType}' não encontrado.`);
-            }
-
-        } catch (error) {
-            showFloatingMessage(`Erro: ${error.message}`);
-            localStorage.removeItem('pending_reward_token'); //
-        } finally {
-            setTimeout(() => { button.disabled = false; }, 3000);
-        }
-    });
+checkinButtons.forEach(btn => {
+    btn.addEventListener('click', () => claimCheckin(btn.getAttribute('data-reward')));
 });
 
-setTimeout(() => {
-    checkRewardLimit();
-}, 600);
+if (checkinClaimAllBtn) {
+    checkinClaimAllBtn.addEventListener('click', () => {
+        if (checkinBusy) return;
+
+        confirmModalMessage.innerHTML = `Deseja recolher todas as recompensas por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${CHECKIN_ALL_COST} de ouro?`;
+
+        purchaseHandler = async () => {
+            purchaseConfirmModal.style.display = 'none';
+            purchaseHandler = null;
+            await claimCheckin('all');
+        };
+
+        purchaseConfirmModal.style.display = 'flex';
+    });
+}
+
+// Re-renderiza ao abrir a aba (também cobre ?action=openShopVideo, que dispara .click() na aba)
+const btnShopVideoTabEl = document.getElementById('btnShopVideoTab');
+if (btnShopVideoTabEl) btnShopVideoTabEl.addEventListener('click', () => renderCheckin());
+
+setTimeout(() => { renderCheckin(); }, 600);
 
 
 /* === MAP INTERACTION: DRAG + INÉRCIA + PINCH-TO-ZOOM === */

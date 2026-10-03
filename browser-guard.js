@@ -886,7 +886,7 @@
   document.addEventListener('DOMContentLoaded', setupNavInterceptors);
 
   // ─────────────────────────────────────────────
-  // 4A. LOJA — Aba "Assistir Vídeo" BLOQUEADA
+  // 4A. LOJA — Interceptadores das abas
   // ─────────────────────────────────────────────
   function setupShopInterceptors() {
     document.addEventListener('click', e => {
@@ -895,19 +895,7 @@
 
       const tab = btn.getAttribute('data-tab');
 
-      // ── Aba de Vídeo: bloqueada só no navegador comum (PWA/TWA liberado) ──
-      if (tab === 'shop-video') {
-        if (platform.isBrowser) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          showModal(
-            'O recurso "Assistir Vídeo" está bloqueado na versão de navegador. Instale o app para assistir.',
-            'Entendi',
-            null
-          );
-        }
-        return;
-      }
+      // ── Aba Check-in (shop-video): liberada em todas as plataformas ──
 
       // ── Aba de Recarga: Pix/PayPal no navegador e no PWA; TWA/app legado mantém "Em breve" ──
       if (tab === 'shop-recharge' && !platform.showsStoreComingSoon) {

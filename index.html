@@ -708,7 +708,7 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
         <div class="shop-tabs">
             <button class="shop-tab-btn active" data-tab="shop-main">Loja</button>
             <button class="shop-tab-btn" data-tab="shop-recharge">Recarga</button>
-            <button class="shop-tab-btn" data-tab="shop-video" id="btnShopVideoTab">Assistir Vídeo</button>
+            <button class="shop-tab-btn" data-tab="shop-video" id="btnShopVideoTab">Check-in</button>
         </div>
 
         <div id="shop-main" class="shop-content">
@@ -900,32 +900,36 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
         </div>
 
         <div id="shop-video" class="shop-content" style="display:none;">
-             <h2>Recompensas Diárias</h2>
-             <p>Assista a um vídeo para ganhar prêmios! Limite de 5 de cada por dia.</p>
+             <button id="checkinClaimAllBtn" class="checkin-claim-all-btn" type="button">
+                 Recolher tudo
+                 <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" width="15" height="15">
+             </button>
+             <h2>Check-in Diário</h2>
+             <p>Faça o Check-in escolhendo uma dentre as recompensas abaixo</p>
              <div class="video-rewards-container">
-                
-                <div class="video-reward-card">
+
+                <div class="video-reward-card" data-checkin="crystals">
                     <img data-src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais">
-                    <span>Cristais<br> x100</span>
-                    <button class="watch-video-btn" data-reward="crystals" data-url="/reward_cristais.html">Assistir</button>
+                    <span>Cristais<br> x500</span>
+                    <button class="checkin-btn" data-reward="crystals">Receber</button>
                 </div>
-                
-                <div class="video-reward-card">
+
+                <div class="video-reward-card" data-checkin="common_card">
                     <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum">
-                    <span>Cartão Comum x1</span>
-                    <button class="watch-video-btn" data-reward="common_card" data-url="/reward_cartaocomum.html">Assistir</button>
+                    <span>Cartão Comum x5</span>
+                    <button class="checkin-btn" data-reward="common_card">Receber</button>
                 </div>
 
-                <div class="video-reward-card">
+                <div class="video-reward-card" data-checkin="sr_fragment">
                     <img src="https://aden-rpg.pages.dev/assets/itens/fragmento_sr.webp" alt="Fragmento SR">
-                    <span>Fragmento SR x1</span>
-                    <button class="watch-video-btn" data-reward="sr_fragment" data-url="/reward_fragsr.html">Assistir</button>
+                    <span>Fragmento SR x3</span>
+                    <button class="checkin-btn" data-reward="sr_fragment">Receber</button>
                 </div>
 
-                <div class="video-reward-card">
+                <div class="video-reward-card" data-checkin="reforge_stone">
                     <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição">
-                    <span>Pedra de Refundição x4</span>
-                    <button class="watch-video-btn" data-reward="reforge_stone" data-url="/reward_pedra.html">Assistir</button>
+                    <span>Pedra de Refundição x15</span>
+                    <button class="checkin-btn" data-reward="reforge_stone">Receber</button>
                 </div>
 
              </div>
@@ -994,18 +998,6 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
             <button id="confirmPurchaseFinalBtn">SIM</button>
         </div>
     </div>
-</div>
-
-<div id="rewardVideoModal" class="modal-container" style="display:none; background-color: #000;">
-    <div class="modal-content" style="padding: 0; background: transparent; width: 100%; height: 100%;">
-        <iframe id="rewardFrame" allow="fullscreen" style="width: 100vw; height: 100vh; border: none;"></iframe>
-    </div>
-</div>
-<div id="appcreator-triggers" style="display: none;">
-    <a id="trigger-crystals-ad" href="go:ancr"></a>
-    <a id="trigger-common_card-ad" href="go:anca"></a>
-    <a id="trigger-sr_fragment-ad" href="go:anfr"></a>
-    <a id="trigger-reforge_stone-ad" href="go:anpr"></a>
 </div>
 
 <div id="pvModal" class="modal-container" style="display:none;">

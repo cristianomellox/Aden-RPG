@@ -5324,3 +5324,45 @@ button, .btn {
     cursor: pointer;
     transition: background-color 0.2s;
 }
+
+
+/* ═══════════════════════ CHECK-IN (aba shop-video) ═══════════════════════ */
+#shop-video { position: relative; }
+
+.checkin-claim-all-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: auto !important;
+    padding: 6px 10px !important;
+    font-size: 0.8em !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+    background: linear-gradient(180deg, #a259e6 0%, #7b2fc9 50%, #4e1a8a 100%) !important;
+    border: 1px solid #3a1368 !important;
+    border-radius: 8px !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5) !important;
+    cursor: pointer;
+    z-index: 2;
+}
+.checkin-claim-all-btn img { width: 15px; height: 15px; object-fit: contain; }
+.checkin-claim-all-btn:disabled {
+    filter: grayscale(100%) brightness(60%);
+    pointer-events: none;
+    cursor: default;
+}
+
+/* Cards não escolhidos após o check-in */
+.video-reward-card.checkin-disabled {
+    filter: grayscale(100%) brightness(70%);
+    pointer-events: none;
+}
+.video-reward-card.checkin-disabled img { filter: grayscale(100%); }
+
+/* Botões "Receber" desabilitados (inclusive o card já recebido) */
+.checkin-btn:disabled { cursor: default; }
+.video-reward-card.checkin-claimed .checkin-btn:disabled { filter: brightness(85%); }
+.video-reward-card.checkin-disabled .checkin-btn:disabled { filter: grayscale(100%); }

@@ -79,7 +79,9 @@ function mapLoadData(arr, uid) {
         current_monster_health: arr[5],
         remaining_attacks_in_combat: arr[6],
         last_afk_start_time: arr[7] ? new Date(arr[7] * 1000).toISOString() : new Date().toISOString(),
-        level: arr[8]
+        level: arr[8],
+        // Compras de tentativa feitas hoje (UTC) — vem do servidor
+        afk_buys: { date: new Date().toISOString().split('T')[0], count: arr[9] || 0 }
     };
 }
 
@@ -410,7 +412,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ── STATE ──────────────────────────────────────────────────────
     let playerAfkData    = {};
     let lastStageClicked = null;
-    const ATTEMPT_COST   = 5; // ouro por tentativa extra
+    const MAX_ATTEMPT_BUYS = 9; // teto diário de compras
+    // Preço progressivo: compras 1-3 = 5, 4-6 = 10, 7-9 = 15 de ouro
+    const attemptCostFor = (boughtToday) => 5 * (Math.floor(boughtToday / 3) + 1);
+    const GOLD_IMG = '<img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" width="16" height="16" style="vertical-align:-2px;">';
+    function getBuysToday() {
+        const today = new Date().toISOString().split('T')[0];
+        const b = playerAfkData.afk_buys;
+        return (b && b.date === today) ? (b.count || 0) : 0;
+    }
+    function setBuysToday(count) {
+        playerAfkData.afk_buys = { date: new Date().toISOString().split('T')[0], count };
+    }
     let afkStartTime     = null;
     let timerInterval;
     let localSimulationInterval;
@@ -857,17 +870,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (buyAttemptBtn)        buyAttemptBtn.style.display        = 'none';
 
         if (attempts <= 0) {
-            // Sem tentativas: oferece compra por ouro
-            const gold = playerAfkData.gold || 0;
-            const canAfford = gold >= ATTEMPT_COST;
+            // Sem tentativas: oferece compra por ouro (teto de 9/dia, preço progressivo)
+            const bought = getBuysToday();
             if (adventureModalTitle) adventureModalTitle.textContent = 'Tentativas Esgotadas';
-            if (adventureModalDesc)  adventureModalDesc.textContent  = canAfford
-                ? `Você não tem mais tentativas diárias.\nDeseja comprar +1 tentativa por ${ATTEMPT_COST} de ouro?`
-                : `Você não tem mais tentativas diárias.\nSão necessários ${ATTEMPT_COST} de ouro para comprar +1 tentativa.`;
-            if (buyAttemptBtn) {
-                buyAttemptBtn.style.display = 'block';
-                buyAttemptBtn.disabled = !canAfford;
-                buyAttemptBtn.style.opacity = canAfford ? '' : '0.5';
+
+            if (bought >= MAX_ATTEMPT_BUYS) {
+                if (adventureModalDesc) adventureModalDesc.textContent =
+                    `Você atingiu o limite diário de ${MAX_ATTEMPT_BUYS} compras de tentativas. Volte amanhã!`;
+            } else {
+                const cost = attemptCostFor(bought);
+                const canAfford = (playerAfkData.gold || 0) >= cost;
+                if (adventureModalDesc) adventureModalDesc.textContent = canAfford
+                    ? `Você não tem mais tentativas diárias.\nDeseja comprar +1 tentativa por ${cost} de ouro? (Compra ${bought + 1}/${MAX_ATTEMPT_BUYS} de hoje)`
+                    : `Você não tem mais tentativas diárias.\nSão necessários ${cost} de ouro para comprar +1 tentativa. (Compra ${bought + 1}/${MAX_ATTEMPT_BUYS} de hoje)`;
+                if (buyAttemptBtn) {
+                    const costSpan = document.getElementById('buy-attempt-cost');
+                    if (costSpan) costSpan.textContent = `x${cost}`;
+                    buyAttemptBtn.style.display = 'block';
+                    buyAttemptBtn.disabled = !canAfford;
+                    buyAttemptBtn.style.opacity = canAfford ? '' : '0.5';
+                }
             }
 
         } else if (stageNum === currentStage) {
@@ -1203,11 +1225,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {}
     }
 
+    // Abre a confirmação SEMPRE com o preço/contador atualizados
+    function openBuyConfirm() {
+        const bought = getBuysToday();
+        const msg = document.getElementById("buy-attempt-msg");
+        if (bought >= MAX_ATTEMPT_BUYS) {
+            reopenStageModal();
+            return;
+        }
+        const cost = attemptCostFor(bought);
+        if (msg) msg.innerHTML =
+            `Deseja comprar +1 tentativa por ${cost} ${GOLD_IMG} de ouro?<br>` +
+            `<small style="color:#aaa;">Compra ${bought + 1} de ${MAX_ATTEMPT_BUYS} hoje</small>`;
+        if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
+        if (buyAttemptModal) buyAttemptModal.style.display = "flex";
+    }
+
     if (buyAttemptBtn) {
-        buyAttemptBtn.addEventListener("click", () => {
-            if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
-            if (buyAttemptModal) buyAttemptModal.style.display = "flex";
-        });
+        buyAttemptBtn.addEventListener("click", openBuyConfirm);
     }
 
     if (buyAttemptNoBtn) {
@@ -1222,7 +1257,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             buyAttemptYesBtn.disabled = true;
             if (buyAttemptNoBtn) buyAttemptNoBtn.disabled = true;
             try {
-                const { data, error } = await supabase.rpc('buy_afk_attempt');
+                const expectedCost = attemptCostFor(getBuysToday());
+                const { data, error } = await supabase.rpc('buy_afk_attempt', { p_expected_cost: expectedCost });
                 if (buyAttemptModal) buyAttemptModal.style.display = "none";
 
                 if (error) {
@@ -1231,16 +1267,23 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
-                // Atualiza estado local (zero egress) com o retorno da RPC
+                // Sincroniza estado local com o servidor (zero egress)
                 if (typeof data.new_gold === 'number')     playerAfkData.gold = data.new_gold;
                 if (typeof data.new_attempts === 'number') playerAfkData.daily_attempts_left = data.new_attempts;
+                if (typeof data.bought_today === 'number') setBuysToday(data.bought_today);
                 await saveToCache(playerAfkData);
                 syncHomeGoldCache(playerAfkData.gold);
                 renderPlayerData();
 
                 if (data.success === false) {
-                    // Ex.: o dia virou e as tentativas já foram renovadas
-                    resultText.textContent = "Você ainda possui tentativas disponíveis.";
+                    if (data.error === 'PRICE_CHANGED') {
+                        // Contador local estava defasado (outro aparelho / novo dia): reabre com o valor correto
+                        openBuyConfirm();
+                        return;
+                    }
+                    resultText.textContent = data.error === 'LIMIT_REACHED'
+                        ? `Você atingiu o limite diário de ${MAX_ATTEMPT_BUYS} compras de tentativas. Volte amanhã!`
+                        : "Você ainda possui tentativas disponíveis.";
                     resultModal.style.display = "flex";
                     return;
                 }

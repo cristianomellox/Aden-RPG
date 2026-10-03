@@ -593,7 +593,7 @@
       <button id="buy-attempt-btn" class="btn" style="display:none;">
         <span>Comprar +1 tentativa</span>
         <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" width="15" height="15" style="vertical-align:-2px;margin:0 3px;">
-        <span>x5</span>
+        <span id="buy-attempt-cost">x5</span>
       </button>
       <button id="close-adventure-options" class="action-btn secondary">Cancelar</button>
     </div>
@@ -606,9 +606,7 @@
 <div id="buy-attempt-modal" class="modal-container">
   <div class="modal-content" style="max-width:340px;text-align:center;">
     <h2 class="modal-title">Comprar Tentativa</h2>
-    <p id="buy-attempt-msg" style="text-align:center;">
-      Deseja comprar +1 tentativa por 5 <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" width="16" height="16" style="vertical-align:-2px;"> de ouro?
-    </p>
+    <p id="buy-attempt-msg" style="text-align:center;"></p>
     <div class="modal-btn-row">
       <button id="buy-attempt-no" class="action-btn secondary">Não</button>
       <button id="buy-attempt-yes" class="action-btn green-btn">Sim</button>
@@ -685,7 +683,13 @@
     <div class="modal-section">
       <h4 class="modal-section-title" style="color:#ff9800;border-color:#ff9800;">4. Tentativas Diárias</h4>
       <p>Você tem <strong style="color:#ffd700">5 tentativas</strong> por dia (resetam às <strong style="color:#ffd700">21h de Brasília</strong>).</p>
-      <p style="margin-top:6px;">Ao esgotar as tentativas, você pode <strong style="color:#ffd700">comprar tentativas extras por 5 de ouro</strong> cada.</p>
+      <p style="margin-top:6px;">Ao esgotar as tentativas, você pode <strong style="color:#ffd700">comprar até 9 tentativas extras por dia</strong>, com preço crescente:</p>
+      <ul style="margin-top:6px;">
+        <li>1ª a 3ª compra: <strong style="color:#ffd700">5 de ouro</strong> cada</li>
+        <li>4ª a 6ª compra: <strong style="color:#ffd700">10 de ouro</strong> cada</li>
+        <li>7ª a 9ª compra: <strong style="color:#ffd700">15 de ouro</strong> cada</li>
+      </ul>
+      <p style="margin-top:6px;">O contador de compras também reinicia no reset diário.</p>
     </div>
 
     <div style="text-align:center;margin-top:20px;padding-top:12px;border-top:1px solid #333;">

@@ -79,8 +79,7 @@ function mapLoadData(arr, uid) {
         current_monster_health: arr[5],
         remaining_attacks_in_combat: arr[6],
         last_afk_start_time: arr[7] ? new Date(arr[7] * 1000).toISOString() : new Date().toISOString(),
-        level: arr[8],
-        daily_rewards_log: arr[9]
+        level: arr[8]
     };
 }
 
@@ -362,8 +361,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const collectBtn           = document.getElementById("hud-collect-btn");
     // Legacy ID kept for compatibility (aliased to hud-collect-btn):
     const collectBtnLegacy     = document.getElementById("collect-rewards-idle"); // null — we alias
-    const watchAdAttemptBtn    = document.getElementById("watch-ad-attempt-btn");
-    const triggerAdLink        = document.getElementById("trigger-afk_attempt-ad");
+    const buyAttemptBtn        = document.getElementById("buy-attempt-btn");
+    const buyAttemptModal      = document.getElementById("buy-attempt-modal");
+    const buyAttemptYesBtn     = document.getElementById("buy-attempt-yes");
+    const buyAttemptNoBtn      = document.getElementById("buy-attempt-no");
     const dailyAttemptsLeftSpan= document.getElementById("daily-attempts-left");
     const playerTotalXpSpan    = document.getElementById("player-total-xp");
     const playerTotalGoldSpan  = document.getElementById("player-total-gold");
@@ -408,6 +409,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ── STATE ──────────────────────────────────────────────────────
     let playerAfkData    = {};
+    let lastStageClicked = null;
+    const ATTEMPT_COST   = 5; // ouro por tentativa extra
     let afkStartTime     = null;
     let timerInterval;
     let localSimulationInterval;
@@ -646,11 +649,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
                     if (resetData.reset_performed) {
                         playerAfkData.last_attempt_reset = new Date().toISOString();
-                        // Limpa o daily_rewards_log do cache local para que
-                        // videoLimitReached seja recalculado corretamente.
-                        // Sem isso, um log stale de dias anteriores mantinha
-                        // o botão de anúncio escondido mesmo após o reset no backend.
-                        playerAfkData.daily_rewards_log = null;
                     }
                     saveToCache(playerAfkData);
                 }
@@ -848,6 +846,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const attempts     = playerAfkData.daily_attempts_left ?? 0;
 
         if (stageNum > currentStage) return; // locked
+        lastStageClicked = stageNum;
 
         // Update tag
         if (dailyAttemptsDisplay) dailyAttemptsDisplay.textContent = attempts;
@@ -855,20 +854,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Show correct button layout
         if (btnFarmPrevious)      btnFarmPrevious.style.display      = 'none';
         if (btnChallengeCurrent)  btnChallengeCurrent.style.display  = 'none';
-        if (watchAdAttemptBtn)    watchAdAttemptBtn.style.display    = 'none';
+        if (buyAttemptBtn)        buyAttemptBtn.style.display        = 'none';
 
         if (attempts <= 0) {
-            // Check video limit
-            let videoLimitReached = false;
-            if (playerAfkData.daily_rewards_log?.counts) {
-                if ((playerAfkData.daily_rewards_log.counts['afk_attempt'] || 0) >= 5) videoLimitReached = true;
-            }
+            // Sem tentativas: oferece compra por ouro
+            const gold = playerAfkData.gold || 0;
+            const canAfford = gold >= ATTEMPT_COST;
             if (adventureModalTitle) adventureModalTitle.textContent = 'Tentativas Esgotadas';
-            if (adventureModalDesc)  adventureModalDesc.textContent  =
-                videoLimitReached
-                ? 'Você atingiu o limite diário de tentativas e anúncios. Volte amanhã!'
-                : 'Você não tem mais tentativas diárias.\nAssista um anúncio para ganhar +1 tentativa?';
-            if (!videoLimitReached && watchAdAttemptBtn) watchAdAttemptBtn.style.display = 'block';
+            if (adventureModalDesc)  adventureModalDesc.textContent  = canAfford
+                ? `Você não tem mais tentativas diárias.\nDeseja comprar +1 tentativa por ${ATTEMPT_COST} de ouro?`
+                : `Você não tem mais tentativas diárias.\nSão necessários ${ATTEMPT_COST} de ouro para comprar +1 tentativa.`;
+            if (buyAttemptBtn) {
+                buyAttemptBtn.style.display = 'block';
+                buyAttemptBtn.disabled = !canAfford;
+                buyAttemptBtn.style.opacity = canAfford ? '' : '0.5';
+            }
 
         } else if (stageNum === currentStage) {
             // Challenge
@@ -1184,68 +1184,79 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
     });
 
-    // Watch ad button
-    if (watchAdAttemptBtn) {
-        watchAdAttemptBtn.addEventListener("click", async () => {
-            watchAdAttemptBtn.disabled = true;
-            watchAdAttemptBtn.textContent = "Carregando...";
-            try {
-                const { data: token, error: rpcError } = await supabase.rpc('generate_reward_token', { p_reward_type: 'afk_attempt' });
-                if (rpcError) {
-                    resultText.textContent = rpcError.message.toLowerCase().includes('limite')
-                        ? "Limite diário de anúncios atingido!"
-                        : rpcError.message;
-                    if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
-                    resultModal.style.display = "flex";
-                    // Esconde o botão e atualiza o modal para mostrar "anúncios esgotados".
-                    // O visibilitychange restaura o botão quando o jogador retornar ao app
-                    // no dia seguinte, resolvendo o bug de travamento de 3 dias.
-                    if (watchAdAttemptBtn) watchAdAttemptBtn.style.display = 'none';
-                    if (adventureModalDesc) adventureModalDesc.textContent =
-                        'Você atingiu o limite diário de tentativas e anúncios. Volte amanhã!';
-                    return;
+    // ── COMPRA DE TENTATIVA (substitui o antigo anúncio recompensado) ──
+    function reopenStageModal() {
+        if (lastStageClicked != null) handleStageClick(lastStageClicked);
+    }
+
+    function syncHomeGoldCache(gold) {
+        // Mantém o cache legado da Home com o ouro correto
+        try {
+            const cachedStr = localStorage.getItem('player_data_cache');
+            if (cachedStr) {
+                const obj = JSON.parse(cachedStr);
+                if (obj && obj.data) {
+                    obj.data.gold = gold;
+                    localStorage.setItem('player_data_cache', JSON.stringify(obj));
                 }
-                localStorage.setItem('pending_reward_token', token);
-                sessionStorage.setItem('ad_in_progress', String(Date.now()));
-                if (triggerAdLink) triggerAdLink.click();
-            } catch(e) {
-                resultText.textContent = "Erro ao conectar com o servidor.";
-                resultModal.style.display = "flex";
-                watchAdAttemptBtn.disabled = false;
-                watchAdAttemptBtn.textContent = "📺 Assistir Anúncio (+1 tentativa)";
             }
+        } catch (e) {}
+    }
+
+    if (buyAttemptBtn) {
+        buyAttemptBtn.addEventListener("click", () => {
+            if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
+            if (buyAttemptModal) buyAttemptModal.style.display = "flex";
         });
     }
 
-    // ── FALLBACK: redireciona para reward_afk.html se o wrapper não o fez após o ad ──
-    // Em alguns dispositivos Android, o AppCreator24/Unity Ads termina o ad mas não navega
-    // para reward_afk.html, deixando o WebView numa tela branca. Este listener detecta o
-    // retorno ao foco da página e faz o redirecionamento manualmente se necessário.
-    // IMPORTANTE: usa timestamp em vez de booleano para não disparar no fechamento do
-    // alert de confirmação do AppCreator24, que também gera um visibilitychange imediato.
-    const MIN_AD_DURATION_MS = 5000; // ads duram no mínimo ~5s; alert fecha em <2s
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            const adStartTime = parseInt(sessionStorage.getItem('ad_in_progress') || '0', 10);
-            const pendingToken = localStorage.getItem('pending_reward_token');
-            if (adStartTime && pendingToken && (Date.now() - adStartTime) > MIN_AD_DURATION_MS) {
-                sessionStorage.removeItem('ad_in_progress');
-                window.location.href = '/reward_afk.html';
-            } else if (!pendingToken) {
-                // Token já foi consumido normalmente, limpa a flag
-                sessionStorage.removeItem('ad_in_progress');
+    if (buyAttemptNoBtn) {
+        buyAttemptNoBtn.addEventListener("click", () => {
+            if (buyAttemptModal) buyAttemptModal.style.display = "none";
+            reopenStageModal();
+        });
+    }
+
+    if (buyAttemptYesBtn) {
+        buyAttemptYesBtn.addEventListener("click", async () => {
+            buyAttemptYesBtn.disabled = true;
+            if (buyAttemptNoBtn) buyAttemptNoBtn.disabled = true;
+            try {
+                const { data, error } = await supabase.rpc('buy_afk_attempt');
+                if (buyAttemptModal) buyAttemptModal.style.display = "none";
+
+                if (error) {
+                    resultText.textContent = error.message || "Erro ao comprar tentativa.";
+                    resultModal.style.display = "flex";
+                    return;
+                }
+
+                // Atualiza estado local (zero egress) com o retorno da RPC
+                if (typeof data.new_gold === 'number')     playerAfkData.gold = data.new_gold;
+                if (typeof data.new_attempts === 'number') playerAfkData.daily_attempts_left = data.new_attempts;
+                await saveToCache(playerAfkData);
+                syncHomeGoldCache(playerAfkData.gold);
+                renderPlayerData();
+
+                if (data.success === false) {
+                    // Ex.: o dia virou e as tentativas já foram renovadas
+                    resultText.textContent = "Você ainda possui tentativas disponíveis.";
+                    resultModal.style.display = "flex";
+                    return;
+                }
+
+                // Reabre o modal do estágio já com o botão de combate liberado
+                reopenStageModal();
+            } catch (e) {
+                if (buyAttemptModal) buyAttemptModal.style.display = "none";
+                resultText.textContent = "Erro ao conectar com o servidor.";
+                resultModal.style.display = "flex";
+            } finally {
+                buyAttemptYesBtn.disabled = false;
+                if (buyAttemptNoBtn) buyAttemptNoBtn.disabled = false;
             }
-            // Sempre restaura o botão de anúncio ao voltar para a página.
-            // Isso garante que, mesmo que o WebView mantenha a página na memória
-            // por dias, o botão fique visível e o backend (check_daily_reset) possa
-            // fazer o reset corretamente na próxima interação.
-            if (watchAdAttemptBtn) {
-                watchAdAttemptBtn.style.display = '';
-                watchAdAttemptBtn.disabled = false;
-                watchAdAttemptBtn.textContent = '📺 Assistir Anúncio (+1 tentativa)';
-            }
-        }
-    });
+        });
+    }
 
     // Confirm result modal → back to map
     if (confirmBtn) {

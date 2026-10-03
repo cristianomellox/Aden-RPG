@@ -3,13 +3,13 @@ import { supabase } from './supabaseClient.js';
 
 // --- Configuração das Cidades ---
 const CITIES_DATA = [
-    { id: 1, name: "Capital", img: "https://aden-rpg.pages.dev/assets/capital.webp" },
-    { id: 2, name: "Zion", img: "https://aden-rpg.pages.dev/assets/zion.webp" },
-    { id: 3, name: "Elendor", img: "https://aden-rpg.pages.dev/assets/elendor.webp" },
-    { id: 4, name: "Mitrar", img: "https://aden-rpg.pages.dev/assets/mitrar.webp" },
-    { id: 5, name: "Tandra", img: "https://aden-rpg.pages.dev/assets/tandra.webp" },
-    { id: 6, name: "Astrax", img: "https://aden-rpg.pages.dev/assets/astrax.webp" },
-    { id: 7, name: "Duratar", img: "https://aden-rpg.pages.dev/assets/duratar.webp" }
+    { id: 1, name: "Capital", img: "https://aden-rpg.pages.dev/assets/capital.png" },
+    { id: 2, name: "Zion", img: "https://aden-rpg.pages.dev/assets/zion.png" },
+    { id: 3, name: "Elendor", img: "https://aden-rpg.pages.dev/assets/elendor.png" },
+    { id: 4, name: "Mitrar", img: "https://aden-rpg.pages.dev/assets/mitrar.png" },
+    { id: 5, name: "Tandra", img: "https://aden-rpg.pages.dev/assets/tandra.png" },
+    { id: 6, name: "Astrax", img: "https://aden-rpg.pages.dev/assets/astrax.png" },
+    { id: 7, name: "Duratar", img: "https://aden-rpg.pages.dev/assets/duratar.png" }
 ];
 
 // Elementos DOM Principais

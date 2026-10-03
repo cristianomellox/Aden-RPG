@@ -4325,7 +4325,7 @@ if (checkinClaimAllBtn) {
     checkinClaimAllBtn.addEventListener('click', () => {
         if (checkinBusy) return;
 
-        confirmModalMessage.innerHTML = `Deseja recolher todas as recompensas por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${CHECKIN_ALL_COST} de ouro?`;
+        confirmModalMessage.innerHTML = `Deseja recolher todas as recompensas por ${CHECKIN_ALL_COST} <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> de ouro?`;
 
         purchaseHandler = async () => {
             purchaseConfirmModal.style.display = 'none';

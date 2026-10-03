@@ -5327,32 +5327,70 @@ button, .btn {
 
 
 /* ═══════════════════════ CHECK-IN (aba shop-video) ═══════════════════════ */
-#shop-video { position: relative; }
 
-.checkin-claim-all-btn {
-    position: absolute;
-    top: 0;
-    right: 0;
-    display: inline-flex;
+/* Botão "Recolher tudo": em linha própria acima do título (não sobrepõe nada) */
+#shopModal #shop-video { padding: 4px 6px 8px; }
+
+#shopModal .checkin-claim-all-btn {
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: 5px;
     width: auto !important;
-    padding: 6px 10px !important;
+    margin: 0 0 8px auto;            /* alinhado à direita */
+    padding: 7px 12px !important;
     font-size: 0.8em !important;
     font-weight: 800 !important;
+    white-space: nowrap;
     color: #fff !important;
     background: linear-gradient(180deg, #a259e6 0%, #7b2fc9 50%, #4e1a8a 100%) !important;
     border: 1px solid #3a1368 !important;
     border-radius: 8px !important;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5) !important;
     cursor: pointer;
-    z-index: 2;
 }
-.checkin-claim-all-btn img { width: 15px; height: 15px; object-fit: contain; }
-.checkin-claim-all-btn:disabled {
+#shopModal .checkin-claim-all-btn img { width: 15px; height: 15px; flex: 0 0 15px; object-fit: contain; }
+#shopModal .checkin-claim-all-btn:disabled {
     filter: grayscale(100%) brightness(60%);
     pointer-events: none;
     cursor: default;
+}
+
+/* Grade: 2 cards por linha */
+#shopModal #shop-video .video-rewards-container {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+    justify-content: stretch;
+}
+#shopModal #shop-video .video-reward-card {
+    width: auto;
+    min-width: 0;
+    padding: 10px 8px;
+    box-sizing: border-box;
+}
+#shopModal #shop-video .video-reward-card img {
+    width: 100%;
+    max-width: 64px;
+    height: 64px;
+    object-fit: contain;
+}
+#shopModal #shop-video .video-reward-card span {
+    margin: 8px 0;
+    min-height: 2.6em;                /* reserva 2 linhas: cards ficam alinhados */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.25;
+    font-size: 0.78em !important;
+    overflow-wrap: anywhere;
+}
+#shopModal #shop-video .video-reward-card button {
+    width: 100%;
+    padding: 9px 6px !important;
+    font-size: 0.8em;
 }
 
 /* Cards não escolhidos após o check-in */
@@ -5362,7 +5400,6 @@ button, .btn {
 }
 .video-reward-card.checkin-disabled img { filter: grayscale(100%); }
 
-/* Botões "Receber" desabilitados (inclusive o card já recebido) */
 .checkin-btn:disabled { cursor: default; }
 .video-reward-card.checkin-claimed .checkin-btn:disabled { filter: brightness(85%); }
 .video-reward-card.checkin-disabled .checkin-btn:disabled { filter: grayscale(100%); }

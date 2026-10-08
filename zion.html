@@ -1420,8 +1420,6 @@ const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
 async function loadResourcesFromCache() {
     const DB_NAME = "aden_inventory_db";
     const STORE_NAME = "inventory_store";
-    const DB_VERSION = 47; 
-
     const resourceMap = {
         51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
         52: { count: 0, name: 'Lumina', img: 'https://aden-rpg.pages.dev/assets/itens/lumina.webp' },
@@ -1430,11 +1428,12 @@ async function loadResourcesFromCache() {
     };
 
     return new Promise((resolve) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = indexedDB.open(DB_NAME);
         req.onerror = () => resolve(resourceMap); 
 
         req.onsuccess = (e) => {
             const db = e.target.result;
+            db.onversionchange = () => db.close();
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 resolve(resourceMap); return;
             }
@@ -1446,7 +1445,7 @@ async function loadResourcesFromCache() {
             getAllReq.onsuccess = () => {
                 const items = getAllReq.result || [];
                 items.forEach(invItem => {
-                    const itemId = invItem.items?.item_id;
+                    const itemId = invItem.item_id ?? invItem.items?.item_id;
                     if (resourceMap[itemId]) {
                         resourceMap[itemId].count += (invItem.quantity || 0);
                     }
@@ -1462,12 +1461,11 @@ async function loadResourcesFromCache() {
 async function updateResourceCache(resId, resQty, fragId, fragQty) {
     const DB_NAME = "aden_inventory_db";
     const STORE_NAME = "inventory_store";
-    const DB_VERSION = 47;
-
     return new Promise((resolve) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = indexedDB.open(DB_NAME);
         req.onsuccess = (e) => {
             const db = e.target.result;
+            db.onversionchange = () => db.close();
             if (!db.objectStoreNames.contains(STORE_NAME)) { resolve(); return; }
             
             const tx = db.transaction(STORE_NAME, "readwrite");
@@ -1482,9 +1480,10 @@ async function updateResourceCache(resId, resQty, fragId, fragQty) {
                 ];
 
                 for (const item of items) {
-                    if (!item.items || !item.items.item_id) continue;
+                    const rawId = item.item_id ?? item.items?.item_id;
+                    if (rawId == null) continue;
                     
-                    const currentId = String(item.items.item_id);
+                    const currentId = String(rawId);
                     const targetIndex = targets.findIndex(t => t.id === currentId);
                     
                     if (targetIndex !== -1) {

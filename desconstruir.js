@@ -117,6 +117,23 @@
       const details = document.getElementById("itemDetailsModal");
       if (details) hideModal(details);
 
+      // Caminho preferido: o servidor devolve as linhas de fragmento já atualizadas e o id removido.
+      // Sem SELECT extra (egress) e sem adivinhar qual linha duplicada recebeu os fragmentos.
+      if (Array.isArray(execData.inventory_updates) && typeof window.updateLocalInventoryState === "function") {
+        try {
+          await window.updateLocalInventoryState({
+            inventoryUpdates: execData.inventory_updates,
+            removedItemIds: [itemId],
+            usedCrystals: spent
+          });
+        } catch (err) {
+          console.error("Erro pós-desconstrução:", err);
+        }
+        showCustomAlert(`Item desconstruído!\n\nRetorno:\nR: ${execData.fragments_returned.R}\nSR: ${execData.fragments_returned.SR}\nSSR: ${execData.fragments_returned.SSR}\nCristais gastos: ${execData.crystals_spent}`);
+        return;
+      }
+
+      // Fallback (SQL antigo ainda publicado): fluxo anterior
       try {
         // --- ATUALIZAÇÃO LOCAL (SEM DOWNLOAD) ---
         // 1. Remove o item desconstruído da lista local

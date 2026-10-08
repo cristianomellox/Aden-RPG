@@ -33,7 +33,7 @@ let activeEdit = null;
 
 // --- Configuração do DB Global (Para Invalidação de Cache) ---
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7; // Mesma versão usada no mines.js e script.js
+const GLOBAL_DB_VERSION = 8; // (leitor: abre a versão atual, sem número, para nunca dar VersionError)
 const OWNERS_STORE = 'owners_store';
 const PLAYER_STORE = 'player_store';
 
@@ -52,7 +52,7 @@ function invalidateGlobalOwnerCache(playerIds) {
     if (!playerIds) return;
     const ids = Array.isArray(playerIds) ? playerIds : [playerIds];
     
-    const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+    const req = indexedDB.open(GLOBAL_DB_NAME);
     req.onsuccess = (e) => {
         const db = e.target.result;
         
@@ -96,7 +96,7 @@ function invalidateGlobalOwnerCache(playerIds) {
 // --- Função Auth Local (Mantida) ---
 async function getLocalAuth() {
     return new Promise((resolve) => {
-        const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION); 
+        const req = indexedDB.open(GLOBAL_DB_NAME); 
         req.onerror = () => resolve(null);
         req.onsuccess = (e) => {
             const db = e.target.result;

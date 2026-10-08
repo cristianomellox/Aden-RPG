@@ -88,23 +88,52 @@ function isExpiredData(d) {
 
 // ─── Fade de Vídeo ───────────────────────────────────────────────────
 
+let _swapToken = 0;
+
 function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     if (!videoEl) return;
 
+    // Cada chamada invalida as anteriores (evita 2 loads concorrentes do mesmo <video>,
+    // que deixavam o fade-in preso quando init() e reconcile() disparavam quase juntos)
+    const token = ++_swapToken;
+
     const doLoad = () => {
+        if (token !== _swapToken) return;
+
         const source = videoEl.querySelector('source');
         if (source) { source.src = newSrc; source.type = newType || DEFAULT_VIDEO_TYPE; }
-        videoEl.load();
+        else { videoEl.src = newSrc; }
 
+        let faded = false;
         const fadeIn = () => {
+            if (faded || token !== _swapToken) return;
+            faded = true;
             videoEl.style.transition = `opacity ${FADE_IN_MS}ms ease-in`;
             videoEl.style.opacity    = VIDEO_TARGET_OPACITY;
         };
-        if (videoEl.readyState >= 3) { fadeIn(); }
-        else {
-            videoEl.addEventListener('canplay',        fadeIn, { once: true });
-            videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
-        }
+
+        // Erro de carregamento (URL inválida/rede): volta ao vídeo padrão em vez de ficar preto/invisível.
+        // O evento 'error' do <source> não borbulha, então escuta na fase de captura.
+        const onError = () => {
+            videoEl.removeEventListener('error', onError, true);
+            if (token === _swapToken && newSrc !== DEFAULT_VIDEO) {
+                console.warn('[Skin] Falha ao carregar vídeo da skin. Usando padrão.');
+                _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, true);
+            } else {
+                fadeIn();
+            }
+        };
+        videoEl.addEventListener('error', onError, true);
+
+        videoEl.load();
+
+        videoEl.addEventListener('loadeddata',     fadeIn, { once: true });
+        videoEl.addEventListener('canplay',        fadeIn, { once: true });
+        videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
+        if (videoEl.readyState >= 3) fadeIn();
+        // Garantia final: nunca deixar o fundo invisível
+        setTimeout(fadeIn, 6000);
+
         videoEl.play().catch(() => {});
     };
 
@@ -178,6 +207,15 @@ function checkAndHandleExpiry() {
 
 // ─── Reconciliação com Servidor ───────────────────────────────────────
 
+let _reconcileRetried = false;
+
+function _skinDef(skinItem) {
+    // Prefere a definição embutida; se ela não tiver as URLs, consulta o mapa global
+    const d = skinItem?.items;
+    if (d && (d.skin_frame_url || d.skin_video_url)) return d;
+    return window.itemDefinitions?.get(skinItem?.item_id) || d || null;
+}
+
 function reconcileWithServer(serverFrameId, serverVideoId) {
     const cache   = loadSkinCache() || {};
     const items   = window.allInventoryItems || [];
@@ -191,6 +229,7 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
     if (!frameChanged && !videoChanged) return;
 
     const newCache = { ...cache };
+    let unresolved = false;
 
     if (frameChanged) {
         if (!serverFrameId) {
@@ -198,15 +237,16 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
             _removeFrame();
         } else {
             const skinItem = items.find(i => i.id === serverFrameId);
-            if (skinItem?.items?.skin_frame_url) {
+            const def = _skinDef(skinItem);
+            if (def?.skin_frame_url) {
                 newCache.active_frame = {
                     inventory_item_id : serverFrameId,
-                    frame_url         : skinItem.items.skin_frame_url,
+                    frame_url         : def.skin_frame_url,
                     expires_at        : skinItem.expires_at || null,
-                    display_name      : skinItem.items.display_name || 'Skin'
+                    display_name      : def.display_name || 'Skin'
                 };
-                _applyFrame(skinItem.items.skin_frame_url);
-            }
+                _applyFrame(def.skin_frame_url);
+            } else { unresolved = true; }
         }
     }
 
@@ -217,19 +257,60 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
             _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
         } else {
             const skinItem = items.find(i => i.id === serverVideoId);
-            if (skinItem?.items?.skin_video_url) {
+            const def = _skinDef(skinItem);
+            if (def?.skin_video_url) {
                 newCache.active_video = {
                     inventory_item_id : serverVideoId,
-                    video_url         : skinItem.items.skin_video_url,
+                    video_url         : def.skin_video_url,
                     expires_at        : skinItem.expires_at || null,
-                    display_name      : skinItem.items.display_name || 'Skin'
+                    display_name      : def.display_name || 'Skin'
                 };
-                _swapVideo(videoEl, skinItem.items.skin_video_url, DEFAULT_VIDEO_TYPE, false);
-            }
+                _swapVideo(videoEl, def.skin_video_url, DEFAULT_VIDEO_TYPE, false);
+            } else { unresolved = true; }
         }
     }
 
     saveSkinCache(newCache);
+}
+
+// Quando o servidor diz "expirou e foi removida" / "não encontrada", o item JÁ NÃO EXISTE lá
+// (activate_skin/select_skin apagam o registro). Se o cliente continuar com ele na bolsa/IndexedDB,
+// o próximo clique devolve "já foi usada". Aqui o estado local é alinhado na hora.
+function _isStaleSkinError(msg) {
+    return typeof msg === 'string' && /expirou|n[ãa]o encontrada/i.test(msg);
+}
+
+async function _dropStaleSkinLocally(inventoryItemId) {
+    try {
+        const items = window.allInventoryItems || [];
+        const idx = items.findIndex(i => i.id === inventoryItemId);
+        if (idx > -1) items.splice(idx, 1);
+        window.allInventoryItems = items;
+
+        const cache = loadSkinCache() || {};
+        const patch = {};
+        if (cache.active_frame?.inventory_item_id === inventoryItemId) { patch.active_frame = null; _removeFrame(); }
+        if (cache.active_video?.inventory_item_id === inventoryItemId) {
+            patch.active_video = null;
+            _swapVideo(document.getElementById('background-video'), DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
+        }
+        if (Object.keys(patch).length) saveSkinCache(patch);
+
+        await window.saveCache?.(items, window.playerBaseStats || {}, new Date().toISOString());
+        window.renderUI?.();
+        const modal = document.getElementById('itemDetailsModal');
+        if (modal) modal.style.display = 'none';
+    } catch (e) { console.warn('[Skin] Falha ao limpar skin obsoleta:', e); }
+    // Resincroniza em segundo plano (corrige qualquer outra divergência)
+    window.loadPlayerAndItems?.(true);
+}
+
+// Consome UM token da bolsa local (espelha o activate_skin: quantity > 1 decrementa; senão remove a linha)
+function _consumeOneToken(items, inventoryItemId) {
+    const idx = items.findIndex(i => i.id === inventoryItemId);
+    if (idx < 0) return;
+    if ((items[idx].quantity || 1) > 1) items[idx].quantity -= 1;
+    else items.splice(idx, 1);
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────
@@ -267,13 +348,16 @@ async function handleActivateSkin(item) {
     }
 
     if (error) { window.showCustomAlert?.('Erro ao ativar: ' + (error.message || error)); return; }
-    if (data?.error) { window.showCustomAlert?.(data.error); return; }
+    if (data?.error) {
+        if (_isStaleSkinError(data.error)) await _dropStaleSkinLocally(item.id);
+        window.showCustomAlert?.(data.error);
+        return;
+    }
 
     // Skin permanente duplicada: token consumido no servidor, remove da bolsa local
     if (data?.duplicate_permanent) {
         const items = window.allInventoryItems || [];
-        const consumedIdx = items.findIndex(i => i.id === item.id);
-        if (consumedIdx > -1) items.splice(consumedIdx, 1);
+        _consumeOneToken(items, item.id);
         window.allInventoryItems = items;
         await window.saveCache?.(items, window.playerBaseStats || {}, new Date().toISOString());
         window.renderUI?.();
@@ -285,10 +369,16 @@ async function handleActivateSkin(item) {
     // ── Atualiza IDB ──────────────────────────────────────────────
     const items = window.allInventoryItems || [];
     if (data.stacked) {
-        const consumedIdx = items.findIndex(i => i.id === item.id);
-        if (consumedIdx > -1) items.splice(consumedIdx, 1);
+        _consumeOneToken(items, item.id);
         const existingIdx = items.findIndex(i => i.id === data.inventory_item_id);
         if (existingIdx > -1) items[existingIdx].expires_at = data.expires_at;
+    } else if (data.inventory_item_id !== item.id) {
+        // Pilha de tokens: o servidor separou UM token (id novo) e manteve os demais na bolsa
+        _consumeOneToken(items, item.id);
+        items.push({
+            id: data.inventory_item_id, item_id: item.item_id, quantity: 1,
+            equipped_slot: 'skin', expires_at: data.expires_at, items: item.items
+        });
     } else {
         const idx = items.findIndex(i => i.id === item.id);
         if (idx > -1) { items[idx].equipped_slot = 'skin'; items[idx].expires_at = data.expires_at; }
@@ -365,7 +455,14 @@ async function handleSelectSkin(inventoryItemId, component) {
         p_player_id        : user.id,
         p_component        : component || 'auto'
     });
-    if (error || data?.error) { window.showCustomAlert?.(data?.error || 'Erro ao selecionar.'); return; }
+    if (error || data?.error) {
+        if (_isStaleSkinError(data?.error)) {
+            await _dropStaleSkinLocally(inventoryItemId);
+            openSkinManagerModal();
+        }
+        window.showCustomAlert?.(data?.error || 'Erro ao selecionar.');
+        return;
+    }
 
     const patch = {};
     const skinItem = (window.allInventoryItems || []).find(i => i.id === inventoryItemId);
@@ -629,7 +726,9 @@ function init() {
         _applyFrame(cache.active_frame.frame_url);
     }
 
-    // 4. Eventos
+    // 4. Eventos (idempotente)
+    if (window.__skinUIBound) return;
+    window.__skinUIBound = true;
     document.getElementById('skinConfigBtn')
         ?.addEventListener('click', openSkinManagerModal);
     document.getElementById('closeSkinManagerModal')

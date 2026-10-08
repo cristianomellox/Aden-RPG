@@ -583,7 +583,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7;
+const GLOBAL_DB_VERSION = 8;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 const OWNERS_STORE = 'owners_store';
@@ -593,18 +593,18 @@ const GlobalDB = {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
             req.onupgradeneeded = (e) => {
+                // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
+                // Antes cada página criava só as stores que conhecia; quem abrisse o banco primeiro
+                // (ex.: após limpar os dados do site) deixava owners_store/bonds_store/player_store faltando.
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains(AUTH_STORE)) {
-                    db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
-                }
-                if (!db.objectStoreNames.contains(PLAYER_STORE)) {
-                    db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
-                }
-                if (!db.objectStoreNames.contains(OWNERS_STORE)) {
-                    db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
-                }
+                ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach(n => {
+                    if (!db.objectStoreNames.contains(n)) {
+                        db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+                    }
+                });
             };
-            req.onsuccess = () => resolve(req.result);
+            req.onblocked = () => console.warn('[GlobalDB] abertura bloqueada por outra aba.');
+            req.onsuccess = () => { const _db = req.result; _db.onversionchange = () => _db.close(); resolve(_db); };
             req.onerror = () => reject(req.error);
         });
     },
@@ -757,21 +757,28 @@ function updateLocalPlayerData(changes) {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47; // Mantenha a mesma versão do inventory.js
+const DB_VERSION = 48; // Mantenha a mesma versão do inventory.js
 
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
+        // MESMO upgrade do inventory.js: quem abrir primeiro limpa o cache antigo.
+        // (Antes só criava stores faltantes; se o script.js fizesse o upgrade, os dados velhos
+        //  — incluindo definições de itens desatualizadas — sobreviviam à troca de versão.)
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: "id" });
-            }
-            if (!db.objectStoreNames.contains(META_STORE)) {
-                db.createObjectStore(META_STORE, { keyPath: "key" });
-            }
+            if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
+            if (db.objectStoreNames.contains(META_STORE)) db.deleteObjectStore(META_STORE);
+            db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            db.createObjectStore(META_STORE, { keyPath: "key" });
         };
-        req.onsuccess = () => resolve(req.result);
+        req.onblocked = () => console.warn('IndexedDB bloqueado por outra aba/página.');
+        req.onsuccess = () => {
+            const db = req.result;
+            // Sem isto, uma aba antiga segurava a conexão e travava o upgrade das outras páginas
+            db.onversionchange = () => db.close();
+            resolve(db);
+        };
         req.onerror = () => reject(req.error);
     });
 }
@@ -1052,6 +1059,7 @@ async function loadItemDefinitions() {
         // Recria o Map a partir dos dados [key, value] salvos no cache
         try {
              itemDefinitions = new Map(cachedData);
+             window.itemDefinitions = itemDefinitions;
              console.log('📚 [Cache] Definições de itens carregadas (Memória/Local).');
              return;
         } catch(e) {
@@ -1077,6 +1085,7 @@ async function loadItemDefinitions() {
         return;
     }
     
+    window.itemDefinitions = itemDefinitions;
     const dataForCache = []; // Array [key, value] para salvar no localStorage
     for (const item of data) {
         // Fallback para display_name se vazio

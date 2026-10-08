@@ -58,7 +58,7 @@ async function _arFetchAndApplyFrame(pid, containerEl) {
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7; // Versão alinhada com mines.js
+const GLOBAL_DB_VERSION = 8; // Versão alinhada com mines.js
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 const OWNERS_STORE = 'owners_store'; // Store compartilhada de perfis
@@ -68,12 +68,18 @@ const GlobalDB = {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
             req.onupgradeneeded = (e) => {
+                // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
+                // Antes cada página criava só as stores que conhecia; quem abrisse o banco primeiro
+                // (ex.: após limpar os dados do site) deixava owners_store/bonds_store/player_store faltando.
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
-                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
-                if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
+                ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach(n => {
+                    if (!db.objectStoreNames.contains(n)) {
+                        db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+                    }
+                });
             };
-            req.onsuccess = () => resolve(req.result);
+            req.onblocked = () => console.warn('[GlobalDB] abertura bloqueada por outra aba.');
+            req.onsuccess = () => { const _db = req.result; _db.onversionchange = () => _db.close(); resolve(_db); };
             req.onerror = () => reject(req.error);
         });
     },
@@ -167,42 +173,49 @@ const GlobalDB = {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47;
+// Sem versão fixa: abre a versão ATUAL do banco (quem controla o schema é o inventory.js).
+// Antes: open(..., 47) -> VersionError assim que o inventory.js subiu a versão.
 
 function openDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onsuccess = () => resolve(req.result);
+        const req = indexedDB.open(DB_NAME);
+        req.onsuccess = () => {
+            const db = req.result;
+            db.onversionchange = () => db.close(); // não bloqueia upgrade do inventory.js
+            resolve(db);
+        };
         req.onerror = () => reject(req.error);
     });
 }
 
-// >>> INCLUI hidratação de itens crus <<<
+// Merge cirúrgico: o servidor manda itens PARCIAIS (inventory_updates). Antes o put() substituía o
+// registro inteiro (perdendo level, bônus, reforge, item_id...) e ainda gravava uma definição velha em `items`.
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
         const db = await openDB();
+        if (!db.objectStoreNames.contains(STORE_NAME) || !db.objectStoreNames.contains(META_STORE)) {
+            db.close();
+            return; // banco ainda não inicializado pelo inventory.js: ele fará o download completo
+        }
         const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
         if (Array.isArray(newItems)) {
             newItems.forEach(item => {
-                // Tenta hidratar se o item estiver "pelado" (veio do RPC sem JOIN)
-                if (!item.items || !item.items.name) {
-                    if (window.itemDefinitions) {
-                        const def = window.itemDefinitions.get(item.item_id);
-                        if (def) item.items = def;
-                    } else if (localStorage.getItem('item_definitions_full_v1')) {
-                        // Fallback: lê do storage se a RAM não tiver
-                        try {
-                             const cached = JSON.parse(localStorage.getItem('item_definitions_full_v1'));
-                             const map = new Map(cached.data || cached);
-                             const def = map.get(item.item_id);
-                             if(def) item.items = def;
-                        } catch(e){}
+                if (!item || item.id == null) return;
+                const getReq = store.get(item.id);
+                getReq.onsuccess = () => {
+                    const existing = getReq.result || {};
+                    const { items: _ignored, ...incoming } = item;      // nunca sobrescreve a definição com snapshot do RPC
+                    const merged = { ...existing, ...incoming };
+                    if (!merged.items?.name) {                          // só hidrata se não houver definição boa
+                        const def = window.itemDefinitions?.get(merged.item_id);
+                        if (def) merged.items = def;
                     }
-                }
-                store.put(item);
+                    store.put(merged);
+                };
+                getReq.onerror = () => { const { items: _i, ...raw } = item; store.put(raw); };
             });
         }
 
@@ -225,7 +238,8 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
             tx.oncomplete = () => {
                 console.log("✅ [Arena Surgical Update] Caches locais atualizados.");
                 resolve();
-            }
+            };
+            tx.onerror = tx.onabort = () => resolve();
         });
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via arena.js:", e);

@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // >>> ADEN GLOBAL DB (Zero Egress Auth & Player) <<<
 // =========================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7;
+const GLOBAL_DB_VERSION = 8;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 
@@ -12,7 +12,17 @@ const GlobalDB = {
     open: function() {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
-            req.onsuccess = () => resolve(req.result);
+            req.onupgradeneeded = (e) => {
+                // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
+                const db = e.target.result;
+                ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach(n => {
+                    if (!db.objectStoreNames.contains(n)) {
+                        db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+                    }
+                });
+            };
+            req.onblocked = () => console.warn('[GlobalDB] abertura bloqueada por outra aba.');
+            req.onsuccess = () => { const _db = req.result; _db.onversionchange = () => _db.close(); resolve(_db); };
             req.onerror = () => reject(req.error);
         });
     },
@@ -99,13 +109,13 @@ const TRADEABLE_MAP = new Map(TRADEABLE_ITEMS.map(i => [i.id, i]));
 // =========================================================
 const IDB_NAME    = 'aden_inventory_db';
 const IDB_STORE   = 'inventory_store';
-const IDB_VERSION = 47;
+// (sem versão fixa: o schema é do inventory.js)
 
 function openIdb() {
     return new Promise((res, rej) => {
-        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        const req = indexedDB.open(IDB_NAME);
         req.onerror   = () => rej(req.error);
-        req.onsuccess = e  => res(e.target.result);
+        req.onsuccess = e  => { const db = e.target.result; db.onversionchange = () => db.close(); res(db); };
         req.onupgradeneeded = () => {}; // não modifica schema
     });
 }
@@ -123,7 +133,7 @@ async function getTradeableItemsFromIdb() {
         // Agrupa por item_id somando quantidades
         const totals = {};
         for (const inv of all) {
-            const id = inv.items?.item_id;
+            const id = inv.item_id ?? inv.items?.item_id;
             if (!id || !TRADEABLE_MAP.has(id)) continue;
             totals[id] = (totals[id] || 0) + (inv.quantity || 0);
         }
@@ -147,7 +157,7 @@ async function decrementIdbItem(itemId, amount) {
             r.onsuccess = () => res(r.result);
             r.onerror   = () => rej(r.error);
         });
-        const matching = all.filter(i => i.items?.item_id === itemId);
+        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
         let remaining  = amount;
         for (const item of matching) {
             if (remaining <= 0) break;
@@ -175,7 +185,7 @@ async function incrementIdbItem(itemId, amount) {
             r.onsuccess = () => res(r.result);
             r.onerror   = () => rej(r.error);
         });
-        const matching = all.filter(i => i.items?.item_id === itemId);
+        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
         if (matching.length > 0) {
             const item = matching[0];
             item.quantity = (item.quantity || 0) + amount;
@@ -1728,11 +1738,10 @@ document.addEventListener("DOMContentLoaded", () => {
     async function _invalidateInventoryCache() {
         try {
             const IDB_NAME_INV = 'aden_inventory_db';
-            const IDB_VER_INV  = 47;
             const META_STORE   = 'meta_store';
             const db = await new Promise((res, rej) => {
-                const r = indexedDB.open(IDB_NAME_INV, IDB_VER_INV);
-                r.onsuccess = () => res(r.result);
+                const r = indexedDB.open(IDB_NAME_INV);
+                r.onsuccess = () => { const d = r.result; d.onversionchange = () => d.close(); res(d); };
                 r.onerror   = () => rej(r.error);
                 r.onupgradeneeded = () => {}; // não modifica schema
             });

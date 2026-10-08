@@ -208,7 +208,7 @@ const STATS_CACHE_DURATION  = 72 * 60 * 60 * 1000; // 72h
 
 // ── GLOBAL IDB (mesmo banco do mines.js — owners_store) ───────
 const _GDBNAME    = 'aden_global_db';
-const _GDBVER     = 6;
+const _GDBVER     = 8;
 const _OWN_STORE  = 'owners_store';
 const _OWNERS_TTL = 24 * 60 * 60 * 1000; // 24h
 
@@ -218,11 +218,14 @@ async function _openGlobalDb(){
     return new Promise((res,rej)=>{
         const req=indexedDB.open(_GDBNAME,_GDBVER);
         req.onerror=()=>rej(req.error);
-        req.onsuccess=e=>{_gdb=e.target.result;res(_gdb);};
+        req.onsuccess=e=>{_gdb=e.target.result;_gdb.onversionchange=()=>{try{_gdb.close();}catch{} _gdb=null;};res(_gdb);};
         req.onupgradeneeded=e=>{
+            // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
             const db=e.target.result;
-            if(!db.objectStoreNames.contains(_OWN_STORE))
-                db.createObjectStore(_OWN_STORE,{keyPath:'id'});
+            ['auth_store','player_store','owners_store','bonds_store'].forEach(n=>{
+                if(!db.objectStoreNames.contains(n))
+                    db.createObjectStore(n,{keyPath:(n==='auth_store'||n==='player_store')?'key':'id'});
+            });
         };
     });
 }
@@ -573,9 +576,9 @@ function _processKillQueue(){
 
 // ── INDEXEDDB (mesmo do mercador.js) ───────────────────────
 const IDB_NAME='aden_inventory_db',IDB_STORE='inventory_store',IDB_VERSION=47;
-function openIdb(){return new Promise((res,rej)=>{const req=indexedDB.open(IDB_NAME,IDB_VERSION);req.onerror=()=>rej(req.error);req.onsuccess=e=>res(e.target.result);req.onupgradeneeded=()=>{};});}
+function openIdb(){return new Promise((res,rej)=>{const req=indexedDB.open(IDB_NAME);req.onerror=()=>rej(req.error);req.onsuccess=e=>{const d=e.target.result;d.onversionchange=()=>d.close();res(d);};req.onupgradeneeded=()=>{};});} // sem versão fixa: o schema é do inventory.js
 async function getItemQtyFromCache(id){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return 0;const tx=db.transaction(IDB_STORE,'readonly');const all=await new Promise((res,rej)=>{const r=tx.objectStore(IDB_STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return all.filter(i=>(i.items?.item_id===id)||(i.item_id===id)).reduce((s,i)=>s+(i.quantity||0),0);}catch{return 0;}}
-async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return;const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);const all=await new Promise((res,rej)=>{const r=store.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});const m=all.filter(i=>(i.items?.item_id===id)||(i.item_id===id&&!i.items));if(!m.length){if(delta>0){store.put({id:`hunt_drop_${id}_${Date.now()}`,item_id:id,quantity:delta,items:{item_id:id}});}return;}let rem=Math.abs(delta);if(delta<0){for(const item of m){if(rem<=0)break;if(item.quantity>=rem){item.quantity-=rem;rem=0;if(item.quantity<=0)store.delete(item.id);else store.put(item);}else{rem-=item.quantity;store.delete(item.id);}}}else{const item=m[0];item.quantity=(item.quantity||0)+delta;store.put(item);}}catch(e){console.warn('[floresta] IDB fail',e);}}
+async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return;const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);const all=await new Promise((res,rej)=>{const r=store.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});const m=all.filter(i=>(i.items?.item_id===id)||(i.item_id===id&&!i.items));if(!m.length){if(delta>0){store.put({id:-Date.now(),item_id:id,quantity:delta,_temp:true,items:{item_id:id}});}return;}let rem=Math.abs(delta);if(delta<0){for(const item of m){if(rem<=0)break;if(item.quantity>=rem){item.quantity-=rem;rem=0;if(item.quantity<=0)store.delete(item.id);else store.put(item);}else{rem-=item.quantity;store.delete(item.id);}}}else{const item=m[0];item.quantity=(item.quantity||0)+delta;store.put(item);}}catch(e){console.warn('[floresta] IDB fail',e);}}
 
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();

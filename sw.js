@@ -36,6 +36,45 @@ const ASSETS_TO_PRECACHE = [
     '/assets/badge-icon.png',
 ];
 
+// =========================================================
+// >>> RANGE REQUESTS (vídeo/áudio servidos do cache) <<<
+// =========================================================
+// <video>/<audio> pedem o arquivo com o cabeçalho "Range". O Cache API ignora esse cabeçalho e
+// devolveria o arquivo inteiro com status 200. Alguns navegadores (Safari/iOS, e o Chrome em certos
+// casos) não aceitam isso e o vídeo simplesmente não toca (ex.: vídeo de fundo da skin).
+// Aqui respondemos com 206 + o trecho pedido, e em QUALQUER dúvida devolvemos a resposta como antes.
+async function respondWithRange(request, cachedResponse) {
+    try {
+        const rangeHeader = request.headers.get('range');
+        if (!rangeHeader || !cachedResponse || cachedResponse.status !== 200) return cachedResponse;
+
+        const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (!m || (m[1] === '' && m[2] === '')) return cachedResponse;
+
+        const buf = await cachedResponse.clone().arrayBuffer();
+        const size = buf.byteLength;
+        let start, end;
+        if (m[1] === '') {                       // "bytes=-N": últimos N bytes
+            start = Math.max(0, size - parseInt(m[2], 10));
+            end = size - 1;
+        } else {
+            start = parseInt(m[1], 10);
+            end = m[2] === '' ? size - 1 : Math.min(parseInt(m[2], 10), size - 1);
+        }
+        if (start >= size || start > end) {
+            return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+        }
+
+        const headers = new Headers(cachedResponse.headers);
+        headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+        headers.set('Content-Length', String(end - start + 1));
+        headers.set('Accept-Ranges', 'bytes');
+        return new Response(buf.slice(start, end + 1), { status: 206, statusText: 'Partial Content', headers });
+    } catch (err) {
+        return cachedResponse;
+    }
+}
+
 self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
@@ -199,7 +238,7 @@ self.addEventListener('fetch', event => {
         event.respondWith(
             // Procura em TODOS os caches abertos (acha tanto o precache quanto os extraídos do zip)
             caches.match(request).then(cachedResponse => {
-                if (cachedResponse) return cachedResponse;
+                if (cachedResponse) return respondWithRange(request, cachedResponse);
 
                 // Não achou no cache (ex: algo que ainda não foi baixado). Tenta buscar na origem.
                 // Isso só funciona para arquivos que ainda existem no repositório/Cloudflare Pages —

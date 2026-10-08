@@ -613,13 +613,13 @@ const ENCOURAGING = [
 // ─────────────────────────────────────────────────────────────────────────────
 const IDB_NAME    = 'aden_inventory_db';
 const IDB_STORE   = 'inventory_store';
-const IDB_VERSION = 47;
+// (sem versão fixa: o schema é do inventory.js)
 
 function openIdb() {
     return new Promise((res, rej) => {
-        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-        req.onerror   = () => rej(req.error);
-        req.onsuccess = e  => res(e.target.result);
+        const req = indexedDB.open(IDB_NAME);
+        req.onerror = () => rej(req.error);
+        req.onsuccess = e => { const d = e.target.result; d.onversionchange = () => d.close(); res(d); };
         req.onupgradeneeded = () => {};
     });
 }
@@ -637,7 +637,7 @@ async function getAllQtysFromCache(ids) {
         const result = {};
         const set = new Set(ids);
         for (const inv of all) {
-            const id = inv.items?.item_id;
+            const id = inv.item_id ?? inv.items?.item_id;
             if (set.has(id)) result[id] = (result[id] || 0) + (inv.quantity || 0);
         }
         return result;
@@ -655,8 +655,11 @@ async function updateCacheQty(itemId, delta) {
             r.onsuccess = () => res(r.result);
             r.onerror   = () => rej(r.error);
         });
-        const matching = all.filter(i => i.items?.item_id === itemId);
-        if (matching.length === 0) return;
+        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
+        if (matching.length === 0) {
+            if (delta > 0) store.put({ id: -Date.now(), item_id: itemId, quantity: delta, _temp: true, items: { item_id: itemId } });
+            return;
+        }
         let remaining = Math.abs(delta);
         if (delta < 0) {
             for (const item of matching) {

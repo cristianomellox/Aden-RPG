@@ -21,26 +21,40 @@ if (!window.itemDefinitions) {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47; 
+const DB_VERSION = 48; 
+
+let _dbPromise = null;
+
+function withTimeout(promise, ms, label) {
+    let t;
+    const timeout = new Promise((_, rej) => { t = setTimeout(() => rej(new Error('timeout:' + label)), ms); });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+}
 
 function openDB() {
-    return new Promise((resolve, reject) => {
+    if (_dbPromise) return _dbPromise;
+    _dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
             console.log('IndexedDB: Upgrade necessário. Limpando caches antigos.');
             const db = e.target.result;
-            if (db.objectStoreNames.contains(STORE_NAME)) {
-                db.deleteObjectStore(STORE_NAME);
-            }
-            if (db.objectStoreNames.contains(META_STORE)) {
-                db.deleteObjectStore(META_STORE);
-            }
+            if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
+            if (db.objectStoreNames.contains(META_STORE)) db.deleteObjectStore(META_STORE);
             db.createObjectStore(STORE_NAME, { keyPath: "id" });
             db.createObjectStore(META_STORE, { keyPath: "key" });
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        // Outra aba/página com versão antiga aberta bloqueava o upgrade para sempre
+        req.onblocked = () => console.warn('IndexedDB: abertura bloqueada por outra aba/página.');
+        req.onsuccess = () => {
+            const db = req.result;
+            // Libera a conexão se outra página pedir upgrade (evita travar as demais)
+            db.onversionchange = () => { db.close(); _dbPromise = null; };
+            db.onclose = () => { _dbPromise = null; };
+            resolve(db);
+        };
+        req.onerror = () => { _dbPromise = null; reject(req.error); };
     });
+    return withTimeout(_dbPromise, 4000, 'openDB').catch(err => { _dbPromise = null; throw err; });
 }
 
 // Salva o cache completo
@@ -52,8 +66,15 @@ async function saveCache(items, stats, timestamp) {
 
     store.clear();
     
-    // Salva TUDO (inclusive itens com qtd 0 para o manifesto funcionar)
-    (items || []).forEach(item => store.put(item));
+    // Salva TUDO (inclusive itens com qtd 0 para o manifesto funcionar).
+    // `items` (definição) continua sendo gravado como CONVENIÊNCIA para outras páginas
+    // (pv.js, afk_page.js, tavernas.js leem direto do IndexedDB). Mas o inventory.js NUNCA confia
+    // nele ao carregar (ver _stripDef + rehydrate), e placeholders ("unknown") jamais são gravados.
+    (items || []).forEach(item => {
+        const { _placeholder, ...rest } = item;
+        if (_placeholder) delete rest.items;
+        store.put(rest);
+    });
     
     if (timestamp) meta.put({ key: "last_updated", value: timestamp }); 
     if (stats) meta.put({ key: "player_stats", value: stats });     
@@ -142,7 +163,10 @@ function getLocalUserId() {
 function generateManifest(items) {
     return items.map(item => ({
         id: item.id,
-        s: `${item.quantity}_${item.level || 0}_${item.refine_level || 0}_${item.equipped_slot || 'none'}`
+        // Item sem item_id (cache parcial vindo do script.js) => assinatura inválida, força reenvio completo
+        s: item.item_id == null
+            ? 'stale'
+            : `${item.quantity}_${item.level || 0}_${item.refine_level || 0}_${item.equipped_slot || 'none'}_${item.expires_at ? Math.floor(new Date(item.expires_at).getTime() / 1000) : 'x'}`
     }));
 }
 
@@ -158,7 +182,13 @@ function processInventoryDelta(localItems, delta) {
         delta.upsert.forEach(newItem => {
             const idx = updatedList.findIndex(i => i.id === newItem.id);
             if (idx !== -1) {
-                updatedList[idx] = { ...updatedList[idx], ...newItem };
+                // O servidor envia o item COMPLETO, mas com jsonb_strip_nulls (campos 0/NULL somem).
+                // Fazer merge {...velho, ...novo} mantinha valores antigos (ex.: expires_at, xp_progress,
+                // reforge_slot, bônus que voltaram a 0). Por isso SUBSTITUI, preservando só campos locais.
+                const old = updatedList[idx];
+                const replaced = { ...newItem };
+                if (old.pending_reforge) replaced.pending_reforge = old.pending_reforge;
+                updatedList[idx] = replaced;
             } else {
                 updatedList.push(newItem);
             }
@@ -172,84 +202,98 @@ function processInventoryDelta(localItems, delta) {
 // >>> HIDRATAÇÃO E CACHE DE DEFINIÇÕES (CORRIGIDO) <<<
 // ========================================================
 
+const DEFS_CACHE_KEY = 'item_definitions_inventory_v2';   // chave PRÓPRIA (script.js usa outra, com formato/colunas diferentes)
+const DEFS_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Uma definição só é válida para a bolsa se trouxer as colunas de skin (mesmo que null)
+function _defsAreComplete(map) {
+    if (!map || map.size === 0) return false;
+    const sample = map.values().next().value;
+    return !!sample && ('skin_frame_url' in sample) && ('skin_video_url' in sample) && ('skin_duration_hours' in sample);
+}
+
 async function ensureDefinitionsLoaded() {
-    // 1. Verifica se já está na memória RAM (carregado pelo script.js)
-    if (window.itemDefinitions && window.itemDefinitions.size > 0) {
-        return;
+    // 1. RAM (só vale se estiver completa; o script.js grava definições SEM colunas de skin)
+    if (_defsAreComplete(window.itemDefinitions)) return true;
+
+    // 2. LocalStorage (formato versionado {expires, data})
+    try {
+        const raw = localStorage.getItem(DEFS_CACHE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.data) && parsed.expires > Date.now()) {
+                const m = new Map(parsed.data);
+                if (_defsAreComplete(m)) {
+                    window.itemDefinitions = m;
+                    console.log("📚 [Inventory] Definições recuperadas do LocalStorage.");
+                    return true;
+                }
+            }
+            localStorage.removeItem(DEFS_CACHE_KEY);
+        }
+    } catch (e) {
+        console.warn("Cache de definições inválido ou corrompido.", e);
+        try { localStorage.removeItem(DEFS_CACHE_KEY); } catch (_) {}
     }
 
-    const CACHE_KEY = 'item_definitions_full_v1';
-
-    // 2. Tenta carregar do LocalStorage
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
+    // 3. Rede (até 2 tentativas, com timeout)
+    for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-            const mapData = JSON.parse(cached); // Array de [key, value]
-            window.itemDefinitions = new Map(mapData);
-            console.log("📚 [Inventory] Definições recuperadas do LocalStorage e carregadas na RAM.");
-            return;
+            const { data, error } = await withTimeout(
+                supabase.from('items').select(`
+                    item_id, name, display_name, rarity, item_type, stars,
+                    crafts_item_id, skin_frame_url, skin_video_url, skin_duration_hours
+                `),
+                8000, 'items'
+            );
+            if (error || !data) throw error || new Error('sem dados');
+
+            const map = new Map();
+            data.forEach(item => {
+                if (!item.display_name) item.display_name = item.name;
+                map.set(item.item_id, item);
+            });
+            window.itemDefinitions = map;
+            try {
+                localStorage.setItem(DEFS_CACHE_KEY, JSON.stringify({ expires: Date.now() + DEFS_TTL_MS, data: [...map.entries()] }));
+            } catch (e) { console.warn("Quota de storage excedida ao salvar definições."); }
+            console.log(`✅ [Inventory] ${data.length} definições baixadas.`);
+            return true;
         } catch (e) {
-            console.warn("Cache de definições inválido ou corrompido.", e);
-            localStorage.removeItem(CACHE_KEY);
+            console.warn(`❌ Falha ao baixar definições (tentativa ${attempt}):`, e);
         }
     }
-
-    // 3. ÚLTIMO RECURSO: Baixa agora se não existir em lugar nenhum
-    console.log("⚠️ [Inventory] Definições ausentes. Baixando definições 'Lite'...");
-    
-    // PATCH SKIN: skin_frame_url, skin_video_url e skin_duration_hours incluídos
-    const { data, error } = await supabase
-        .from('items')
-        .select(`
-            item_id, name, display_name, rarity, item_type, stars,
-            crafts_item_id, skin_frame_url, skin_video_url, skin_duration_hours
-        `);
-
-    if (!error && data) {
-        window.itemDefinitions = new Map();
-        const dataForCache = [];
-        data.forEach(item => {
-            if (!item.display_name) item.display_name = item.name;
-            window.itemDefinitions.set(item.item_id, item);
-            dataForCache.push([item.item_id, item]);
-        });
-        
-        try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify(dataForCache));
-        } catch(e) {
-            console.warn("Quota de storage excedida ao salvar definições.");
-        }
-        console.log(`✅ [Inventory] ${data.length} definições baixadas e salvas.`);
-    } else {
-        console.error("❌ Falha crítica ao baixar definições de itens:", error);
-    }
+    return false;
 }
 
 // Função robusta de hidratação (cruza dados crus com definições)
 function hydrateItem(rawItem) {
     if (!rawItem) return null;
-    if (rawItem.equipped_slot === undefined) {
-        rawItem.equipped_slot = null;
-    }
-    
-    // Se já estiver hidratado corretamente, retorna
-    if (rawItem.items && rawItem.items.name) return rawItem;
+    if (rawItem.equipped_slot === undefined) rawItem.equipped_slot = null;
 
-    let def = null;
+    // Já hidratado e NÃO é placeholder: mantém (definição fresca desta sessão)
+    if (rawItem.items && rawItem.items.name && !rawItem._placeholder && rawItem.items.name !== 'unknown') {
+        return rawItem;
+    }
+
     const itemId = rawItem.item_id;
-
-    if (window.itemDefinitions) {
-        // Tenta buscar pelo ID numérico
-        def = window.itemDefinitions.get(itemId);
-        
-        // Se falhar, tenta buscar pelo ID string (caso haja divergência de tipos)
-        if (!def) def = window.itemDefinitions.get(String(itemId));
-        if (!def) def = window.itemDefinitions.get(Number(itemId));
+    let def = null;
+    if (window.itemDefinitions && itemId != null) {
+        def = window.itemDefinitions.get(itemId)
+           || window.itemDefinitions.get(String(itemId))
+           || window.itemDefinitions.get(Number(itemId));
     }
 
-    // Se ainda não achou, usa placeholder para não quebrar a UI
-    if (!def) {
-        def = {
+    if (def) {
+        const { _placeholder, ...clean } = rawItem;
+        return { ...clean, items: def };
+    }
+
+    // Sem definição: placeholder MARCADO (será re-hidratado quando as definições chegarem)
+    return {
+        ...rawItem,
+        _placeholder: true,
+        items: {
             item_id: rawItem.item_id,
             name: "unknown",
             display_name: "Carregando...",
@@ -257,83 +301,65 @@ function hydrateItem(rawItem) {
             item_type: "outros",
             stars: 1,
             description: "Carregando...",
-            min_attack: 0, attack: 0, defense: 0, health: 0 
-        };
-    }
-
-    return {
-        ...rawItem,
-        items: def
+            min_attack: 0, attack: 0, defense: 0, health: 0
+        }
     };
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando script inventory.js...');
-    
-    // Nota: o fade-in do vídeo de fundo é gerenciado pelo skin_system.init()
-    // que conhece imediatamente qual src usar (padrão ou skin ativa).
+// Re-hidrata tudo (usado quando as definições chegam depois da primeira renderização)
+function rehydrateAll() {
+    allInventoryItems = allInventoryItems.map(i => {
+        const { items: _old, ...raw } = i;           // descarta o snapshot antigo
+        return hydrateItem(raw);
+    });
+    equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
+}
 
-    // Auth Otimista: tenta recuperar ID do cache local para exibição imediata
-    const localId = getLocalUserId();
-    if (localId) {
-        console.log("⚡ Auth Otimista: ID recuperado localmente.");
-        globalUser = { id: localId };
-    }
+// ============================================================
+// BOOT — ordem importa:
+//   1) liga TODOS os eventos de UI (X dos modais, abas, botões)   → nunca depende de rede/IDB
+//   2) inicia skins (vídeo/moldura) a partir do cache local       → idem
+//   3) só então sessão + definições + inventário (com timeouts)
+// Antes, 1 e 2 ficavam DEPOIS de `await loadPlayerAndItems()`. Se o IndexedDB ou o
+// Supabase (lock de auth entre páginas) travasse, o handler nunca chegava neles:
+// vídeo invisível (opacity:0), modal sem fechar, botões mortos. Recarregar "curava".
+// ============================================================
 
-    // Sempre valida/renova a sessão com o Supabase em background.
-    // Isso resolve o "adormecimento": após inatividade a sessão expira no cliente
-    // e os RPCs falham silenciosamente. getSession() renova o token se necessário.
-    try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
+const MODAL_CLOSERS = {
+    closeDetailsModal:       'itemDetailsModal',
+    closeCraftingModal:      'craftingModal',
+    closeFragmentModal:      'fragmentSelectModal',
+    closeRefineFragmentModal:'refineFragmentModal',
+    customAlertOkBtn:        'customAlertModal'
+};
 
-        if (session && session.user) {
-            // Atualiza o usuário global com a sessão fresca (token renovado)
-            globalUser = session.user;
-            console.log("✅ Sessão Supabase validada/renovada.");
-        } else if (!globalUser) {
-            // Sem sessão e sem cache local: redireciona para login
-            console.warn("Nenhuma sessão ativa. Redirecionando para login.");
-            window.location.href = "index.html?refresh=true";
-            return;
+function bindStaticUI() {
+    if (window.__inventoryUIBound) return;
+    window.__inventoryUIBound = true;
+
+    // Delegação: continua funcionando mesmo se outro script clonar/substituir o botão (refundir.js faz isso com o OK)
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest ? e.target.closest(Object.keys(MODAL_CLOSERS).map(id => '#' + id).join(',')) : null;
+        if (!btn) return;
+        const modal = document.getElementById(MODAL_CLOSERS[btn.id]);
+        if (modal) modal.style.display = 'none';
+    });
+
+    // Rede de segurança: ESC fecha o modal aberto mais "alto"
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        for (const id of ['customAlertModal', 'refineFragmentModal', 'fragmentSelectModal', 'craftingModal', 'itemDetailsModal', 'skinManagerModal']) {
+            const m = document.getElementById(id);
+            if (m && m.style.display && m.style.display !== 'none') { m.style.display = 'none'; break; }
         }
-        // Se globalUser veio do cache mas a sessão retornou vazia,
-        // tenta refreshSession antes de desistir
-        if (!session && globalUser) {
-            const { data: refreshData } = await supabase.auth.refreshSession();
-            if (refreshData?.session?.user) {
-                globalUser = refreshData.session.user;
-                console.log("♻️ Sessão renovada via refreshSession.");
-            } else {
-                console.warn("Sessão inválida após refresh. Redirecionando.");
-                window.location.href = "index.html?refresh=true";
-                return;
-            }
-        }
-    } catch (e) {
-        // Se falhar a validação mas temos o ID local, continuamos (modo offline parcial)
-        if (!globalUser) {
-            console.error("Erro ao validar sessão:", e);
-            window.location.href = "index.html?refresh=true";
-            return;
-        }
-        console.warn("⚠️ Falha ao validar sessão, usando ID em cache:", e);
-    }
-    
-    // >>> PASSO CRUCIAL: Garante que temos as definições <<<
-    await ensureDefinitionsLoaded();
-
-    // Inicia carregamento do inventário
-    await loadPlayerAndItems();
-
-    // === SKIN: Inicializa sistema de skins após carregar inventário ===
-    window.skinSystem?.init();
+    });
 
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
         console.log('Botão de refresh clicado. Forçando a recarga.');
         await ensureDefinitionsLoaded();
-        await loadPlayerAndItems(true); 
+        rehydrateAll();
+        await loadPlayerAndItems(true);
     });
 
     document.querySelectorAll('.tab-button').forEach(button => {
@@ -344,47 +370,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Eventos de Modais
-    document.getElementById('closeDetailsModal')?.addEventListener('click', () => {
-        document.getElementById('itemDetailsModal').style.display = 'none';
-    });
-
-    document.getElementById('closeCraftingModal')?.addEventListener('click', () => {
-        document.getElementById('craftingModal').style.display = 'none';
-    });
-
     document.getElementById('levelUpBtn')?.addEventListener('click', () => {
-        if (!selectedItem) {
-            showCustomAlert('Nenhum item selecionado para evoluir.');
-            return;
-        }
+        if (!selectedItem) { showCustomAlert('Nenhum item selecionado para evoluir.'); return; }
         document.getElementById('fragmentSelectModal').style.display = 'flex';
         renderFragmentList(selectedItem);
     });
 
     document.getElementById('refineBtn')?.addEventListener('click', () => {
-        if (selectedItem) {
-            openRefineFragmentModal(selectedItem);
-        } else {
-            showCustomAlert('Nenhum item selecionado para refinar.');
-        }
+        if (selectedItem) openRefineFragmentModal(selectedItem);
+        else showCustomAlert('Nenhum item selecionado para refinar.');
     });
 
     document.getElementById('craftBtn')?.addEventListener('click', () => {
         if (selectedItem && selectedItem.items && selectedItem.items.crafts_item_id) {
-            const itemToCraftId = selectedItem.items.crafts_item_id;
-            handleCraft(itemToCraftId, selectedItem.id);
+            handleCraft(selectedItem.items.crafts_item_id, selectedItem.id);
         } else {
             showCustomAlert('Informações de construção incompletas.');
         }
-    });
-
-    document.getElementById('closeFragmentModal')?.addEventListener('click', () => {
-        document.getElementById('fragmentSelectModal').style.display = 'none';
-    });
-  
-    document.getElementById('closeRefineFragmentModal')?.addEventListener('click', () => {
-        document.getElementById('refineFragmentModal').style.display = 'none';
     });
 
     document.getElementById('confirmFragmentSelection')?.addEventListener('click', () => {
@@ -396,11 +398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const quantityInput = li.querySelector('.fragment-quantity-input');
             const qty = parseInt(quantityInput.value, 10) || 0;
             if (qty > 0) {
-                selections.push({
-                    fragment_id: li.dataset.inventoryItemId,
-                    qty,
-                    rarity: li.dataset.rarity
-                });
+                selections.push({ fragment_id: li.dataset.inventoryItemId, qty, rarity: li.dataset.rarity });
                 totalSelecionado += qty;
             }
         });
@@ -420,11 +418,95 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         handleLevelUpMulti(item, selections);
     });
+}
 
-    document.getElementById('customAlertOkBtn')?.addEventListener('click', () => {
-        document.getElementById('customAlertModal').style.display = 'none';
-    });
-});
+// Garante sessão sem nunca travar o boot. Retorna false se precisou redirecionar.
+async function resolveSession() {
+    const localId = getLocalUserId();
+    if (localId) {
+        console.log("⚡ Auth Otimista: ID recuperado localmente.");
+        globalUser = { id: localId };
+    }
+
+    try {
+        const { data: { session }, error: sessionError } = await withTimeout(supabase.auth.getSession(), 6000, 'getSession');
+        if (sessionError) throw sessionError;
+
+        if (session && session.user) {
+            globalUser = session.user;
+            console.log("✅ Sessão Supabase validada/renovada.");
+        } else if (!globalUser) {
+            console.warn("Nenhuma sessão ativa. Redirecionando para login.");
+            window.location.href = "index.html?refresh=true";
+            return false;
+        } else {
+            const { data: refreshData } = await withTimeout(supabase.auth.refreshSession(), 6000, 'refreshSession');
+            if (refreshData?.session?.user) {
+                globalUser = refreshData.session.user;
+                console.log("♻️ Sessão renovada via refreshSession.");
+            } else {
+                console.warn("Sessão inválida após refresh. Redirecionando.");
+                window.location.href = "index.html?refresh=true";
+                return false;
+            }
+        }
+    } catch (e) {
+        if (!globalUser) {
+            console.error("Erro ao validar sessão:", e);
+            window.location.href = "index.html?refresh=true";
+            return false;
+        }
+        console.warn("⚠️ Falha/timeout ao validar sessão, usando ID em cache:", e);
+    }
+    return true;
+}
+
+async function bootstrapData() {
+    if (!(await resolveSession())) return;
+
+    const defsOk = await ensureDefinitionsLoaded();
+    await loadPlayerAndItems();
+
+    // Definições falharam (rede ruim)? Tenta de novo em segundo plano e re-hidrata sem recarregar a página
+    if (!defsOk) {
+        const retry = async () => {
+            if (await ensureDefinitionsLoaded()) {
+                rehydrateAll();
+                renderUI();
+                window.skinSystem?.reconcileWithServer?.(...(window.__lastActiveSkinIds || [undefined, undefined]));
+                return true;
+            }
+            return false;
+        };
+        setTimeout(async () => { if (!(await retry())) setTimeout(retry, 15000); }, 4000);
+    }
+}
+
+function startInventoryPage() {
+    console.log('DOM carregado. Iniciando script inventory.js...');
+
+    // 1) UI imediata
+    try { bindStaticUI(); } catch (e) { console.error('Erro ao ligar UI:', e); }
+
+    // 2) Skins imediatas (usa só localStorage). O fade-in do vídeo vem daqui.
+    try { window.skinSystem?.init(); } catch (e) { console.error('Erro no skinSystem.init:', e); }
+
+    // Rede de segurança: se por qualquer motivo o vídeo continuar invisível, mostra o que estiver carregado
+    setTimeout(() => {
+        const v = document.getElementById('background-video');
+        if (v && parseFloat(getComputedStyle(v).opacity) === 0) {
+            v.style.transition = 'opacity 1.5s ease-in';
+            v.style.opacity = '0.98';
+            v.play?.().catch(() => {});
+        }
+    }, 5000);
+
+    // 3) Dados (nunca bloqueia os passos acima)
+    bootstrapData().catch(err => console.error('Erro no carregamento do inventário:', err));
+}
+
+if (document.readyState === 'complete') startInventoryPage();
+else document.addEventListener('DOMContentLoaded', startInventoryPage, { once: true });
 
 function showCustomAlert(message, shareCtx) {
     const modal = document.getElementById('customAlertModal');
@@ -492,129 +574,151 @@ function showCustomConfirm(message, onConfirm) {
 // CARREGAMENTO OTIMIZADO (Delta Sync + Lazy Load Fallback)
 // ===============================
 
-async function loadPlayerAndItems(forceRefresh = false) {
+// Single-flight: evita 2 cargas simultâneas (ex.: expiração de skin + boot) corrompendo o cache
+let _loadInFlight = null;
+function loadPlayerAndItems(forceRefresh = false) {
+    if (_loadInFlight) {
+        return _loadInFlight.then(() => forceRefresh ? loadPlayerAndItems(true) : undefined);
+    }
+    _loadInFlight = _loadPlayerAndItems(forceRefresh)
+        .catch(err => console.error('Erro em loadPlayerAndItems:', err))
+        .finally(() => { _loadInFlight = null; });
+    return _loadInFlight;
+}
+
+function _stripDef(item) {
+    const { items: _def, _placeholder, ...raw } = item;
+    return raw;
+}
+
+function _notifySkinReconcile(frameId, videoId) {
+    window.__lastActiveSkinIds = [frameId ?? null, videoId ?? null];
+    window.skinSystem?.reconcileWithServer(frameId ?? null, videoId ?? null);
+}
+
+async function _loadPlayerAndItems(forceRefresh = false) {
     if (!globalUser) return;
 
     let localItems = [];
     let localStats = null;
-    let localTimestamp = null;
 
-    // 1. Tenta carregar dados do Cache Local (IndexedDB)
+    // 1. Cache local (IndexedDB) — com timeout; falha aqui NUNCA pode travar o resto
     try {
-        [localItems, localStats, localTimestamp] = await Promise.all([
+        let localTimestamp;
+        [localItems, localStats, localTimestamp] = await withTimeout(Promise.all([
             loadCache(),
             loadPlayerStatsFromCache(),
             getLastUpdated()
-        ]);
+        ]), 5000, 'idb');
 
-        // Se tiver dados locais, exibe imediatamente (Optimistic UI)
-        if (localItems && localItems.length >= 0) {
+        // Descarta qualquer snapshot de definição que tenha ficado gravado (versões antigas)
+        localItems = (localItems || []).map(_stripDef);
+
+        // Descarta registros inventados por páginas antigas (id string "hunt_drop_..." ou id temporário negativo).
+        // Eles não existem no servidor; mantê-los no manifesto derrubava o sync_inventory (cast para bigint).
+        localItems = localItems.filter(i => typeof i.id === 'number' && i.id > 0);
+
+        // Cache parcial (itens sem item_id gravados pelo script.js) => não dá para confiar: baixa tudo
+        if (localItems.some(i => i.item_id == null)) {
+            console.warn('⚠️ Cache local incompleto detectado. Forçando download completo.');
+            forceRefresh = true;
+        }
+
+        if (localItems.length > 0) {
             console.log('✅ UI Otimista: Exibindo dados locais enquanto sincroniza...');
-            
-            // Hidrata os itens do cache
-            allInventoryItems = localItems.map(item => hydrateItem(item));
-            
+            allInventoryItems = localItems.map(item => hydrateItem({ ...item }));
             playerBaseStats = localStats || {};
-            
             equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
-            
             renderUI();
         }
     } catch (e) {
         console.warn("Erro ao ler cache local:", e);
+        localItems = [];
     }
 
-    // 2. Se for Refresh Forçado ou Cache Vazio -> Download Completo
+    // 2. Refresh forçado ou cache vazio -> Download completo
     if (forceRefresh || !localItems || localItems.length === 0) {
         console.log('🔄 Cache vazio ou Refresh forçado. Iniciando Download Completo...');
         await fullDownload();
         return;
     }
 
-    // 3. Tenta Sincronização Diferencial (Delta Sync)
+    // 3. Delta Sync
     console.log('🔄 Iniciando Delta Sync com servidor...');
     const manifest = generateManifest(localItems);
 
-    const { data: deltaData, error: deltaError } = await supabase.rpc('sync_inventory', {
-        p_player_id: globalUser.id,
-        p_client_manifest: manifest
-    });
+    let deltaData = null, deltaError = null;
+    try {
+        ({ data: deltaData, error: deltaError } = await withTimeout(
+            supabase.rpc('sync_inventory', { p_player_id: globalUser.id, p_client_manifest: manifest }),
+            12000, 'sync_inventory'
+        ));
+    } catch (e) {
+        deltaError = e;
+    }
 
     if (deltaError || !deltaData) {
-        console.warn('⚠️ Falha no Delta Sync (RPC error). Fazendo fallback para Download Completo.', deltaError);
+        console.warn('⚠️ Falha no Delta Sync. Fazendo fallback para Download Completo.', deltaError);
         await fullDownload();
         return;
     }
 
-    // 4. Aplica as mudanças do Delta Sync
+    // 4. Aplica o delta
     try {
         console.log(`📥 Delta recebido: ${deltaData.upsert?.length || 0} modificados, ${deltaData.remove?.length || 0} removidos.`);
-        
-        let mergedList = processInventoryDelta(localItems, deltaData);
-        
-        // >>> HIDRATAÇÃO: Cruza com as definições carregadas <<<
-        mergedList = mergedList.map(item => hydrateItem(item));
-        
+
+        let mergedList = processInventoryDelta(localItems, deltaData).map(item => hydrateItem({ ...item }));
+
         allInventoryItems = mergedList;
         equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
-        
-        if (deltaData.player_stats) {
-            playerBaseStats = deltaData.player_stats;
-        }
+
+        if (deltaData.player_stats) playerBaseStats = deltaData.player_stats;
 
         renderUI();
 
-        // === SKIN: Reconcilia estado local com o que o servidor retornou ===
-        // (Delta sync agora também retorna active_frame/video_inventory_id)
-        window.skinSystem?.reconcileWithServer(
-            deltaData.active_frame_inventory_id ?? null,
-            deltaData.active_video_inventory_id ?? null
-        );
-
-        // Salva o novo estado no cache
+        // Salva ANTES de reconciliar/iniciar timers: se algo abaixo falhar, o cache já está correto
         await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);
         console.log('💾 Cache local sincronizado e salvo.');
 
-        // === SKIN: Inicia timers de skins recebidas e ainda não iniciadas ===
-        await initPendingSkinTimers();
+        _notifySkinReconcile(deltaData.active_frame_inventory_id, deltaData.active_video_inventory_id);
 
+        await initPendingSkinTimers();
     } catch (e) {
         console.error("Erro ao processar Delta Sync:", e);
         await fullDownload();
     }
 }
 
-// Função de Download Completo (Fallback seguro)
+// Download Completo (fallback seguro)
 async function fullDownload() {
     console.log('⬇️ Executando get_player_data_lazy (Full Load)...');
-    
-    const { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
 
-    if (rpcError) {
-        console.error('❌ Erro crítico ao baixar inventário:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Verifique sua conexão.');
+    let playerData = null, rpcError = null;
+    try {
+        ({ data: playerData, error: rpcError } = await withTimeout(
+            supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id }),
+            15000, 'get_player_data_lazy'
+        ));
+    } catch (e) {
+        rpcError = e;
+    }
+
+    if (rpcError || !playerData) {
+        console.error('❌ Erro crítico ao baixar inventário:', rpcError?.message || rpcError);
+        // Só incomoda o jogador se não há NADA na tela; senão mantém os dados locais
+        if (!allInventoryItems || allInventoryItems.length === 0) {
+            showCustomAlert('Erro ao carregar inventário. Verifique sua conexão.');
+        }
         return;
     }
 
     playerBaseStats = playerData.cached_combat_stats || {};
-    
-    // Pega itens crus e HIDRATA no cliente
+
     const rawItems = playerData.cached_inventory || [];
-    allInventoryItems = rawItems.map(item => hydrateItem(item));
-    
+    allInventoryItems = rawItems.map(item => hydrateItem({ ...item }));
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null && item.quantity > 0);
 
     renderUI();
-
-    // === SKIN: Reconcilia estado local com o que o servidor retornou ===
-    window.skinSystem?.reconcileWithServer(
-        playerData.active_frame_inventory_id ?? null,
-        playerData.active_video_inventory_id ?? null
-    );
-
-    // === SKIN: Inicia timers de skins recebidas e ainda não iniciadas ===
-    await initPendingSkinTimers();
 
     try {
         await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
@@ -622,6 +726,10 @@ async function fullDownload() {
     } catch (e) {
         console.warn("⚠️ Erro não-crítico ao salvar cache:", e);
     }
+
+    _notifySkinReconcile(playerData.active_frame_inventory_id, playerData.active_video_inventory_id);
+
+    await initPendingSkinTimers();
 }
 
 function renderUI() {
@@ -803,10 +911,13 @@ async function initPendingSkinTimers() {
     console.log(`[Skin] ${pending.length} skin(s) sem timer — iniciando...`);
 
     for (const skinItem of pending) {
-        const { data } = await supabase.rpc('start_skin_expiry', {
-            p_inventory_item_id: skinItem.id,
-            p_player_id        : globalUser.id
-        });
+        let data = null;
+        try {
+            ({ data } = await withTimeout(supabase.rpc('start_skin_expiry', {
+                p_inventory_item_id: skinItem.id,
+                p_player_id        : globalUser.id
+            }), 8000, 'start_skin_expiry'));
+        } catch (e) { console.warn('[Skin] start_skin_expiry falhou:', e); continue; }
 
         if (data?.success && data.expires_at) {
             // Atualiza localmente sem precisar rebaixar tudo
@@ -824,7 +935,7 @@ async function initPendingSkinTimers() {
 
 
 async function updateLocalInventoryState(args) {
-    const { updatedItemId, newItemData, usedFragments, usedCrystals, newStats, equipUpdate } = args;
+    const { updatedItemId, newItemData, usedFragments, usedCrystals, newStats, equipUpdate, inventoryUpdates, removedItemIds } = args;
     let needsSort = false;
 
     // 1. Atualiza Item Principal (Equipamento evoluído/refinado)
@@ -845,6 +956,29 @@ async function updateLocalInventoryState(args) {
         const hydrated = hydrateItem(newItemData);
         allInventoryItems.push(hydrated);
         needsSort = true;
+    }
+
+    // 1b. Linhas COMPLETAS devolvidas pelo servidor (construção, desconstrução, refundição...). O servidor é a fonte da
+    // verdade: evita descobrir localmente qual linha duplicada foi descontada e dispensa SELECT extra (egress).
+    if (Array.isArray(removedItemIds)) {
+        removedItemIds.forEach(rid => {
+            const k = allInventoryItems.findIndex(i => i.id === rid);
+            if (k > -1) allInventoryItems.splice(k, 1);
+        });
+    }
+    if (Array.isArray(inventoryUpdates)) {
+        inventoryUpdates.forEach(row => {
+            if (!row || row.id == null) return;
+            const { items: _ignored, ...raw } = row;               // nunca confia em definição embutida
+            const k = allInventoryItems.findIndex(i => i.id === row.id);
+            if (k > -1) {
+                allInventoryItems[k] = { ...allInventoryItems[k], ...raw };
+                if (selectedItem && selectedItem.id === row.id) selectedItem = allInventoryItems[k];
+            } else {
+                allInventoryItems.push(hydrateItem({ ...raw }));
+                needsSort = true;
+            }
+        });
     }
 
     // 2. Decrementa Fragmentos Usados
@@ -1062,9 +1196,10 @@ async function handleCraft(itemId, fragmentId) {
             document.getElementById('itemDetailsModal').style.display = 'none';
             selectedItem = null;
 
-            let newItemFull = null;
-            if (data.new_item_id) {
-                // Fetch necessário aqui pois é um item novo que não temos no cache
+            // O servidor já devolve a linha completa do item novo (new_item): sem SELECT extra.
+            // O fetch fica só como fallback caso o SQL antigo ainda esteja publicado.
+            let newItemFull = data.new_item || null;
+            if (!newItemFull && data.new_item_id) {
                 const { data: fetched } = await supabase.from('inventory_items').select('*').eq('id', data.new_item_id).single();
                 newItemFull = fetched;
             }
@@ -1570,5 +1705,6 @@ window.openRefineFragmentModal = openRefineFragmentModal;
 window.saveCache = saveCache;
 window.renderUI = renderUI;
 window.loadPlayerAndItems = loadPlayerAndItems;
+window.hydrateItem = hydrateItem;
 
 if (!window.handleDeconstruct) window.handleDeconstruct = () => {};

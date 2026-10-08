@@ -43,7 +43,7 @@ function injectStyles() {
             max-width: 90vw;
         }
         #titleNotificationBanner.show {
-            animation: slideTitleBanner 6s linear forwards;
+            animation: slideTitleBanner 10s linear forwards;
         }
         #titleNotificationBanner.royal-announcement {
             border-left: 4px solid #ff4444; /* Cor diferente para o Rei */
@@ -275,7 +275,7 @@ function patchTitlesCache(cityId, freshNobles, newOwnerGuildId, leaderInfo) {
 function invalidateOwnersCache(playerIds) {
     if (!playerIds || playerIds.length === 0) return;
 
-    const req = indexedDB.open('aden_global_db', 6);
+    const req = indexedDB.open('aden_global_db');
     req.onsuccess = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('owners_store')) return;

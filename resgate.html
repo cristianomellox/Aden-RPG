@@ -355,12 +355,17 @@
       const DB_NAME = "aden_inventory_db";
       const STORE_NAME = "inventory_store";
       const META_STORE = "meta_store";
-      const DB_VERSION = 44; 
+      // Sem versão fixa (antes: 44, abaixo da atual => VersionError e o cache nunca era atualizado).
+      // O schema é do inventory.js.
 
       function openDB() {
           return new Promise((resolve, reject) => {
-              const req = indexedDB.open(DB_NAME, DB_VERSION);
-              req.onsuccess = () => resolve(req.result);
+              const req = indexedDB.open(DB_NAME);
+              req.onsuccess = () => {
+                  const db = req.result;
+                  db.onversionchange = () => db.close();
+                  resolve(db);
+              };
               req.onerror = () => reject(req.error);
           });
       }
@@ -368,13 +373,25 @@
       async function surgicalCacheUpdate(newItems, newTimestamp) {
           try {
               const db = await openDB();
+              if (!db.objectStoreNames.contains(STORE_NAME) || !db.objectStoreNames.contains(META_STORE)) {
+                  db.close();
+                  return; // banco ainda não criado: a bolsa baixa tudo na próxima visita
+              }
               const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
               const store = tx.objectStore(STORE_NAME);
               const meta = tx.objectStore(META_STORE);
 
-              // 1. Atualiza ou insere os itens modificados
+              // 1. Merge (não substitui o registro inteiro) e nunca grava definição velha em `items`
               if (Array.isArray(newItems) && newItems.length > 0) {
-                  newItems.forEach(item => store.put(item));
+                  newItems.forEach(item => {
+                      if (!item || item.id == null) return;
+                      const getReq = store.get(item.id);
+                      getReq.onsuccess = () => {
+                          const { items: _ignored, ...incoming } = item;
+                          store.put({ ...(getReq.result || {}), ...incoming });
+                      };
+                      getReq.onerror = () => { const { items: _i, ...raw } = item; store.put(raw); };
+                  });
               }
 
               // 2. Atualiza o Timestamp para evitar redownload no inventário
@@ -386,8 +403,10 @@
               return new Promise(resolve => {
                   tx.oncomplete = () => {
                       console.log("✅ [Resgate] Cache local atualizado com sucesso.");
+                      db.close();
                       resolve();
-                  }
+                  };
+                  tx.onerror = tx.onabort = () => { db.close(); resolve(); };
               });
           } catch (e) {
               console.warn("⚠️ Falha ao atualizar IndexedDB via resgate:", e);

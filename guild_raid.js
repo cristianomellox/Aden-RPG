@@ -7,33 +7,48 @@ import { supabase } from './supabaseClient.js'
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47; 
 
 function openDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        // Sem versão fixa (quem controla o schema é o inventory.js). Se o banco ainda não existir,
+        // cria apenas as stores vazias; o inventory.js faz o upgrade depois.
+        const req = indexedDB.open(DB_NAME);
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
             if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: "key" });
         };
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+            const db = req.result;
+            db.onversionchange = () => db.close();
+            resolve(db);
+        };
         req.onerror = () => reject(req.error);
     });
 }
 
 /**
- * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
+ * Atualiza o cache local "cirurgicamente" dentro da página de Raid (com MERGE:
+ * o servidor manda itens parciais e o put() cru apagava level/bônus/item_id do registro).
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
         const db = await openDB();
+        if (!db.objectStoreNames.contains(STORE_NAME) || !db.objectStoreNames.contains(META_STORE)) { db.close(); return; }
         const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => store.put(item));
+            newItems.forEach(item => {
+                if (!item || item.id == null) return;
+                const getReq = store.get(item.id);
+                getReq.onsuccess = () => {
+                    const { items: _ignored, ...incoming } = item;
+                    store.put({ ...(getReq.result || {}), ...incoming });
+                };
+                getReq.onerror = () => { const { items: _i, ...raw } = item; store.put(raw); };
+            });
         }
 
         if (newTimestamp) {
@@ -42,9 +57,8 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         }
 
         return new Promise(resolve => {
-            tx.oncomplete = () => {
-                resolve();
-            }
+            tx.oncomplete = () => resolve();
+            tx.onerror = tx.onabort = () => resolve();
         });
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB localmente na Raid:", e);

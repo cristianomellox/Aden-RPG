@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // ADEN GLOBAL DB
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7;
+const GLOBAL_DB_VERSION = 8;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 
@@ -13,11 +13,18 @@ const GlobalDB = {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
             req.onupgradeneeded = (e) => {
+                // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
+                // Antes cada página criava só as stores que conhecia; quem abrisse o banco primeiro
+                // (ex.: após limpar os dados do site) deixava owners_store/bonds_store/player_store faltando.
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
-                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach(n => {
+                    if (!db.objectStoreNames.contains(n)) {
+                        db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+                    }
+                });
             };
-            req.onsuccess = () => resolve(req.result);
+            req.onblocked = () => console.warn('[GlobalDB] abertura bloqueada por outra aba.');
+            req.onsuccess = () => { const _db = req.result; _db.onversionchange = () => _db.close(); resolve(_db); };
             req.onerror = () => reject(req.error);
         });
     },
@@ -452,11 +459,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             const db = await new Promise((resolve, reject) => {
                 const req = indexedDB.open('aden_inventory_db');
-                req.onsuccess = () => resolve(req.result);
+                req.onsuccess = () => { const d = req.result; d.onversionchange = () => d.close(); resolve(d); };
                 req.onerror   = () => reject(req.error);
             });
 
             const items = await new Promise((resolve, reject) => {
+                if (!db.objectStoreNames.contains('inventory_store')) { resolve([]); return; }
                 const tx  = db.transaction('inventory_store', 'readonly');
                 const req = tx.objectStore('inventory_store').getAll();
                 req.onsuccess = () => resolve(req.result || []);

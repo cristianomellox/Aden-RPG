@@ -4,7 +4,7 @@
 // >>> ADEN GLOBAL DB (Para Atualização Local) <<<
 // =========================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 7;
+const GLOBAL_DB_VERSION = 8;
 const PLAYER_STORE = 'player_store';
 const AUTH_STORE = 'auth_store'; 
 
@@ -12,7 +12,17 @@ const GlobalDB = {
     open: function() {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
-            req.onsuccess = () => resolve(req.result);
+            req.onupgradeneeded = (e) => {
+                // Schema ÚNICO do aden_global_db (v8) — idêntico em TODAS as páginas.
+                const db = e.target.result;
+                ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach(n => {
+                    if (!db.objectStoreNames.contains(n)) {
+                        db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+                    }
+                });
+            };
+            req.onblocked = () => console.warn('[GlobalDB] abertura bloqueada por outra aba.');
+            req.onsuccess = () => { const _db = req.result; _db.onversionchange = () => _db.close(); resolve(_db); };
             req.onerror = () => reject(req.error);
         });
     },

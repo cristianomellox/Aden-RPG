@@ -118,8 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const stoneId = 20; // ID do item "Pedra de Refundição"
 
             // Verifica se tem pedras antes de chamar o servidor
-            const stoneItem = allInventoryItems.find(item => item.item_id === stoneId);
-            if (!stoneItem || stoneItem.quantity < stonesUsed) {
+            // Soma TODAS as linhas de pedra (com linhas duplicadas, a primeira podia estar zerada e dava falso "sem pedras")
+            const stoneRows = allInventoryItems.filter(item => item.item_id === stoneId);
+            const stoneTotal = stoneRows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+            const stoneItem = stoneRows.find(r => (r.quantity || 0) > 0) || stoneRows[0];
+            if (!stoneItem || stoneTotal < stonesUsed) {
                 showCustomAlert("Você não tem Pedras de Refundição suficientes.");
                 return;
             }
@@ -148,10 +151,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Atualiza a quantidade de pedras de refundição LOCALMENTE
             // CORREÇÃO: Usando a assinatura correta de updateLocalInventoryState({ ... })
-            if (typeof updateLocalInventoryState === 'function' && stoneItem) {
-                await updateLocalInventoryState({
-                    usedFragments: [{ id: stoneItem.id, qty: stonesUsed }]
-                });
+            // Preferência: linhas de pedra já atualizadas pelo servidor (não adivinha qual linha foi descontada)
+            if (typeof updateLocalInventoryState === 'function') {
+                if (Array.isArray(data.inventory_updates)) {
+                    await updateLocalInventoryState({ inventoryUpdates: data.inventory_updates });
+                } else if (stoneItem) {
+                    await updateLocalInventoryState({
+                        usedFragments: [{ id: stoneItem.id, qty: stonesUsed }]
+                    });
+                }
             }
 
             // Atualiza o currentItem com o pending_reforge retornado para persistência local temporária

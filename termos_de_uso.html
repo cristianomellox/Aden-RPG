@@ -6,6 +6,8 @@
     <meta name="robots" content="index, follow">
     <meta name="googlebot" content="index, follow">
     <title>Termos de Uso</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         /* Estilos base para garantir que o layout ocupe 100% da tela */
         body, html {
@@ -100,14 +102,96 @@ font > font {
     box-shadow: none !important;
     position: static !important;
 }
+
+        /* ── SIDEBAR MENU (mesmo da página de download) ── */
+        #dl-sidebar-overlay {
+            position: fixed; inset: 0; z-index: 300;
+            background: rgba(0,0,0,0.55);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.28s ease;
+        }
+        #dl-sidebar-overlay.open { opacity: 1; pointer-events: all; }
+
+        #dl-sidebar {
+            position: fixed; top: 0; left: 0;
+            width: 260px; height: 100%;
+            background: linear-gradient(to bottom, #1e1508, #110d04);
+            border-right: 1px solid rgba(201,169,74,0.55);
+            box-shadow: 4px 0 32px rgba(0,0,0,0.8);
+            z-index: 350;
+            transform: translateX(-100%);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+            display: flex; flex-direction: column;
+        }
+        #dl-sidebar.open { transform: translateX(0); }
+
+        #dl-sidebar-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(201,169,74,0.30);
+            background: linear-gradient(to bottom, #2a1c08, #1a1106);
+        }
+        #dl-sidebar-header h3 {
+            font-family: 'Cinzel', serif; font-size: 1.1rem;
+            font-weight: 600; color: #e8d08a;
+            letter-spacing: 0.08em; margin: 0;
+        }
+        #dl-sidebar-close {
+            background: none; border: none; cursor: pointer;
+            color: silver; padding: 4px;
+            display: flex; align-items: center; justify-content: center;
+            transition: color 0.15s;
+        }
+        #dl-sidebar-close:hover { color: #c9a94a; }
+
+        #dl-sidebar-list { list-style: none; padding: 12px 0; margin: 0; flex: 1; }
+        .dl-menu-item { display: block; }
+        .dl-menu-link {
+            display: flex; align-items: center; gap: 14px;
+            padding: 13px 20px;
+            color: #e8e0cc; text-decoration: none;
+            font-family: 'Cinzel', serif; font-size: 1rem;
+            letter-spacing: 0.04em;
+            border-left: 3px solid transparent;
+            transition: background 0.18s, border-color 0.18s, color 0.18s;
+            cursor: pointer;
+        }
+        .dl-menu-link:hover {
+            background: rgba(201,169,74,0.10);
+            border-left-color: #8a6e24;
+            color: #e8d08a;
+        }
+        .dl-menu-icon {
+            width: 28px; height: 28px;
+            object-fit: contain; flex-shrink: 0;
+            opacity: 0.85;
+        }
+        .dl-menu-link:hover .dl-menu-icon { opacity: 1; }
+
+        /* botão hambúrguer na topbar */
+        #dl-hamburger-btn {
+            background: none; border: 4px solid rgba(201,169,74,0.30);
+            border-radius: 6px; width: 44px; height: 34px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: #c9a94a;
+            transition: border-color 0.2s, background 0.2s, transform 0.15s;
+        }
+        #dl-hamburger-btn:hover {
+            border-color: #c9a94a; background: rgba(201,169,74,0.12); transform: scale(1.06);
+        }
+        #dl-hamburger-btn svg { width: 20px; height: 20px; }
     </style>
 </head>
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" style="color: white;" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <button id="dl-hamburger-btn" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+        </button>
         <div id="pageTitle">Termos de Uso</div>
         <div style="width: 44px; height: 34px;"></div> 
     </div>
@@ -250,5 +334,52 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<!-- ══ SIDEBAR MENU ══ -->
+<div id="dl-sidebar-overlay"></div>
+<div id="dl-sidebar" role="dialog" aria-label="Menu de navegação">
+    <div id="dl-sidebar-header">
+        <h3>Menu</h3>
+        <button id="dl-sidebar-close" aria-label="Fechar menu">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+    </div>
+    <ul id="dl-sidebar-list">
+        <li class="dl-menu-item">
+            <a href="sobre.html" class="dl-menu-link">
+                <img src="/assets/sobre.webp" class="dl-menu-icon" alt="" onerror="this.style.display='none'">
+                <span>Sobre</span>
+            </a>
+        </li>
+        <li class="dl-menu-item">
+            <a href="download.html" class="dl-menu-link">
+                <img src="/assets/icontitulos.webp" class="dl-menu-icon" alt="" onerror="this.style.display='none'">
+                <span>Download</span>
+            </a>
+        </li>
+    </ul>
+</div>
+
+<script>
+(function() {
+    const sidebar  = document.getElementById('dl-sidebar');
+    const overlay  = document.getElementById('dl-sidebar-overlay');
+    const openBtn  = document.getElementById('dl-hamburger-btn');
+    const closeBtn = document.getElementById('dl-sidebar-close');
+
+    function openSidebar()  { sidebar.classList.add('open');    overlay.classList.add('open'); }
+    function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+
+    openBtn.addEventListener('click', openSidebar);
+    closeBtn.addEventListener('click', closeSidebar);
+    overlay.addEventListener('click', closeSidebar);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && sidebar.classList.contains('open')) closeSidebar();
+    });
+})();
+</script>
 </body>
 </html>

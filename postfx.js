@@ -36,9 +36,9 @@ export const POSTFX_CONFIG = {
     // câmera (ver updateMotionBlur) — some sozinho quando a câmera para.
     motionBlur: {
         enabled: true,
-        maxAmount: 0.035,   // teto do deslocamento de amostragem (em UV, 0-1)
-        sensitivity: 2.2,   // rad/frame → uAmount
-        smoothing: 0.72,    // 0 = reage instantâneo, 1 = nunca muda (suaviza o "liga/desliga")
+        maxAmount: 0.005,   // teto do deslocamento de amostragem (em UV, 0-1)
+        sensitivity: 1.2,   // rad/frame → uAmount
+        smoothing: 0.42,    // 0 = reage instantâneo, 1 = nunca muda (suaviza o "liga/desliga")
     },
 
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo

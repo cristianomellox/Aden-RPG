@@ -1,12 +1,11 @@
 {
-  "sons": "v1.0.1",
-  "mapas1": "v1.0.1",
-  "mapas2": "v1.0.1",
-  "videos1": "v1.0.1",
-  "videos2": "v1.0.1",
-  "npc": "v1.0.1",
-  "outros": "v1.0.1",
-  "mobs": "v1.0.1",
-  "mobs2": "v1.0.1",
-  "misc": "v1.0.2"
+  "sons": "v1.0.3",
+  "mapas1": "v1.0.3",
+  "mapas2": "v1.0.3",
+  "videos1": "v1.0.3",
+  "videos2": "v1.0.3",
+  "npc": "v1.0.3",
+  "outros": "v1.0.3",
+  "mobs": "v1.0.3",
+  "mobs2": "v1.0.3"
 }

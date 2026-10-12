@@ -1259,10 +1259,22 @@ hr {
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   height: 4px;
 }
+/* ── Posição do monstro no combate (ajuste fino aqui) ──────────────────
+   --raid-mob-drop: quanto o monstro desce em relação ao centro da área
+                    (pra ficar "pisando" no chão do cenário, não flutuando).
+   --raid-name-gap: distância entre o nome e o topo (cabeça) do monstro.
+   Os efeitos de impacto (anéis, números de dano, cura) usam o mesmo
+   --raid-mob-drop em guild_raid.js, então acompanham o monstro. */
+#raidCombatModal {
+  --raid-mob-drop: 150px;
+  --raid-name-gap: 80px;
+}
 #raidMonsterImage {
   position: absolute !important;
   top: 50%;
-  margin-top: -210px !important; /* metade da altura (420px), centraliza verticalmente sem colidir com a animação (que usa transform) */
+  /* -210px = metade da altura (420px) centraliza verticalmente; + drop desce o monstro.
+     Usa margin (e não transform) pra não colidir com a respiração orgânica em JS. */
+  margin-top: calc(-210px + var(--raid-mob-drop, 0px)) !important;
   z-index: 0 !important;
   width: 350px !important;
   height: 420px !important;
@@ -3210,9 +3222,19 @@ body {
   position: relative !important;
   z-index: 20 !important;
 }
+/* Nome ancorado ao topo do monstro: sua borda inferior fica --raid-name-gap
+   acima da cabeça (topo da imagem). Vive dentro do mesmo wrapper da imagem. */
 #raidMonsterName {
-  position: relative;
+  position: absolute !important;
+  left: 0;
+  right: 0;
+  top: calc(50% - 210px + var(--raid-mob-drop, 0px) - var(--raid-name-gap, 0px)) !important;
+  transform: translateY(-100%);
+  margin: 0 !important;
+  padding: 0 8px;
+  box-sizing: border-box;
   z-index: 2;
+  pointer-events: none;
 }
 /* ═══════════════════════════════════════════════════════════
    PATCH v5 — respiro entre o botão de recolher HUD e o

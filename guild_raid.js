@@ -595,7 +595,7 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     }
 
     // Shockwave rings (centered on monster, upper portion of area)
-    const rTop = '38%', rLeft = '50%';
+    const rTop = 'calc(38% + var(--raid-mob-drop, 0px))', rLeft = '50%';
     const r1 = document.createElement('div'); r1.className = 'raid-ring' + (isCrit ? ' crit' : '');
     r1.style.top = rTop; r1.style.left = rLeft;
     targetEl.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
@@ -627,13 +627,13 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
 
     // Damage number
     const dmgEl = document.createElement('div');
-    const topPos = isCrit ? '26%' : '31%';
+    const topPos = isCrit ? 'calc(26% + var(--raid-mob-drop, 0px))' : 'calc(31% + var(--raid-mob-drop, 0px))';
     if (isCrit) {
         dmgEl.className = 'raid-crit-num';
         dmgEl.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
         dmgEl.style.top = topPos;
         const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
-        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = '19%';
+        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = 'calc(19% + var(--raid-mob-drop, 0px))';
         targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
     } else {
         dmgEl.className = 'raid-dmg-num';
@@ -661,7 +661,7 @@ function _epicRaidMonsterHeal(targetEl, healAmount) {
         setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, 920);
     }
 
-    const rTop = '38%', rLeft = '50%';
+    const rTop = 'calc(38% + var(--raid-mob-drop, 0px))', rLeft = '50%';
     const ring = document.createElement('div');
     ring.className = 'raid-ring-heal';
     ring.style.top = rTop; ring.style.left = rLeft;
@@ -691,7 +691,7 @@ function _epicRaidMonsterHeal(targetEl, healAmount) {
     const healEl = document.createElement('div');
     healEl.className = 'raid-heal-num';
     healEl.innerHTML = '✚ +' + Number(healAmount).toLocaleString();
-    healEl.style.top = '31%';
+    healEl.style.top = 'calc(31% + var(--raid-mob-drop, 0px))';
     targetEl.appendChild(healEl);
     healEl.addEventListener('animationend', () => healEl.remove(), { once: true });
     setTimeout(() => { if (healEl.parentNode) healEl.remove(); }, 3900);
@@ -1423,11 +1423,13 @@ function updateMonsterNameAndHp(data) {
     if (!monsterNameEl) {
         monsterNameEl = document.createElement("div");
         monsterNameEl.id = "raidMonsterName";
-        monsterNameEl.style.cssText = "text-align: center; font-weight: bold; font-size: 1em; color: #fff; margin-top: -5px; text-shadow: 2px 2px 4px #000;";
+        monsterNameEl.style.cssText = "text-align: center; font-weight: bold; font-size: 1em; color: #fff; text-shadow: 2px 2px 4px #000;";
+        // Fica no mesmo wrapper (position:relative) da imagem do monstro: o CSS ancora
+        // o nome --raid-name-gap acima da cabeça (ver #raidMonsterName em guild.css).
+        const monsterImgEl = $id("raidMonsterImage");
         const monsterArea = $id("raidMonsterArea");
-        if (monsterArea) {
-            monsterArea.insertBefore(monsterNameEl, monsterArea.firstChild);
-        }
+        const nameHost = (monsterImgEl && monsterImgEl.parentElement) || monsterArea;
+        if (nameHost) nameHost.insertBefore(monsterNameEl, nameHost.firstChild);
     }
     monsterNameEl.textContent = data.name || "Monstro";
     if (data.base_health) maxMonsterHealth = Number(data.base_health);

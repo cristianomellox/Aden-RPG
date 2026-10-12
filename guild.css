@@ -1266,8 +1266,8 @@ hr {
    Os efeitos de impacto (anéis, números de dano, cura) usam o mesmo
    --raid-mob-drop em guild_raid.js, então acompanham o monstro. */
 #raidCombatModal {
-  --raid-mob-drop: 190px;
-  --raid-name-gap: 40px;
+  --raid-mob-drop: 220px;
+  --raid-name-gap: 28px;
 }
 #raidMonsterImage {
   position: absolute !important;

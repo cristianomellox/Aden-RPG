@@ -517,7 +517,7 @@ function frame(ts) {
 }
 
 function startLoop() {
-    if (!S || S.running) return;
+    if (!S || S.running || S.held) return;
     S.running = true;
     S.last = performance.now();
     S.raf = requestAnimationFrame(frame);
@@ -531,6 +531,21 @@ function stopLoop() {
 }
 
 // ── API pública ──────────────────────────────────────────────────────
+// Segura a renderização enquanto um vídeo em tela cheia cobre a raid (intro/ataques
+// do chefe): o céu fica 100% escondido, então renderizar só tira GPU do decodificador
+// de vídeo. `held` é independente de show/hide.
+export function pauseRaidSkybox() {
+    if (!S) return;
+    S.held = true;
+    stopLoop();
+}
+
+export function resumeRaidSkybox() {
+    if (!S) return;
+    S.held = false;
+    if (S.shouldRun && !document.hidden) startLoop();
+}
+
 export function showRaidSkybox() {
     if (!S) return;
     S.shouldRun = true;
@@ -549,4 +564,4 @@ export function hideRaidSkybox() {
     stopLoop();
 }
 
-window.RaidSkybox = { init: initRaidSkybox, show: showRaidSkybox, hide: hideRaidSkybox };
+window.RaidSkybox = { init: initRaidSkybox, show: showRaidSkybox, hide: hideRaidSkybox, pause: pauseRaidSkybox, resume: resumeRaidSkybox };

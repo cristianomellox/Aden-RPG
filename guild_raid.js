@@ -376,6 +376,8 @@ function playVideo(src, onVideoEndCallback) {
         return;
     }
 
+    _raidSkyHoldForVideo(true);
+
     videoPlayer.style.visibility = 'hidden';
     videoPlayer.src = src;
     videoPlayer.load(); 
@@ -395,16 +397,27 @@ function playVideo(src, onVideoEndCallback) {
     
     videoPlayer.addEventListener('canplay', onCanPlay, { once: true });
 
+    let finished = false;
     const endPlayback = () => {
+        if (finished) return;
+        finished = true;
         videoPlayer.removeEventListener('ended', endPlayback);
-        videoPlayer.pause();
-        videoPlayer.currentTime = 0;
+        videoPlayer.removeEventListener('error', endPlayback);
+        videoPlayer.removeEventListener('canplay', onCanPlay);
+        // 1º devolve a tela da batalha — nada pesado antes disso.
+        // (Antes havia um `currentTime = 0` aqui: um seek síncrono num vídeo que
+        // acabou de terminar, desnecessário, já que o próximo playVideo faz
+        // src + load() e reinicia tudo do zero.)
         videoOverlay.style.display = 'none';
+        _raidSkyHoldForVideo(false);
+        try { videoPlayer.pause(); } catch (e) {}
         if (onVideoEndCallback) onVideoEndCallback();
         isProcessingAction = false;
         processNextAction();
     };
     videoPlayer.addEventListener('ended', endPlayback, { once: true });
+    // Se o vídeo falhar ao carregar/decodificar, não deixa o overlay preto travando a raid.
+    videoPlayer.addEventListener('error', endPlayback, { once: true });
 }
 
 function unlockMedia() {
@@ -2119,6 +2132,14 @@ function _showRaidSky() {
   _raidSkyWanted = true;
   try { window.GuildSkybox && window.GuildSkybox.pause && window.GuildSkybox.pause(); } catch (e) {}
   _loadRaidSky().then(m => { if (m && _raidSkyWanted) m.showRaidSkybox(); });
+}
+
+// Pausa o céu 3D enquanto um vídeo em tela cheia está por cima (libera a GPU pro
+// decodificador). Ao fim, retoma com um respiro pra a UI da batalha voltar primeiro.
+function _raidSkyHoldForVideo(hold) {
+  if (!_raidSkyPromise) return;
+  const run = () => _raidSkyPromise.then(m => { if (m) (hold ? m.pauseRaidSkybox() : m.resumeRaidSkybox()); });
+  if (hold) run(); else setTimeout(run, 150);
 }
 
 function _hideRaidSky() {

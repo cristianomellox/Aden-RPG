@@ -2040,6 +2040,7 @@ function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterv
 function closeCombatModal(){ 
   const m = $id("raidCombatModal"); 
   if (m) m.style.display = "none"; 
+  _hideRaidSky();
   _exitRaidFullscreen();
 
   const banner = $id('raidDeathNotification');
@@ -2095,7 +2096,39 @@ function _exitRaidFullscreen() {
   } catch (e) { /* ignora */ }
 }
 
-function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; _requestRaidFullscreen(); }
+// ── Skybox 3D do combate (guild_raid_skybox.js) ──────────────────────────
+// Carregado via import() dinâmico: o <script type="importmap"> do guild.html
+// vem DEPOIS deste módulo, então um import estático não resolveria o 'three'.
+// Andares de chefe (múltiplos de 5) ganham a atmosfera roxa automaticamente —
+// o módulo lê currentFloor a cada quadro e faz a transição suave sozinho.
+let _raidSkyPromise = null;
+let _raidSkyWanted = false;
+
+function _loadRaidSky() {
+  if (!_raidSkyPromise) {
+    _raidSkyPromise = import('./guild_raid_skybox.js')
+      .then(m => { m.initRaidSkybox({ getFloor: () => currentFloor }); return m; })
+      .catch(e => { console.warn('[Raid] skybox 3D indisponível:', e); _raidSkyPromise = null; return null; });
+  }
+  return _raidSkyPromise;
+}
+
+function _showRaidSky() {
+  _raidSkyWanted = true;
+  try { window.GuildSkybox && window.GuildSkybox.pause && window.GuildSkybox.pause(); } catch (e) {}
+  _loadRaidSky().then(m => { if (m && _raidSkyWanted) m.showRaidSkybox(); });
+}
+
+function _hideRaidSky() {
+  _raidSkyWanted = false;
+  if (_raidSkyPromise) _raidSkyPromise.then(m => { if (m) m.hideRaidSkybox(); });
+  try { window.GuildSkybox && window.GuildSkybox.resume && window.GuildSkybox.resume(); } catch (e) {}
+}
+
+// Pré-aquece a imagem do céu (cache do navegador) pra a 1ª abertura da raid não "piscar".
+setTimeout(() => { try { new Image().src = '/assets/tdd_andar.png'; } catch (e) {} }, 4000);
+
+function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; _requestRaidFullscreen(); _showRaidSky(); }
 
 function bindEvents() {
   const tdd = $id("tdd");

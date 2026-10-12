@@ -48,6 +48,7 @@ let dragging = false;
 let _lastTs = 0;
 let _idleTimer = null;
 let _pitchTween = null;
+let _paused = false;   // pausado enquanto a raid (skybox próprio) está aberta
 
 function randBetween(min, max) { return min + Math.random() * (max - min); }
 
@@ -307,7 +308,7 @@ function scheduleIdleRealign() {
 // CICLO DE VIDA
 // ═══════════════════════════════════════════════════════════════════════
 function loop(ts) {
-    if (!_sky || !_sky.running) return;
+    if (!_sky || !_sky.running || _paused) return;
     const dt = Math.min(ts - _lastTs, 100);
     _lastTs = ts;
 
@@ -397,7 +398,7 @@ function startGuildSkybox() {
     document.addEventListener('visibilitychange', () => {
         if (!_sky) return;
         _sky.running = !document.hidden;
-        if (_sky.running) { _lastTs = performance.now(); _sky.raf = requestAnimationFrame(loop); }
+        if (_sky.running && !_paused) { _lastTs = performance.now(); _sky.raf = requestAnimationFrame(loop); }
         else if (_sky.raf) cancelAnimationFrame(_sky.raf);
     });
 
@@ -433,8 +434,26 @@ function setForeground(fg) {
     _sky.layer.style.zIndex = fg ? '90' : '-1';
 }
 
+// Pausa/retoma a renderização (usado pela Raid: o combate tem o próprio
+// skybox em tela cheia por cima — não faz sentido renderizar dois ao mesmo tempo).
+function pause() {
+    _paused = true;
+    if (_sky && _sky.raf) { cancelAnimationFrame(_sky.raf); _sky.raf = 0; }
+}
+function resume() {
+    if (!_paused) return;
+    _paused = false;
+    if (_sky && _sky.running) {
+        _lastTs = performance.now();
+        if (_sky.raf) cancelAnimationFrame(_sky.raf);
+        _sky.raf = requestAnimationFrame(loop);
+    }
+}
+
 // ── API pública ──────────────────────────────────────────────────────
 window.GuildSkybox = {
+    pause,
+    resume,
     registerOrbiter,
     unregisterOrbiter,
     yawPitchToVector,

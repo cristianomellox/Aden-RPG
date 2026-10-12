@@ -1182,7 +1182,9 @@ body {
   z-index: 3;
 }
 #raidCombatModal .modal-content {
-background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/tdd_andar.webp')!important;
+/* Fundo agora é o skybox 3D (guild_raid_skybox.js), renderizado numa camada
+       atrás deste conteúdo. O escurecimento p/ legibilidade do HUD está no shader. */
+    background-image: none!important;
     background-repeat: no-repeat!important;
     background-position: center center!important;
     background-size: cover!important;

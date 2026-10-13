@@ -89,7 +89,7 @@ const SNOW_VERT = /* glsl */`
 
         // some suavemente nas bordas da caixa (esconde o "wrap") e muito perto da câmera
         float ey = p.y / uBox.y + 0.5;
-        float fadeY = smoothstep(0.0, 0.10, ey) * smoothstep(1.0, 0.90, ey);
+        float fadeY = smoothstep(0.0, 0.10, ey) * (1.0 - smoothstep(0.90, 1.0, ey));
         float fadeX = 1.0 - smoothstep(0.38, 0.5, abs(p.x / uBox.x));
         float fadeZ = 1.0 - smoothstep(0.38, 0.5, abs(p.z / uBox.z));
         float dist  = length(p);
@@ -103,7 +103,7 @@ const SNOW_VERT = /* glsl */`
         gl_PointSize = clamp(sz * uPxScale / depth, 1.4, 46.0);
 
         // quanto mais perto, mais "fora de foco" (profundidade de campo)
-        vBlur = clamp(uBlur + smoothstep(7.0, 1.5, dist) * 0.55, 0.0, 1.0);
+        vBlur = clamp(uBlur + (1.0 - smoothstep(1.5, 7.0, dist)) * 0.55, 0.0, 1.0);
 
         // alguns flocos cintilam (brilho >1 → pega o bloom do postfx)
         float isSpark = step(0.93, fract(aRand.z * 13.7));
@@ -268,15 +268,44 @@ function createFrostOverlay() {
 
     function rnd(a, b) { return a + Math.random() * (b - a); }
 
-    function branch(x, y, ang, len, depth, alpha, w) {
-        if (depth <= 0 || len < 4) return;
-        const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
-        ctx.strokeStyle = `rgba(215,238,255,${alpha})`;
-        ctx.lineWidth = w;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
-        branch(x2, y2, ang + rnd(-0.25, 0.25), len * rnd(0.62, 0.78), depth - 1, alpha * 0.9, w * 0.8);
-        if (Math.random() < 0.85) branch(x + (x2 - x) * 0.55, y + (y2 - y) * 0.55, ang + rnd(0.7, 1.15), len * rnd(0.38, 0.55), depth - 1, alpha * 0.8, w * 0.7);
-        if (Math.random() < 0.85) branch(x + (x2 - x) * 0.55, y + (y2 - y) * 0.55, ang - rnd(0.7, 1.15), len * rnd(0.38, 0.55), depth - 1, alpha * 0.8, w * 0.7);
+    // ruído de valor suave (fbm) para a "névoa" de gelo
+    function makeNoise(w, h, scale, seed) {
+        const gw = Math.ceil(w / scale) + 2, gh = Math.ceil(h / scale) + 2;
+        const grid = new Float32Array(gw * gh);
+        let r = seed;
+        for (let i = 0; i < grid.length; i++) { r = (r * 16807) % 2147483647; grid[i] = r / 2147483647; }
+        return (x, y) => {
+            const fx = x / scale, fy = y / scale, ix = Math.floor(fx), iy = Math.floor(fy);
+            let tx = fx - ix, ty = fy - iy;
+            tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+            const a = grid[iy * gw + ix], b = grid[iy * gw + ix + 1];
+            const c = grid[(iy + 1) * gw + ix], d = grid[(iy + 1) * gw + ix + 1];
+            return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
+        };
+    }
+
+    // cristal de gelo com simetria de 6 pontas (dendrito), fino e discreto
+    function crystal(cx, cy, R, alpha) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.lineCap = 'round';
+        for (let k = 0; k < 6; k++) {
+            ctx.save();
+            ctx.rotate((Math.PI / 3) * k);
+            ctx.strokeStyle = `rgba(225,243,255,${alpha})`;
+            ctx.lineWidth = Math.max(0.6, R * 0.035);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R, 0); ctx.stroke();
+            for (let j = 1; j <= 3; j++) {            // ramificações simétricas ao longo do braço
+                const px = R * (0.25 * j + 0.1), bl = R * (0.34 - j * 0.07);
+                ctx.lineWidth = Math.max(0.5, R * 0.022);
+                ctx.beginPath();
+                ctx.moveTo(px, 0); ctx.lineTo(px + bl * 0.6, bl);
+                ctx.moveTo(px, 0); ctx.lineTo(px + bl * 0.6, -bl);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+        ctx.restore();
     }
 
     function draw() {
@@ -285,28 +314,46 @@ function createFrostOverlay() {
         cv.width = W; cv.height = H;
         ctx.clearRect(0, 0, W, H);
 
-        // vinheta gelada (centro limpo → bordas azuladas)
-        const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34, W / 2, H / 2, Math.hypot(W, H) * 0.56);
-        g.addColorStop(0.0, 'rgba(170,215,255,0)');
-        g.addColorStop(0.65, 'rgba(150,200,250,0.10)');
-        g.addColorStop(1.0, 'rgba(200,232,255,0.42)');
+        // 1) névoa de gelo nas bordas (ruído fbm × distância da borda), em baixa resolução
+        const lw = 200, lh = Math.round(200 * H / W);
+        const low = document.createElement('canvas'); low.width = lw; low.height = lh;
+        const lctx = low.getContext('2d');
+        const img = lctx.createImageData(lw, lh);
+        const n1 = makeNoise(lw, lh, 26, 12345), n2 = makeNoise(lw, lh, 11, 777), n3 = makeNoise(lw, lh, 5, 4242);
+        for (let y = 0; y < lh; y++) {
+            for (let x = 0; x < lw; x++) {
+                const ex = Math.min(x, lw - 1 - x) / (lw * 0.5);
+                const ey = Math.min(y, lh - 1 - y) / (lh * 0.5);
+                const edge = 1 - Math.min(1, Math.min(ex, ey) * 2.6);       // 1 na borda → 0 no miolo
+                const nz = n1(x, y) * 0.55 + n2(x, y) * 0.3 + n3(x, y) * 0.15;
+                const a = Math.pow(Math.max(0, edge), 1.6) * (0.35 + nz * 0.9);
+                const i = (y * lw + x) * 4;
+                img.data[i] = 205; img.data[i + 1] = 232; img.data[i + 2] = 255;
+                img.data[i + 3] = Math.min(255, a * 150);
+            }
+        }
+        lctx.putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(low, 0, 0, W, H);
+
+        // 2) vinheta azul-gelo suave
+        const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.hypot(W, H) * 0.55);
+        g.addColorStop(0.0, 'rgba(150,200,255,0)');
+        g.addColorStop(1.0, 'rgba(120,175,240,0.30)');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
 
-        // cristais crescendo das bordas para dentro
-        try { ctx.filter = 'blur(0.5px)'; } catch (e) {}
-        ctx.lineCap = 'round';
-        const n = Math.round((W + H) / 14);
-        for (let i = 0; i < n; i++) {
-            const side = Math.floor(Math.random() * 4);
-            let x, y, ang;
-            if (side === 0)      { x = rnd(0, W); y = 0;  ang = Math.PI / 2 + rnd(-0.7, 0.7); }
-            else if (side === 1) { x = rnd(0, W); y = H;  ang = -Math.PI / 2 + rnd(-0.7, 0.7); }
-            else if (side === 2) { x = 0; y = rnd(0, H);  ang = rnd(-0.7, 0.7); }
-            else                 { x = W; y = rnd(0, H);  ang = Math.PI + rnd(-0.7, 0.7); }
-            branch(x, y, ang, rnd(26, 70), 4, rnd(0.10, 0.26), rnd(0.7, 1.4));
+        // 3) poucos cristais, concentrados nos cantos
+        const corners = [[0, 0], [W, 0], [0, H], [W, H]];
+        for (const [cx, cy] of corners) {
+            const count = 3 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < count; i++) {
+                const px = cx + (cx ? -1 : 1) * rnd(0, W * 0.10);
+                const py = cy + (cy ? -1 : 1) * rnd(0, H * 0.14);
+                crystal(px, py, rnd(14, 38) * Math.min(W, H) / 500, rnd(0.20, 0.42));
+            }
         }
-        try { ctx.filter = 'none'; } catch (e) {}
     }
 
     draw();
@@ -363,9 +410,9 @@ function initSkybox() {
     if (WEATHER_SNOW_ENABLED) {
         // fundo: pequenos, nítidos, muitos | meio | frente: grandes, desfocados, poucos
         weather.snow.push(
-            makeSnowLayer({ count: Math.round(1500 * q), box: [150, 90, 150], speed: [1.5, 2.4], size: [0.25, 0.45], blur: 0.00, opacity: 0.75, sway: 1.2, sparkle: 1.0, renderOrder: 2 }),
-            makeSnowLayer({ count: Math.round( 900 * q), box: [ 60, 44,  60], speed: [2.0, 3.2], size: [0.10, 0.20], blur: 0.15, opacity: 0.85, sway: 0.9, sparkle: 0.7, renderOrder: 3 }),
-            makeSnowLayer({ count: Math.round( 240 * q), box: [ 18, 16,  18], speed: [2.6, 4.0], size: [0.16, 0.30], blur: 0.45, opacity: 0.80, sway: 0.5, sparkle: 0.0, renderOrder: 4 }),
+            makeSnowLayer({ count: Math.round(1900 * q), box: [150, 90, 150], speed: [1.5, 2.4], size: [0.34, 0.58], blur: 0.00, opacity: 0.75, sway: 1.2, sparkle: 1.0, renderOrder: 2 }),
+            makeSnowLayer({ count: Math.round(1100 * q), box: [ 60, 44,  60], speed: [2.0, 3.2], size: [0.14, 0.26], blur: 0.15, opacity: 0.85, sway: 0.9, sparkle: 0.7, renderOrder: 3 }),
+            makeSnowLayer({ count: Math.round( 320 * q), box: [ 18, 16,  18], speed: [2.6, 4.0], size: [0.20, 0.36], blur: 0.45, opacity: 0.80, sway: 0.5, sparkle: 0.0, renderOrder: 4 }),
         );
         weather.snow.forEach(s => scene.add(s));
     }
@@ -396,7 +443,9 @@ function initSkybox() {
     window.addEventListener('resize', onResize);
 
     (function loop(ts) {
-        updateWeather(ts * 0.001);
+        // A 1ª chamada (manual) vem sem timestamp — usa performance.now() para nunca gerar NaN
+        const now = (typeof ts === 'number' ? ts : performance.now()) * 0.001;
+        updateWeather(now);
         if (_sky.pfx) {
             try {
                 _sky.pfx.render(scene, camera);
@@ -415,7 +464,8 @@ function initSkybox() {
 function updateWeather(t) {
     if (!_sky || !_sky.weather) return;
     const w = _sky.weather;
-    const dt = Math.min(0.1, w.last ? t - w.last : 0.016);
+    if (!Number.isFinite(t)) return;
+    const dt = Math.min(0.1, w.last ? Math.max(0, t - w.last) : 0.016);
     w.last = t;
 
     // rajadas: soma de senos lentos → vento que "respira" em vez de ser constante

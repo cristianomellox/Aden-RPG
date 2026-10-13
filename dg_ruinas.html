@@ -7,6 +7,16 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
     <title>Ruínas Ancestrais - Aden RPG</title>
+    <!-- Import map exigido pelo postfx.js (bloom/color-grade/motion blur do
+         skybox) — mesma versão do Three.js usada em dg_ruinas.js (0.160.0). -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="zion.css" /> 
@@ -105,81 +115,190 @@ body {
 }
 
 
-/* Mapa em Tela Cheia */
+/* ==================================================================
+   SKYBOX 360° (Three.js) — mesma estrutura da Capital.
+   #skyboxCanvas renderiza a esfera (WebGL); #map é uma camada
+   transparente por cima onde ficam os .city-hotspot (nome + feixe de
+   luz), reposicionados a cada frame por dg_ruinas.js a partir do
+   yaw/pitch de cada um.
+   ================================================================== */
 #mapContainer {
-    position: fixed; 
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100vw; 
-    height: 100vh; 
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
     margin: 0;
-    z-index: 1; 
+    z-index: 1;
     box-shadow: none;
-    background-color: #121212; 
+    background-color: #121212;
 }
+
+#skyboxCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+    outline: none;
+    cursor: grab;
+}
+#skyboxCanvas.dragging { cursor: grabbing; }
 
 #map {
-    /* Imagem de fundo sugerida, certifique-se de ter este asset ou mude para ruins.webp se preferir */
-    background-image: url('https://aden-rpg.pages.dev/assets/dg_ruinas.webp'); 
-    background-size: cover; /* Ajustado para cobrir melhor em caso de imagem genérica */
-    background-repeat: no-repeat;
-    background-position: center center;
-    width: 1500px; 
-    height: 1700px; 
     position: absolute;
-    cursor: grab;
-    transform-origin: top left;
-    transition: transform 0.05s linear;
-    transform: scale(1.1); 
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* deixa o drag chegar ao mapContainer/canvas */
+    user-select: none;
 }
 
-/* Container do Conteúdo Flutuante */
-#contentOverlay {
-    position: fixed; 
-    top: 50px; 
-    left: 0;
-    width: 100%;
-    bottom: 0; /* garante que footer fica visível no browser */
-    height: auto; 
+/* ==================================================================
+   HOTSPOTS (mesmo padrão visual da Capital: nome + feixe de luz).
+   ================================================================== */
+.city-hotspot {
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    justify-content: space-between; 
     align-items: center;
-    z-index: 10; 
-    pointer-events: none; 
+    justify-content: flex-start;
+    gap: 4px;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 4px 2px;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: auto;   /* #map é pointer-events:none; cada hotspot reativa o próprio clique */
+    transform-origin: center center; /* dg_ruinas.js aplica translate(-50%,-50%) scale(zoom) aqui */
+}
+.city-hotspot:active { transform: scale(0.97); }
+
+/* DEBUG: contorno tracejado + mira no centro de cada hotspot.
+   Ative acessando a página com ?debugSpots=1 na URL. Clicar em qualquer
+   ponto do cenário mostra o yaw/pitch; copie para RUINS_SPOTS em dg_ruinas.js. */
+#map.debug-hotspots .city-hotspot {
+    outline: 1px dashed rgba(255,255,255,0.35);
+}
+#map.debug-hotspots .city-hotspot::before,
+#map.debug-hotspots .city-hotspot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    background: rgba(255, 0, 0, 0.85);
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    pointer-events: none;
+}
+#map.debug-hotspots .city-hotspot::before { width: 16px; height: 2px; }
+#map.debug-hotspots .city-hotspot::after  { width: 2px; height: 16px; }
+
+.city-hotspot-name {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.8em;
+    color: #ffd700;
+    text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
+    line-height: 1;
+    white-space: nowrap;
+    position: relative;
+    z-index: 2;
 }
 
-#zionContent2 {
-    width: 95%;
-    max-width: 600px;
-    margin-top: 2px; 
-    padding: 10px;
-    box-sizing: border-box;
-    text-align: center;
-    background-color: rgba(18, 18, 18, 0.5); 
-    border-radius: 8px;
-    pointer-events: auto; 
-}
-
-#zionContent h2 {
-    margin-top: -5px; 
-    margin-bottom: 5px;
-    color: #9c27b0; /* Roxo Místico */
-    text-shadow: 2px 2px 6px black; 
-}
-
-/* Rodapé específico da página e botões */
-#zionFooter {
-    margin-top: auto; 
-    padding: 10px;
-    pointer-events: auto;
+.city-hotspot-glow-slot {
+    position: relative;
+    flex: 0 0 auto;
+    height: 64px;
     display: flex;
-    flex-direction: column; 
-    gap: 10px;
     align-items: center;
+    justify-content: center;
     width: 100%;
-    max-width: 400px;
+    min-height: 0;
+    opacity: 0.7;
+}
+
+/* Feixe de luz — ajustável por hotspot via --beam-top / --beam-height /
+   --beam-column-width / --glow-rgb no style inline do elemento. */
+.city-hotspot-glow {
+    --glow-rgb: 255,215,0;
+    --beam-top: 4px;
+    --beam-height: 80px;
+    --beam-column-width: 60px;
+
+    position: absolute;
+    left: 50%;
+    top: var(--beam-top);
+    bottom: auto;
+    width: var(--beam-column-width);
+    height: var(--beam-height);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: screen;
+    background: radial-gradient(ellipse 90% 40% at 50% 94%,
+        rgba(var(--glow-rgb), 0.55) 0%,
+        rgba(var(--glow-rgb), 0.2) 50%,
+        rgba(var(--glow-rgb), 0) 80%);
+    filter: blur(6px);
+    animation: chg-ground-flicker 5.6s ease-in-out infinite;
+}
+.city-hotspot-glow::before,
+.city-hotspot-glow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    pointer-events: none;
+}
+.city-hotspot-glow::before {
+    top: -10%;
+    width: 55%;
+    height: 20%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.95) 0%,
+        rgba(var(--glow-rgb), 0.75) 45%,
+        rgba(var(--glow-rgb), 0) 78%);
+    filter: blur(2.5px);
+    animation: chg-source-flicker 3.4s ease-in-out infinite;
+}
+.city-hotspot-glow::after {
+    top: 4%;
+    width: 100%;
+    height: 92%;
+    transform: translateX(-50%);
+    clip-path: polygon(15% 0%, 85% 0%, 96% 100%, 4% 100%);
+    background: linear-gradient(to bottom,
+        rgba(var(--glow-rgb), 0.75) 0%,
+        rgba(var(--glow-rgb), 0.28) 55%,
+        rgba(var(--glow-rgb), 0) 94%);
+    filter: blur(3px);
+    animation: chg-beam-flicker 4.8s ease-in-out infinite;
+}
+@keyframes chg-ground-flicker {
+    0%   { opacity: 0.65; }
+    30%  { opacity: 0.9;  }
+    55%  { opacity: 0.6;  }
+    78%  { opacity: 0.82; }
+    100% { opacity: 0.65; }
+}
+@keyframes chg-source-flicker {
+    0%   { opacity: 0.7;  }
+    38%  { opacity: 1;    }
+    64%  { opacity: 0.8;  }
+    100% { opacity: 0.7;  }
+}
+@keyframes chg-beam-flicker {
+    0%   { opacity: 0.55; }
+    25%  { opacity: 0.85; }
+    48%  { opacity: 0.4;  }
+    70%  { opacity: 0.78; }
+    88%  { opacity: 0.5;  }
+    100% { opacity: 0.55; }
 }
 
 /* Botões */
@@ -259,6 +378,9 @@ body {
 /* === ESTILOS DO SUBMENU === */
 .footer-submenu {
     position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: none; /* Hidden by default */
     flex-direction: column;
     gap: 5px;
@@ -267,8 +389,16 @@ body {
     border-radius: 8px;
     padding: 5px;
     z-index: 9998;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
-    min-width: 180px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.6);
+    min-width: 220px;
+}
+.footer-submenu-title {
+    text-align: center;
+    color: #ffd700;
+    font-weight: bold;
+    font-size: 1.05em;
+    padding: 6px 4px 4px;
+    text-shadow: 1px 1px 3px #000;
 }
 
 .footer-submenu-btn {
@@ -316,30 +446,58 @@ body {
     </div>
 
     <div id="mapContainer">
-        <div id="map"></div>
+        <canvas id="skyboxCanvas"></canvas>
+        <div id="map">
+            <!-- ====================================================================
+                 HOTSPOTS DAS MASMORRAS — nome + feixe de luz. A posição (left/top) e
+                 a escala de cada um são calculadas a cada frame por dg_ruinas.js a
+                 partir do yaw/pitch em RUINS_SPOTS (width/height também). Para
+                 reposicionar, abra a página com ?debugSpots=1 na URL.
+                 ==================================================================== -->
+
+            <div id="btnRuinsEntrance" class="city-hotspot">
+                <span class="city-hotspot-name">Ruínas Ancestrais</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+
+            <div id="btnSoonDungeon1" class="city-hotspot">
+                <span class="city-hotspot-name">Em breve</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+
+            <div id="btnSoonDungeon2" class="city-hotspot">
+                <span class="city-hotspot-name">Em breve</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,140,40;"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="contentOverlay">
-        
-        <div id="zionContent">
-            <!-- Título removido daqui para focar na imersão do mapa, o título está na TopBar -->
-        </div>
-
-        <div id="zionFooter">
-            <button id="ruinsMenuBtn" class="action-btn">Menu</button>
-        </div>
-
-    </div>
-
+    <!-- Menu card da entrada "Ruínas Ancestrais" (aberto ao clicar no hotspot) -->
     <div id="ruinsSubmenu" class="footer-submenu">
+        <div class="footer-submenu-title">Ruínas Ancestrais</div>
         <div id="btnOpenHistory" class="footer-submenu-btn">
             <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon"> História
         </div>
         <div onclick="window.location.href='ruins.html'" class="footer-submenu-btn">
-            <img src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon"> Entrar nas Ruínas
+            <img src="https://aden-rpg.pages.dev/assets/dgs.png" class="submenu-icon"> Entrar nas Ruínas
         </div>
     </div>
-    
+
+    <!-- Modal "Em breve" (hotspots das masmorras ainda não disponíveis) -->
+    <div id="soonModal" class="modal-container" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Em breve</h2>
+            <p style="color:#ccc; font-size:1.1em;">Em breve uma nova masmorra</p>
+        </div>
+    </div>
+
     <div id="historyModal" class="modal-container" style="display: none;">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
@@ -425,251 +583,51 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 // FIM DA MÚSICA DE FUNDO
   
-function enableMapInteraction() {
-    const mapContainer = document.getElementById('mapContainer');
-    const map = document.getElementById('map');
-    if (!map || !mapContainer) return;
+// (A navegação do mapa — arrastar/pinch/zoom — agora é a skybox 360° em
+// dg_ruinas.js. Debug dos hotspots: abra a página com ?debugSpots=1.)
 
-    // Guard contra dupla inicialização
-    if (map._interactionEnabled) return;
-    map._interactionEnabled = true;
-
-    const mapNaturalWidth  = 1500;
-    const mapNaturalHeight = 1700;
-    const MAX_SCALE = 3.0;
-
-    // Escala inicial vinda do CSS (ex: scale(1.1))
-    const cssScale = (() => {
-        const m = map.style.transform.match(/scale\(([^)]+)\)/);
-        return m ? parseFloat(m[1]) : 1.1;
-    })();
-    let cx = 0, cy = 0, currentScale = cssScale;
-    let MIN_SCALE = 0.3;  // recalculado dinamicamente em recalcLimits()
-
-    // ── Inércia ────────────────────────────────────────────────────────
-    let vx = 0, vy = 0, lt = 0, aId = null;
-    const FRICTION = 0.94;
-
-    // ── Drag ───────────────────────────────────────────────────────────
-    let drag = false, sx = 0, sy = 0;
-
-    // ── Pinch ──────────────────────────────────────────────────────────
-    let isPinching = false;
-    let pinchStartDist = 0, pinchStartScale = 1;
-    let pinchFocalX = 0, pinchFocalY = 0;
-    let pinchStartTx = 0, pinchStartTy = 0;
-
-    // ── Limites dinâmicos ──────────────────────────────────────────────
-    let minX = 0, maxX = 0, minY = 0, maxY = 0;
-
-    function recalcLimits() {
-        const cr = mapContainer.getBoundingClientRect();
-        // Zoom-out mínimo: impede ver fundo preto além das bordas do mapa
-        MIN_SCALE = Math.max(cr.width / mapNaturalWidth, cr.height / mapNaturalHeight);
-        if (currentScale < MIN_SCALE) {
-            currentScale = MIN_SCALE;
-            map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-        }
-        minX = Math.min(0, cr.width  - mapNaturalWidth  * currentScale);
-        minY = Math.min(0, cr.height - mapNaturalHeight * currentScale);
-        maxX = 0; maxY = 0;
-    }
-    recalcLimits();
-    window.addEventListener('resize', recalcLimits);
-    if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', recalcLimits);
-    }
-
-    map.style.touchAction = 'none';
-    map.style.userSelect  = 'none';
-
-    // Aplica transform com escala (pinch) — recalcula limites com nova escala
-    function applyTransform(x, y, s) {
-        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
-        const cr = mapContainer.getBoundingClientRect();
-        const sw = mapNaturalWidth * s, sh = mapNaturalHeight * s;
-        x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
-        y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
-        cx = x; cy = y; currentScale = s;
-        map.style.transform = `translate(${x}px,${y}px) scale(${s})`;
-        recalcLimits();
-    }
-
-    // Aplica posição (drag/inércia) — usa limites já calculados
-    function setPos(x, y) {
-        cx = Math.max(minX, Math.min(maxX, x));
-        cy = Math.max(minY, Math.min(maxY, y));
-        map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-    }
-
-    // ── Inércia ────────────────────────────────────────────────────────
-    function inertia() {
-        cancelAnimationFrame(aId);
-        if (drag) return;
-        vx *= FRICTION; vy *= FRICTION;
-        setPos(cx + vx, cy + vy);
-        if (Math.abs(vx) > 0.4 || Math.abs(vy) > 0.4)
-            aId = requestAnimationFrame(inertia);
-    }
-
-    // ── Helpers pinch ──────────────────────────────────────────────────
-    function touchDist(e) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-    function touchMid(e) {
-        return {
-            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-        };
-    }
-
-    // ── Drag handlers (mouse) ──────────────────────────────────────────
-    function startDrag(e) {
-        drag = true;
-        map.style.cursor = 'grabbing';
-        sx = e.clientX ?? e.touches[0].clientX;
-        sy = e.clientY ?? e.touches[0].clientY;
-        vx = vy = 0; lt = performance.now();
-        cancelAnimationFrame(aId);
-    }
-
-    function onDrag(e) {
-        if (!drag) return;
-        e.preventDefault();
-        const nx = e.clientX ?? e.touches[0].clientX;
-        const ny = e.clientY ?? e.touches[0].clientY;
-        const dt = performance.now() - lt;
-        if (dt > 0) { vx = (nx - sx) / dt; vy = (ny - sy) / dt; }
-        setPos(cx + (nx - sx), cy + (ny - sy));
-        sx = nx; sy = ny; lt = performance.now();
-    }
-
-    function endDrag() {
-        drag = false;
-        map.style.cursor = 'grab';
-        if (Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2) { vx *= 10; vy *= 10; inertia(); }
-    }
-
-    // ── Touch unificado (drag + pinch) ─────────────────────────────────
-    function onTouchStart(e) {
-        if (e.touches.length >= 2) {
-            isPinching = true;
-            drag = false;
-            cancelAnimationFrame(aId);
-            pinchStartDist  = touchDist(e);
-            pinchStartScale = currentScale;
-            const mid = touchMid(e);
-            const cr  = mapContainer.getBoundingClientRect();
-            pinchFocalX = mid.x - cr.left;
-            pinchFocalY = mid.y - cr.top;
-            pinchStartTx = cx;
-            pinchStartTy = cy;
-        } else if (e.touches.length === 1 && !isPinching) {
-            startDrag(e);
-        }
-    }
-
-    function onTouchMove(e) {
-        if (e.touches.length >= 2 && isPinching) {
-            e.preventDefault();
-            const newScale  = pinchStartScale * (touchDist(e) / pinchStartDist);
-            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
-            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
-            applyTransform(
-                pinchFocalX - mapPointX * newScale,
-                pinchFocalY - mapPointY * newScale,
-                newScale
-            );
-        } else if (e.touches.length === 1 && !isPinching) {
-            onDrag(e);
-        }
-    }
-
-    function onTouchEnd(e) {
-        if (isPinching && e.touches.length < 2) {
-            isPinching = false;
-            vx = vy = 0;
-            recalcLimits();
-        }
-        if (e.touches.length === 0) endDrag();
-    }
-
-    // ── Mouse (desktop) ────────────────────────────────────────────────
-    map.addEventListener('mousedown', startDrag, { passive: true });
-    window.addEventListener('mousemove', onDrag,    { passive: false });
-    window.addEventListener('mouseup',   endDrag,   { passive: true });
-
-    // ── Touch (mobile) ─────────────────────────────────────────────────
-    map.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
-
-    map.style.cursor = 'grab';
-}
-
-// Lógica de UI (Menu e Modais)
+// Lógica de UI (Menu card e Modais)
 document.addEventListener('DOMContentLoaded', () => {
-    // === LÓGICA DO MENU POPUP ===
-    const menuBtn = document.getElementById('ruinsMenuBtn');
     const submenu = document.getElementById('ruinsSubmenu');
-    
-    if (menuBtn && submenu) {
-        menuBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); 
-            
-            const isVisible = submenu.style.display === 'flex';
-            
-            if (!isVisible) {
-                submenu.style.display = 'flex';
-                
-                const btnRect = menuBtn.getBoundingClientRect();
-                const submenuRect = submenu.getBoundingClientRect();
-                
-                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
-                let newTop = btnRect.top - submenuRect.height - 10;
+    const ruinsHotspot = document.getElementById('btnRuinsEntrance');
 
-                submenu.style.top = newTop + 'px';
-                submenu.style.left = newLeft + 'px';
-            } else {
-                submenu.style.display = 'none';
-            }
+    // === HOTSPOT "RUÍNAS ANCESTRAIS" -> MENU CARD ===
+    if (ruinsHotspot && submenu) {
+        ruinsHotspot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            submenu.style.display = 'flex';
         });
 
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('#ruinsSubmenu') && !e.target.closest('#ruinsMenuBtn')) {
+            if (!e.target.closest('#ruinsSubmenu') && !e.target.closest('#btnRuinsEntrance')) {
                 submenu.style.display = 'none';
             }
         });
     }
 
-    // === LÓGICA DO MODAL DE HISTÓRIA ===
-    const openHistoryBtn = document.getElementById('btnOpenHistory');
-    const modal = document.getElementById('historyModal');
-    const closeBtn = modal.querySelector('.close-btn');
-
-    if (openHistoryBtn && modal && closeBtn) {
-        openHistoryBtn.addEventListener('click', () => {
-            modal.style.display = 'flex'; 
-            document.body.style.overflow = 'hidden'; 
-            if(submenu) submenu.style.display = 'none';
-        });
-
-        closeBtn.addEventListener('click', () => {
+    // === MODAIS (História / Em breve) ===
+    function bindModal(modal, openers) {
+        if (!modal) return;
+        const closeBtn = modal.querySelector('.close-btn');
+        const open = () => {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if (submenu) submenu.style.display = 'none';
+        };
+        const close = () => {
             modal.style.display = 'none';
-            document.body.style.overflow = ''; 
-        });
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-        });
+            document.body.style.overflow = '';
+        };
+        openers.forEach(el => { if (el) el.addEventListener('click', (e) => { e.stopPropagation(); open(); }); });
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     }
 
-    enableMapInteraction();
+    bindModal(document.getElementById('historyModal'), [document.getElementById('btnOpenHistory')]);
+    bindModal(document.getElementById('soonModal'), [
+        document.getElementById('btnSoonDungeon1'),
+        document.getElementById('btnSoonDungeon2')
+    ]);
 });
 </script>
 
@@ -699,5 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<!-- Skybox 360° + postfx + hotspots + debug (?debugSpots=1) -->
+<script type="module" src="dg_ruinas.js"></script>
 </body>
 </html>

@@ -29,7 +29,7 @@ const SPOT_SPHERE_RADIUS = 400;
 
 // AJUSTE com ?debugSpots=1 (ver comentário acima).
 const RUINS_SPOTS = [
-    { id: 'btnRuinsEntrance', yaw:  0,  pitch: -10, width: 250, height: 200 },
+    { id: 'btnRuinsEntrance', yaw:  -20,  pitch: -10, width: 280, height: 400 },
     { id: 'btnSoonDungeon1',  yaw: -60, pitch: -10, width: 200, height: 200 },
     { id: 'btnSoonDungeon2',  yaw:  60, pitch: -10, width: 200, height: 200 },
 ];

@@ -2,8 +2,8 @@
     const hotspots = [
         // Adicione novos locais aqui seguindo o padrão:
         { id: 'zion', name: 'Zion', top: 284, left: 88, width: 100, height: 90, url: '/zion.html', color: '#84e000' },
-        { id: 'dg_ruinas', name: 'Ruínas Ancestrais', top: 400, left: 79, width: 100, height: 100, url: '/dg_ruinas.html', color: '#b7a5ff' },
-        { id: 'solaris', name: 'Solaris', top: 365, left: 325, width: 100, height: 110, url: '/solaris.html', color: '#b7a5ff' },
+        { id: 'dg_ruinas', name: 'Masmorras', top: 400, left: 79, width: 130, height: 100, url: '/dg_ruinas.html', color: '#b7a5ff' },
+        { id: 'solaris', name: 'Solaris', top: 368, left: 329, width: 110, height: 110, url: '/solaris.html', color: '#b7a5ff' },
         { id: 'floresta_mistica', name: 'Floresta Mística', top: 845, left: 130, width: 190, height: 180, url: '/floresta_mistica.html', color: '#ffc3c3' },
         { id: 'vale_arcano', name: 'Vale Arcano', top: 498, left: 340, width: 190, height: 120, url: '/vale_arcano.html', color: '#ffc3c3' },
         { id: 'penumbra_uivante', name: 'Penumbra Uivante', top: 388, left: 515, width: 190, height: 110, url: '/penumbra_uivante.html', color: '#ffc3c3' },

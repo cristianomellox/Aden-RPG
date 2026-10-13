@@ -7,6 +7,16 @@
 
     
     <title>Solaris - Aden RPG</title>
+    <!-- Import map exigido pelo postfx.js (bloom/color-grade/motion blur do
+         skybox) — mesma versão do Three.js usada em solaris.js (0.160.0). -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="zion.css" /> 
@@ -105,32 +115,57 @@ body {
 }
 
 
-/* Mapa em Tela Cheia */
+/* ==================================================================
+   SKYBOX 360° (Three.js) — mesma estrutura da Capital.
+   #skyboxCanvas renderiza a esfera (WebGL) + clima (neve/névoa);
+   #map é uma camada transparente por cima (usada pelo postfx).
+   ================================================================== */
 #mapContainer {
-    position: fixed; 
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100vw; 
-    height: 100vh; 
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
     margin: 0;
-    z-index: 1; 
+    z-index: 1;
     box-shadow: none;
-    background-color: #121212; 
+    background-color: #121212;
 }
 
-#map {
-    background-image: url('https://aden-rpg.pages.dev/assets/solaris.jpg'); 
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: center center;
-    width: 1500px; 
-    height: 1700px; 
+#skyboxCanvas {
     position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+    outline: none;
     cursor: grab;
-    transform-origin: top left;
-    transition: transform 0.05s linear;
-    transform: scale(1.1); 
+}
+#skyboxCanvas.dragging { cursor: grabbing; }
+
+#map {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* deixa o drag chegar ao mapContainer/canvas */
+    user-select: none;
+}
+
+/* Geada nas bordas da tela (desenhada por solaris.js). Fica acima do
+   skybox e abaixo da UI; não captura cliques. */
+#frostOverlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    animation: frostBreath 9s ease-in-out infinite;
+}
+@keyframes frostBreath {
+    0%, 100% { opacity: 0.80; }
+    50%      { opacity: 1.00; }
 }
 
 /* Container do Conteúdo Flutuante */
@@ -315,6 +350,7 @@ body {
     </div>
 
     <div id="mapContainer">
+        <canvas id="skyboxCanvas"></canvas>
         <div id="map"></div>
     </div>
 
@@ -422,189 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 // FIM DA MÚSICA DE FUNDO
   
-function enableMapInteraction() {
-    const mapContainer = document.getElementById('mapContainer');
-    const map = document.getElementById('map');
-    if (!map || !mapContainer) return;
-
-    // Guard contra dupla inicialização
-    if (map._interactionEnabled) return;
-    map._interactionEnabled = true;
-
-    const mapNaturalWidth  = 1500;
-    const mapNaturalHeight = 1700;
-    const MAX_SCALE = 3.0;
-
-    // Escala inicial vinda do CSS (ex: scale(1.1))
-    const cssScale = (() => {
-        const m = map.style.transform.match(/scale\(([^)]+)\)/);
-        return m ? parseFloat(m[1]) : 1.1;
-    })();
-    let cx = 0, cy = 0, currentScale = cssScale;
-    let MIN_SCALE = 0.3;  // recalculado dinamicamente em recalcLimits()
-
-    // ── Inércia ────────────────────────────────────────────────────────
-    let vx = 0, vy = 0, lt = 0, aId = null;
-    const FRICTION = 0.94;
-
-    // ── Drag ───────────────────────────────────────────────────────────
-    let drag = false, sx = 0, sy = 0;
-
-    // ── Pinch ──────────────────────────────────────────────────────────
-    let isPinching = false;
-    let pinchStartDist = 0, pinchStartScale = 1;
-    let pinchFocalX = 0, pinchFocalY = 0;
-    let pinchStartTx = 0, pinchStartTy = 0;
-
-    // ── Limites dinâmicos ──────────────────────────────────────────────
-    let minX = 0, maxX = 0, minY = 0, maxY = 0;
-
-    function recalcLimits() {
-        const cr = mapContainer.getBoundingClientRect();
-        // Zoom-out mínimo: impede ver fundo preto além das bordas do mapa
-        MIN_SCALE = Math.max(cr.width / mapNaturalWidth, cr.height / mapNaturalHeight);
-        if (currentScale < MIN_SCALE) {
-            currentScale = MIN_SCALE;
-            map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-        }
-        minX = Math.min(0, cr.width  - mapNaturalWidth  * currentScale);
-        minY = Math.min(0, cr.height - mapNaturalHeight * currentScale);
-        maxX = 0; maxY = 0;
-    }
-    recalcLimits();
-    window.addEventListener('resize', recalcLimits);
-    if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', recalcLimits);
-    }
-
-    map.style.touchAction = 'none';
-    map.style.userSelect  = 'none';
-
-    // Aplica transform com escala (pinch) — recalcula limites com nova escala
-    function applyTransform(x, y, s) {
-        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
-        const cr = mapContainer.getBoundingClientRect();
-        const sw = mapNaturalWidth * s, sh = mapNaturalHeight * s;
-        x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
-        y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
-        cx = x; cy = y; currentScale = s;
-        map.style.transform = `translate(${x}px,${y}px) scale(${s})`;
-        recalcLimits();
-    }
-
-    // Aplica posição (drag/inércia) — usa limites já calculados
-    function setPos(x, y) {
-        cx = Math.max(minX, Math.min(maxX, x));
-        cy = Math.max(minY, Math.min(maxY, y));
-        map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-    }
-
-    // ── Inércia ────────────────────────────────────────────────────────
-    function inertia() {
-        cancelAnimationFrame(aId);
-        if (drag) return;
-        vx *= FRICTION; vy *= FRICTION;
-        setPos(cx + vx, cy + vy);
-        if (Math.abs(vx) > 0.4 || Math.abs(vy) > 0.4)
-            aId = requestAnimationFrame(inertia);
-    }
-
-    // ── Helpers pinch ──────────────────────────────────────────────────
-    function touchDist(e) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-    function touchMid(e) {
-        return {
-            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-        };
-    }
-
-    // ── Drag handlers (mouse) ──────────────────────────────────────────
-    function startDrag(e) {
-        drag = true;
-        map.style.cursor = 'grabbing';
-        sx = e.clientX ?? e.touches[0].clientX;
-        sy = e.clientY ?? e.touches[0].clientY;
-        vx = vy = 0; lt = performance.now();
-        cancelAnimationFrame(aId);
-    }
-
-    function onDrag(e) {
-        if (!drag) return;
-        e.preventDefault();
-        const nx = e.clientX ?? e.touches[0].clientX;
-        const ny = e.clientY ?? e.touches[0].clientY;
-        const dt = performance.now() - lt;
-        if (dt > 0) { vx = (nx - sx) / dt; vy = (ny - sy) / dt; }
-        setPos(cx + (nx - sx), cy + (ny - sy));
-        sx = nx; sy = ny; lt = performance.now();
-    }
-
-    function endDrag() {
-        drag = false;
-        map.style.cursor = 'grab';
-        if (Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2) { vx *= 10; vy *= 10; inertia(); }
-    }
-
-    // ── Touch unificado (drag + pinch) ─────────────────────────────────
-    function onTouchStart(e) {
-        if (e.touches.length >= 2) {
-            isPinching = true;
-            drag = false;
-            cancelAnimationFrame(aId);
-            pinchStartDist  = touchDist(e);
-            pinchStartScale = currentScale;
-            const mid = touchMid(e);
-            const cr  = mapContainer.getBoundingClientRect();
-            pinchFocalX = mid.x - cr.left;
-            pinchFocalY = mid.y - cr.top;
-            pinchStartTx = cx;
-            pinchStartTy = cy;
-        } else if (e.touches.length === 1 && !isPinching) {
-            startDrag(e);
-        }
-    }
-
-    function onTouchMove(e) {
-        if (e.touches.length >= 2 && isPinching) {
-            e.preventDefault();
-            const newScale  = pinchStartScale * (touchDist(e) / pinchStartDist);
-            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
-            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
-            applyTransform(
-                pinchFocalX - mapPointX * newScale,
-                pinchFocalY - mapPointY * newScale,
-                newScale
-            );
-        } else if (e.touches.length === 1 && !isPinching) {
-            onDrag(e);
-        }
-    }
-
-    function onTouchEnd(e) {
-        if (isPinching && e.touches.length < 2) {
-            isPinching = false;
-            vx = vy = 0;
-            recalcLimits();
-        }
-        if (e.touches.length === 0) endDrag();
-    }
-
-    // ── Mouse (desktop) ────────────────────────────────────────────────
-    map.addEventListener('mousedown', startDrag, { passive: true });
-    window.addEventListener('mousemove', onDrag,    { passive: false });
-    window.addEventListener('mouseup',   endDrag,   { passive: true });
-
-    // ── Touch (mobile) ─────────────────────────────────────────────────
-    map.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
-
-    map.style.cursor = 'grab';
-}
+// (A navegação do mapa — arrastar/pinch — agora é a skybox 360° em solaris.js.)
 
 // Lógica de UI (Menu e Modais)
 document.addEventListener('DOMContentLoaded', () => {
@@ -674,7 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    enableMapInteraction();
 });
 </script>
 
@@ -704,5 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<!-- Skybox 360° + postfx + neve/névoa/geada -->
+<script type="module" src="solaris.js"></script>
 </body>
 </html>

@@ -531,7 +531,7 @@ async function buyVendaItem(type, quantity) {
 //   • Câmbio 1 material = 1 Moeda Rúnica (igual ao antigo escambo).
 // ─────────────────────────────────────────────────────────────────────────────
 const SELL_RATE = 1;
-const SELL_CATALOG_KEY = 'mercador_sell_catalog_v1';
+const SELL_CATALOG_KEY = 'mercador_sell_catalog_v2';
 const SELL_CATALOG_TTL = 24 * 60 * 60 * 1000;
 const SELL_MIN_CART_SLOTS = 8;
 const SELL_MIN_INV_SLOTS  = 20;
@@ -544,10 +544,32 @@ let sellBusy    = false;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const UNKNOWN_IMG = BASE_URL + 'unknown.webp';
-const IMG_FALLBACK_ATTR = `onerror="this.onerror=null;this.src='${UNKNOWN_IMG}'"`;
 
-// Convenção do jogo: a imagem é sempre items.name + ".webp" (name já vem com underlines).
-const buildSellImg = name => BASE_URL + name + '.webp';
+// Mesma convenção do inventory.js: name_{stars}estrelas.webp. Se não existir, tenta name.webp e por fim unknown.webp.
+const buildSellImg    = (file, stars) => `${BASE_URL}${file}_${stars || 0}estrelas.webp`;
+const buildSellImgAlt = file => `${BASE_URL}${file}.webp`;
+
+// <img> com cadeia de fallback (error não "borbulha", por isso o listener em captura logo abaixo)
+const itemImgTag = (item, cls = '') =>
+    `<img ${cls ? `class="${cls}" ` : ''}src="${esc(item.img)}" data-alt="${esc(item.imgAlt)}" alt="${esc(item.name)}" draggable="false">`;
+
+function applyItemImg(imgEl, item) {
+    imgEl.dataset.tried = '';
+    imgEl.dataset.alt = item.imgAlt;
+    imgEl.src = item.img;
+}
+
+let _sellImgFallbackBound = false;
+function bindSellImgFallback() {
+    if (_sellImgFallbackBound) return;
+    _sellImgFallbackBound = true;
+    document.addEventListener('error', e => {
+        const el = e.target;
+        if (!(el instanceof HTMLImageElement) || el.dataset.alt === undefined) return;
+        if (!el.dataset.tried && el.dataset.alt) { el.dataset.tried = '1'; el.src = el.dataset.alt; }
+        else if (el.dataset.tried !== '2') { el.dataset.tried = '2'; el.src = UNKNOWN_IMG; }
+    }, true);
+}
 
 async function loadSellCatalog() {
     if (sellCatalog) return sellCatalog;
@@ -564,7 +586,7 @@ async function loadSellCatalog() {
 
     const { data, error } = await supabase
         .from('items')
-        .select('item_id, name, display_name')
+        .select('item_id, name, display_name, stars')
         .ilike('item_type', 'outros')
         .ilike('description', '%material%')
         .neq('item_id', MOEDA_ID);
@@ -573,7 +595,8 @@ async function loadSellCatalog() {
     const items = (data || []).map(r => ({
         id: r.item_id,
         name: r.display_name || r.name,
-        img: buildSellImg(r.name),
+        img: buildSellImg(r.name, r.stars),
+        imgAlt: buildSellImgAlt(r.name),
     }));
     sellCatalog = new Map(items.map(i => [i.id, i]));
     try { localStorage.setItem(SELL_CATALOG_KEY, JSON.stringify({ t: Date.now(), items })); } catch {}
@@ -605,11 +628,11 @@ const sellAvail = id => (sellStock.get(id) || 0) - (sellCart.get(id) || 0);
 const sellTotalCoins = () => [...sellCart.values()].reduce((s, q) => s + q * SELL_RATE, 0);
 
 function slotHtml(item, qty, attr) {
-    return `<button type="button" class="mc-slot" ${attr}="${item.id}" title="${esc(item.name)}">
-        <img src="${esc(item.img)}" alt="${esc(item.name)}" loading="lazy" ${IMG_FALLBACK_ATTR}>
+    return `<div class="mc-slot" role="button" tabindex="0" ${attr}="${item.id}" title="${esc(item.name)}">
+        ${itemImgTag(item)}
         <span class="mc-slot-name">${esc(item.name)}</span>
         <span class="mc-slot-qty">${fmt(qty)}</span>
-    </button>`;
+    </div>`;
 }
 
 function renderSellTab() {
@@ -642,6 +665,7 @@ function renderSellTab() {
 let qtyModalState = null; // { id, min, max, mode }
 
 function ensureSellModals() {
+    bindSellImgFallback();
     if (document.getElementById('mercadorQtyModal')) return;
 
     const q = document.createElement('div');
@@ -745,9 +769,7 @@ function openQtyModal(id, mode) {
     qtyModalState = { id, min: editing ? 0 : 1, max, mode };
     const range = document.getElementById('mcqRange');
     range.min = qtyModalState.min; range.max = max;
-    const qImg = document.getElementById('mcqImg');
-    qImg.onerror = () => { qImg.onerror = null; qImg.src = UNKNOWN_IMG; };
-    qImg.src = item.img;
+    applyItemImg(document.getElementById('mcqImg'), item);
     document.getElementById('mcqName').textContent = item.name;
     document.getElementById('mcqAvail').textContent = `Disponível: ${fmt(max)}`;
     document.getElementById('mcqRemove').style.display = editing ? '' : 'none';
@@ -761,7 +783,7 @@ function openConfirmModal() {
     ensureSellModals();
     document.getElementById('mccList').innerHTML = [...sellCart.entries()].map(([id, qty]) => {
         const it = sellCatalog.get(id);
-        return `<div class="mc-confirm-row"><img src="${esc(it.img)}" alt="" ${IMG_FALLBACK_ATTR}>
+        return `<div class="mc-confirm-row">${itemImgTag(it)}
             <span>${esc(it.name)}</span><b>x${fmt(qty)}</b></div>`;
     }).join('');
     document.getElementById('mccTotal').textContent = fmt(sellTotalCoins());
@@ -835,6 +857,7 @@ async function switchMercadorTab(tab) {
 }
 
 function attachTabEvents() {
+    bindSellImgFallback();
     document.querySelectorAll('.mercador-tab').forEach(btn =>
         btn.addEventListener('click', () => switchMercadorTab(btn.dataset.tab)));
 
@@ -854,6 +877,9 @@ function attachTabEvents() {
             if ((sellCart.get(id) || 0) <= 1) { sellCart.delete(id); renderSellTab(); }
             else openQtyModal(id, 'edit');
         }
+    });
+    panel.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.mc-slot[role="button"]')) { e.preventDefault(); e.target.click(); }
     });
     document.getElementById('sellBtn')?.addEventListener('click', openConfirmModal);
 }
@@ -1027,21 +1053,25 @@ function injectStyles() {
 }
 .mc-box-title { color: gold; font-size: 1em; text-shadow: 1px 1px 3px #000; }
 .mc-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px;
     max-height: 42vh; overflow-y: auto; padding: 2px;
 }
 .mc-slot {
-    position: relative; aspect-ratio: 1 / 1; min-height: 72px;
+    position: relative; box-sizing: border-box; height: 96px; min-width: 0;
     background: linear-gradient(180deg, #2a2a2a, #161616);
-    border: 1px solid #5a4a1f; border-radius: 8px; padding: 4px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    cursor: pointer; color: #e0dccc; font-family: inherit;
+    border: 1px solid #5a4a1f; border-radius: 8px; padding: 6px 4px 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+    cursor: pointer; color: #e0dccc; margin: 0; overflow: hidden;
+    -webkit-tap-highlight-color: transparent; user-select: none;
 }
 .mc-slot:active { border-color: gold; }
 .mc-slot.empty { cursor: default; opacity: .45; }
-.mc-slot img { width: 70%; height: 55%; object-fit: contain; filter: drop-shadow(1px 1px 2px #000); pointer-events: none; }
+.mc-slot img {
+    display: block; flex: 0 0 auto; width: 52px; height: 52px; max-width: 100%;
+    object-fit: contain; filter: drop-shadow(1px 1px 2px #000); pointer-events: none;
+}
 .mc-slot-name {
-    font-size: 9px; line-height: 1.05; text-align: center; max-width: 100%;
+    display: block; width: 100%; font-size: 10px; line-height: 1.1; text-align: center; color: #e0dccc;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
 }
 .mc-slot-qty {

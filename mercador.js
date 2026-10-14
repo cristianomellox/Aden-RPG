@@ -26,54 +26,10 @@ function getMerchantState() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CATÁLOGO DE ITENS 56-84
+// INDEXEDDB — lê inventário do cache local
 // ─────────────────────────────────────────────────────────────────────────────
 const BASE_URL = 'https://aden-rpg.pages.dev/assets/itens/';
 
-const TRADE_ITEMS = [
-    { id: 56,  name: 'Pórfero',           img: 'porifero.webp'         },
-    { id: 57,  name: 'Tecido Alfa',        img: 'tecido_alfa.webp'      },
-    { id: 58,  name: 'Verniz',             img: 'verniz.webp'           },
-    { id: 59,  name: 'Safira',             img: 'safira.webp'           },
-    { id: 60,  name: 'Pétala Orium',       img: 'petala_orium.webp'     },
-    { id: 61,  name: 'Lápis-lazúli',       img: 'lapis_lazuli.webp'     },
-    { id: 62,  name: 'Essência de Anjo',   img: 'essencia_de_anjo.webp' },
-    { id: 63,  name: 'Lubrificante',       img: 'lubrificante.webp'     },
-    { id: 64,  name: 'Garra de Dragão',    img: 'garra_de_dragao.webp'  },
-    { id: 65,  name: 'Reagente Ômega',     img: 'reagente_omega.webp'   },
-    { id: 66,  name: 'Núcleo de Dragão',   img: 'nucleo_de_dragao.webp' },
-    { id: 67,  name: 'Pele Animal',        img: 'pele_animal.webp'      },
-    { id: 68,  name: 'Pena de Harpia',     img: 'pena_de_harpia.webp'   },
-    { id: 69,  name: 'Lã',                 img: 'la.webp'               },
-    { id: 70,  name: 'Sal de Cobalto',     img: 'sal_de_cobalto.webp'   },
-    { id: 71,  name: 'Lágrima de Fênix',   img: 'lagrima_de_fenix.webp' },
-    { id: 72,  name: 'Pedaço de Freixo',   img: 'pedaco_de_freixo.webp' },
-    { id: 73,  name: 'Presa de Kelts',     img: 'presa_de_kelts.webp'   },
-    { id: 74,  name: 'Galho Espiritual',   img: 'galho_espiritual.webp' },
-    { id: 75,  name: 'Minério de Mithril', img: 'minerio_de_mithril.webp'},
-    { id: 76,  name: 'Pó Ósseo',           img: 'po_osseo.webp'         },
-    { id: 77,  name: 'Couro Animal',       img: 'couro_animal.webp'     },
-    { id: 78,  name: 'Linha Mágica',       img: 'linha_magica.webp'     },
-    { id: 79,  name: 'Mithril Temperado',  img: 'mithril_temperado.webp'},
-    { id: 80,  name: 'Carvão',             img: 'carvao.webp'           },
-    { id: 81,  name: 'Minério de Ferro',   img: 'minerio_de_ferro.webp' },
-    { id: 82,  name: 'Fios de Fibra',      img: 'fios_de_fibra.webp'    },
-    { id: 83,  name: 'Escama de Dragão',   img: 'escama_de_dragao.webp' },
-    { id: 84,  name: 'Chifre de Unicórnio',img: 'chifre_de_unicornio.webp'},
-    { id: 86,  name: 'Asa de Morcego',     img: 'asa_de_morcego.webp'    },
-    { id: 87,  name: 'Emblema Vampírico',  img: 'emblema_vampirico.webp' },
-    { id: 88,  name: 'Quitina',            img: 'quitina.webp'           },
-    { id: 89,  name: 'Pedra Âmbar',        img: 'pedra_ambar.webp'       },
-    { id: 90,  name: 'Lodo Mágico',        img: 'lodo_magico.webp'       },
-    { id: 91,  name: 'Núcleo de Vinha',    img: 'nucleo_de_vinha.webp'   },
-    { id: 92,  name: 'Totem Reptiliano',   img: 'totem_reptiliano.webp'  },
-];
-
-// PRNG e generateTradePairs removidos — escambo agora exibe todos os itens permanentemente.
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INDEXEDDB — lê inventário do cache local
-// ─────────────────────────────────────────────────────────────────────────────
 const IDB_NAME    = 'aden_inventory_db';
 const IDB_STORE   = 'inventory_store';
 // (sem versão fixa: o schema é do inventory.js)
@@ -122,8 +78,24 @@ async function getAllItemsQtyFromCache(ids) {
     } catch { return {}; }
 }
 
-async function updateCacheQty(itemId, delta) {
-    // delta negativo = consumir, positivo = adicionar
+async function getAllInventoryRowsFromCache() {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return [];
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        return await new Promise((res, rej) => {
+            const r = tx.objectStore(IDB_STORE).getAll();
+            r.onsuccess = () => res(r.result || []);
+            r.onerror = () => rej(r.error);
+        });
+    } catch { return []; }
+}
+
+/**
+ * Aplica vários deltas [[itemId, delta], ...] no cache IDB numa única transação.
+ * delta negativo = consumir, positivo = adicionar.
+ */
+async function applyCacheDeltas(deltas) {
     try {
         const db = await openIdb();
         if (!db.objectStoreNames.contains(IDB_STORE)) return;
@@ -134,34 +106,68 @@ async function updateCacheQty(itemId, delta) {
             r.onsuccess = () => res(r.result);
             r.onerror = () => rej(r.error);
         });
-        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
-        if (matching.length === 0) {
-            if (delta > 0) store.put({ id: -Date.now(), item_id: itemId, quantity: delta, _temp: true, items: { item_id: itemId } });
-            return;
-        }
 
-        let remaining = Math.abs(delta);
-        if (delta < 0) {
-            // consumir
-            for (const item of matching) {
-                if (remaining <= 0) break;
-                if (item.quantity >= remaining) {
-                    item.quantity -= remaining;
-                    remaining = 0;
-                    if (item.quantity <= 0) store.delete(item.id);
-                    else store.put(item);
-                } else {
-                    remaining -= item.quantity;
-                    store.delete(item.id);
-                }
+        for (const [itemId, delta] of deltas) {
+            const matching = all.filter(i => !i.equipped_slot && (i.item_id ?? i.items?.item_id) === itemId);
+            if (matching.length === 0) {
+                if (delta > 0) store.put({ id: -Date.now() - Math.floor(Math.random() * 1000), item_id: itemId, quantity: delta, _temp: true, items: { item_id: itemId } });
+                continue;
             }
-        } else {
-            // adicionar ao primeiro stack
-            const item = matching[0];
-            item.quantity = (item.quantity || 0) + delta;
-            store.put(item);
+            if (delta < 0) {
+                let remaining = Math.abs(delta);
+                for (const item of matching) {
+                    if (remaining <= 0) break;
+                    if (item.quantity >= remaining) {
+                        item.quantity -= remaining;
+                        remaining = 0;
+                        if (item.quantity <= 0) store.delete(item.id);
+                        else store.put(item);
+                    } else {
+                        remaining -= item.quantity;
+                        store.delete(item.id);
+                    }
+                }
+            } else {
+                const item = matching[0];
+                item.quantity = (item.quantity || 0) + delta;
+                store.put(item);
+            }
         }
     } catch (e) { console.warn('mercador: cache update fail', e); }
+}
+
+/**
+ * Sincroniza o cache IDB com o que o servidor devolveu (mesma estratégia do inventory.js):
+ * para os itens afetados, substitui TODAS as linhas não equipadas pelas linhas atuais do servidor.
+ * Assim o cache nunca diverge de qual stack o servidor debitou.
+ */
+async function syncCacheFromServer(updates, removedIds, affectedItemIds) {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return;
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        const all = await new Promise((res, rej) => {
+            const r = store.getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+        });
+        const affected = new Set(affectedItemIds);
+        const removed = new Set(removedIds || []);
+        for (const row of all) {
+            const id = row.item_id ?? row.items?.item_id;
+            if (removed.has(row.id) || (!row.equipped_slot && affected.has(id))) store.delete(row.id);
+        }
+        for (const row of updates || []) {
+            if (!row || row.id == null) continue;
+            const { items: _ignored, ...raw } = row;   // nunca grava definição embutida
+            store.put(raw);
+        }
+    } catch (e) { console.warn('mercador: cache sync fail', e); }
+}
+
+async function updateCacheQty(itemId, delta) {
+    return applyCacheDeltas([[itemId, delta]]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,12 +246,8 @@ const RECEITA_ELMO_ID = 116;
 const RECEITA_ELMO_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_elmo_da_noite_eterna_60.webp';
 const GOLD_IMG = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
 
-// Quantidades em cache (atualizado ao abrir modal)
+// Quantidade de Moedas Rúnicas em cache (atualizada ao abrir modal)
 let cachedMoedaQty = 0;
-let cachedTradeQtys = {}; // { itemId: qty }
-
-// Quantidades UI das trocas
-const tradeQtys = {}; // { pairIndex: qty }
 
 async function openMercadorModal() {
     const state = getMerchantState();
@@ -289,13 +291,9 @@ async function openMercadorModal() {
     content.innerHTML = `<div class="mercador-loading">Carregando ofertas...</div>`;
     startCountdown(state.nextSlot);
 
-    const allIds = [MOEDA_ID, PEDRA_ID, AMPULHETA_ID, RECEITA_FOICE_ID, RECEITA_ARMADURA_ID, RECEITA_COLAR_ID, RECEITA_ANEL_ID, RECEITA_ASA_ID, RECEITA_ELMO_ID, ...TRADE_ITEMS.map(i => i.id)];
-    const qtys = await getAllItemsQtyFromCache(allIds);
-    cachedMoedaQty = qtys[MOEDA_ID] || 0;
-    cachedTradeQtys = qtys;
-
-    // Inicializar qtys UI para todos os itens de escambo
-    for (let i = 0; i < TRADE_ITEMS.length; i++) tradeQtys[i] = 1;
+    cachedMoedaQty = await getItemQtyFromCache(MOEDA_ID);
+    sellCart.clear();
+    sellStock = new Map();
 
     content.innerHTML = `
         <!-- RECURSOS TOPO -->
@@ -313,25 +311,45 @@ async function openMercadorModal() {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent; font-size: 2em; font-weight:bold;">--:--:--</span></p>
 
-        <!-- SEÇÃO VENDA -->
-        <div class="mercador-section-title">⚙ Venda</div>
-        <div class="mercador-section mercador-venda" id="mercadorVenda">
-            ${renderVendaCard('pedra',         PEDRA_IMG,        'Pedra de Refundição',                        1,  MOEDA_IMG, 'pedra')}
-            ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
-            ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
-            ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
-            ${renderVendaCard('receita_foice',    RECEITA_FOICE_IMG,    'Receita Fragmentos Foice da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_foice',    500)}
-            ${renderVendaCard('receita_armadura', RECEITA_ARMADURA_IMG, 'Receita Fragmentos Armadura da Noite Eterna (60%)', 1, MOEDA_IMG, 'receita_armadura', 500)}
-            ${renderVendaCard('receita_colar',    RECEITA_COLAR_IMG,    'Receita Fragmentos Colar da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_colar',    500)}
-            ${renderVendaCard('receita_anel',     RECEITA_ANEL_IMG,     'Receita Fragmentos Anel da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_anel',     500)}
-            ${renderVendaCard('receita_asa',      RECEITA_ASA_IMG,      'Receita Fragmentos Asa da Noite Eterna (60%)',      1, MOEDA_IMG, 'receita_asa',      500)}
-            ${renderVendaCard('receita_elmo',     RECEITA_ELMO_IMG,     'Receita Fragmentos Elmo da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_elmo',     500)}
+        <!-- ABAS -->
+        <div class="mercador-tabs" role="tablist">
+            <button class="mercador-tab active" id="mercadorTabComprar" data-tab="comprar" role="tab">Comprar</button>
+            <button class="mercador-tab" id="mercadorTabVender" data-tab="vender" role="tab">Vender</button>
         </div>
 
-        <!-- SEÇÃO ESCAMBO -->
-        <div class="mercador-section-title">🔄 Escambo</div>
-        <div class="mercador-section mercador-escambo" id="mercadorEscambo">
-            ${TRADE_ITEMS.map((item, i) => renderEscamboCard(item, i)).join('')}
+        <!-- ABA COMPRAR (antiga "Venda") -->
+        <div class="mercador-panel" id="mercadorPanelComprar">
+            <div class="mercador-section mercador-venda" id="mercadorVenda">
+                ${renderVendaCard('pedra',         PEDRA_IMG,        'Pedra de Refundição',                        1,  MOEDA_IMG, 'pedra')}
+                ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
+                ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
+                ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
+                ${renderVendaCard('receita_foice',    RECEITA_FOICE_IMG,    'Receita Fragmentos Foice da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_foice',    500)}
+                ${renderVendaCard('receita_armadura', RECEITA_ARMADURA_IMG, 'Receita Fragmentos Armadura da Noite Eterna (60%)', 1, MOEDA_IMG, 'receita_armadura', 500)}
+                ${renderVendaCard('receita_colar',    RECEITA_COLAR_IMG,    'Receita Fragmentos Colar da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_colar',    500)}
+                ${renderVendaCard('receita_anel',     RECEITA_ANEL_IMG,     'Receita Fragmentos Anel da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_anel',     500)}
+                ${renderVendaCard('receita_asa',      RECEITA_ASA_IMG,      'Receita Fragmentos Asa da Noite Eterna (60%)',      1, MOEDA_IMG, 'receita_asa',      500)}
+                ${renderVendaCard('receita_elmo',     RECEITA_ELMO_IMG,     'Receita Fragmentos Elmo da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_elmo',     500)}
+            </div>
+        </div>
+
+        <!-- ABA VENDER (antigo "Escambo", agora estilo inventário) -->
+        <div class="mercador-panel" id="mercadorPanelVender" style="display:none;">
+            <div class="mc-box">
+                <div class="mc-box-title">📦 Para vender</div>
+                <div class="mc-grid" id="sellCartGrid"></div>
+                <div class="mc-sell-footer">
+                    <div class="mc-sell-total">Você receberá:
+                        <img src="${MOEDA_IMG}" class="mercador-cost-icon" alt="Moeda Rúnica">
+                        <b id="sellTotal">0</b>
+                    </div>
+                    <button class="pm-buy-btn" id="sellBtn" disabled>Vender</button>
+                </div>
+            </div>
+            <div class="mc-box">
+                <div class="mc-box-title">🎒 Seus materiais</div>
+                <div class="mc-grid mc-grid-inv" id="sellInvGrid"></div>
+            </div>
         </div>
     `;
 
@@ -370,40 +388,6 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
                 → Recebe: <span id="vtot-receive-${type}">${receiveBaseQty}</span> ${itemLabel.replace(/ x\d+$/, '')}
             </div>
             <button class="pm-buy-btn" id="vbuy-${type}">Comprar</button>
-        </div>
-    </div>`;
-}
-
-function renderEscamboCard(item, idx) {
-    const giveImg = BASE_URL + item.img;
-    return `
-    <div class="mercador-card" id="escambo-card-${idx}">
-        <div class="mercador-card-header">
-            <div class="mercador-trade-icons">
-                <div class="mercador-trade-side">
-                    <img src="${MOEDA_IMG}" class="mercador-item-icon" alt="Moeda Rúnica">
-                    <span class="mercador-trade-qty" id="get-qty-label-${idx}">x1</span>
-                    <span class="mercador-item-name">Moeda Rúnica</span>
-                </div>
-                <div class="mercador-arrow">⟵</div>
-                <div class="mercador-trade-side">
-                    <img src="${giveImg}" class="mercador-item-icon" alt="${item.name}">
-                    <span class="mercador-trade-qty give-qty-label" id="give-qty-label-${idx}">x1</span>
-                    <span class="mercador-item-name">${item.name}</span>
-                </div>
-            </div>
-            <div class="mercador-have">
-                Você tem: <span id="give-have-${idx}">${fmt(cachedTradeQtys[item.id] || 0)}</span> ${item.name}
-            </div>
-        </div>
-        <div class="mercador-controls">
-            <div class="mercador-qty-row">
-                <button class="pm-qty-btn minus" data-eidx="${idx}">-</button>
-                <span class="pm-qty-val" id="eqty-${idx}">1</span>
-                <button class="pm-qty-btn plus" data-eidx="${idx}">+</button>
-            </div>
-            <div class="mercador-total">Custo: <span id="etot-${idx}">1</span> ${item.name} → <span id="eget-${idx}">1</span> Moeda(s) Rúnica(s)</div>
-            <button class="pm-buy-btn" id="ebuy-${idx}" data-eidx="${idx}">Trocar</button>
         </div>
     </div>`;
 }
@@ -449,34 +433,7 @@ function attachMercadorEvents() {
         });
     }
 
-    // Escambo: qty selectors para todos os TRADE_ITEMS
-    for (let i = 0; i < TRADE_ITEMS.length; i++) {
-        const idx = i;
-        document.querySelector(`.pm-qty-btn.plus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx));
-        document.querySelector(`.pm-qty-btn.minus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx, -1));
-        document.getElementById(`ebuy-${idx}`)?.addEventListener('click', () => {
-            const qty = parseInt(document.getElementById(`eqty-${idx}`)?.textContent || 1);
-            doEscambo(TRADE_ITEMS[idx], idx, qty);
-        });
-    }
-}
-
-function updateEscamboQty(idx, delta = 1) {
-    const el = document.getElementById(`eqty-${idx}`);
-    if (!el) return;
-    const cur = parseInt(el.textContent || 1);
-    const nv = Math.max(1, Math.min(cur + delta, 99));
-    el.textContent = nv;
-    // labels do ícone — ambos os lados são 1:1
-    const giveQtyLabel = document.getElementById(`give-qty-label-${idx}`);
-    if (giveQtyLabel) giveQtyLabel.textContent = `x${nv}`;
-    const getQtyLabel = document.getElementById(`get-qty-label-${idx}`);
-    if (getQtyLabel) getQtyLabel.textContent = `x${nv}`;
-    // texto resumo embaixo
-    const totEl = document.getElementById(`etot-${idx}`);
-    const getEl = document.getElementById(`eget-${idx}`);
-    if (totEl) totEl.textContent = nv;
-    if (getEl) getEl.textContent = nv;
+    attachTabEvents();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,55 +522,340 @@ async function buyVendaItem(type, quantity) {
     }
 }
 
-async function doEscambo(item, idx, tradeQty) {
-    const btn = document.getElementById(`ebuy-${idx}`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Trocando...'; }
+// ─────────────────────────────────────────────────────────────────────────────
+// ABA VENDER — inventário (materiais) → Moedas Rúnicas
+//   • Itens vendáveis: items.item_type = 'outros' E items.description contendo "material"
+//     (a mesma regra é revalidada no servidor em merchant_sell_materials).
+//   • O inventário exibido vem do cache IndexedDB (zero egress); só o CATÁLOGO de
+//     itens vendáveis é consultado no banco (1 query pequena, guardada 24h no localStorage).
+//   • Câmbio 1 material = 1 Moeda Rúnica (igual ao antigo escambo).
+// ─────────────────────────────────────────────────────────────────────────────
+const SELL_RATE = 1;
+const SELL_CATALOG_KEY = 'mercador_sell_catalog_v1';
+const SELL_CATALOG_TTL = 24 * 60 * 60 * 1000;
+const SELL_MIN_CART_SLOTS = 8;
+const SELL_MIN_INV_SLOTS  = 20;
 
-    const giveTotal = tradeQty; // 1:1
-    const haveQty = cachedTradeQtys[item.id] || 0;
+let sellCatalog = null;        // Map<item_id, { id, name, img }>
+let sellStock   = new Map();   // item_id → quantidade que o jogador tem (cache)
+let sellCart    = new Map();   // item_id → quantidade escolhida para vender
+let sellBusy    = false;
 
-    // Só bloqueia localmente se cache > 0 e insuficiente. Cache=0 pode ser miss.
-    if (haveQty > 0 && haveQty < giveTotal) {
-        showMsg(`${item.name} insuficiente! Você tem ${haveQty}, precisa de ${giveTotal}.`);
-        if (btn) { btn.disabled = false; btn.textContent = 'Trocar'; }
-        return;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const UNKNOWN_IMG = BASE_URL + 'unknown.webp';
+const IMG_FALLBACK_ATTR = `onerror="this.onerror=null;this.src='${UNKNOWN_IMG}'"`;
+
+// Convenção do jogo: a imagem é sempre items.name + ".webp" (name já vem com underlines).
+const buildSellImg = name => BASE_URL + name + '.webp';
+
+async function loadSellCatalog() {
+    if (sellCatalog) return sellCatalog;
+    try {
+        const raw = localStorage.getItem(SELL_CATALOG_KEY);
+        if (raw) {
+            const c = JSON.parse(raw);
+            if (c && Date.now() - c.t < SELL_CATALOG_TTL && Array.isArray(c.items)) {
+                sellCatalog = new Map(c.items.map(i => [i.id, i]));
+                return sellCatalog;
+            }
+        }
+    } catch {}
+
+    const { data, error } = await supabase
+        .from('items')
+        .select('item_id, name, display_name')
+        .ilike('item_type', 'outros')
+        .ilike('description', '%material%')
+        .neq('item_id', MOEDA_ID);
+    if (error) throw error;
+
+    const items = (data || []).map(r => ({
+        id: r.item_id,
+        name: r.display_name || r.name,
+        img: buildSellImg(r.name),
+    }));
+    sellCatalog = new Map(items.map(i => [i.id, i]));
+    try { localStorage.setItem(SELL_CATALOG_KEY, JSON.stringify({ t: Date.now(), items })); } catch {}
+    return sellCatalog;
+}
+
+// Recalcula o estoque vendável a partir do cache local (sem rede).
+async function refreshSellStock() {
+    const catalog = await loadSellCatalog();
+    const rows = await getAllInventoryRowsFromCache();
+    const m = new Map();
+    for (const r of rows) {
+        if (r.equipped_slot) continue;
+        const id = r.item_id ?? r.items?.item_id;
+        if (!catalog.has(id)) continue;
+        m.set(id, (m.get(id) || 0) + (r.quantity || 0));
     }
+    for (const [id, q] of [...m]) if (q <= 0) m.delete(id);
+    sellStock = m;
+    // limita o carrinho ao que realmente existe agora
+    for (const [id, q] of [...sellCart]) {
+        const have = sellStock.get(id) || 0;
+        if (have <= 0) sellCart.delete(id);
+        else if (q > have) sellCart.set(id, have);
+    }
+}
+
+const sellAvail = id => (sellStock.get(id) || 0) - (sellCart.get(id) || 0);
+const sellTotalCoins = () => [...sellCart.values()].reduce((s, q) => s + q * SELL_RATE, 0);
+
+function slotHtml(item, qty, attr) {
+    return `<button type="button" class="mc-slot" ${attr}="${item.id}" title="${esc(item.name)}">
+        <img src="${esc(item.img)}" alt="${esc(item.name)}" loading="lazy" ${IMG_FALLBACK_ATTR}>
+        <span class="mc-slot-name">${esc(item.name)}</span>
+        <span class="mc-slot-qty">${fmt(qty)}</span>
+    </button>`;
+}
+
+function renderSellTab() {
+    const cartGrid = document.getElementById('sellCartGrid');
+    const invGrid  = document.getElementById('sellInvGrid');
+    if (!cartGrid || !invGrid || !sellCatalog) return;
+
+    // Cima: o que será vendido
+    const cartItems = [...sellCart.entries()].map(([id, q]) => slotHtml(sellCatalog.get(id), q, 'data-sell-edit'));
+    cartGrid.innerHTML = cartItems.join('') +
+        '<div class="mc-slot empty"></div>'.repeat(Math.max(0, SELL_MIN_CART_SLOTS - cartItems.length));
+
+    // Baixo: inventário (já descontando o que foi para cima)
+    const invItems = [...sellStock.keys()]
+        .filter(id => sellAvail(id) > 0)
+        .sort((a, b) => sellCatalog.get(a).name.localeCompare(sellCatalog.get(b).name, 'pt-BR'))
+        .map(id => slotHtml(sellCatalog.get(id), sellAvail(id), 'data-sell-add'));
+    invGrid.innerHTML = invItems.length || sellCart.size
+        ? invItems.join('') + '<div class="mc-slot empty"></div>'.repeat(Math.max(0, SELL_MIN_INV_SLOTS - invItems.length))
+        : '<div class="mc-empty-msg">Você não tem materiais para vender.</div>';
+
+    const total = sellTotalCoins();
+    const totalEl = document.getElementById('sellTotal');
+    if (totalEl) totalEl.textContent = fmt(total);
+    const btn = document.getElementById('sellBtn');
+    if (btn) btn.disabled = sellBusy || sellCart.size === 0;
+}
+
+// ── Modais (quantidade e confirmação) ───────────────────────────────────────
+let qtyModalState = null; // { id, min, max, mode }
+
+function ensureSellModals() {
+    if (document.getElementById('mercadorQtyModal')) return;
+
+    const q = document.createElement('div');
+    q.id = 'mercadorQtyModal';
+    q.className = 'mc-overlay';
+    q.innerHTML = `
+        <div class="mc-dialog">
+            <img id="mcqImg" class="mc-dialog-img" alt="">
+            <div id="mcqName" class="mc-dialog-title"></div>
+            <div id="mcqAvail" class="mc-dialog-sub"></div>
+            <div class="mercador-qty-row">
+                <button type="button" class="pm-qty-btn" id="mcqMinus">-</button>
+                <input type="number" id="mcqInput" class="mc-qty-input" inputmode="numeric">
+                <button type="button" class="pm-qty-btn" id="mcqPlus">+</button>
+            </div>
+            <input type="range" id="mcqRange" class="mc-range">
+            <div class="mc-dialog-sub">Valor: <b id="mcqCoins">0</b> Moeda(s) Rúnica(s)</div>
+            <div class="mc-dialog-actions">
+                <button type="button" class="mc-btn secondary" id="mcqMax">Máx</button>
+                <button type="button" class="mc-btn danger" id="mcqRemove" style="display:none;">Remover</button>
+                <button type="button" class="mc-btn secondary" id="mcqCancel">Cancelar</button>
+                <button type="button" class="mc-btn primary" id="mcqOk">Confirmar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(q);
+
+    const c = document.createElement('div');
+    c.id = 'mercadorConfirmModal';
+    c.className = 'mc-overlay';
+    c.innerHTML = `
+        <div class="mc-dialog">
+            <div class="mc-dialog-title">Confirmar venda</div>
+            <div id="mccList" class="mc-confirm-list"></div>
+            <div class="mc-dialog-sub">Você receberá
+                <img src="${MOEDA_IMG}" class="mercador-cost-icon" alt="">
+                <b id="mccTotal">0</b> Moeda(s) Rúnica(s)</div>
+            <div class="mc-dialog-actions">
+                <button type="button" class="mc-btn secondary" id="mccCancel">Cancelar</button>
+                <button type="button" class="mc-btn primary" id="mccOk">Confirmar venda</button>
+            </div>
+        </div>`;
+    document.body.appendChild(c);
+
+    // quantidade
+    const input = document.getElementById('mcqInput');
+    const range = document.getElementById('mcqRange');
+    const setQty = v => {
+        if (!qtyModalState) return;
+        let n = parseInt(v, 10);
+        if (!Number.isFinite(n)) n = qtyModalState.min;
+        n = Math.max(qtyModalState.min, Math.min(qtyModalState.max, n));
+        input.value = n; range.value = n;
+        document.getElementById('mcqCoins').textContent = fmt(n * SELL_RATE);
+    };
+    qtyModalState = null;
+    document.getElementById('mcqMinus').addEventListener('click', () => setQty((parseInt(input.value, 10) || 0) - 1));
+    document.getElementById('mcqPlus').addEventListener('click',  () => setQty((parseInt(input.value, 10) || 0) + 1));
+    document.getElementById('mcqMax').addEventListener('click',   () => setQty(qtyModalState?.max));
+    input.addEventListener('input',  () => { if (input.value !== '') setQty(input.value); });
+    input.addEventListener('blur',   () => setQty(input.value));
+    range.addEventListener('input',  () => setQty(range.value));
+    document.getElementById('mcqCancel').addEventListener('click', closeQtyModal);
+    q.addEventListener('click', e => { if (e.target === q) closeQtyModal(); });
+    document.getElementById('mcqRemove').addEventListener('click', () => {
+        if (!qtyModalState) return;
+        sellCart.delete(qtyModalState.id);
+        closeQtyModal(); renderSellTab();
+    });
+    document.getElementById('mcqOk').addEventListener('click', () => {
+        if (!qtyModalState) return;
+        const n = Math.max(qtyModalState.min, Math.min(qtyModalState.max, parseInt(input.value, 10) || 0));
+        if (n <= 0) sellCart.delete(qtyModalState.id);
+        else sellCart.set(qtyModalState.id, n);
+        closeQtyModal(); renderSellTab();
+    });
+    qtyModalState = null;
+    q._setQty = setQty;
+
+    // confirmação
+    document.getElementById('mccCancel').addEventListener('click', () => { if (!sellBusy) c.style.display = 'none'; });
+    c.addEventListener('click', e => { if (e.target === c && !sellBusy) c.style.display = 'none'; });
+    document.getElementById('mccOk').addEventListener('click', confirmSell);
+}
+
+function closeQtyModal() {
+    const q = document.getElementById('mercadorQtyModal');
+    if (q) q.style.display = 'none';
+    qtyModalState = null;
+}
+
+function openQtyModal(id, mode) {
+    ensureSellModals();
+    const item = sellCatalog.get(id);
+    if (!item) return;
+    const q = document.getElementById('mercadorQtyModal');
+    const editing = mode === 'edit';
+    const max = editing ? (sellStock.get(id) || 0) : sellAvail(id);
+    if (max <= 0) return;
+    const current = editing ? (sellCart.get(id) || 1) : 1;
+
+    qtyModalState = { id, min: editing ? 0 : 1, max, mode };
+    const range = document.getElementById('mcqRange');
+    range.min = qtyModalState.min; range.max = max;
+    const qImg = document.getElementById('mcqImg');
+    qImg.onerror = () => { qImg.onerror = null; qImg.src = UNKNOWN_IMG; };
+    qImg.src = item.img;
+    document.getElementById('mcqName').textContent = item.name;
+    document.getElementById('mcqAvail').textContent = `Disponível: ${fmt(max)}`;
+    document.getElementById('mcqRemove').style.display = editing ? '' : 'none';
+    document.getElementById('mcqOk').textContent = editing ? 'Atualizar' : 'Adicionar';
+    q._setQty(current);
+    q.style.display = 'flex';
+}
+
+function openConfirmModal() {
+    if (sellCart.size === 0 || sellBusy) return;
+    ensureSellModals();
+    document.getElementById('mccList').innerHTML = [...sellCart.entries()].map(([id, qty]) => {
+        const it = sellCatalog.get(id);
+        return `<div class="mc-confirm-row"><img src="${esc(it.img)}" alt="" ${IMG_FALLBACK_ATTR}>
+            <span>${esc(it.name)}</span><b>x${fmt(qty)}</b></div>`;
+    }).join('');
+    document.getElementById('mccTotal').textContent = fmt(sellTotalCoins());
+    document.getElementById('mercadorConfirmModal').style.display = 'flex';
+}
+
+async function confirmSell() {
+    if (sellBusy || sellCart.size === 0) return;
+    sellBusy = true;
+    const okBtn = document.getElementById('mccOk');
+    const cancelBtn = document.getElementById('mccCancel');
+    if (okBtn) { okBtn.disabled = true; okBtn.textContent = 'Vendendo...'; }
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    const items = [...sellCart.entries()].map(([item_id, qty]) => ({ item_id, qty }));
+    const total = sellTotalCoins();
 
     try {
-        const { data, error } = await supabase.rpc('merchant_trade', {
-            p_give_id:   item.id,
-            p_trade_qty: tradeQty
-        });
+        const { data, error } = await supabase.rpc('merchant_sell_materials', { p_items: items });
         if (error) throw error;
         if (!data.success) throw new Error(data.message);
 
-        // Sincroniza cache do item entregue
-        const newGiveQty = (data.new_give_qty != null)
-            ? data.new_give_qty
-            : Math.max(0, (cachedTradeQtys[item.id] || 0) - giveTotal);
+        // Sincroniza o cache IDB em UMA transação, com as linhas que o servidor devolveu (sem egress extra)
+        if (Array.isArray(data.inventory_updates)) {
+            await syncCacheFromServer(data.inventory_updates, data.removed_item_ids, [...items.map(i => i.item_id), MOEDA_ID]);
+        } else {
+            await applyCacheDeltas([...items.map(i => [i.item_id, -i.qty]), [MOEDA_ID, total]]);
+        }
 
-        cachedTradeQtys[item.id] = newGiveQty;
-        await updateCacheQty(item.id, -giveTotal);
-
-        const haveEl = document.getElementById(`give-have-${idx}`);
-        if (haveEl) haveEl.textContent = fmt(newGiveQty);
-
-        // Atualiza Moedas Rúnicas
-        const newMoedaQty = (data.new_moeda_qty != null)
-            ? data.new_moeda_qty
-            : cachedMoedaQty + tradeQty;
-        cachedMoedaQty = newMoedaQty;
-        await updateCacheQty(MOEDA_ID, tradeQty);
-
+        sellCart.clear();
+        try { await refreshSellStock(); } catch {}   // relê o cache local já corrigido (a venda já ocorreu: não vira erro)
+        cachedMoedaQty = (data.new_moeda_qty != null) ? data.new_moeda_qty : cachedMoedaQty + total;
         const moedaEl = document.getElementById('mercadorMoedaQty');
         if (moedaEl) moedaEl.textContent = `x${fmt(cachedMoedaQty)}`;
 
-        showMsg(`Troca realizada! Você recebeu ${tradeQty} Moeda(s) Rúnica(s).`);
+        document.getElementById('mercadorConfirmModal').style.display = 'none';
+        sellBusy = false;
+        renderSellTab();
+        showMsg(`Venda realizada! Você recebeu ${fmt(total)} Moeda(s) Rúnica(s).`);
     } catch (err) {
-        showMsg(`Erro: ${err.message || 'Falha na troca.'}`);
+        document.getElementById('mercadorConfirmModal').style.display = 'none';
+        showMsg(`Erro: ${err.message || 'Falha na venda.'}`);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Trocar'; }
+        sellBusy = false;
+        if (okBtn) { okBtn.disabled = false; okBtn.textContent = 'Confirmar venda'; }
+        if (cancelBtn) cancelBtn.disabled = false;
+        renderSellTab();
     }
+}
+
+// ── Abas ────────────────────────────────────────────────────────────────────
+async function switchMercadorTab(tab) {
+    const isVender = tab === 'vender';
+    document.getElementById('mercadorTabComprar')?.classList.toggle('active', !isVender);
+    document.getElementById('mercadorTabVender')?.classList.toggle('active', isVender);
+    const pc = document.getElementById('mercadorPanelComprar');
+    const pv = document.getElementById('mercadorPanelVender');
+    if (pc) pc.style.display = isVender ? 'none' : '';
+    if (pv) pv.style.display = isVender ? 'flex' : 'none';
+    if (!isVender) return;
+
+    const invGrid = document.getElementById('sellInvGrid');
+    if (invGrid && !sellCatalog) invGrid.innerHTML = '<div class="mc-empty-msg">Carregando...</div>';
+    try {
+        await refreshSellStock();   // lê só o cache local (e o catálogo, 1x/24h)
+        renderSellTab();
+    } catch (e) {
+        console.warn('mercador: falha ao carregar catálogo de venda', e);
+        if (invGrid) invGrid.innerHTML = '<div class="mc-empty-msg">Não foi possível carregar seus itens. Tente novamente.</div>';
+    }
+}
+
+function attachTabEvents() {
+    document.querySelectorAll('.mercador-tab').forEach(btn =>
+        btn.addEventListener('click', () => switchMercadorTab(btn.dataset.tab)));
+
+    const panel = document.getElementById('mercadorPanelVender');
+    if (!panel) return;
+    panel.addEventListener('click', e => {
+        const add  = e.target.closest('[data-sell-add]');
+        const edit = e.target.closest('[data-sell-edit]');
+        if (add) {
+            const id = Number(add.dataset.sellAdd);
+            const avail = sellAvail(id);
+            if (avail <= 0) return;
+            if (avail === 1) { sellCart.set(id, (sellCart.get(id) || 0) + 1); renderSellTab(); }
+            else openQtyModal(id, 'add');
+        } else if (edit) {
+            const id = Number(edit.dataset.sellEdit);
+            if ((sellCart.get(id) || 0) <= 1) { sellCart.delete(id); renderSellTab(); }
+            else openQtyModal(id, 'edit');
+        }
+    });
+    document.getElementById('sellBtn')?.addEventListener('click', openConfirmModal);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -765,6 +1007,85 @@ function injectStyles() {
     transition: background .2s;
 }
 #mercadorMsgOk:hover { background: linear-gradient(135deg, #d4a017, #a07820); }
+
+/* ─── ABAS ─── */
+.mercador-tabs { display: flex; justify-content: center; gap: 8px; width: 90%; max-width: 600px; }
+.mercador-tab {
+    flex: 1; max-width: 200px;
+    background: rgba(0,0,0,.55); color: #c9a94a;
+    border: 1px solid #c9a94a; border-radius: 8px;
+    padding: 8px 14px; font-family: 'Cinzel', serif; font-size: 1em;
+    cursor: pointer; transition: background .2s, color .2s;
+}
+.mercador-tab.active { background: linear-gradient(135deg, #b8860b, #8b6914); color: #fff; text-shadow: 1px 1px 2px #000; }
+.mercador-panel { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* ─── VENDER: caixas estilo inventário ─── */
+.mc-box {
+    width: 90%; max-width: 600px;
+    background: rgba(0,0,0,.6); border: 1px solid #c9a94a; border-radius: 10px;
+    padding: 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.mc-box-title { color: gold; font-size: 1em; text-shadow: 1px 1px 3px #000; }
+.mc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
+    max-height: 42vh; overflow-y: auto; padding: 2px;
+}
+.mc-slot {
+    position: relative; aspect-ratio: 1 / 1; min-height: 72px;
+    background: linear-gradient(180deg, #2a2a2a, #161616);
+    border: 1px solid #5a4a1f; border-radius: 8px; padding: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    cursor: pointer; color: #e0dccc; font-family: inherit;
+}
+.mc-slot:active { border-color: gold; }
+.mc-slot.empty { cursor: default; opacity: .45; }
+.mc-slot img { width: 70%; height: 55%; object-fit: contain; filter: drop-shadow(1px 1px 2px #000); pointer-events: none; }
+.mc-slot-name {
+    font-size: 9px; line-height: 1.05; text-align: center; max-width: 100%;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
+}
+.mc-slot-qty {
+    position: absolute; right: 4px; bottom: 2px; color: gold; font-weight: bold; font-size: .75em;
+    text-shadow: 1px 1px 2px #000, -1px -1px 2px #000; pointer-events: none;
+}
+.mc-empty-msg { grid-column: 1 / -1; color: #aaa; text-align: center; padding: 16px 8px; font-size: .9em; }
+.mc-sell-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.mc-sell-total { color: #e0dccc; display: flex; align-items: center; gap: 6px; }
+.mc-sell-total b { color: gold; }
+/* ─── MODAIS DE QUANTIDADE / CONFIRMAÇÃO ─── */
+.mc-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9998;
+    background: rgba(0,0,0,.65); align-items: center; justify-content: center;
+}
+.mc-dialog {
+    background: linear-gradient(160deg, #1e1e2e, #12121c); border: 1px solid #c9a94a; border-radius: 12px;
+    padding: 20px 18px 16px; max-width: 360px; width: 90%;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.8); font-family: 'Cinzel', serif; color: #e0dccc;
+}
+.mc-dialog-img { width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(1px 1px 2px #000); }
+.mc-dialog-title { color: gold; font-size: 1.05em; text-align: center; }
+.mc-dialog-sub { font-size: .85em; color: #ccc; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.mc-dialog-sub b { color: gold; }
+.mc-qty-input {
+    width: 90px; text-align: center; font-size: 1.1em; padding: 4px;
+    background: #0d0d14; color: #fff; border: 1px solid #c9a94a; border-radius: 6px;
+}
+.mc-range { width: 100%; accent-color: #c9a94a; }
+.mc-dialog-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.mc-btn {
+    border-radius: 8px; padding: 8px 14px; font-family: 'Cinzel', serif; font-size: .9em;
+    cursor: pointer; border: 1px solid #c9a94a; color: #fff;
+}
+.mc-btn.primary   { background: linear-gradient(135deg, #b8860b, #8b6914); }
+.mc-btn.secondary { background: rgba(255,255,255,.08); }
+.mc-btn.danger    { background: rgba(160,40,40,.7); border-color: #a04040; }
+.mc-btn:disabled  { opacity: .5; cursor: default; }
+.mc-confirm-list { width: 100%; max-height: 34vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.mc-confirm-row { display: flex; align-items: center; gap: 8px; font-size: .9em; }
+.mc-confirm-row img { width: 30px; height: 30px; object-fit: contain; }
+.mc-confirm-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-confirm-row b { color: gold; }
 `;
     document.head.appendChild(style);
 }

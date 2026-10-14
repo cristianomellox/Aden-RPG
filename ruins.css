@@ -117,8 +117,8 @@ body {
     position: relative;
     width: 100%;
     padding: 5px 10px;
-    background: #111;
-    border-bottom: 1px solid #333;
+    background: rgba(8, 6, 10, 0.55); /* translúcido: o skybox 3D aparece por trás */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     z-index: 20;
     box-sizing: border-box;
     flex-shrink: 0; /* Garante que o HUD não encolha */
@@ -210,16 +210,14 @@ body {
 #roomView {
     flex-grow: 1;
     position: relative;
-    background-color: #000;
-    background-image: url('https://aden-rpg.pages.dev/assets/amasmorra.webp');
-    background-size: cover;
-    background-position: center;
+    /* Fundo agora é o skybox 3D (ruins_skybox.js), em tela cheia atrás de tudo. */
+    background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    border-bottom: 2px solid #444;
+    border-bottom: none;
 }
 
 /* Entidade (Monstro/Baú) com Fade In/Out */
@@ -295,13 +293,13 @@ body {
 /* CONTROLES */
 .nav-controls {
     height: 280px;
-    background: #1a1a1a;
+    background: linear-gradient(to bottom, rgba(10, 8, 14, 0.50), rgba(10, 8, 14, 0.72)); /* skybox aparece por trás */
     padding: 15px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    border-top: 1px solid #444;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-sizing: border-box;
     flex-shrink: 0;
 }
@@ -899,7 +897,7 @@ body {
     z-index: 2; /* Acima do background (0), abaixo da entidade (5) */
     animation: redPulse 2s infinite ease-in-out;
     box-shadow: inset 0 0 50px rgba(255, 0, 0, 0.5);
-    display: none; /* Começa escondido */
+    display: none !important; /* DESATIVADO: o pulso do colapso agora é um batimento no shader do skybox (ruins_skybox.js) */
 }
 
 @keyframes redPulse {

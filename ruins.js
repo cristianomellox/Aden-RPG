@@ -698,6 +698,7 @@ async function enterGame() {
     
     els.lobby.style.display = 'none';
     els.game.style.display = 'flex';
+    _startRuinsSky();
     
     updateHUD();
     updateTimers();
@@ -1475,16 +1476,37 @@ function updateTimers() {
             els.collapseTimer.textContent = `Colapso em: ${m}:${s}`;
             els.collapseTimer.style.color = "white";
             els.collapseTimer.classList.remove('pulse-text');
+            ruinsCollapseActive = false;
             
             if(els.collapseOverlay) els.collapseOverlay.style.display = 'none';
         } else {
             els.collapseTimer.textContent = "COLAPSO IMINENTE!";
             els.collapseTimer.style.color = "silver";
             els.collapseTimer.classList.add('pulse-text');
+            ruinsCollapseActive = true;   // o skybox passa a girar em tons de vermelho
             
             if(els.collapseOverlay) els.collapseOverlay.style.display = 'block';
         }
     }
+}
+
+// =====================================================================
+// SKYBOX 3D DA PARTIDA (ruins_skybox.js)
+// Parado até o colapso; no colapso gira com efeitos vermelhos. Carregado via
+// import() dinâmico só quando a tela de jogo aparece (o importmap do 'three'
+// está no <head> do ruins.html). O antigo #collapseOverlay (redPulse) é
+// escondido por CSS — o batimento agora é feito no shader.
+// =====================================================================
+let ruinsCollapseActive = false;
+let _ruinsSkyPromise = null;
+
+function _startRuinsSky() {
+    if (!_ruinsSkyPromise) {
+        _ruinsSkyPromise = import('./ruins_skybox.js')
+            .then(m => { m.initRuinsSkybox({ getCollapse: () => ruinsCollapseActive }); return m; })
+            .catch(e => { console.warn('[Ruins] skybox 3D indisponível:', e); _ruinsSkyPromise = null; return null; });
+    }
+    _ruinsSkyPromise.then(m => { if (m) m.showRuinsSkybox(); });
 }
 
 // =====================================================================

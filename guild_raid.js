@@ -589,6 +589,8 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
 
     // Flash on monster image (só filter/drop-shadow — a respiração orgânica
     // em JS continua controlando o transform o tempo todo, sem ser sobrescrita)
+    _raidMob3D('mobHit', isCrit ? 'crit' : 'hit');
+    const fx = _mobFxAnchor(targetEl);
     const monsterImg = document.getElementById('raidMonsterImage');
     if (monsterImg) {
         monsterImg.style.animation = isCrit
@@ -608,7 +610,7 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     }
 
     // Shockwave rings (centered on monster, upper portion of area)
-    const rTop = 'calc(38% + var(--raid-mob-drop, 0px))', rLeft = '50%';
+    const rTop = fx.ringTop, rLeft = fx.left;
     const r1 = document.createElement('div'); r1.className = 'raid-ring' + (isCrit ? ' crit' : '');
     r1.style.top = rTop; r1.style.left = rLeft;
     targetEl.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
@@ -633,25 +635,28 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     }
 
     // Monster shake on crit
-    if (isCrit && monsterImg) {
-        monsterImg.classList.add('shake-animation');
-        setTimeout(() => monsterImg.classList.remove('shake-animation'), 750);
+    if (isCrit) {
+        _raidMob3D('mobShake');
+        if (monsterImg) {
+            monsterImg.classList.add('shake-animation');
+            setTimeout(() => monsterImg.classList.remove('shake-animation'), 750);
+        }
     }
 
     // Damage number
     const dmgEl = document.createElement('div');
-    const topPos = isCrit ? 'calc(26% + var(--raid-mob-drop, 0px))' : 'calc(31% + var(--raid-mob-drop, 0px))';
+    const topPos = isCrit ? fx.critTop : fx.numTop;
     if (isCrit) {
         dmgEl.className = 'raid-crit-num';
         dmgEl.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
-        dmgEl.style.top = topPos;
+        dmgEl.style.top = topPos; dmgEl.style.left = fx.left;
         const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
-        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = 'calc(19% + var(--raid-mob-drop, 0px))';
+        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = fx.lblTop; lbl.style.left = fx.left;
         targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
     } else {
         dmgEl.className = 'raid-dmg-num';
         dmgEl.textContent = Number(dmg).toLocaleString();
-        dmgEl.style.top = topPos;
+        dmgEl.style.top = topPos; dmgEl.style.left = fx.left;
     }
     targetEl.appendChild(dmgEl);
     dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
@@ -668,13 +673,15 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
 function _epicRaidMonsterHeal(targetEl, healAmount) {
     targetEl.style.position = targetEl.style.position || 'relative';
 
+    _raidMob3D('mobHit', 'heal');
+    const fx = _mobFxAnchor(targetEl);
     const monsterImg = document.getElementById('raidMonsterImage');
     if (monsterImg) {
         monsterImg.style.animation = 'raid-monster-heal 0.9s ease-out';
         setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, 920);
     }
 
-    const rTop = 'calc(38% + var(--raid-mob-drop, 0px))', rLeft = '50%';
+    const rTop = fx.ringTop, rLeft = fx.left;
     const ring = document.createElement('div');
     ring.className = 'raid-ring-heal';
     ring.style.top = rTop; ring.style.left = rLeft;
@@ -704,7 +711,7 @@ function _epicRaidMonsterHeal(targetEl, healAmount) {
     const healEl = document.createElement('div');
     healEl.className = 'raid-heal-num';
     healEl.innerHTML = '✚ +' + Number(healAmount).toLocaleString();
-    healEl.style.top = 'calc(31% + var(--raid-mob-drop, 0px))';
+    healEl.style.top = fx.numTop; healEl.style.left = fx.left;
     targetEl.appendChild(healEl);
     healEl.addEventListener('animationend', () => healEl.remove(), { once: true });
     setTimeout(() => { if (healEl.parentNode) healEl.remove(); }, 3900);
@@ -1275,8 +1282,9 @@ function clearCountdown() {
 
 async function handleRaidCountdown(raidData) {
     clearCountdown();
+    _setRaidSkyMode('prep');      // preparação: céu girando, sem mob
     openCombatModal();
-    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+    ['raidHeader', 'raidTargetInfo', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
         const el = $id(id);
         if (el) el.style.display = 'none';
     });
@@ -1365,12 +1373,13 @@ async function loadRaid() {
 }
 
 async function continueLoadingRaid(raidData) {
+    _setRaidSkyMode('combat');    // raid rodando: mob 3D, céu parado (exceto andar de chefe)
     currentRaidId = raidData.id;
     currentFloor = raidData.current_floor || 1; 
     maxMonsterHealth = Number(raidData.initial_monster_health) || 1;
     raidEndsAt = raidData.ends_at;
     $id('raidCountdownContainer').style.display = 'none';
-    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+    ['raidHeader', 'raidTargetInfo', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
         const el = $id(id);
         if (el) el.style.display = ''; 
     });
@@ -1407,8 +1416,7 @@ async function loadMonsterForFloor(floor) {
   
   // 1. Gera URL da imagem localmente (ZERO EGRESS)
   const imageUrl = getMonsterImageUrl(floor);
-  const img = $id("raidMonsterImage");
-  if (img) img.src = imageUrl;
+  _setMonsterImage(imageUrl);
 
   // 2. Verifica Cache de Stats (Nome/HP)
   if (monsterCache.has(floor)) {
@@ -1437,11 +1445,8 @@ function updateMonsterNameAndHp(data) {
         monsterNameEl = document.createElement("div");
         monsterNameEl.id = "raidMonsterName";
         monsterNameEl.style.cssText = "text-align: center; font-weight: bold; font-size: 1em; color: #fff; text-shadow: 2px 2px 4px #000;";
-        // Fica no mesmo wrapper (position:relative) da imagem do monstro: o CSS ancora
-        // o nome --raid-name-gap acima da cabeça (ver #raidMonsterName em guild.css).
-        const monsterImgEl = $id("raidMonsterImage");
-        const monsterArea = $id("raidMonsterArea");
-        const nameHost = (monsterImgEl && monsterImgEl.parentElement) || monsterArea;
+        // Nome vive no bloco #raidTargetInfo (logo abaixo do timer, junto da barra de HP).
+        const nameHost = $id("raidTargetInfo") || $id("raidMonsterArea");
         if (nameHost) nameHost.insertBefore(monsterNameEl, nameHost.firstChild);
     }
     monsterNameEl.textContent = data.name || "Monstro";
@@ -1761,8 +1766,7 @@ async function triggerBatchSync() {
                         
                         // Define imagem LOCALMENTE
                         const newImageUrl = getMonsterImageUrl(currentFloor);
-                        const img = $id("raidMonsterImage");
-                        if (img) img.src = newImageUrl;
+                        _setMonsterImage(newImageUrl);
 
                         // Atualiza Cache com nome/hp vindos do server
                         monsterCache.set(currentFloor, {
@@ -2118,11 +2122,15 @@ function _exitRaidFullscreen() {
 // o módulo lê currentFloor a cada quadro e faz a transição suave sozinho.
 let _raidSkyPromise = null;
 let _raidSkyWanted = false;
+// 'prep'   = contagem regressiva (céu gira, sem mob)
+// 'combat' = raid rodando (andar normal: céu parado; andar de chefe: céu gira)
+let _raidSkyMode = 'combat';
+function _setRaidSkyMode(mode) { _raidSkyMode = mode; }
 
 function _loadRaidSky() {
   if (!_raidSkyPromise) {
     _raidSkyPromise = import('./guild_raid_skybox.js')
-      .then(m => { m.initRaidSkybox({ getFloor: () => currentFloor }); return m; })
+      .then(m => { m.initRaidSkybox({ getFloor: () => currentFloor, getMode: () => _raidSkyMode }); return m; })
       .catch(e => { console.warn('[Raid] skybox 3D indisponível:', e); _raidSkyPromise = null; return null; });
   }
   return _raidSkyPromise;
@@ -2146,6 +2154,42 @@ function _hideRaidSky() {
   _raidSkyWanted = false;
   if (_raidSkyPromise) _raidSkyPromise.then(m => { if (m) m.hideRaidSkybox(); });
   try { window.GuildSkybox && window.GuildSkybox.resume && window.GuildSkybox.resume(); } catch (e) {}
+}
+
+// ── Mob/chefe como sprite 3D (guild_raid_skybox.js) ───────────────────
+// O <img id="raidMonsterImage"> continua no DOM só como pré-carga/fallback
+// (CSS o esconde, a menos que o WebGL falhe → classe .raid-mob-fallback).
+function _setMonsterImage(url) {
+  const img = $id("raidMonsterImage");
+  if (img) img.src = url;
+  _loadRaidSky().then(m => { if (m) m.setMobImage(url); });
+}
+
+function _raidMob3D(fn, ...args) {
+  try { const R = window.RaidSkybox; if (R && typeof R[fn] === 'function') R[fn](...args); } catch (e) {}
+}
+
+// Pontos de impacto (anéis, números) relativos ao targetEl. Com o sprite 3D ativo
+// ancora no corpo projetado na tela; senão cai nas porcentagens antigas (fallback DOM).
+function _mobFxAnchor(targetEl) {
+  const old = {
+    ringTop:  'calc(38% + var(--raid-mob-drop, 0px))',
+    numTop:   'calc(31% + var(--raid-mob-drop, 0px))',
+    critTop:  'calc(26% + var(--raid-mob-drop, 0px))',
+    lblTop:   'calc(19% + var(--raid-mob-drop, 0px))',
+    left: '50%'
+  };
+  try {
+    const R = window.RaidSkybox;
+    const rect = R && R.getMobScreenRect && R.getMobScreenRect();
+    if (!rect || !(rect.height > 20)) return old;
+    const t = targetEl.getBoundingClientRect();
+    const at = (frac) => `${(rect.feetY - rect.height * frac - t.top).toFixed(1)}px`;
+    return {
+      ringTop: at(0.55), numTop: at(0.68), critTop: at(0.78), lblTop: at(0.90),
+      left: `${(rect.cx - t.left).toFixed(1)}px`
+    };
+  } catch (e) { return old; }
 }
 
 // Pré-aquece a imagem do céu (cache do navegador) pra a 1ª abertura da raid não "piscar".

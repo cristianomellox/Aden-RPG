@@ -305,13 +305,19 @@ if ('serviceWorker' in navigator) {
         <small style="font-size: 0.6em;">voltar</small>
         </div>
 
-    <div id="raidMonsterArea">
-      <div style="position: relative; width:100%; flex: 1 1 auto; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center">
-      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/tddandar01.webp" style="width:100px; height: 200px;">
-      </div>
+    <!-- Nome + barra de HP do mob/chefe: logo abaixo do timer (o sprite 3D do monstro vive no skybox) -->
+    <div id="raidTargetInfo">
+      <div id="raidMonsterName"></div>
       <div id="raidMonsterHpBar">
         <div id="raidMonsterHpFill"></div>
         <span id="raidMonsterHpText"></span>
+      </div>
+    </div>
+
+    <div id="raidMonsterArea">
+      <div style="position: relative; width:100%; flex: 1 1 auto; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center">
+      <!-- Só pré-carga/fallback: escondido por CSS enquanto o sprite 3D estiver ativo -->
+      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/tddandar01.webp" style="width:100px; height: 200px;">
       </div>
     </div>
    <center> <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:38px;height:38px;cursor:pointer; margin-top: 4px;"></center>

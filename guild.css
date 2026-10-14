@@ -1266,7 +1266,7 @@ hr {
    Os efeitos de impacto (anéis, números de dano, cura) usam o mesmo
    --raid-mob-drop em guild_raid.js, então acompanham o monstro. */
 #raidCombatModal {
-  --raid-mob-drop: 220px;
+  --raid-mob-drop: 180px;
   --raid-name-gap: 28px;
 }
 #raidMonsterImage {
@@ -3222,20 +3222,38 @@ body {
   position: relative !important;
   z-index: 20 !important;
 }
-/* Nome ancorado ao topo do monstro: sua borda inferior fica --raid-name-gap
-   acima da cabeça (topo da imagem). Vive dentro do mesmo wrapper da imagem. */
-#raidMonsterName {
-  position: absolute !important;
+/* ── Nome + HP do mob/chefe: bloco logo abaixo do timer ──────────────────
+   --raid-target-top: distância do topo do conteúdo até o nome (ajuste fino
+   aqui se o timer ficar colado/sobreposto). O sprite do monstro agora é 3D,
+   dentro do skybox (guild_raid_skybox.js → MOB_SPOT). */
+#raidCombatModal { --raid-target-top: 40px; }
+#raidTargetInfo {
+  position: absolute;
+  top: var(--raid-target-top, 40px);
   left: 0;
   right: 0;
-  top: calc(50% - 210px + var(--raid-mob-drop, 0px) - var(--raid-name-gap, 0px)) !important;
-  transform: translateY(-100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 3;
+  pointer-events: none;
+}
+#raidTargetInfo #raidMonsterName {
+  position: static !important;
+  transform: none !important;
   margin: 0 !important;
   padding: 0 8px;
   box-sizing: border-box;
-  z-index: 2;
-  pointer-events: none;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.1;
 }
+#raidTargetInfo #raidMonsterHpBar { margin: 0 auto; }
+
+/* Sprite 3D ativo → o <img> do DOM some. Se o WebGL/sprite falhar, o JS
+   adiciona .raid-mob-fallback no modal e o <img> antigo volta a aparecer. */
+#raidCombatModal:not(.raid-mob-fallback) #raidMonsterImage { display: none !important; }
 /* ═══════════════════════════════════════════════════════════
    PATCH v5 — respiro entre o botão de recolher HUD e o
    conteúdo da aba (bandeira/banner da guilda ficava colado

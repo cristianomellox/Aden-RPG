@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chefe Mundial - Aden RPG</title>
+    <!-- Import map exigido pelo skybox (solo_boss_skybox.js) e pelo postfx.js —
+         mesma versão do Three.js usada em solaris.js (0.160.0). -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="guild.css" />
@@ -51,16 +61,49 @@ if ('serviceWorker' in navigator) {
             position: relative;
             overflow: hidden;
         }
-        #sbBackgroundVideo {
+        /* ==============================================================
+           SKYBOX 360° (Three.js) — substitui o antigo vídeo de fundo.
+           #sbSkyCanvas renderiza a esfera + clima (neve/névoa);
+           #sbSkyMap é a camada transparente usada pelo postfx;
+           #sbFrostOverlay (criado por solo_boss_skybox.js) é a geada
+           nas bordas. Tudo fica atrás do boss e da UI (z-index 0).
+           ============================================================== */
+        #sbSkyLayer {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+            background: #05070d;
+        }
+        #sbSkyCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: block;
+            opacity: 0;
+            transition: opacity 1.2s ease-in;
+        }
+        #sbSkyLayer.is-ready #sbSkyCanvas { opacity: 1; }
+        #sbSkyMap {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            user-select: none;
+        }
+        #sbFrostOverlay {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover; /* Faz o vídeo cobrir a área como o background-size: cover */
-            z-index: 0;        /* Garante que fique atrás de tudo */
-            opacity: 0;
-            transition: opacity 2s ease-in;
+            pointer-events: none;
+            mix-blend-mode: screen;
+            animation: sbFrostBreath 9s ease-in-out infinite;
+        }
+        @keyframes sbFrostBreath {
+            0%, 100% { opacity: 0.80; }
+            50%      { opacity: 1.00; }
         }
 
         /* HEADER: Apenas Nome e Timer agora */
@@ -414,10 +457,10 @@ font-size: 1em;
     </div>
 
     <div id="sbContainer" style="display: none;">
-      <video autoplay muted loop playsinline id="sbBackgroundVideo">
-        <source src="https://aden-rpg.pages.dev/assets/solaris.mp4" type="video/mp4">
-        Seu navegador não suporta vídeos.
-    </video>
+        <div id="sbSkyLayer">
+            <canvas id="sbSkyCanvas"></canvas>
+            <div id="sbSkyMap"></div>
+        </div>
         <div id="sbHeader">
             <div id="bossName">Kar-Drakul</div>
             <div id="sbTimer">15:00</div>

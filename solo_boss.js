@@ -534,22 +534,41 @@ function initOrganicBreathing(elementId) {
     requestAnimationFrame(tick);
 }
 
+// =================================================================
+// SKYBOX 360° DE FUNDO (solo_boss_skybox.js)
+// Carregado via import() dinâmico: se falhar (CDN, WebGL, postfx.js),
+// o combate segue normal, só com a imagem estática de fundo.
+// =================================================================
+let _skyPromise = null;
+function _loadSky() {
+    if (!_skyPromise) {
+        _skyPromise = import('./solo_boss_skybox.js').catch((e) => {
+            console.error('[SoloBossSky] Falha ao carregar o módulo do skybox, usando imagem estática:', e);
+            const layer = document.getElementById('sbSkyLayer');
+            if (layer) layer.style.background = "#05070d url('/assets/solaris_boss.png') center / cover no-repeat";
+            return null;
+        });
+    }
+    return _skyPromise;
+}
+function _skyDo(fn) { _loadSky().then(m => { if (m) { try { fn(m); } catch (e) { console.error(e); } } }); }
+
+// Vídeos em tela cheia (intro/ataques/morte) cobrem o céu: pausa a renderização
+// (com pequeno atraso, pra não congelar durante o fade-in do overlay) e retoma
+// assim que o vídeo acaba (o céu precisa estar rodando durante o fade-out).
+let _skyHoldTimer = null;
+function _skyHold(hold) {
+    clearTimeout(_skyHoldTimer);
+    if (hold) _skyHoldTimer = setTimeout(() => _skyDo(m => m.pauseSoloBossSky()), 400);
+    else _skyDo(m => m.resumeSoloBossSky());
+}
+
 // ================= INICIALIZAÇÃO =================
 document.addEventListener("DOMContentLoaded", async () => {
     initOrganicBreathing('bossImage');
 
-    // 1. CORREÇÃO DO VÍDEO DE FUNDO
-    const bgVideo = document.getElementById('sbBackgroundVideo');
-    if (bgVideo) {
-        bgVideo.load();
-        const fadeInVideo = () => { bgVideo.style.opacity = '1'; };
-        if (bgVideo.readyState >= 3) {
-            fadeInVideo();
-        } else {
-            bgVideo.addEventListener('canplaythrough', fadeInVideo, { once: true });
-            bgVideo.addEventListener('canplay', fadeInVideo, { once: true });
-        }
-    }
+    // Pré-carrega módulo + textura do skybox (a intro em vídeo dá tempo de sobra)
+    _loadSky();
 
     document.getElementById('msgCloseBtn').addEventListener('click', () => {
         document.getElementById('msgModal').style.display = 'none';
@@ -885,6 +904,9 @@ async function initCombatState(serverData) {
 function setupUI() {
     document.getElementById('sbLobby').style.display = 'none';
     document.getElementById('sbContainer').style.display = 'flex'; 
+    
+    // Container já visível (tem tamanho): inicia/retoma o skybox
+    _skyDo(m => m.showSoloBossSky());
     
     if (state.bossImageUrl) document.getElementById('bossImage').src = state.bossImageUrl;
     if (state.playerAvatarUrl) document.getElementById('playerAvatar').src = state.playerAvatarUrl;
@@ -1233,6 +1255,8 @@ function playVideo(src, callback) {
     // Verifica se temos a versão em memória (Blob), senão usa a URL normal
     const videoSrc = videoBlobCache[src] || src;
 
+    _skyHold(true);
+
     // Reset visual
     overlay.style.display = 'flex';
     requestAnimationFrame(() => {
@@ -1275,6 +1299,7 @@ function playVideo(src, callback) {
     // Ao finalizar
     vid.onended = () => {
         vid.removeEventListener('timeupdate', timeUpdateHandler);
+        _skyHold(false);
         
         overlay.style.opacity = '0';
 

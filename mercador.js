@@ -357,6 +357,43 @@ async function openMercadorModal() {
     attachMercadorEvents();
 }
 
+// Tabelas da aba Comprar (espelham merchant_sell.sql). O servidor rejeita p_quantity fora de 1..99.
+const VENDA_MAX_QTY = 99;
+const VENDA_TYPES   = ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice', 'receita_armadura', 'receita_colar', 'receita_anel', 'receita_asa', 'receita_elmo'];
+const VENDA_RECEIVE = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
+const VENDA_COST    = { pedra: 1, crystals:  1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+
+// Máximo que o slider permite: 99 ou o que as moedas em cache pagam. Cache = 0 pode ser miss,
+// então nesse caso libera até 99 e deixa o servidor validar (mesmo critério do buyVendaItem).
+function vendaMaxFor(type) {
+    const cost = VENDA_COST[type] ?? 1;
+    if (cachedMoedaQty <= 0) return VENDA_MAX_QTY;
+    return Math.max(1, Math.min(VENDA_MAX_QTY, Math.floor(cachedMoedaQty / cost)));
+}
+
+function setVendaQty(type, value) {
+    const max = vendaMaxFor(type);
+    const nv = Math.max(1, Math.min(max, parseInt(value, 10) || 1));
+    const base = VENDA_RECEIVE[type], cost = VENDA_COST[type];
+    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    set(`vqty-${type}`, nv);
+    set(`vtot-moeda-${type}`, fmt(nv * cost));
+    set(`vtot-receive-${type}`, fmt(nv * base));
+    set(`vreceive-qty-${type}`, `x${fmt(nv * base)}`);
+    set(`vcost-qty-${type}`, `x${fmt(nv * cost)}`);
+    const range = document.getElementById(`vrange-${type}`);
+    if (range) { range.max = max; range.value = nv; }
+    return nv;
+}
+
+// Reajusta o teto de todos os sliders (ex.: depois de gastar moedas)
+function refreshVendaLimits() {
+    for (const type of VENDA_TYPES) {
+        const cur = parseInt(document.getElementById(`vqty-${type}`)?.textContent || 1, 10);
+        setVendaQty(type, cur);
+    }
+}
+
 function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType, costPerPack = 1) {
     // receiveBaseQty: 3 para pedra, 50 para crystals, 1 para escudo (por pacote)
     // costPerPack: moedas gastas por pacote (1 para pedra/crystals, 150 para escudo)
@@ -383,6 +420,7 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
                 <span class="pm-qty-val" id="vqty-${type}">1</span>
                 <button class="pm-qty-btn plus" data-vtype="${btnType}">+</button>
             </div>
+            <input type="range" class="mc-range" id="vrange-${type}" min="1" max="${VENDA_MAX_QTY}" value="1" step="1">
             <div class="mercador-total">
                 Custo: <span id="vtot-moeda-${type}">${costPerPack}</span> Moeda(s)
                 → Recebe: <span id="vtot-receive-${type}">${receiveBaseQty}</span> ${itemLabel.replace(/ x\d+$/, '')}
@@ -393,45 +431,15 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
 }
 
 function attachMercadorEvents() {
-    // Venda: qty selectors
-    // receiveBaseQty per type
-    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
-    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
-    for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice', 'receita_armadura', 'receita_colar', 'receita_anel', 'receita_asa', 'receita_elmo']) {
-        const base = vendaReceiveBase[type];
-        const cost = vendaCostBase[type];
-        const getQtyEl = () => document.getElementById(`vqty-${type}`);
-        document.querySelector(`.pm-qty-btn.plus[data-vtype="${type}"]`)?.addEventListener('click', () => {
-            const cur = parseInt(getQtyEl()?.textContent || 1);
-            const nv = Math.min(cur + 1, 99);
-            if (getQtyEl()) getQtyEl().textContent = nv;
-            const moedaEl = document.getElementById(`vtot-moeda-${type}`);
-            const receiveEl = document.getElementById(`vtot-receive-${type}`);
-            const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
-            const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
-            if (moedaEl) moedaEl.textContent = nv * cost;
-            if (receiveEl) receiveEl.textContent = nv * base;
-            if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
-            if (costQtyLabel) costQtyLabel.textContent = `x${nv * cost}`;
-        });
-        document.querySelector(`.pm-qty-btn.minus[data-vtype="${type}"]`)?.addEventListener('click', () => {
-            const cur = parseInt(getQtyEl()?.textContent || 1);
-            const nv = Math.max(cur - 1, 1);
-            if (getQtyEl()) getQtyEl().textContent = nv;
-            const moedaEl = document.getElementById(`vtot-moeda-${type}`);
-            const receiveEl = document.getElementById(`vtot-receive-${type}`);
-            const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
-            const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
-            if (moedaEl) moedaEl.textContent = nv * cost;
-            if (receiveEl) receiveEl.textContent = nv * base;
-            if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
-            if (costQtyLabel) costQtyLabel.textContent = `x${nv * cost}`;
-        });
-        document.getElementById(`vbuy-${type}`)?.addEventListener('click', () => {
-            const qty = parseInt(document.getElementById(`vqty-${type}`)?.textContent || 1);
-            buyVendaItem(type, qty);
-        });
+    // Comprar: botões −/+ e slider de quantidade
+    for (const type of VENDA_TYPES) {
+        const cur = () => parseInt(document.getElementById(`vqty-${type}`)?.textContent || 1, 10);
+        document.querySelector(`.pm-qty-btn.plus[data-vtype="${type}"]`)?.addEventListener('click', () => setVendaQty(type, cur() + 1));
+        document.querySelector(`.pm-qty-btn.minus[data-vtype="${type}"]`)?.addEventListener('click', () => setVendaQty(type, cur() - 1));
+        document.getElementById(`vrange-${type}`)?.addEventListener('input', e => setVendaQty(type, e.target.value));
+        document.getElementById(`vbuy-${type}`)?.addEventListener('click', () => buyVendaItem(type, cur()));
     }
+    refreshVendaLimits();
 
     attachTabEvents();
 }
@@ -444,8 +452,7 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
-    const costPerPack   = vendaCostBase[type] ?? 1;
+    const costPerPack   = VENDA_COST[type] ?? 1;
     const totalCost     = quantity * costPerPack;
 
     // Só bloqueia localmente se cache tem valor > 0 e é insuficiente.
@@ -519,6 +526,7 @@ async function buyVendaItem(type, quantity) {
         showMsg(`Erro: ${err.message || 'Falha na compra.'}`);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
+        refreshVendaLimits();
     }
 }
 
@@ -818,6 +826,7 @@ async function confirmSell() {
         cachedMoedaQty = (data.new_moeda_qty != null) ? data.new_moeda_qty : cachedMoedaQty + total;
         const moedaEl = document.getElementById('mercadorMoedaQty');
         if (moedaEl) moedaEl.textContent = `x${fmt(cachedMoedaQty)}`;
+        refreshVendaLimits();
 
         document.getElementById('mercadorConfirmModal').style.display = 'none';
         sellBusy = false;
@@ -1102,6 +1111,7 @@ function injectStyles() {
     background: #0d0d14; color: #fff; border: 1px solid #c9a94a; border-radius: 6px;
 }
 .mc-range { width: 100%; accent-color: #c9a94a; }
+.mercador-controls .mc-range { max-width: 320px; }
 .mc-dialog-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; }
 .mc-btn {
     border-radius: 8px; padding: 8px 14px; font-family: 'Cinzel', serif; font-size: .9em;

@@ -33,7 +33,7 @@ const SKY_IMAGE_URL = '/assets/ruinas_anc.png';
 // ── Câmera ────────────────────────────────────────────────────────────
 const CAM_FOV              = 120;
 const CAM_FOV_COLLAPSE     = 110;
-const ROTATE_DEG_PER_SEC   = 360 / 170;   // giro durante o colapso (1 volta a cada 100s)
+const ROTATE_DEG_PER_SEC   = 360 / 200;   // giro durante o colapso (1 volta a cada 100s)
 const COLLAPSE_BLEND_SPEED = 1.6;         // maior = transição calmo↔colapso mais rápida
 
 // Céu parado antes do colapso: direção (graus) pra onde a câmera olha.

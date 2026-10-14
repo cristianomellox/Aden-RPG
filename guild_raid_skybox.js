@@ -82,7 +82,7 @@ const BOOST_BLEND_SPEED   = 1.6;   // transição da intensidade extra dos efeit
 // distance : PROFUNDIDADE. Maior = mais longe = menor (perspectiva real)
 // heightFrac: altura do sprite como fração da altura da tela, medida na
 //             distância de referência MOB_REF_DIST com FOV CAM_FOV
-const MOB_SPOT = { yaw: 0, pitch: -60, distance: 260, heightFrac: 0.38 };
+const MOB_SPOT = { yaw: 0, pitch: -60, distance: 300, heightFrac: 0.38 };
 const MOB_REF_DIST    = 250;
 const MOB_BOSS_SCALE  = 1.2;    // multiplicador extra no tamanho do chefe
 const MOB_SHADOW_W    = 0.80;   // largura da sombra (fração da largura do sprite)

@@ -53,9 +53,9 @@ const SKY_IMAGE_URL = '/assets/tdd_andar.png';
 const FALLBACK_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/tdd_andar.webp'; // só se WebGL falhar
 
 // ── Câmera ────────────────────────────────────────────────────────────
-const CAM_FOV             = 100;
-const CAM_FOV_BOSS        = 93;
-const ROTATE_DEG_PER_SEC  = 360 / 150;  // mesma rotação lenta do lobby: 1 volta a cada 150s
+const CAM_FOV             = 120;
+const CAM_FOV_BOSS        = 110;
+const ROTATE_DEG_PER_SEC  = 360 / 170;  // mesma rotação lenta do lobby: 1 volta a cada 150s
 const BOSS_BLEND_SPEED    = 1.6;        // maior = transição normal↔chefe mais rápida
 
 // ── Bloom (normal → chefe) ───────────────────────────────────────────
@@ -65,7 +65,7 @@ const BLOOM_BOSS   = { strength: 0.85, radius: 0.70, threshold: 0.52 };
 // Bloom nos andares normais DURANTE A RAID (mais perceptível que o de preparação)
 const BLOOM_COMBAT = { strength: 0.58, radius: 0.55, threshold: 0.66 };
 
-const PARTICLE_COUNT = 260;
+const PARTICLE_COUNT = 250;
 
 // ── Céu parado nos andares normais ───────────────────────────────────
 // Direção (graus) pra onde a câmera olha quando o céu está parado. Ajuste
@@ -82,9 +82,9 @@ const BOOST_BLEND_SPEED   = 1.6;   // transição da intensidade extra dos efeit
 // distance : PROFUNDIDADE. Maior = mais longe = menor (perspectiva real)
 // heightFrac: altura do sprite como fração da altura da tela, medida na
 //             distância de referência MOB_REF_DIST com FOV CAM_FOV
-const MOB_SPOT = { yaw: 0, pitch: -30, distance: 250, heightFrac: 0.36 };
+const MOB_SPOT = { yaw: 0, pitch: -40, distance: 260, heightFrac: 0.38 };
 const MOB_REF_DIST    = 250;
-const MOB_BOSS_SCALE  = 1.0;    // multiplicador extra no tamanho do chefe
+const MOB_BOSS_SCALE  = 1.2;    // multiplicador extra no tamanho do chefe
 const MOB_SHADOW_W    = 0.80;   // largura da sombra (fração da largura do sprite)
 const MOB_SHADOW_H    = 0.24;   // achatamento da sombra (fração da largura dela)
 const MOB_SHADOW_OPA  = 0.60;

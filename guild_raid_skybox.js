@@ -55,7 +55,7 @@ const FALLBACK_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/tdd_andar.webp'; /
 // ── Câmera ────────────────────────────────────────────────────────────
 const CAM_FOV             = 120;
 const CAM_FOV_BOSS        = 110;
-const ROTATE_DEG_PER_SEC  = 360 / 170;  // mesma rotação lenta do lobby: 1 volta a cada 150s
+const ROTATE_DEG_PER_SEC  = 360 / 270;  // mesma rotação lenta do lobby: 1 volta a cada 150s
 const BOSS_BLEND_SPEED    = 1.6;        // maior = transição normal↔chefe mais rápida
 
 // ── Bloom (normal → chefe) ───────────────────────────────────────────

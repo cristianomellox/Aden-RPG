@@ -319,9 +319,13 @@ async function openMercadorModal() {
 
         <!-- ABA COMPRAR (antiga "Venda") -->
         <div class="mercador-panel" id="mercadorPanelComprar">
+            <div class="mercador-search" id="mercadorSearchWrap">
+                <svg class="mercador-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="mercadorSearchInput" class="mercador-search-input" placeholder="Buscar item..." autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Buscar item">
+            </div>
             <div class="mercador-section mercador-venda" id="mercadorVenda">
-                ${renderVendaCard('pedra',         PEDRA_IMG,        'Pedra de Refundição',                        1,  MOEDA_IMG, 'pedra')}
-                ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
+                ${renderVendaCard('pedra',         PEDRA_IMG,        'Pedra de Refundição',                        1,  MOEDA_IMG, 'pedra',         3)}
+                ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   10, MOEDA_IMG, 'crystals')}
                 ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
                 ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
                 ${renderVendaCard('receita_foice',    RECEITA_FOICE_IMG,    'Receita Fragmentos Foice da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_foice',    500)}
@@ -330,6 +334,11 @@ async function openMercadorModal() {
                 ${renderVendaCard('receita_anel',     RECEITA_ANEL_IMG,     'Receita Fragmentos Anel da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_anel',     500)}
                 ${renderVendaCard('receita_asa',      RECEITA_ASA_IMG,      'Receita Fragmentos Asa da Noite Eterna (60%)',      1, MOEDA_IMG, 'receita_asa',      500)}
                 ${renderVendaCard('receita_elmo',     RECEITA_ELMO_IMG,     'Receita Fragmentos Elmo da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_elmo',     500)}
+                <div class="mercador-category-banner" data-cat="moldura"><span>Molduras</span></div>
+                ${SKINS.filter(k => k.kind === 'moldura').map(renderSkinCard).join('')}
+                <div class="mercador-category-banner" data-cat="fundo"><span>Fundos</span></div>
+                ${SKINS.filter(k => k.kind === 'fundo').map(renderSkinCard).join('')}
+                <div class="mc-empty-msg" id="mercadorSearchEmpty" style="display:none;">Nenhum item encontrado.</div>
             </div>
         </div>
 
@@ -360,8 +369,43 @@ async function openMercadorModal() {
 // Tabelas da aba Comprar (espelham merchant_sell.sql). O servidor rejeita p_quantity fora de 1..99.
 const VENDA_MAX_QTY = 99;
 const VENDA_TYPES   = ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice', 'receita_armadura', 'receita_colar', 'receita_anel', 'receita_asa', 'receita_elmo'];
-const VENDA_RECEIVE = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
-const VENDA_COST    = { pedra: 1, crystals:  1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+const VENDA_RECEIVE = { pedra: 1, crystals: 10, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
+const VENDA_COST    = { pedra: 3, crystals:  1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+
+// Skins (mesmos ids, nomes, imagens e descrições da loja de ouro do index.html).
+// Itens únicos: sempre 1 unidade. Molduras = 250 Moedas Rúnicas, Fundos = 500 (espelha merchant_sell.sql).
+const SKIN_COST = { moldura: 250, fundo: 500 };
+const SKIN_DESC = {
+    moldura: 'Skin de moldura de perfil, válido por três dias.',
+    fundo:   'Skin de fundo animado de perfil, válido por três dias.'
+};
+const SKINS = [
+    { id: 124, kind: 'moldura', name: 'Moldura da Noite Eterna (3 dias)',        file: 'skin_de_moldura_da_noite_eterna.webp' },
+    { id: 125, kind: 'moldura', name: 'Moldura de Pixie (3 dias)',               file: 'skin_de_moldura_de_pixie.webp' },
+    { id: 127, kind: 'moldura', name: 'Moldura dos Magos (3 dias)',              file: 'moldura_dos_magos.webp' },
+    { id: 128, kind: 'moldura', name: 'Moldura da Raposa (3 dias)',              file: 'moldura_da_raposa.webp' },
+    { id: 129, kind: 'moldura', name: 'Moldura Aliança de Pantokrator (3 dias)', file: 'moldura_alianca_de_pantokrator.webp' },
+    { id: 138, kind: 'moldura', name: 'Moldura da Doçura (3 dias)',              file: 'skin_de_moldura_de_docura.webp' },
+    { id: 142, kind: 'moldura', name: 'Moldura Nevasca (3 dias)',                file: 'skin_de_moldura_de_nevasca.webp' },
+    { id: 143, kind: 'moldura', name: 'Moldura Magma (3 dias)',                  file: 'skin_de_moldura_de_magma.webp' },
+    { id: 144, kind: 'moldura', name: 'Moldura de Samurai (3 dias)',             file: 'skin_de_moldura_de_samurai.webp' },
+    { id: 123, kind: 'fundo',   name: 'Fundo da Noite Eterna (3 dias)',          file: 'skin_de_fundo_da_noite_eterna.webp' },
+    { id: 126, kind: 'fundo',   name: 'Fundo de Pixie (3 dias)',                 file: 'skin_fundo_de_pixie.webp' },
+    { id: 145, kind: 'fundo',   name: 'Fundo da Doçura (3 dias)',                file: 'skin_de_fundo_da_docura.webp' },
+    { id: 146, kind: 'fundo',   name: 'Fundo Nevasca (3 dias)',                  file: 'skin_de_fundo_de_nevasca.webp' },
+    { id: 147, kind: 'fundo',   name: 'Fundo dos Magos (3 dias)',                file: 'skin_de_fundo_dos_magos.webp' },
+    { id: 148, kind: 'fundo',   name: 'Fundo Magma (3 dias)',                    file: 'skin_de_fundo_de_magma.webp' },
+    { id: 149, kind: 'fundo',   name: 'Fundo de Ronin (3 dias)',                 file: 'skin_de_fundo_de_ronin.webp' },
+];
+const SKIN_BY_TYPE = {};
+for (const k of SKINS) {
+    const t = `skin_${k.id}`;
+    k.type = t;
+    SKIN_BY_TYPE[t] = k;
+    VENDA_TYPES.push(t);
+    VENDA_RECEIVE[t] = 1;
+    VENDA_COST[t] = SKIN_COST[k.kind];
+}
 
 // Máximo que o slider permite: 99 ou o que as moedas em cache pagam. Cache = 0 pode ser miss,
 // então nesse caso libera até 99 e deixa o servidor validar (mesmo critério do buyVendaItem).
@@ -394,17 +438,28 @@ function refreshVendaLimits() {
     }
 }
 
-function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType, costPerPack = 1) {
-    // receiveBaseQty: 3 para pedra, 50 para crystals, 1 para escudo (por pacote)
-    // costPerPack: moedas gastas por pacote (1 para pedra/crystals, 150 para escudo)
+function normSearch(str) {
+    return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function renderSkinCard(k) {
+    return renderVendaCard(k.type, BASE_URL + k.file, k.name, 1, MOEDA_IMG, k.type, SKIN_COST[k.kind],
+        { skin: true, desc: SKIN_DESC[k.kind], cat: k.kind });
+}
+
+function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType, costPerPack = 1, opts = {}) {
+    const isSkin = !!opts.skin;
+    // receiveBaseQty: 1 para pedra, 10 para crystals, 1 para escudo (por pacote)
+    // costPerPack: moedas gastas por pacote (3 para pedra, 1 para crystals, 100 para escudo, 250/500 para skins)
     return `
-    <div class="mercador-card" id="venda-card-${type}">
+    <div class="mercador-card${isSkin ? ' mercador-card-skin' : ''}" id="venda-card-${type}" data-search="${normSearch(itemLabel)}"${opts.cat ? ` data-cat="${opts.cat}"` : ''}>
         <div class="mercador-card-header">
             <div class="mercador-trade-icons">
                 <div class="mercador-trade-side">
-                    <img src="${itemImg}" class="mercador-item-icon" alt="${itemLabel}">
+                    <img src="${itemImg}" class="mercador-item-icon" alt="${itemLabel}"${isSkin ? ' loading="lazy"' : ''}>
                     <span class="mercador-trade-qty" id="vreceive-qty-${type}">x${receiveBaseQty}</span>
                     <span class="mercador-item-name">${itemLabel.replace(/ x\d+$/, '')}</span>
+                    ${opts.desc ? `<span class="mercador-item-desc">${opts.desc}</span>` : ''}
                 </div>
                 <div class="mercador-arrow">⟵</div>
                 <div class="mercador-trade-side">
@@ -415,15 +470,17 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
             </div>
         </div>
         <div class="mercador-controls">
-            <div class="mercador-qty-row">
+            ${isSkin ? '' : `<div class="mercador-qty-row">
                 <button class="pm-qty-btn minus" data-vtype="${btnType}">-</button>
                 <span class="pm-qty-val" id="vqty-${type}">1</span>
                 <button class="pm-qty-btn plus" data-vtype="${btnType}">+</button>
             </div>
-            <input type="range" class="mc-range" id="vrange-${type}" min="1" max="${VENDA_MAX_QTY}" value="1" step="1">
+            <input type="range" class="mc-range" id="vrange-${type}" min="1" max="${VENDA_MAX_QTY}" value="1" step="1">`}
             <div class="mercador-total">
-                Custo: <span id="vtot-moeda-${type}">${costPerPack}</span> Moeda(s)
-                → Recebe: <span id="vtot-receive-${type}">${receiveBaseQty}</span> ${itemLabel.replace(/ x\d+$/, '')}
+                ${isSkin
+                    ? `Custo: <span id="vtot-moeda-${type}">${costPerPack}</span> Moeda(s) Rúnica(s)`
+                    : `Custo: <span id="vtot-moeda-${type}">${costPerPack}</span> Moeda(s)
+                → Recebe: <span id="vtot-receive-${type}">${receiveBaseQty}</span> ${itemLabel.replace(/ x\d+$/, '')}`}
             </div>
             <button class="pm-buy-btn" id="vbuy-${type}">Comprar</button>
         </div>
@@ -441,7 +498,47 @@ function attachMercadorEvents() {
     }
     refreshVendaLimits();
 
+    // Busca (aba Comprar): filtra os cards já renderizados a cada tecla
+    const search = document.getElementById('mercadorSearchInput');
+    if (search) {
+        search.addEventListener('input', () => filterVendaCards(search.value));
+        search.addEventListener('keydown', e => e.stopPropagation());   // não dispara atalhos do jogo
+    }
+
+    markOwnedSkins();
     attachTabEvents();
+}
+
+// Filtro instantâneo (sem acento / sem diferenciar maiúsculas). Banners de categoria somem se nada sobrar nelas.
+function filterVendaCards(raw) {
+    const q = normSearch(raw);
+    const wrap = document.getElementById('mercadorVenda');
+    if (!wrap) return;
+    wrap.classList.add('mc-seen');   // evita reanimar (fade de 6s) os cards ao reaparecerem
+    let visible = 0;
+    const catVisible = {};
+    wrap.querySelectorAll('.mercador-card').forEach(card => {
+        const show = !q || (card.dataset.search || '').includes(q);
+        card.classList.toggle('mc-filter-hide', !show);
+        if (show) { visible++; if (card.dataset.cat) catVisible[card.dataset.cat] = true; }
+    });
+    wrap.querySelectorAll('.mercador-category-banner').forEach(b =>
+        b.classList.toggle('mc-filter-hide', !catVisible[b.dataset.cat]));
+    const empty = document.getElementById('mercadorSearchEmpty');
+    if (empty) empty.style.display = visible === 0 ? '' : 'none';
+}
+
+function setSkinOwned(type) {
+    const btn = document.getElementById(`vbuy-${type}`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Adquirida'; }
+}
+
+// Skins são únicas: marca as que o jogador já tem (lê só o cache local)
+async function markOwnedSkins() {
+    try {
+        const owned = await getAllItemsQtyFromCache(SKINS.map(k => k.id));
+        for (const k of SKINS) if ((owned[k.id] || 0) > 0) setSkinOwned(k.type);
+    } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -449,6 +546,9 @@ function attachMercadorEvents() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function buyVendaItem(type, quantity) {
+    const skin = SKIN_BY_TYPE[type] || null;
+    if (skin) quantity = 1;           // skin = item único
+    let ownedNow = false;
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
@@ -469,7 +569,10 @@ async function buyVendaItem(type, quantity) {
             p_quantity: quantity
         });
         if (error) throw error;
-        if (!data.success) throw new Error(data.message);
+        if (!data.success) {
+            if (skin && /já possui/i.test(data.message || '')) ownedNow = true;
+            throw new Error(data.message);
+        }
 
         // Sincroniza moedas: usa valor retornado pelo servidor se disponível, senão desconta local
         const newMoedaQty = (data.new_moeda_qty != null)
@@ -483,7 +586,15 @@ async function buyVendaItem(type, quantity) {
         // Atualiza cache IDB com o delta correto
         await updateCacheQty(MOEDA_ID, -totalCost);
 
-        if (type === 'pedra') {
+        if (skin) {
+            if (Array.isArray(data.inventory_updates)) {
+                await syncCacheFromServer(data.inventory_updates, data.removed_item_ids, [MOEDA_ID, skin.id]);
+            } else {
+                await updateCacheQty(skin.id, 1);
+            }
+            ownedNow = true;
+            showMsg(`Você recebeu ${skin.name}!`);
+        } else if (type === 'pedra') {
             await updateCacheQty(PEDRA_ID, quantity * 1);
             showMsg(`Você recebeu ${quantity * 1}x Pedra de Refundição!`);
         } else if (type === 'escudo') {
@@ -520,12 +631,13 @@ async function buyVendaItem(type, quantity) {
             } catch {}
             const cryEl = document.getElementById('playerCrystals');
             if (cryEl && data.new_crystals != null) cryEl.innerHTML = `<img src="${CRYSTAL_IMG}" style="width:17px;height:17px;vertical-align:-4px;"> ${fmt(data.new_crystals)}`;
-            showMsg(`Você recebeu ${quantity * 50} Cristais!`);
+            showMsg(`Você recebeu ${quantity * 10} Cristais!`);
         }
     } catch (err) {
         showMsg(`Erro: ${err.message || 'Falha na compra.'}`);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
+        if (skin && ownedNow) setSkinOwned(type);
+        else if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
         refreshVendaLimits();
     }
 }
@@ -1054,6 +1166,34 @@ function injectStyles() {
 }
 .mercador-tab.active { background: linear-gradient(135deg, #b8860b, #8b6914); color: #fff; text-shadow: 1px 1px 2px #000; }
 .mercador-panel { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* ─── BUSCA (aba Comprar) ─── */
+.mercador-search {
+    position: relative; width: 90%; max-width: 600px; margin-top: 4px;
+}
+.mercador-search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: #c9a94a; pointer-events: none;
+}
+.mercador-search-input {
+    width: 100%; box-sizing: border-box;
+    background: rgba(0,0,0,.55); color: #e0dccc;
+    border: 1px solid #c9a94a; border-radius: 8px;
+    padding: 9px 12px 9px 38px; font-family: 'Cinzel', serif;
+    font-size: 16px; /* >=16px evita zoom automático no iOS */
+    outline: none; margin: 0;
+}
+.mercador-search-input::placeholder { color: #8f8260; }
+.mercador-search-input:focus { border-color: gold; box-shadow: 0 0 0 2px rgba(255,215,0,.2); }
+.mc-filter-hide { display: none !important; }
+.mercador-venda.mc-seen .mercador-card { animation: none; opacity: 1; }
+/* ─── SKINS ─── */
+.mercador-category-banner {
+    color: gold; font-size: 1.05em; text-shadow: 1px 1px 3px #000;
+    border-bottom: 1px solid #c9a94a55; padding-bottom: 4px; margin-top: 6px;
+}
+.mercador-card-skin .mercador-item-icon { width: 80px; height: 80px; border-radius: 8px; }
+.mercador-card-skin .mercador-trade-side .mercador-item-name { white-space: normal; overflow: visible; }
+.mercador-item-desc { color: #aaa; font-size: .78em; text-align: center; line-height: 1.3; }
 /* ─── VENDER: caixas estilo inventário ─── */
 .mc-box {
     width: 90%; max-width: 600px;

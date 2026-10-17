@@ -51,61 +51,137 @@ const GlobalDB = {
 };
 
 // =========================================================
-// >>> CATÁLOGO DE ITENS COMERCIALIZÁVEIS <<<
+// >>> CATÁLOGO DE ITENS (as regras vêm do banco, não de listas fixas) <<<
 // =========================================================
+//  • Escambo : items.item_type = 'outros' E items.description contendo "material" (Moeda Rúnica fora)
+//  • Presente: items.item_type = 'skin' (exceto as skins especiais bloqueadas)
+// O servidor revalida as mesmas regras (create_player_trade / create_player_gift).
+// O que o jogador TEM vem do IndexedDB do inventário (zero egress); do banco só vem
+// o catálogo pequeno de itens elegíveis, guardado 24h no localStorage (mesma ideia do Mercador).
 const BASE_ITEM_URL = 'https://aden-rpg.pages.dev/assets/itens/';
 const GOLD_IMG_URL  = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
+const UNKNOWN_IMG   = BASE_ITEM_URL + 'unknown.webp';
 
-const TRADEABLE_ITEMS = [
-    { id: 56,  name: 'Pórfero',                img: 'porifero.webp',           minGold: 1  },
-    { id: 57,  name: 'Tecido Alfa',             img: 'tecido_alfa.webp',        minGold: 1  },
-    { id: 58,  name: 'Verniz',                  img: 'verniz.webp',             minGold: 1  },
-    { id: 59,  name: 'Safira',                  img: 'safira.webp',             minGold: 1  },
-    { id: 60,  name: 'Pétala Orium',            img: 'petala_orium.webp',       minGold: 1  },
-    { id: 61,  name: 'Lápis-lazúli',            img: 'lapis_lazuli.webp',       minGold: 1  },
-    { id: 62,  name: 'Essência de Anjo',        img: 'essencia_de_anjo.webp',   minGold: 1  },
-    { id: 63,  name: 'Lubrificante',            img: 'lubrificante.webp',       minGold: 1  },
-    { id: 64,  name: 'Garra de Dragão',         img: 'garra_de_dragao.webp',    minGold: 1  },
-    { id: 65,  name: 'Reagente Ômega',          img: 'reagente_omega.webp',     minGold: 1  },
-    { id: 66,  name: 'Núcleo de Dragão',        img: 'nucleo_de_dragao.webp',   minGold: 1  },
-    { id: 67,  name: 'Pele Animal',             img: 'pele_animal.webp',        minGold: 1  },
-    { id: 68,  name: 'Pena de Harpia',          img: 'pena_de_harpia.webp',     minGold: 1  },
-    { id: 69,  name: 'Lã',                      img: 'la.webp',                 minGold: 1  },
-    { id: 70,  name: 'Sal de Cobalto',          img: 'sal_de_cobalto.webp',     minGold: 1  },
-    { id: 71,  name: 'Lágrima de Fênix',        img: 'lagrima_de_fenix.webp',   minGold: 1  },
-    { id: 72,  name: 'Pedaço de Freixo',        img: 'pedaco_de_freixo.webp',   minGold: 1  },
-    { id: 73,  name: 'Presa de Kelts',          img: 'presa_de_kelts.webp',     minGold: 1  },
-    { id: 74,  name: 'Galho Espiritual',        img: 'galho_espiritual.webp',   minGold: 1  },
-    { id: 75,  name: 'Minério de Mithril',      img: 'minerio_de_mithril.webp', minGold: 1  },
-    { id: 76,  name: 'Pó Ósseo',               img: 'po_osseo.webp',           minGold: 1  },
-    { id: 77,  name: 'Couro Animal',            img: 'couro_animal.webp',       minGold: 1  },
-    { id: 78,  name: 'Linha Mágica',            img: 'linha_magica.webp',       minGold: 1  },
-    { id: 79,  name: 'Mithril Temperado',       img: 'mithril_temperado.webp',  minGold: 1  },
-    { id: 80,  name: 'Carvão',                  img: 'carvao.webp',             minGold: 1  },
-    { id: 81,  name: 'Minério de Ferro',        img: 'minerio_de_ferro.webp',   minGold: 1  },
-    { id: 82,  name: 'Fios de Fibra',           img: 'fios_de_fibra.webp',      minGold: 1  },
-    { id: 83,  name: 'Escama de Dragão',        img: 'escama_de_dragao.webp',   minGold: 1  },
-    { id: 84,  name: 'Chifre de Unicórnio',     img: 'chifre_de_unicornio.webp',minGold: 1  },
-    { id: 85,  name: 'Escudo de Caça',          img: 'escudo_de_caca.webp',     minGold: 1  },
-    { id: 86,  name: 'Asa de Morcego',          img: 'asa_de_morcego.webp',     minGold: 1  },
-    { id: 87,  name: 'Emblema Vampírico',       img: 'emblema_vampirico.webp',  minGold: 1  },
-    { id: 88,  name: 'Quitina',                 img: 'quitina.webp',            minGold: 1  },
-    { id: 89,  name: 'Pedra Âmbar',             img: 'pedra_ambar.webp',        minGold: 1  },
-    { id: 90,  name: 'Lodo Mágico',             img: 'lodo_magico.webp',        minGold: 1  },
-    { id: 91,  name: 'Núcleo de Vinha',         img: 'nucleo_de_vinha.webp',    minGold: 1  },
-    { id: 92,  name: 'Totem Reptiliano',        img: 'totem_reptiliano.webp',   minGold: 1  },
-    { id: 101, name: 'Receita Foice 100%',      img: 'receita_de_fragmentos_de_foice_da_noite_eterna_100.webp',    minGold: 50 },
-    { id: 105, name: 'Receita Armadura 100%',   img: 'receita_de_fragmentos_de_armadura_da_noite_eterna_100.webp', minGold: 50 },
-    { id: 109, name: 'Receita Anel 100%',       img: 'receita_de_fragmentos_de_anel_da_noite_eterna_100.webp',    minGold: 50 },
-    { id: 113, name: 'Receita Colar 100%',      img: 'receita_de_fragmentos_de_colar_da_noite_eterna_100.webp',   minGold: 50 },
-    { id: 117, name: 'Receita Elmo 100%',       img: 'receita_de_fragmentos_de_elmo_da_noite_eterna_100.webp',    minGold: 50 },
-    { id: 121, name: 'Receita Asa 100%',        img: 'receita_de_fragmentos_de_asa_da_noite_eterna_100.webp',     minGold: 50 },
-];
+const MOEDA_RUNICA_ID  = 55;
+const BLOCKED_GIFT_IDS = [130, 131, 132, 133];   // skins especiais (espelha create_player_gift.sql)
+const GIFT_MAX_KINDS   = 10;                      // skins diferentes por presente (espelha o SQL)
+const GIFT_MAX_UNITS   = 20;                      // unidades por presente (espelha o SQL)
+const TRADE_MAX_QTY    = 9999;                    // espelha create_player_trade.sql
+const CATALOG_TTL      = 24 * 60 * 60 * 1000;
+const CATALOG_KEYS     = { trade: 'pv_trade_catalog_v1', gift: 'pv_gift_catalog_v1', extra: 'pv_item_defs_extra_v1' };
 
-const TRADEABLE_MAP = new Map(TRADEABLE_ITEMS.map(i => [i.id, i]));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtNum = n => new Intl.NumberFormat('pt-BR').format(n);
+
+// def = { id, name (arquivo), label (nome exibido), stars, type, frame }
+function defFromRow(r) {
+    return {
+        id: Number(r.item_id),
+        name: r.name,
+        label: r.display_name || r.name,
+        stars: r.stars || 0,
+        type: String(r.item_type || '').toLowerCase(),
+        frame: r.skin_frame_url || '',
+    };
+}
+
+// Mesma convenção do inventory.js / mercador.js:
+//   skin  → name.webp (sem estrelas)      demais → name_{stars}estrelas.webp (fallback name.webp)
+function defImgs(d) {
+    if (d.type === 'skin') {
+        const alt = d.frame ? (/^https?:/i.test(d.frame) ? d.frame : BASE_ITEM_URL + d.frame) : '';
+        return { img: `${BASE_ITEM_URL}${d.name}.webp`, alt };
+    }
+    return { img: `${BASE_ITEM_URL}${d.name}_${d.stars || 0}estrelas.webp`, alt: `${BASE_ITEM_URL}${d.name}.webp` };
+}
+
+// <img> com cadeia de fallback: img → data-alt → unknown.webp ("error" não borbulha: listener em captura)
+function itemImgTag(imgs, label, cls = '') {
+    return `<img ${cls ? `class="${cls}" ` : ''}src="${esc(imgs.img)}" data-alt="${esc(imgs.alt || '')}" alt="${esc(label)}" loading="lazy" draggable="false">`;
+}
+function applyItemImg(el, imgs) {
+    el.dataset.tried = '';
+    el.dataset.alt = imgs.alt || '';
+    el.src = imgs.img;
+}
+let _imgFallbackBound = false;
+function bindItemImgFallback() {
+    if (_imgFallbackBound) return;
+    _imgFallbackBound = true;
+    document.addEventListener('error', e => {
+        const el = e.target;
+        if (!(el instanceof HTMLImageElement) || el.dataset.alt === undefined) return;
+        if (!el.dataset.tried && el.dataset.alt) { el.dataset.tried = '1'; el.src = el.dataset.alt; }
+        else if (el.dataset.tried !== '2') { el.dataset.tried = '2'; el.src = UNKNOWN_IMG; }
+    }, true);
+}
+
+// Slot de grade: imagem + nome + quantidade (skin com qty 1 não mostra contador)
+function pvSlotHtml(def, qty, attr, selected = false) {
+    const showQty = qty > 1 || def.type !== 'skin';
+    return `<div class="pv-slot${selected ? ' selected' : ''}" role="button" tabindex="0" ${attr}="${def.id}" title="${esc(def.label)}">
+        ${itemImgTag(defImgs(def), def.label)}
+        <span class="pv-slot-name">${esc(def.label)}</span>
+        ${showQty ? `<span class="pv-slot-qty">${fmtNum(qty)}</span>` : ''}
+    </div>`;
+}
+const pvFillers = n => '<div class="pv-slot empty"></div>'.repeat(Math.max(0, n));
+
+const _catalogMem = { trade: null, gift: null };   // Map<item_id, def> em RAM
+
+async function loadCatalog(kind) {
+    if (_catalogMem[kind]) return _catalogMem[kind];
+
+    let raw = null;
+    try {
+        const c = JSON.parse(localStorage.getItem(CATALOG_KEYS[kind]));
+        if (c && Date.now() - c.t < CATALOG_TTL && Array.isArray(c.items)) raw = c.items;
+    } catch {}
+
+    if (!raw) {
+        let q = supabaseClient.from('items');
+        q = kind === 'trade'
+            ? q.select('item_id, name, display_name, stars, item_type')
+                .ilike('item_type', 'outros')
+                .ilike('description', '%material%')
+                .neq('item_id', MOEDA_RUNICA_ID)
+            : q.select('item_id, name, display_name, stars, item_type, skin_frame_url')
+                .ilike('item_type', 'skin')
+                .not('item_id', 'in', `(${BLOCKED_GIFT_IDS.join(',')})`);
+        const { data, error } = await q;
+        if (error) throw error;
+        raw = (data || []).map(defFromRow);
+        try { localStorage.setItem(CATALOG_KEYS[kind], JSON.stringify({ t: Date.now(), items: raw })); } catch {}
+    }
+    _catalogMem[kind] = new Map(raw.map(d => [d.id, d]));
+    return _catalogMem[kind];
+}
+
+// Definições avulsas (só para cards ANTIGOS do chat, gravados antes do nome do item ir na mensagem).
+// Uma query para todos os que faltam; o resultado fica guardado e não é pedido de novo.
+async function resolveDefs(ids) {
+    const out = new Map();
+    let extra = {};
+    try { extra = JSON.parse(localStorage.getItem(CATALOG_KEYS.extra) || '{}') || {}; } catch {}
+    const missing = [];
+    for (const id of ids) {
+        const hit = _catalogMem.trade?.get(id) || _catalogMem.gift?.get(id) || extra[id];
+        if (hit) out.set(id, hit); else missing.push(id);
+    }
+    if (missing.length) {
+        try {
+            const { data } = await supabaseClient.from('items')
+                .select('item_id, name, display_name, stars, item_type, skin_frame_url')
+                .in('item_id', missing);
+            for (const r of data || []) { const d = defFromRow(r); out.set(d.id, d); extra[d.id] = d; }
+            try { localStorage.setItem(CATALOG_KEYS.extra, JSON.stringify(extra)); } catch {}
+        } catch {}
+    }
+    return out;
+}
 
 // =========================================================
-// >>> INDEXEDDB – INVENTÁRIO <<<
+// >>> INDEXEDDB – INVENTÁRIO (cache do inventory.js) <<<
 // =========================================================
 const IDB_NAME    = 'aden_inventory_db';
 const IDB_STORE   = 'inventory_store';
@@ -119,80 +195,62 @@ function openIdb() {
         req.onupgradeneeded = () => {}; // não modifica schema
     });
 }
+const idbReq = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const rowItemId = r => r.item_id ?? r.items?.item_id;
 
-async function getTradeableItemsFromIdb() {
+async function readInventoryRows() {
     try {
         const db = await openIdb();
         if (!db.objectStoreNames.contains(IDB_STORE)) return [];
-        const tx    = db.transaction(IDB_STORE, 'readonly');
-        const all   = await new Promise((res, rej) => {
-            const r = tx.objectStore(IDB_STORE).getAll();
-            r.onsuccess = () => res(r.result);
-            r.onerror   = () => rej(r.error);
-        });
-        // Agrupa por item_id somando quantidades
-        const totals = {};
-        for (const inv of all) {
-            const id = inv.item_id ?? inv.items?.item_id;
-            if (!id || !TRADEABLE_MAP.has(id)) continue;
-            totals[id] = (totals[id] || 0) + (inv.quantity || 0);
-        }
-        return Object.entries(totals)
-            .filter(([, qty]) => qty > 0)
-            .map(([idStr, qty]) => {
-                const meta = TRADEABLE_MAP.get(Number(idStr));
-                return { ...meta, qty };
-            });
+        return (await idbReq(db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).getAll())) || [];
     } catch { return []; }
 }
 
-async function decrementIdbItem(itemId, amount) {
-    try {
-        const db = await openIdb();
-        if (!db.objectStoreNames.contains(IDB_STORE)) return;
-        const tx    = db.transaction(IDB_STORE, 'readwrite');
-        const store = tx.objectStore(IDB_STORE);
-        const all   = await new Promise((res, rej) => {
-            const r = store.getAll();
-            r.onsuccess = () => res(r.result);
-            r.onerror   = () => rej(r.error);
-        });
-        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
-        let remaining  = amount;
-        for (const item of matching) {
-            if (remaining <= 0) break;
-            if (item.quantity >= remaining) {
-                item.quantity -= remaining;
-                remaining = 0;
-                if (item.quantity <= 0) store.delete(item.id);
-                else store.put(item);
-            } else {
-                remaining -= item.quantity;
-                store.delete(item.id);
-            }
-        }
-    } catch (e) { console.warn('pv: idb decrement fail', e); }
+// Estoque (não equipado) dos itens que existem no catálogo: Map<item_id, quantidade>
+async function getOwnedStock(catalog) {
+    const rows = await readInventoryRows();
+    const m = new Map();
+    for (const r of rows) {
+        if (r.equipped_slot) continue;
+        const id = rowItemId(r);
+        if (id == null || !catalog.has(id)) continue;
+        m.set(id, (m.get(id) || 0) + (r.quantity || 0));
+    }
+    for (const [id, q] of [...m]) if (q <= 0) m.delete(id);
+    return m;
 }
 
-async function incrementIdbItem(itemId, amount) {
+/**
+ * Aplica no cache IDB o que o SERVIDOR devolveu (mesma estratégia do Mercador / script.js):
+ *  • removedIds      → apaga essas linhas
+ *  • replaceItemIds  → para esses itens, troca TODAS as linhas não equipadas pelas de `updates`
+ *                      (use quando o servidor devolve todas as linhas do item, como no escambo)
+ *  • updates         → grava/atualiza as linhas cruas (sem definição embutida)
+ * Nunca inventa linhas: só grava o que veio do banco, então o cache não diverge.
+ */
+async function applyInventoryDelta({ updates = [], removedIds = [], replaceItemIds = [] } = {}) {
     try {
         const db = await openIdb();
         if (!db.objectStoreNames.contains(IDB_STORE)) return;
         const tx    = db.transaction(IDB_STORE, 'readwrite');
         const store = tx.objectStore(IDB_STORE);
-        const all   = await new Promise((res, rej) => {
-            const r = store.getAll();
-            r.onsuccess = () => res(r.result);
-            r.onerror   = () => rej(r.error);
-        });
-        const matching = all.filter(i => (i.item_id ?? i.items?.item_id) === itemId);
-        if (matching.length > 0) {
-            const item = matching[0];
-            item.quantity = (item.quantity || 0) + amount;
-            store.put(item);
+        const done  = new Promise(res => { tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
+        const removed = new Set(removedIds || []);
+        const replace = new Set(replaceItemIds || []);
+        if (removed.size || replace.size) {
+            const all = await idbReq(store.getAll());
+            for (const row of all) {
+                if (removed.has(row.id) || (replace.size && !row.equipped_slot && replace.has(rowItemId(row)))) store.delete(row.id);
+            }
         }
-        // Se não existe, o recalc do servidor vai sincronizar no próximo login
-    } catch (e) { console.warn('pv: idb increment fail', e); }
+        for (const row of updates || []) {
+            if (!row || row.id == null) continue;
+            if ((row.quantity ?? 1) <= 0) { store.delete(row.id); continue; }
+            const { items: _ignored, ...raw } = row;   // nunca grava definição embutida
+            store.put(raw);
+        }
+        await done;
+    } catch (e) { console.warn('pv: idb delta fail', e); }
 }
 
 // =========================================================
@@ -568,100 +626,96 @@ function injectTradeStyles() {
 .pv-gift-cancel  { background: linear-gradient(135deg, #5a1a7a, #2d0d45); color: #d080f0; }
 .pv-gift-accept:hover, .pv-gift-decline:hover, .pv-gift-cancel:hover { opacity: .85; }
 .chat-message .pv-gift-msg { max-width: 100%; }
+
+/* ── GRADES DE ITENS (escambo / presente) — mesma ideia das grades do Mercador ── */
+.pv-scroll { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pv-box-title {
+    color: #d4b4ff; font-size: .82em; padding: 10px 14px 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.pv-box-title small { color: #9a7abf; font-size: .9em; }
+.pv-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
+    padding: 8px 14px; max-height: 34vh; overflow-y: auto; flex-shrink: 0;
+}
+#pvTradeBox > .pv-grid { flex: 1; max-height: none; min-height: 110px; }
+.pv-grid::-webkit-scrollbar { width: 4px; }
+.pv-grid::-webkit-scrollbar-thumb { background: #5a2d9a; border-radius: 2px; }
+.pv-slot {
+    position: relative; box-sizing: border-box; height: 92px; min-width: 0;
+    background: linear-gradient(180deg, #2a1a40, #150c24);
+    border: 1px solid rgba(160,100,255,.25); border-radius: 8px; padding: 6px 4px 4px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    cursor: pointer; color: #e0ccff; overflow: hidden; user-select: none;
+    -webkit-tap-highlight-color: transparent; transition: border-color .15s, box-shadow .15s;
+}
+.pv-slot:hover { border-color: #8a5ad0; }
+.pv-slot.selected, .pv-slot:active { border-color: #c9a8ff; box-shadow: 0 0 8px rgba(160,100,255,.5); }
+.pv-slot.empty { cursor: default; opacity: .35; pointer-events: none; }
+.pv-slot img { width: 50px; height: 50px; max-width: 100%; object-fit: contain; flex: 0 0 auto; pointer-events: none; filter: drop-shadow(1px 1px 2px #000); }
+.pv-slot-name {
+    width: 100%; font-size: 10px; line-height: 1.1; text-align: center; color: #e0ccff; pointer-events: none;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pv-slot-qty {
+    position: absolute; right: 4px; bottom: 2px; color: #ffd766; font-weight: bold; font-size: .75em; pointer-events: none;
+    text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
+}
+.pv-empty { grid-column: 1 / -1; color: #9a7abf; text-align: center; padding: 16px 8px; font-size: .85em; line-height: 1.5; }
+.pv-qty-row { display: flex; align-items: center; gap: 8px; }
+.pv-qty-row input[type=number] { flex: 1; text-align: center; }
+.pv-qty-btn {
+    width: 34px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 1.1em; font-weight: bold;
+    background: rgba(120,60,200,.3); color: #e0ccff; border: 1px solid rgba(140,80,220,.5);
+}
+.pv-qty-btn:active { transform: scale(.94); }
+.pv-range { width: 100%; accent-color: #9060e0; }
+.pv-trade-preview-info { display: flex; flex-direction: column; gap: 2px; }
+.pv-trade-preview-info small { color: #9a7abf; font-size: .75em; }
+.pv-gift-footer { padding: 12px 18px 14px; border-top: 1px solid rgba(120,60,200,.3); background: rgba(0,0,0,.2); display: flex; flex-direction: column; gap: 8px; }
+
+/* ── DIALOG DE QUANTIDADE (presente) ── */
+#pvQtyModal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none;
+    align-items: center; justify-content: center; z-index: 4700;
+}
+#pvQtyModal.active { display: flex; }
+.pv-dialog {
+    background: linear-gradient(160deg, #1a0d2e, #120920); border: 1px solid #6a3fa0; border-radius: 12px;
+    padding: 18px 16px 14px; width: min(340px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px;
+    box-shadow: 0 0 40px rgba(120,60,200,.45); color: #e0ccff;
+}
+.pv-dialog-img { width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(1px 1px 2px #000); }
+.pv-dialog-title { color: #d4b4ff; font-weight: bold; text-align: center; }
+.pv-dialog-sub { color: #9a7abf; font-size: .8em; }
+.pv-dialog .pv-qty-row { width: 100%; }
+.pv-dialog input[type=number] {
+    background: rgba(0,0,0,.4); border: 1px solid rgba(120,70,200,.5); border-radius: 6px; color: #e0ccff;
+    padding: 6px 10px; font-size: 1em; outline: none; box-sizing: border-box; min-width: 0;
+}
+.pv-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
+.pv-btn {
+    border-radius: 7px; padding: 8px 14px; font-size: .85em; font-weight: bold; cursor: pointer; color: #f0e0ff;
+    border: 1px solid rgba(140,80,220,.5); background: rgba(255,255,255,.07);
+}
+.pv-btn.primary { background: linear-gradient(135deg, #6a2fa0, #3d1870); border-color: transparent; }
+.pv-btn.danger  { background: rgba(160,40,40,.6); border-color: #a04040; }
+
+/* ── CARD DE PRESENTE COM VÁRIAS SKINS ── */
+.pv-gift-mini-grid { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.pv-gift-mini {
+    position: relative; width: 54px; height: 54px; border-radius: 8px; box-sizing: border-box;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(160,60,220,.2); padding: 2px;
+}
+.pv-gift-mini img { width: 100%; height: 100%; object-fit: contain; display: block; border: none; padding: 0; background: none; border-radius: 0; }
+.pv-gift-mini span {
+    position: absolute; right: 2px; bottom: 0; color: #ffd766; font-weight: bold; font-size: .72em;
+    text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
+}
+.pv-gift-msg-list { display: block; padding: 12px; }
+.pv-gift-msg-list .pv-gift-sub { margin-bottom: 8px; }
 `;
     document.head.appendChild(s);
-}
-
-// =========================================================
-// >>> SKINS PRESENTEÁVEIS <<<
-// =========================================================
-const BLOCKED_GIFT_IDS = new Set([130, 131, 132, 133]);
-
-async function getGiftableSkinsFromIdb() {
-    try {
-        const db = await openIdb();
-        if (!db.objectStoreNames.contains(IDB_STORE)) return null;
-        const tx  = db.transaction(IDB_STORE, 'readonly');
-        const all = await new Promise((res, rej) => {
-            const r = tx.objectStore(IDB_STORE).getAll();
-            r.onsuccess = () => res(r.result);
-            r.onerror   = () => rej(r.error);
-        });
-        const totals = {};
-        for (const inv of all) {
-            const item = inv.items;
-            if (!item) continue;
-            const id = item.item_id;
-            if (!id || item.item_type !== 'skin' || BLOCKED_GIFT_IDS.has(id)) continue;
-            // Skins com equipped_slot preenchido estão ativas no perfil → não podem ser presenteadas
-            if (inv.equipped_slot) continue;
-            if (!totals[id]) {
-                const raw = item.img || item.skin_frame_url || null;
-                totals[id] = {
-                    id, name: item.name || item.display_name || `Skin #${id}`,
-                    img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
-                    subtype: item.item_subtype || item.subtype || '',
-                    qty: 0,
-                    // Guarda o inventory_items.id para exclusão precisa
-                    inv_id: inv.id,
-                };
-            }
-            totals[id].qty += (inv.quantity || 0);
-        }
-        const skins = Object.values(totals).filter(s => s.qty > 0);
-        return skins.length > 0 ? skins : null;
-    } catch { return null; }
-}
-
-async function getGiftableSkinsFromSupabase(playerId) {
-    try {
-        // Busca o player para saber quais inventory_ids estão ativos
-        const { data: playerData } = await supabaseClient
-            .from('players')
-            .select('active_frame_inventory_id, active_video_inventory_id')
-            .eq('id', playerId)
-            .single();
-
-        const activeIds = new Set([
-            playerData?.active_frame_inventory_id,
-            playerData?.active_video_inventory_id,
-        ].filter(Boolean));
-
-        const { data, error } = await supabaseClient
-            .from('inventory_items')
-            .select('id, item_id, quantity, equipped_slot, items:item_id(item_id, name, display_name, img, skin_frame_url, item_type, item_subtype)')
-            .eq('player_id', playerId)
-            .eq('items.item_type', 'skin')
-            .gt('quantity', 0);
-        if (error || !data) return [];
-
-        const totals = {};
-        for (const row of data) {
-            const item = Array.isArray(row.items) ? row.items[0] : row.items;
-            if (!item || item.item_type !== 'skin') continue;
-            if (BLOCKED_GIFT_IDS.has(row.item_id)) continue;
-            // Exclui skins com equipped_slot (ativas) ou com inventory id ativo
-            if (row.equipped_slot || activeIds.has(row.id)) continue;
-            const id = row.item_id;
-            if (!totals[id]) {
-                const raw = item.img || item.skin_frame_url || null;
-                totals[id] = {
-                    id, name: item.display_name || item.name || `Skin #${id}`,
-                    img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
-                    subtype: item.item_subtype || '',
-                    qty: 0,
-                };
-            }
-            totals[id].qty += row.quantity || 0;
-        }
-        return Object.values(totals).filter(s => s.qty > 0);
-    } catch { return []; }
-}
-
-async function loadGiftableSkins(playerId) {
-    const fromIdb = await getGiftableSkinsFromIdb();
-    if (fromIdb !== null) return fromIdb;
-    return getGiftableSkinsFromSupabase(playerId);
 }
 
 // =========================================================
@@ -669,6 +723,7 @@ async function loadGiftableSkins(playerId) {
 // =========================================================
 document.addEventListener("DOMContentLoaded", () => {
     injectTradeStyles();
+    bindItemImgFallback();
 
     const showFloatingMessage = window.showFloatingMessage || console.log;
 
@@ -808,8 +863,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // SISTEMA DE COMÉRCIO ENTRE JOGADORES
     // ============================================================
 
-    // Cria e injeta o modal de seleção de itens para trade
+    // ============================================================
+    // ESCAMBO — grade com os materiais da bolsa (item_type 'outros' + "material")
+    // Uma negociação = um tipo de item; quantidade e preço escolhidos no painel de baixo.
+    // ============================================================
+    let tradeCatalog      = null;       // Map<item_id, def>
+    let tradeStock        = new Map();  // item_id → quantidade (cache IndexedDB)
+    let selectedTradeItem = null;       // def do item escolhido
+    let tradeBusy         = false;
+
+    const tradeQtyMax = () => Math.min(tradeStock.get(selectedTradeItem?.id) || 0, TRADE_MAX_QTY);
+
     function ensureTradeModal() {
+        bindItemImgFallback();
         if (document.getElementById('pvTradeModal')) return;
         const wrap = document.createElement('div');
         wrap.id = 'pvTradeModal';
@@ -820,21 +886,28 @@ document.addEventListener("DOMContentLoaded", () => {
     Comércio com Jogador
     <span class="pv-trade-close" id="pvTradeCloseBtn">&times;</span>
   </h3>
-  <div id="pvTradeItemList"><p style="color:#7a5caa;padding:16px;text-align:center;">Carregando seu inventário...</p></div>
+  <div class="pv-box-title">🎒 Seus materiais <small>toque para escolher</small></div>
+  <div class="pv-grid" id="pvTradeGrid"></div>
   <div id="pvTradeConfigArea" style="display:none;">
-    <div class="pv-trade-selected-preview" id="pvTradePreview">
+    <div class="pv-trade-selected-preview">
       <img id="pvTradePreviewImg" src="" alt="">
-      <span id="pvTradePreviewName">Selecione um item</span>
+      <div class="pv-trade-preview-info">
+        <span id="pvTradePreviewName">Selecione um item</span>
+        <small id="pvTradePreviewAvail"></small>
+      </div>
     </div>
-    <div class="pv-trade-inputs">
-      <div class="pv-trade-input-group">
-        <label>Quantidade</label>
-        <input type="number" id="pvTradeQtyInput" min="1" max="9999" value="1" placeholder="Ex: 10">
+    <div class="pv-trade-input-group">
+      <label>Quantidade</label>
+      <div class="pv-qty-row">
+        <button type="button" class="pv-qty-btn" id="pvTradeMinus">-</button>
+        <input type="number" id="pvTradeQtyInput" min="1" value="1" inputmode="numeric">
+        <button type="button" class="pv-qty-btn" id="pvTradePlus">+</button>
       </div>
-      <div class="pv-trade-input-group">
-        <label>Ouro total</label>
-        <input type="number" id="pvTradeGoldInput" min="1" value="1" placeholder="Ex: 50">
-      </div>
+      <input type="range" class="pv-range" id="pvTradeQtyRange" min="1" max="1" value="1" step="1">
+    </div>
+    <div class="pv-trade-input-group">
+      <label>Ouro total</label>
+      <input type="number" id="pvTradeGoldInput" min="1" value="1" inputmode="numeric" placeholder="Ex: 50">
     </div>
     <div class="pv-trade-hint" id="pvTradeHint"></div>
     <button id="pvTradeOfferBtn" disabled>Criar Oferta</button>
@@ -843,15 +916,32 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.appendChild(wrap);
 
         document.getElementById('pvTradeCloseBtn').onclick = closeTradeModal;
-        wrap.addEventListener('click', e => { if (e.target === wrap) closeTradeModal(); });
+        wrap.addEventListener('click', e => {
+            if (e.target === wrap) { closeTradeModal(); return; }
+            const slot = e.target.closest('[data-pv-trade-pick]');
+            if (slot) selectTradeItem(Number(slot.dataset.pvTradePick));
+        });
+        wrap.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.pv-slot[role="button"]')) { e.preventDefault(); e.target.click(); }
+        });
 
-        document.getElementById('pvTradeQtyInput').addEventListener('input', validateTradeInputs);
-        document.getElementById('pvTradeGoldInput').addEventListener('input', validateTradeInputs);
-
+        const qtyInput  = document.getElementById('pvTradeQtyInput');
+        const range     = document.getElementById('pvTradeQtyRange');
+        const goldInput = document.getElementById('pvTradeGoldInput');
+        document.getElementById('pvTradeMinus').onclick = () => setTradeQty((parseInt(qtyInput.value, 10) || 1) - 1);
+        document.getElementById('pvTradePlus').onclick  = () => setTradeQty((parseInt(qtyInput.value, 10) || 0) + 1);
+        qtyInput.addEventListener('input',  () => { if (qtyInput.value !== '') setTradeQty(qtyInput.value); });
+        qtyInput.addEventListener('blur',   () => setTradeQty(qtyInput.value));
+        range.addEventListener('input',     () => setTradeQty(range.value));
+        // Preço: valida enquanto digita, mas só corrige o valor quando o campo perde o foco
+        goldInput.addEventListener('input',  validateTradeInputs);
+        goldInput.addEventListener('change', () => {
+            const qty = parseInt(qtyInput.value, 10) || 1;
+            goldInput.value = Math.max(qty, parseInt(goldInput.value, 10) || qty);
+            validateTradeInputs();
+        });
         document.getElementById('pvTradeOfferBtn').addEventListener('click', submitTradeOffer);
     }
-
-    let selectedTradeItem = null; // { id, name, img, qty, minGold }
 
     function closeTradeModal() {
         const m = document.getElementById('pvTradeModal');
@@ -859,123 +949,97 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedTradeItem = null;
     }
 
+    function renderTradeGrid() {
+        const grid = document.getElementById('pvTradeGrid');
+        if (!grid || !tradeCatalog) return;
+        const ids = [...tradeStock.keys()]
+            .sort((a, b) => tradeCatalog.get(a).label.localeCompare(tradeCatalog.get(b).label, 'pt-BR'));
+        grid.innerHTML = ids.length
+            ? ids.map(id => pvSlotHtml(tradeCatalog.get(id), tradeStock.get(id), 'data-pv-trade-pick', id === selectedTradeItem?.id)).join('')
+              + pvFillers(12 - ids.length)
+            : '<div class="pv-empty">Você não tem materiais para negociar.<br><small>Se acabou de entrar no jogo, abra a bolsa uma vez para sincronizar.</small></div>';
+    }
+
     async function openTradePanel() {
         ensureTradeModal();
         selectedTradeItem = null;
+        document.getElementById('pvTradeConfigArea').style.display = 'none';
+        document.getElementById('pvTradeOfferBtn').disabled = true;
 
-        const config = document.getElementById('pvTradeConfigArea');
-        const offerBtn = document.getElementById('pvTradeOfferBtn');
-        if (config) config.style.display = 'none';
-        if (offerBtn) offerBtn.disabled = true;
-
-        const listDiv = document.getElementById('pvTradeItemList');
-        listDiv.innerHTML = '<p style="color:#7a5caa;padding:16px;text-align:center;">Carregando inventário...</p>';
-
+        const grid = document.getElementById('pvTradeGrid');
+        grid.innerHTML = '<div class="pv-empty">Carregando seus materiais...</div>';
         document.getElementById('pvTradeModal').classList.add('active');
 
-        const items = await getTradeableItemsFromIdb();
-
-        if (items.length === 0) {
-            listDiv.innerHTML = '<p style="color:#7a5caa;padding:16px;text-align:center;">Nenhum item comercializável na bolsa.</p>';
-            return;
-        }
-
-        listDiv.innerHTML = '';
-        for (const item of items) {
-            const row = document.createElement('div');
-            row.className = 'pv-trade-item-row';
-            row.dataset.itemId = item.id;
-            row.innerHTML = `
-              <img src="${BASE_ITEM_URL}${item.img}" alt="${item.name}" loading="lazy">
-              <div class="pv-trade-item-info">
-                <strong>${item.name}</strong>
-                <small>Mínimo: ${item.minGold} ouro${item.minGold >= 50 ? ' ✦' : ''}</small>
-              </div>
-              <span class="pv-trade-item-qty-badge">x${item.qty}</span>`;
-            row.addEventListener('click', () => selectTradeItem(item, row));
-            listDiv.appendChild(row);
+        try {
+            tradeCatalog = await loadCatalog('trade');       // 1x/24h; o resto é cache local
+            tradeStock   = await getOwnedStock(tradeCatalog); // só lê o IndexedDB
+            renderTradeGrid();
+        } catch (e) {
+            console.warn('pv: falha ao carregar catálogo de escambo', e);
+            grid.innerHTML = '<div class="pv-empty">Não foi possível carregar seus itens. Tente novamente.</div>';
         }
     }
 
-    function selectTradeItem(item, rowEl) {
-        // Deseleciona anterior
-        document.querySelectorAll('.pv-trade-item-row.selected').forEach(r => r.classList.remove('selected'));
-        rowEl.classList.add('selected');
+    function selectTradeItem(id) {
+        const def = tradeCatalog?.get(id);
+        if (!def || (tradeStock.get(id) || 0) <= 0) return;
+        selectedTradeItem = def;
 
-        selectedTradeItem = item;
+        const max = tradeQtyMax();
+        document.getElementById('pvTradeConfigArea').style.display = 'flex';
+        applyItemImg(document.getElementById('pvTradePreviewImg'), defImgs(def));
+        document.getElementById('pvTradePreviewName').textContent  = def.label;
+        document.getElementById('pvTradePreviewAvail').textContent = `Disponível: ${fmtNum(tradeStock.get(id))}`;
 
-        const config   = document.getElementById('pvTradeConfigArea');
-        const previewImg  = document.getElementById('pvTradePreviewImg');
-        const previewName = document.getElementById('pvTradePreviewName');
-        const qtyInput  = document.getElementById('pvTradeQtyInput');
+        const qtyInput = document.getElementById('pvTradeQtyInput');
+        const range    = document.getElementById('pvTradeQtyRange');
+        qtyInput.max = max; range.max = max;
+        qtyInput.value = 1; range.value = 1;
+        document.getElementById('pvTradeGoldInput').value = 1;
+
+        renderTradeGrid();
+        validateTradeInputs();
+    }
+
+    function setTradeQty(v) {
+        if (!selectedTradeItem) return;
+        const n = Math.max(1, Math.min(tradeQtyMax(), parseInt(v, 10) || 1));
+        document.getElementById('pvTradeQtyInput').value = n;
+        document.getElementById('pvTradeQtyRange').value = n;
+        // o preço nunca fica abaixo do mínimo (1 ouro por unidade)
         const goldInput = document.getElementById('pvTradeGoldInput');
-        const hint      = document.getElementById('pvTradeHint');
-
-        config.style.display = 'flex';
-        previewImg.src       = `${BASE_ITEM_URL}${item.img}`;
-        previewName.textContent = item.name;
-
-        qtyInput.max   = item.qty;
-        qtyInput.value = 1;
-        goldInput.min  = item.minGold;   // qty 1 × minGold unitário
-        goldInput.value = item.minGold;
-
-        hint.textContent = `Mínimo: ${item.minGold} ouro (1 × ${item.minGold})${item.minGold >= 50 ? ' ✦' : ''}.`;
+        if ((parseInt(goldInput.value, 10) || 0) < n) goldInput.value = n;
         validateTradeInputs();
     }
 
     function validateTradeInputs() {
-        const offerBtn  = document.getElementById('pvTradeOfferBtn');
-        const qtyInput  = document.getElementById('pvTradeQtyInput');
-        const goldInput = document.getElementById('pvTradeGoldInput');
-        const hint      = document.getElementById('pvTradeHint');
+        const offerBtn = document.getElementById('pvTradeOfferBtn');
+        const hint     = document.getElementById('pvTradeHint');
         if (!offerBtn || !selectedTradeItem) return;
-
-        // Garantir que gold seja inteiro (sem decimais) antes de calcular
-        if (goldInput.value.includes('.') || goldInput.value.includes(',')) {
-            goldInput.value = Math.floor(parseFloat(goldInput.value.replace(',', '.'))) || 1;
-        }
-
-        const qty  = parseInt(qtyInput.value)  || 1;
-        const gold = parseInt(goldInput.value) || 0;
-
-        // Mínimo total = quantidade × preço unitário mínimo do item
-        const minGoldTotal = qty * selectedTradeItem.minGold;
-
-        // Atualiza o atributo min e trava o valor se ficar abaixo do mínimo
-        goldInput.min = minGoldTotal;
-        if (gold < minGoldTotal) {
-            goldInput.value = minGoldTotal;
-        }
-
-        const goldFinal = parseInt(goldInput.value);
-        const qtyOk  = qty >= 1 && qty <= selectedTradeItem.qty;
-        const goldOk = goldFinal >= minGoldTotal;
-
-        offerBtn.disabled = !(qtyOk && goldOk);
-
-        // Atualiza hint dinamicamente com o mínimo calculado
-        if (hint) {
-            const isSpecial = selectedTradeItem.minGold >= 50;
-            hint.textContent = `Mínimo: ${minGoldTotal} ouro (${qty} × ${selectedTradeItem.minGold})${isSpecial ? ' ✦' : ''}.`;
-        }
+        const qty  = parseInt(document.getElementById('pvTradeQtyInput').value, 10) || 0;
+        const gold = parseInt(document.getElementById('pvTradeGoldInput').value, 10) || 0;
+        const qtyOk  = qty >= 1 && qty <= tradeQtyMax();
+        const goldOk = qty >= 1 && gold >= qty;
+        offerBtn.disabled = tradeBusy || !(qtyOk && goldOk);
+        if (hint) hint.textContent = goldOk || qty < 1
+            ? `Mínimo: ${fmtNum(Math.max(1, qty))} ouro (${Math.max(1, qty)} × 1).`
+            : `Preço abaixo do mínimo: ${fmtNum(qty)} ouro (${qty} × 1).`;
     }
 
     async function submitTradeOffer() {
-        if (!selectedTradeItem || !currentOpenConversationId || !currentOtherPlayerId) return;
+        if (!selectedTradeItem || !currentOpenConversationId || !currentOtherPlayerId || tradeBusy) return;
 
-        const qtyInput  = document.getElementById('pvTradeQtyInput');
-        const goldInput = document.getElementById('pvTradeGoldInput');
         const offerBtn  = document.getElementById('pvTradeOfferBtn');
+        const qty       = parseInt(document.getElementById('pvTradeQtyInput').value, 10);
+        const goldTotal = parseInt(document.getElementById('pvTradeGoldInput').value, 10);
+        const itemId    = selectedTradeItem.id;
 
-        const qty       = parseInt(qtyInput.value);
-        const goldTotal = parseInt(goldInput.value);
-
-        if (!qty || !goldTotal || qty < 1 || goldTotal < qty * selectedTradeItem.minGold) {
+        if (!qty || !goldTotal || qty < 1 || goldTotal < qty) {
             showFloatingMessage('Verifique a quantidade e o preço.');
             return;
         }
 
+        tradeBusy = true;
         offerBtn.disabled = true;
         offerBtn.textContent = 'Criando oferta...';
 
@@ -983,7 +1047,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const { data, error } = await callRpcWithRetry('create_player_trade', {
                 p_conversation_id: parseInt(currentOpenConversationId),
                 p_buyer_id:        currentOtherPlayerId,
-                p_item_id:         selectedTradeItem.id,
+                p_item_id:         itemId,
                 p_quantity:        qty,
                 p_gold_price:      goldTotal
             });
@@ -991,8 +1055,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (error) throw error;
             if (!data.success) throw new Error(data.message);
 
-            // Decrementa IDB imediatamente
-            await decrementIdbItem(selectedTradeItem.id, qty);
+            // O servidor devolve TODAS as linhas restantes do item + as apagadas: o cache fica idêntico ao banco
+            await applyInventoryDelta({
+                updates: data.inventory_updates,
+                removedIds: data.removed_item_ids,
+                replaceItemIds: [itemId],
+            });
 
             closeTradeModal();
             showFloatingMessage(`Oferta criada! Os itens foram reservados por 12 horas.`);
@@ -1004,8 +1072,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         } catch (err) {
             showFloatingMessage(`Erro: ${err.message || 'Não foi possível criar a oferta.'}`);
-            offerBtn.disabled = false;
+        } finally {
+            tradeBusy = false;
             offerBtn.textContent = 'Criar Oferta';
+            validateTradeInputs();
         }
     }
 
@@ -1045,8 +1115,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (goldEl) goldEl.textContent = data.new_gold;
                     } catch {}
                 }
-                // Adiciona ao IDB local
-                await incrementIdbItem(data.item_id, data.items_received);
+                // Cache IDB: grava a linha que o servidor devolveu (sem SELECT extra)
+                await applyInventoryDelta({ updates: data.inventory_updates });
                 notifyOtherPlayer(currentOtherPlayerId);
 
                 // Re-renderiza a conversa para mostrar status atualizado
@@ -1074,9 +1144,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // Se for vendedor: devolve ao IDB
+            // Se for vendedor: grava no cache a linha devolvida pelo servidor
             if (isSeller) {
-                await incrementIdbItem(data.item_id, data.quantity);
+                await applyInventoryDelta({ updates: data.inventory_updates });
             }
             notifyOtherPlayer(currentOtherPlayerId);
 
@@ -1447,6 +1517,12 @@ document.addEventListener("DOMContentLoaded", () => {
         let giftStatuses = {};
         if (giftIds.length > 0) giftStatuses = await fetchGiftStatuses(giftIds);
 
+        // Cards de escambo ANTIGOS (sem nome do item gravado na mensagem): 1 query só, guardada em cache
+        const legacyTradeIds = [...new Set(messages
+            .filter(m => m.text === '__TRADE__' && m.trade_item_id != null && !m.trade_item_name)
+            .map(m => Number(m.trade_item_id)))];
+        const resolvedDefs = legacyTradeIds.length ? await resolveDefs(legacyTradeIds) : new Map();
+
         for (const msg of messages) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'chat-message';
@@ -1454,7 +1530,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (msg.text === '__TRADE__' && msg.trade_id != null) {
                 msgDiv.classList.add('chat-message-rich');
-                const tradeHtml = buildTradeMessageHtml(msg, tradeStatuses);
+                const tradeHtml = buildTradeMessageHtml(msg, tradeStatuses, resolvedDefs);
                 msgDiv.innerHTML = tradeHtml;
                 const tradeId  = Number(msg.trade_id);
                 const isSeller = msg.sender_id === currentPlayer.id;
@@ -1518,7 +1594,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function buildTradeMessageHtml(msg, tradeStatuses) {
+    function buildTradeMessageHtml(msg, tradeStatuses, resolvedDefs = new Map()) {
         const tradeId   = Number(msg.trade_id);
         const itemId    = Number(msg.trade_item_id);
         const qty       = Number(msg.trade_quantity);
@@ -1526,9 +1602,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const expiresAt = new Date(msg.trade_expires_at);
         const isSeller  = msg.sender_id === currentPlayer.id;
 
-        const meta     = TRADEABLE_MAP.get(itemId);
-        const imgUrl   = meta ? `${BASE_ITEM_URL}${meta.img}` : '';
-        const itemName = meta ? meta.name : `Item #${itemId}`;
+        // Nome/estrelas vêm gravados na mensagem; cards antigos usam a definição resolvida
+        const def = msg.trade_item_name
+            ? { id: itemId, name: msg.trade_item_name, label: msg.trade_item_label || msg.trade_item_name, stars: Number(msg.trade_item_stars) || 0, type: 'outros', frame: '' }
+            : (resolvedDefs.get(itemId) || null);
+        const imgs     = def ? defImgs(def) : { img: UNKNOWN_IMG, alt: '' };
+        const itemName = def ? def.label : `Item #${itemId}`;
 
         // Status (do servidor ou inferido)
         const serverTrade = tradeStatuses[String(tradeId)];
@@ -1569,9 +1648,9 @@ document.addEventListener("DOMContentLoaded", () => {
     Oferta de Comércio
   </div>
   <div class="pv-trade-msg-body">
-    <img class="pv-trade-item-icon" src="${imgUrl}" alt="${itemName}" loading="lazy">
+    ${itemImgTag(imgs, itemName, 'pv-trade-item-icon')}
     <div class="pv-trade-msg-info">
-      <div class="pv-trade-msg-name">${itemName}</div>
+      <div class="pv-trade-msg-name">${esc(itemName)}</div>
       <div class="pv-trade-msg-qty">Quantidade: <strong>${qty}</strong></div>
     </div>
     <div class="pv-trade-msg-price">
@@ -1590,111 +1669,232 @@ document.addEventListener("DOMContentLoaded", () => {
     // ============================================================
     // SISTEMA DE PRESENTE
     // ============================================================
-    let selectedGiftItem = null;
+    let giftCatalog = null;       // Map<item_id, def>
+    let giftStock   = new Map();  // item_id → quantidade disponível (cache IndexedDB)
+    let giftCart    = new Map();  // item_id → quantidade que vai no presente
+    let giftBusy    = false;
 
+    const giftAvail     = id => (giftStock.get(id) || 0) - (giftCart.get(id) || 0);
+    const giftCartUnits = () => [...giftCart.values()].reduce((s, q) => s + q, 0);
+    // Quantas unidades a mais deste item ainda cabem no presente (respeita estoque e limites)
+    function giftRoomFor(id) {
+        if (!giftCart.has(id) && giftCart.size >= GIFT_MAX_KINDS) return 0;
+        return Math.max(0, Math.min(GIFT_MAX_UNITS - giftCartUnits(), giftAvail(id)));
+    }
+    function giftLimitMsg(id) {
+        if (giftAvail(id) <= 0) return null;
+        return (!giftCart.has(id) && giftCart.size >= GIFT_MAX_KINDS)
+            ? `Máximo de ${GIFT_MAX_KINDS} skins diferentes por presente.`
+            : `Máximo de ${GIFT_MAX_UNITS} skins por presente.`;
+    }
+
+    // ── Dialog genérico de quantidade ───────────────────────────
+    let qtyState = null; // { min, max, onOk, onRemove }
+
+    function ensureQtyDialog() {
+        bindItemImgFallback();
+        if (document.getElementById('pvQtyModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvQtyModal';
+        wrap.innerHTML = `
+<div class="pv-dialog">
+  <img id="pvQtyImg" class="pv-dialog-img" alt="">
+  <div id="pvQtyName" class="pv-dialog-title"></div>
+  <div id="pvQtyAvail" class="pv-dialog-sub"></div>
+  <div class="pv-qty-row">
+    <button type="button" class="pv-qty-btn" id="pvQtyMinus">-</button>
+    <input type="number" id="pvQtyInput" inputmode="numeric">
+    <button type="button" class="pv-qty-btn" id="pvQtyPlus">+</button>
+  </div>
+  <input type="range" id="pvQtyRange" class="pv-range">
+  <div class="pv-dialog-actions">
+    <button type="button" class="pv-btn" id="pvQtyMax">Máx</button>
+    <button type="button" class="pv-btn danger" id="pvQtyRemove" style="display:none;">Remover</button>
+    <button type="button" class="pv-btn" id="pvQtyCancel">Cancelar</button>
+    <button type="button" class="pv-btn primary" id="pvQtyOk">Confirmar</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+
+        const input = document.getElementById('pvQtyInput');
+        const range = document.getElementById('pvQtyRange');
+        const setQty = v => {
+            if (!qtyState) return;
+            let n = parseInt(v, 10);
+            if (!Number.isFinite(n)) n = qtyState.min;
+            n = Math.max(qtyState.min, Math.min(qtyState.max, n));
+            input.value = n; range.value = n;
+        };
+        wrap._setQty = setQty;
+        document.getElementById('pvQtyMinus').onclick = () => setQty((parseInt(input.value, 10) || 0) - 1);
+        document.getElementById('pvQtyPlus').onclick  = () => setQty((parseInt(input.value, 10) || 0) + 1);
+        document.getElementById('pvQtyMax').onclick   = () => setQty(qtyState?.max);
+        input.addEventListener('input', () => { if (input.value !== '') setQty(input.value); });
+        input.addEventListener('blur',  () => setQty(input.value));
+        range.addEventListener('input', () => setQty(range.value));
+        document.getElementById('pvQtyCancel').onclick = closeQtyDialog;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeQtyDialog(); });
+        document.getElementById('pvQtyRemove').onclick = () => { const s = qtyState; closeQtyDialog(); s?.onRemove?.(); };
+        document.getElementById('pvQtyOk').onclick = () => {
+            if (!qtyState) return;
+            const n = Math.max(qtyState.min, Math.min(qtyState.max, parseInt(input.value, 10) || qtyState.min));
+            const s = qtyState; closeQtyDialog(); s.onOk(n);
+        };
+    }
+
+    function closeQtyDialog() {
+        const q = document.getElementById('pvQtyModal');
+        if (q) q.classList.remove('active');
+        qtyState = null;
+    }
+
+    function openQtyDialog({ def, min = 1, max, current = 1, okLabel = 'Confirmar', onOk, onRemove = null }) {
+        ensureQtyDialog();
+        const q = document.getElementById('pvQtyModal');
+        qtyState = { min, max, onOk, onRemove };
+        const range = document.getElementById('pvQtyRange');
+        range.min = min; range.max = max;
+        applyItemImg(document.getElementById('pvQtyImg'), defImgs(def));
+        document.getElementById('pvQtyName').textContent  = def.label;
+        document.getElementById('pvQtyAvail').textContent = `Máximo agora: ${fmtNum(max)}`;
+        document.getElementById('pvQtyRemove').style.display = onRemove ? '' : 'none';
+        document.getElementById('pvQtyOk').textContent = okLabel;
+        q._setQty(current);
+        q.classList.add('active');
+    }
+
+    // ── Modal de presente: duas grades (para presentear / suas skins) ──
     function ensureGiftModal() {
+        bindItemImgFallback();
         if (document.getElementById('pvGiftModal')) return;
         const wrap = document.createElement('div');
         wrap.id = 'pvGiftModal';
         wrap.innerHTML = `<div id="pvGiftBox">
   <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
     Presentear Jogador <span class="pv-gift-x" id="pvGiftCloseBtn">&times;</span></h3>
-  <div id="pvGiftItemList"><p style="color:#9a7abf;padding:16px;text-align:center;">Carregando skins...</p></div>
-  <div id="pvGiftConfigArea" style="display:none;">
-    <div class="pv-gift-preview">
-      <img id="pvGiftPreviewImg" src="" alt="" style="display:none">
-      <div><strong id="pvGiftPreviewName"></strong><small id="pvGiftPreviewSub"></small></div>
-    </div>
-    <div class="pv-trade-input-group" style="display:flex;flex-direction:column;gap:4px;">
-      <label style="color:#9a7abf;font-size:.75em;text-transform:uppercase;letter-spacing:.4px;">Quantidade</label>
-      <input type="number" id="pvGiftQtyInput" min="1" max="1" value="1"
-        style="background:rgba(0,0,0,.4);border:1px solid rgba(120,70,200,.5);border-radius:6px;color:#e0ccff;padding:6px 10px;font-size:.9em;outline:none;width:100%;box-sizing:border-box;">
-    </div>
+  <div class="pv-scroll">
+    <div class="pv-box-title">🎁 Para presentear <small id="pvGiftCount"></small></div>
+    <div class="pv-grid" id="pvGiftCartGrid"></div>
+    <div class="pv-box-title">🎒 Suas skins <small>toque para adicionar</small></div>
+    <div class="pv-grid" id="pvGiftInvGrid"></div>
+  </div>
+  <div class="pv-gift-footer">
     <p class="pv-gift-hint">O destinatário tem 24h para aceitar.</p>
-    <button id="pvGiftSendBtn">Enviar Presente</button>
+    <button id="pvGiftSendBtn" disabled>Enviar Presente</button>
   </div>
 </div>`;
         document.body.appendChild(wrap);
+
         document.getElementById('pvGiftCloseBtn').onclick = closeGiftModal;
-        wrap.addEventListener('click', e => { if (e.target === wrap) closeGiftModal(); });
         document.getElementById('pvGiftSendBtn').addEventListener('click', submitGiftOffer);
+        wrap.addEventListener('click', e => {
+            if (e.target === wrap) { closeGiftModal(); return; }
+            const add  = e.target.closest('[data-pv-gift-add]');
+            const edit = e.target.closest('[data-pv-gift-edit]');
+            if (add)  onGiftAdd(Number(add.dataset.pvGiftAdd));
+            if (edit) onGiftEdit(Number(edit.dataset.pvGiftEdit));
+        });
+        wrap.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.pv-slot[role="button"]')) { e.preventDefault(); e.target.click(); }
+        });
     }
 
     function closeGiftModal() {
         const m = document.getElementById('pvGiftModal');
         if (m) m.classList.remove('active');
-        selectedGiftItem = null;
+        closeQtyDialog();
+        giftCart.clear();
+    }
+
+    function renderGiftGrids() {
+        const cartGrid = document.getElementById('pvGiftCartGrid');
+        const invGrid  = document.getElementById('pvGiftInvGrid');
+        if (!cartGrid || !invGrid || !giftCatalog) return;
+
+        const byName = (a, b) => giftCatalog.get(a).label.localeCompare(giftCatalog.get(b).label, 'pt-BR');
+
+        const cartIds = [...giftCart.keys()].sort(byName);
+        cartGrid.innerHTML = cartIds.map(id => pvSlotHtml(giftCatalog.get(id), giftCart.get(id), 'data-pv-gift-edit')).join('')
+            + pvFillers(6 - cartIds.length);
+
+        const invIds = [...giftStock.keys()].filter(id => giftAvail(id) > 0).sort(byName);
+        invGrid.innerHTML = invIds.length
+            ? invIds.map(id => pvSlotHtml(giftCatalog.get(id), giftAvail(id), 'data-pv-gift-add')).join('') + pvFillers(12 - invIds.length)
+            : (giftCart.size
+                ? pvFillers(12)
+                : '<div class="pv-empty">Nenhuma skin disponível para presentear.<br><small>Skins equipadas e skins especiais não podem ser presenteadas.<br>Se acabou de entrar no jogo, abra a bolsa uma vez para sincronizar.</small></div>');
+
+        const units = giftCartUnits();
+        const countEl = document.getElementById('pvGiftCount');
+        if (countEl) countEl.textContent = `${units}/${GIFT_MAX_UNITS}`;
+        const btn = document.getElementById('pvGiftSendBtn');
+        if (btn) btn.disabled = giftBusy || giftCart.size === 0;
+    }
+
+    function onGiftAdd(id) {
+        const def = giftCatalog?.get(id);
+        if (!def || giftBusy) return;
+        const room = giftRoomFor(id);
+        if (room <= 0) { const m = giftLimitMsg(id); if (m) showFloatingMessage(m); return; }
+        if (room === 1) { giftCart.set(id, (giftCart.get(id) || 0) + 1); renderGiftGrids(); return; }
+        openQtyDialog({
+            def, min: 1, max: room, current: 1, okLabel: 'Adicionar',
+            onOk: n => { giftCart.set(id, (giftCart.get(id) || 0) + n); renderGiftGrids(); },
+        });
+    }
+
+    function onGiftEdit(id) {
+        const def = giftCatalog?.get(id);
+        const cur = giftCart.get(id) || 0;
+        if (!def || giftBusy || cur <= 0) return;
+        if (cur === 1) { giftCart.delete(id); renderGiftGrids(); return; }
+        const max = Math.min(giftStock.get(id) || 0, cur + (GIFT_MAX_UNITS - giftCartUnits()));
+        openQtyDialog({
+            def, min: 1, max, current: cur, okLabel: 'Atualizar',
+            onOk: n => { giftCart.set(id, n); renderGiftGrids(); },
+            onRemove: () => { giftCart.delete(id); renderGiftGrids(); },
+        });
     }
 
     async function openGiftPanel() {
         ensureGiftModal();
-        selectedGiftItem = null;
-        const cfg = document.getElementById('pvGiftConfigArea');
-        if (cfg) cfg.style.display = 'none';
-        const listDiv = document.getElementById('pvGiftItemList');
-        listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Carregando suas skins...</p>';
+        giftCart.clear();
+        const cartGrid = document.getElementById('pvGiftCartGrid');
+        const invGrid  = document.getElementById('pvGiftInvGrid');
+        cartGrid.innerHTML = pvFillers(6);
+        invGrid.innerHTML  = '<div class="pv-empty">Carregando suas skins...</div>';
+        document.getElementById('pvGiftSendBtn').disabled = true;
         document.getElementById('pvGiftModal').classList.add('active');
 
-        const skins = await loadGiftableSkins(currentPlayer.id);
-
-        if (!skins || skins.length === 0) {
-            listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Nenhuma skin disponível para presentear.<br><small>Skins especiais não podem ser presenteadas.</small></p>';
-            return;
-        }
-        listDiv.innerHTML = '';
-        for (const skin of skins) {
-            const sub = skin.subtype ? (skin.subtype === 'moldura' ? 'Moldura' : skin.subtype === 'fundo' ? 'Fundo' : skin.subtype) : 'Skin';
-            const row = document.createElement('div');
-            row.className = 'pv-gift-item-row';
-            row.innerHTML = `${skin.img ? `<img src="${skin.img}" alt="${skin.name}" loading="lazy">` : '<div style="width:44px;height:44px;background:rgba(255,255,255,.06);border-radius:6px;flex-shrink:0"></div>'}
-              <div class="pv-gift-item-info"><strong>${skin.name}</strong><small>${sub}</small></div>
-              <span class="pv-gift-qty-badge">x${skin.qty}</span>`;
-            row.addEventListener('click', () => {
-                document.querySelectorAll('.pv-gift-item-row.selected').forEach(r => r.classList.remove('selected'));
-                row.classList.add('selected');
-                selectedGiftItem = skin;
-                const cfg = document.getElementById('pvGiftConfigArea');
-                document.getElementById('pvGiftPreviewImg').src = skin.img || '';
-                document.getElementById('pvGiftPreviewImg').style.display = skin.img ? 'block' : 'none';
-                document.getElementById('pvGiftPreviewName').textContent = skin.name;
-                document.getElementById('pvGiftPreviewSub').textContent  = sub;
-                const qtyInput = document.getElementById('pvGiftQtyInput');
-                if (qtyInput) { qtyInput.max = skin.qty; qtyInput.value = 1; }
-                cfg.style.display = 'flex';
-            });
-            listDiv.appendChild(row);
+        try {
+            giftCatalog = await loadCatalog('gift');        // 1x/24h; o resto é cache local
+            giftStock   = await getOwnedStock(giftCatalog); // só lê o IndexedDB
+            renderGiftGrids();
+        } catch (e) {
+            console.warn('pv: falha ao carregar catálogo de skins', e);
+            invGrid.innerHTML = '<div class="pv-empty">Não foi possível carregar suas skins. Tente novamente.</div>';
         }
     }
 
     async function submitGiftOffer() {
-        if (!selectedGiftItem || !currentOpenConversationId || !currentOtherPlayerId) return;
-        const btn = document.getElementById('pvGiftSendBtn');
-        const qtyInput = document.getElementById('pvGiftQtyInput');
-        const qty = parseInt(qtyInput?.value) || 1;
+        if (giftBusy || giftCart.size === 0 || !currentOpenConversationId || !currentOtherPlayerId) return;
+        const btn   = document.getElementById('pvGiftSendBtn');
+        const items = [...giftCart.entries()].map(([item_id, qty]) => ({ item_id, qty }));
 
-        if (qty < 1 || isNaN(qty)) {
-            showFloatingMessage('Quantidade inválida.');
-            return;
-        }
-        if (qty > selectedGiftItem.qty) {
-            showFloatingMessage(`Quantidade insuficiente. Você tem apenas ${selectedGiftItem.qty} disponível(is).`);
-            if (qtyInput) qtyInput.value = selectedGiftItem.qty;
-            return;
-        }
-
+        giftBusy = true;
         btn.disabled = true; btn.textContent = 'Enviando...';
         try {
             const { data, error } = await callRpcWithRetry('create_player_gift', {
                 p_conversation_id: parseInt(currentOpenConversationId),
                 p_receiver_id:     currentOtherPlayerId,
-                p_item_id:         selectedGiftItem.id,
-                p_quantity:        qty,
-                p_item_name:       selectedGiftItem.name,
-                p_item_img:        selectedGiftItem.img || ''
+                p_items:           items
             });
             if (error) throw error;
             if (!data.success) throw new Error(data.message);
-            await decrementIdbItem(selectedGiftItem.id, qty);
+
+            // O servidor diz exatamente quais linhas sumiram e quais só perderam quantidade
+            await applyInventoryDelta({ updates: data.inventory_updates, removedIds: data.removed_item_ids });
+
             closeGiftModal();
             showFloatingMessage('Presente enviado! O destinatário tem 24h para aceitar.');
             notifyOtherPlayer(currentOtherPlayerId);
@@ -1702,7 +1902,10 @@ document.addEventListener("DOMContentLoaded", () => {
             await openChatView(currentOpenConversationId);
         } catch (err) {
             showFloatingMessage(`Erro: ${err.message || 'Não foi possível enviar.'}`);
-            btn.disabled = false; btn.textContent = 'Enviar Presente';
+        } finally {
+            giftBusy = false;
+            btn.textContent = 'Enviar Presente';
+            btn.disabled = giftCart.size === 0;
         }
     }
 
@@ -1724,13 +1927,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
             }
-            // Invalida o cache do inventário no IDB para forçar re-sync
-            // quando o receptor abrir o inventário
-            _invalidateInventoryCache();
+            // O servidor devolveu as linhas novas: grava direto no cache (sem re-sync completo).
+            // Só se por algum motivo vier vazio é que invalida o cache para forçar sincronização.
+            if (Array.isArray(data.inventory_updates) && data.inventory_updates.length) {
+                await applyInventoryDelta({ updates: data.inventory_updates });
+            } else {
+                _invalidateInventoryCache();
+            }
             notifyOtherPlayer(currentOtherPlayerId);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
-            showFloatingMessage('Presente aceito! Abra o inventário para ver a skin recebida.');
+            showFloatingMessage('Presente aceito! Abra o inventário para ver as skins recebidas.');
         });
     }
 
@@ -1755,7 +1962,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function handleCancelGift(giftId, itemId, footerEl, isSender) {
-        showConfirmModal(isSender ? 'Cancelar este presente? A skin será devolvida para você.' : 'Recusar este presente?', async () => {
+        showConfirmModal(isSender ? 'Cancelar este presente? As skins serão devolvidas para você.' : 'Recusar este presente?', async () => {
             const btns = footerEl.querySelectorAll('.pv-gift-btn');
             btns.forEach(b => b.disabled = true);
             const { data, error } = await callRpcWithRetry('cancel_player_gift', { p_gift_id: giftId });
@@ -1763,7 +1970,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
             }
-            if (isSender) await incrementIdbItem(itemId, data.quantity || 1);
+            if (isSender) await applyInventoryDelta({ updates: data.inventory_updates });
             notifyOtherPlayer(currentOtherPlayerId);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
@@ -1771,14 +1978,25 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Itens exibidos no card: usa o que foi gravado na mensagem (zero consulta ao banco).
+    // Presentes antigos (sem gift_items) caem no formato de 1 item.
+    function giftMsgEntries(msg) {
+        if (Array.isArray(msg.gift_items) && msg.gift_items.length) {
+            return msg.gift_items.map(it => {
+                const d = { id: Number(it.item_id), name: it.name, label: it.label || it.name, stars: Number(it.stars) || 0, type: 'skin', frame: '' };
+                return { id: d.id, qty: Number(it.qty) || 1, label: d.label, ...defImgs(d) };
+            });
+        }
+        const id = Number(msg.gift_item_id);
+        return [{ id, qty: Number(msg.gift_quantity) || 1, label: msg.gift_item_name || `Skin #${id}`, img: msg.gift_item_img || UNKNOWN_IMG, alt: '' }];
+    }
+
     function buildGiftMessageHtml(msg, giftStatuses) {
         const giftId   = Number(msg.gift_id);
-        const itemId   = Number(msg.gift_item_id);
-        const qty      = Number(msg.gift_quantity) || 1;
         const expiresAt = new Date(msg.gift_expires_at);
         const isSender = msg.sender_id === currentPlayer.id;
-        const itemName = msg.gift_item_name || `Skin #${itemId}`;
-        const itemImg  = msg.gift_item_img  || '';
+        const entries  = giftMsgEntries(msg);
+        const total    = entries.reduce((s, e) => s + e.qty, 0);
 
         const serverGift = giftStatuses[String(giftId)];
         let status = serverGift?.status || 'pending';
@@ -1794,12 +2012,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? `<div class="pv-gift-actions"><button class="pv-gift-btn pv-gift-cancel">Cancelar Presente</button></div>`
                 : `<div class="pv-gift-actions"><button class="pv-gift-btn pv-gift-accept">Aceitar</button><button class="pv-gift-btn pv-gift-decline">Recusar</button></div>`;
         }
+
+        let bodyHtml;
+        if (entries.length === 1) {
+            const e = entries[0];
+            bodyHtml = `<div class="pv-gift-msg-body">
+    ${itemImgTag(e, e.label)}
+    <div class="pv-gift-msg-info"><div class="pv-gift-name">${esc(e.label)}</div><div class="pv-gift-sub">Skin${e.qty > 1 ? ` · Qtd: ${e.qty}` : ''}</div></div>
+  </div>`;
+        } else {
+            bodyHtml = `<div class="pv-gift-msg-body pv-gift-msg-list">
+    <div class="pv-gift-sub">${total} skins · ${entries.length} tipos</div>
+    <div class="pv-gift-mini-grid">${entries.map(e =>
+        `<div class="pv-gift-mini" title="${esc(e.label)}">${itemImgTag(e, e.label)}${e.qty > 1 ? `<span>${e.qty}</span>` : ''}</div>`
+    ).join('')}</div>
+  </div>`;
+        }
+
         return `<div class="pv-gift-msg">
   <div class="pv-gift-msg-header"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>${isSender ? 'Presente Enviado' : 'Você Recebeu um Presente'}</div>
-  <div class="pv-gift-msg-body">
-    ${itemImg ? `<img src="${itemImg}" alt="${itemName}" loading="lazy">` : ''}
-    <div class="pv-gift-msg-info"><div class="pv-gift-name">${itemName}</div><div class="pv-gift-sub">Skin${qty > 1 ? ` · Qtd: ${qty}` : ''}</div></div>
-  </div>
+  ${bodyHtml}
   <div class="pv-gift-msg-footer">
     ${expiryStr ? `<div class="pv-gift-expiry">${expiryStr}</div>` : ''}
     <div class="pv-gift-status status-${status}">${labels[status] || status}</div>

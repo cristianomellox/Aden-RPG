@@ -505,7 +505,6 @@ function attachMercadorEvents() {
         search.addEventListener('keydown', e => e.stopPropagation());   // não dispara atalhos do jogo
     }
 
-    markOwnedSkins();
     attachTabEvents();
 }
 
@@ -528,19 +527,6 @@ function filterVendaCards(raw) {
     if (empty) empty.style.display = visible === 0 ? '' : 'none';
 }
 
-function setSkinOwned(type) {
-    const btn = document.getElementById(`vbuy-${type}`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Adquirida'; }
-}
-
-// Skins são únicas: marca as que o jogador já tem (lê só o cache local)
-async function markOwnedSkins() {
-    try {
-        const owned = await getAllItemsQtyFromCache(SKINS.map(k => k.id));
-        for (const k of SKINS) if ((owned[k.id] || 0) > 0) setSkinOwned(k.type);
-    } catch {}
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // TRANSAÇÕES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -548,7 +534,6 @@ async function markOwnedSkins() {
 async function buyVendaItem(type, quantity) {
     const skin = SKIN_BY_TYPE[type] || null;
     if (skin) quantity = 1;           // skin = item único
-    let ownedNow = false;
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
@@ -569,10 +554,7 @@ async function buyVendaItem(type, quantity) {
             p_quantity: quantity
         });
         if (error) throw error;
-        if (!data.success) {
-            if (skin && /já possui/i.test(data.message || '')) ownedNow = true;
-            throw new Error(data.message);
-        }
+        if (!data.success) throw new Error(data.message);
 
         // Sincroniza moedas: usa valor retornado pelo servidor se disponível, senão desconta local
         const newMoedaQty = (data.new_moeda_qty != null)
@@ -592,7 +574,6 @@ async function buyVendaItem(type, quantity) {
             } else {
                 await updateCacheQty(skin.id, 1);
             }
-            ownedNow = true;
             showMsg(`Você recebeu ${skin.name}!`);
         } else if (type === 'pedra') {
             await updateCacheQty(PEDRA_ID, quantity * 1);
@@ -636,8 +617,7 @@ async function buyVendaItem(type, quantity) {
     } catch (err) {
         showMsg(`Erro: ${err.message || 'Falha na compra.'}`);
     } finally {
-        if (skin && ownedNow) setSkinOwned(type);
-        else if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
         refreshVendaLimits();
     }
 }
@@ -1171,14 +1151,14 @@ function injectStyles() {
     position: relative; width: 90%; max-width: 600px; margin-top: 4px;
 }
 .mercador-search-icon {
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    color: #c9a94a; pointer-events: none;
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    color: #c9a94a; pointer-events: none; z-index: 1;
 }
 .mercador-search-input {
     width: 100%; box-sizing: border-box;
     background: rgba(0,0,0,.55); color: #e0dccc;
     border: 1px solid #c9a94a; border-radius: 8px;
-    padding: 9px 12px 9px 38px; font-family: 'Cinzel', serif;
+    padding: 9px 38px 9px 12px !important; font-family: 'Cinzel', serif;
     font-size: 16px; /* >=16px evita zoom automático no iOS */
     outline: none; margin: 0;
 }
@@ -1191,7 +1171,6 @@ function injectStyles() {
     color: gold; font-size: 1.05em; text-shadow: 1px 1px 3px #000;
     border-bottom: 1px solid #c9a94a55; padding-bottom: 4px; margin-top: 6px;
 }
-.mercador-card-skin .mercador-item-icon { width: 80px; height: 80px; border-radius: 8px; }
 .mercador-card-skin .mercador-trade-side .mercador-item-name { white-space: normal; overflow: visible; }
 .mercador-item-desc { color: #aaa; font-size: .78em; text-align: center; line-height: 1.3; }
 /* ─── VENDER: caixas estilo inventário ─── */

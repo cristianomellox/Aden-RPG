@@ -4670,7 +4670,7 @@ button, .btn {
   clip-path: polygon(1.5% 0%, 98.5% 0%, 100% 50%, 98.5% 100%, 1.5% 100%, 0% 50%);
   box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
-#shopModal .shop-category-banner:first-of-type { margin-top: 6px; }
+#shopModal .shop-category-banner:first-child { margin-top: 6px; }
 #shopModal .shop-category-banner span {
   font-family: 'Cinzel', serif;
   font-weight: 800;
@@ -4682,7 +4682,7 @@ button, .btn {
 }
 
 /* Grade de 2 colunas para a Loja e a Recarga */
-#shopModal #shop-main,
+#shopModal .shop-subcontent,
 #shopModal #shop-recharge {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -4849,7 +4849,7 @@ button, .btn {
 }
 
 @media (max-width: 380px) {
-  #shopModal #shop-main, #shopModal #shop-recharge { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  #shopModal .shop-subcontent, #shopModal #shop-recharge { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   #shopModal .shop-item { padding: 10px 6px 10px; }
 }
 
@@ -5403,3 +5403,34 @@ button, .btn {
 .checkin-btn:disabled { cursor: default; }
 .video-reward-card.checkin-claimed .checkin-btn:disabled { filter: brightness(85%); }
 .video-reward-card.checkin-disabled .checkin-btn:disabled { filter: grayscale(100%); }
+
+
+/* ── Sub-abas da Loja (Consumíveis / Skins) ── */
+#shopModal .shop-subtabs {
+  display: flex;
+  gap: 6px;
+  max-width: 320px;
+  margin: 8px auto 6px;
+}
+#shopModal .shop-subtab-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border-radius: 20px;
+  border: 1px solid var(--aaa-border-soft);
+  background: rgba(0,0,0,0.35);
+  color: #9a9488;
+  font-weight: 700;
+  font-size: 0.78em;
+  cursor: pointer;
+  background-image: none !important;
+  transition: background 0.2s, color 0.2s;
+}
+#shopModal .shop-subtab-btn.active {
+  color: #1a1409;
+  background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark)) !important;
+  border-color: #8a6e24;
+}
+#shopModal #shop-main { display: block; }
+#shopModal .shop-subcontent { margin-top: 6px; }
+#shopModal .shop-skin-img { width: 96px !important; height: 96px !important; border-radius: 8px; }
+#shopModal .shop-skin-video { object-fit: cover; background: rgba(0,0,0,0.4); }

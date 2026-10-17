@@ -4143,12 +4143,39 @@ shopTabs.forEach(tab => {
 
         const targetContentId = tab.getAttribute('data-tab');
         shopContents.forEach(content => {
-            if (content.id === targetContentId) {
-                content.style.display = 'block';
-            } else {
-                content.style.display = 'none';
-            }
+            // '' devolve o controle do display ao CSS (grid/block); só esconde com 'none'
+            content.style.display = (content.id === targetContentId) ? '' : 'none';
         });
+        if (targetContentId === 'shop-main') loadShopSkinMedia();
+    });
+});
+
+// Sub-abas da Loja (Consumíveis / Skins)
+const shopSubTabs = document.querySelectorAll('.shop-subtab-btn');
+const shopSubContents = document.querySelectorAll('.shop-subcontent');
+
+// Os vídeos das skins só são carregados ao abrir a aba Skins (economiza banda)
+function loadShopSkinMedia() {
+    const skins = document.getElementById('shop-sub-skins');
+    if (!skins || skins.style.display === 'none') return;
+    skins.querySelectorAll('video[data-src]').forEach(v => {
+        if (!v.getAttribute('src')) { v.src = v.getAttribute('data-src'); }
+        v.play().catch(() => {});
+    });
+    skins.querySelectorAll('img[data-src]:not([src])').forEach(img => {
+        img.src = img.getAttribute('data-src');
+    });
+}
+
+shopSubTabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+        shopSubTabs.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const target = btn.getAttribute('data-subtab');
+        shopSubContents.forEach(c => {
+            c.style.display = (c.id === target) ? '' : 'none';
+        });
+        loadShopSkinMedia();
     });
 });
 

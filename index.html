@@ -715,21 +715,12 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
             <h2>Loja</h2>
             <p>Aproveite as promoções e adquira seus itens.</p>
 
-            <div class="shop-category-banner"><span>Recursos</span></div>
-            <div class="shop-item">
-                <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição" class="shop-item-img" style="width: 130px; height: 100px; margin-left: 30px;">
-                <div class="shop-item-details">
-                    <h3>Pedras de Refundição x500</h3>
-                    <p>Utilizadas para reforjar os atributos de um equipamento.</p>
-                    <div class="shop-item-cost">
-                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
-                        <span>2.000</span>
-                    </div>
-                   
-<button class="shop-buy-btn" data-package="reforge_stone_pack" data-name="Pedras de Refundição x500" data-cost="2000">Comprar</button>
-                </div>
+            <div class="shop-subtabs">
+                <button class="shop-subtab-btn active" data-subtab="shop-sub-consumables">Consumíveis</button>
+                <button class="shop-subtab-btn" data-subtab="shop-sub-skins">Skins</button>
             </div>
-            
+
+            <div id="shop-sub-consumables" class="shop-subcontent">
 <div class="shop-category-banner"><span>Poções</span></div>
 <div class="shop-item">
     <img src="https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp" alt="Poção de Cura R" class="shop-item-img" style="width: 80px; height: 80px;">
@@ -835,7 +826,23 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
     </div>
 </div>
 
-<div class="shop-category-banner"><span>Utilidades</span></div>
+
+            <div class="shop-category-banner"><span>Evolução</span></div>
+            <div class="shop-item">
+                <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição" class="shop-item-img" style="width: 130px; height: 100px; margin-left: 30px;">
+                <div class="shop-item-details">
+                    <h3>Pedras de Refundição x500</h3>
+                    <p>Utilizadas para reforjar os atributos de um equipamento.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>2.000</span>
+                    </div>
+                   
+<button class="shop-buy-btn" data-package="reforge_stone_pack" data-name="Pedras de Refundição x500" data-cost="2000">Comprar</button>
+                </div>
+            </div>
+            
+
 <div class="shop-item">
     <img src="https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp" alt="Escudo de Caça" class="shop-item-img" style="width: 100px; height: 100px;">
     <div class="shop-item-details">
@@ -860,6 +867,208 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
         <button class="shop-buy-btn" data-package="hourglass_pack" data-name="Ampulheta de Caça x1" data-cost="50">Comprar</button>
     </div>
 </div>
+
+            </div>
+
+            <div id="shop-sub-skins" class="shop-subcontent" style="display:none;">
+            <div class="shop-category-banner"><span>Moldura</span></div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_da_noite_eterna.webp" alt="Moldura Noite Eterna" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Noite Eterna</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_124_pack" data-name="Moldura Noite Eterna" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_de_pixie.webp" alt="Moldura Pixie" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Pixie</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_125_pack" data-name="Moldura Pixie" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/moldura_dos_magos.webp" alt="Moldura Magos" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Magos</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_127_pack" data-name="Moldura Magos" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/moldura_da_raposa.webp" alt="Moldura Raposa" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Raposa</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_128_pack" data-name="Moldura Raposa" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/moldura_alianca_de_pantokrator.webp" alt="Moldura Aliança de Pantokrator" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Aliança de Pantokrator</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_129_pack" data-name="Moldura Aliança de Pantokrator" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_de_docura.webp" alt="Moldura Doçura" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Doçura</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_138_pack" data-name="Moldura Doçura" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_de_nevasca.webp" alt="Moldura Nevasca" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Nevasca</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_142_pack" data-name="Moldura Nevasca" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_de_magma.webp" alt="Moldura Magma" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Magma</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_143_pack" data-name="Moldura Magma" data-cost="500">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <img data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_moldura_de_samurai.webp" alt="Moldura Samurai" class="shop-item-img shop-skin-img">
+                <div class="shop-item-details">
+                    <h3>Moldura Samurai</h3>
+                    <p>Skin de moldura de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>500</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_144_pack" data-name="Moldura Samurai" data-cost="500">Comprar</button>
+                </div>
+            </div>
+
+            <div class="shop-category-banner"><span>Fundo</span></div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_da_noite_eterna.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Noite Eterna</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_123_pack" data-name="Fundo Noite Eterna" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_fundo_de_pixie.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Pixie</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_126_pack" data-name="Fundo Pixie" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_da_docura.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Doçura</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_145_pack" data-name="Fundo Doçura" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_de_nevasca.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Nevasca</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_146_pack" data-name="Fundo Nevasca" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_dos_magos.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Magos</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_147_pack" data-name="Fundo Magos" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_de_magma.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Magma</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_148_pack" data-name="Fundo Magma" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <video class="shop-item-img shop-skin-img shop-skin-video" data-src="https://aden-rpg.pages.dev/assets/itens/skin_de_fundo_de_ronin.webm" muted loop playsinline preload="none"></video>
+                <div class="shop-item-details">
+                    <h3>Fundo Ronin</h3>
+                    <p>Skin de fundo animado de perfil.</p>
+                    <div class="shop-item-cost">
+                        <img data-src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>1.000</span>
+                    </div>
+                    <button class="shop-buy-btn" data-package="skin_149_pack" data-name="Fundo Ronin" data-cost="1000">Comprar</button>
+                </div>
+            </div>
+
+            </div>
+
             <p id="shopMessage" style="color: white; margin-top: 10px;"></p>
         </div>
 

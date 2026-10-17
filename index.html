@@ -42,20 +42,6 @@
     <script src="platform.js"></script>
     <script src="browser-guard.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Import map compartilhado. IMPORTANTE: precisa ficar ANTES de qualquer
-     <script type="module"> da página — depois que o primeiro módulo começa a
-     carregar, o navegador ignora import maps e "three" deixa de resolver.
-     Usado pelo auth_skybox.js (skybox 360° + dragões da tela de login) e pelo
-     import() dinâmico do postfx.js em map_effects.js e map_skybox.js. -->
-<script type="importmap">
-{
-    "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"
-    }
-}
-</script>
 <script type="module" src="maintenance2.js"></script>
 <link href="style.css" rel="stylesheet"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -421,7 +407,7 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 
   <div id="btnAreasToggle" class="footer-submenu-btn" style="cursor: pointer; justify-content: space-between;">
     <div style="display:flex; align-items:center; gap:10px;">
-      <img data-src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon">Instâncias
+      <img data-src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon">Masmorras
     </div>
     <svg id="areasArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -1181,6 +1167,18 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 <script src="map_effects.js"></script>
 <script src="map_skybox.js"></script>
 
+<!-- Import map compartilhado: necessário pro auth_skybox.js (skybox 360°
+     + dragão da tela de login) e também usado pelo import() dinâmico do
+     postfx.js dentro de map_effects.js e map_skybox.js (grading do mapa). -->
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"
+    }
+}
+</script>
 <script type="module" src="auth_skybox.js"></script>
 <div class="modal" id="playerInfoModal" style="display: none;">
 <div class="aaa-account-box">
@@ -1217,7 +1215,7 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
         </span>
       </label>
       <label class="notif-pref-item">
-        <span class="notif-pref-label">Instâncias (Ruínas Ancestrais)</span>
+        <span class="notif-pref-label">Masmorras (Ruínas Ancestrais)</span>
         <span class="notif-pref-check-wrap">
           <input type="checkbox" class="notif-pref-checkbox" id="notifPref_ruins" data-pref="ruins">
           <span class="notif-pref-check-box">✔</span>
@@ -1600,7 +1598,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // Lógica para o Dropdown "Instâncias" (Áreas)
+    // Lógica para o Dropdown "Masmorras" (Áreas)
     const btnAreasToggle = document.getElementById('btnAreasToggle');
     const areasDropdownContent = document.getElementById('areasDropdownContent');
     const areasArrow = document.getElementById('areasArrow');

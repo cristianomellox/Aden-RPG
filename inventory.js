@@ -1528,7 +1528,7 @@ async function showCraftingModal(fragment) {
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
     document.getElementById('craftingTargetImage').src = `https://aden-rpg.pages.dev/assets/itens/${targetDef.name}_${targetDef.stars}estrelas.webp`;
 
-    const crystalCost = { 'R': 100, 'SR': 300, 'SSR': 600 };
+    const crystalCost = { 'R': 800, 'SR': 1400, 'SSR': 2000 };
     document.getElementById('fragmentsNeeded').textContent = `30 (você tem: ${fragment.quantity})`;
     document.getElementById('crystalCost').textContent = crystalCost[targetDef.rarity] || 0;
 

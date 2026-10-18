@@ -3917,27 +3917,48 @@ document.getElementById('closeBuyCardsModalBtn').addEventListener('click', () =>
 document.getElementById('closeDrawConfirmModalBtn').addEventListener('click', () => drawConfirmModal.style.display = 'none');
 document.getElementById('closeDrawResultsModalBtn').addEventListener('click', () => drawResultsModal.style.display = 'none');
 
+// Preço do Cartão Comum (precisa ser igual ao card_cost de buy_spiral_cards.sql)
+const COMMON_CARD_COST = 420;
+// Mesmo teto do servidor (buy_spiral_cards valida 1 a 99)
+const CARD_BUY_MAX_QTY = 99;
+const cardQtyRange = document.getElementById('cardQtyRange');
+const maxCardQtyBtn = document.getElementById('maxCardQtyBtn');
+
+// Máximo que o slider permite: 99 ou o que os cristais em cache pagam. Cristais = 0 pode ser cache vazio,
+// então nesse caso libera até 99 e deixa o servidor validar (mesmo critério do slider do mercador).
+function getMaxBuyableCards() {
+    const crystals = Number(currentPlayerData?.crystals) || 0;
+    if (crystals <= 0) return CARD_BUY_MAX_QTY;
+    return Math.max(1, Math.min(CARD_BUY_MAX_QTY, Math.floor(crystals / COMMON_CARD_COST)));
+}
+
+function setCardBuyQty(value) {
+    const max = getMaxBuyableCards();
+    const qty = Math.max(1, Math.min(max, parseInt(value, 10) || 1));
+    cardQtyToBuySpan.textContent = qty;
+    totalCrystalCostSpan.textContent = qty * COMMON_CARD_COST;
+    if (cardQtyRange) { cardQtyRange.max = max; cardQtyRange.value = qty; }
+    return qty;
+}
+
 buyCommonCardBtn.addEventListener('click', () => {
-    cardQtyToBuySpan.textContent = '1';
-    totalCrystalCostSpan.textContent = '350';
     buyCardsMessage.textContent = '';
+    setCardBuyQty(1);
     buyCardsModal.style.display = 'flex';
 });
 
 increaseCardQtyBtn.addEventListener('click', () => {
-    let qty = parseInt(cardQtyToBuySpan.textContent) + 1;
-    cardQtyToBuySpan.textContent = qty;
-    totalCrystalCostSpan.textContent = qty * 350;
+    setCardBuyQty((parseInt(cardQtyToBuySpan.textContent, 10) || 1) + 1);
 });
 
 decreaseCardQtyBtn.addEventListener('click', () => {
-    let qty = parseInt(cardQtyToBuySpan.textContent);
-    if (qty > 1) {
-        qty--;
-        cardQtyToBuySpan.textContent = qty;
-        totalCrystalCostSpan.textContent = qty * 350;
-    }
+    setCardBuyQty((parseInt(cardQtyToBuySpan.textContent, 10) || 1) - 1);
 });
+
+cardQtyRange?.addEventListener('input', () => setCardBuyQty(cardQtyRange.value));
+
+// Máx: já insere o máximo de cartões que os cristais do jogador pagam
+maxCardQtyBtn?.addEventListener('click', () => setCardBuyQty(getMaxBuyableCards()));
 
 // MODIFICADO PARA ATUALIZAR O CACHE VIA SYNC
 confirmPurchaseBtn.addEventListener('click', async () => {

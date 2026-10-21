@@ -37,6 +37,12 @@ const ERR = {
 };
 const friendly = (m) => ERR[String(m || '').trim()] || 'Algo deu errado. Tente novamente.';
 
+function showDebug(title, text) {
+    $('errTitle').textContent = title || 'Algo deu errado';
+    $('errText').textContent = String(text || '(sem detalhes)');
+    openOv('errModal');
+}
+
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null,
@@ -69,9 +75,10 @@ const sceneLabel = (id) => S.scenes[id] || String(id || '').replace(/_/g, ' ').r
 async function callFn(name, body) {
     const { data, error } = await supabase.functions.invoke(name, { body });
     if (error) {
-        let msg = error.message;
-        try { const j = await error.context.json(); msg = j.error || msg; } catch (_) { /* ignora */ }
-        throw new Error(msg);
+        let msg = error.message, detail = '';
+        try { const j = await error.context.json(); msg = j.error || msg; detail = j.detail || ''; } catch (_) { /* ignora */ }
+        const err = new Error(msg); err.detail = detail;
+        throw err;
     }
     if (data && data.error) throw new Error(data.error);
     return data;
@@ -384,6 +391,17 @@ async function drainPlayback(A, maxMs = 9000) {
 // ---------------------------------------------------------------------
 // AVENTURA
 // ---------------------------------------------------------------------
+async function failStart(why, detail) {
+    const adv = S.adv;
+    const slot = adv?.slotId;
+    if (adv) { adv.finished = true; teardown(); S.adv = null; }
+    closeOv('diceOverlay'); busy(false);
+    if (slot) { try { await callFn('mission-token', { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
+    showView('lobby');
+    showDebug(why, detail);
+    await refreshState();
+}
+
 async function startAdventure() {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
     closeOv('briefModal');
@@ -406,7 +424,8 @@ async function startAdventure() {
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
-        toast(denied ? 'Permita o microfone para jogar.' : friendly(e.message), true);
+        if (denied) toast('Permita o microfone para jogar.', true);
+        else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
         await refreshState();
         return;
     }
@@ -418,7 +437,7 @@ async function startAdventure() {
 function newAdv(slotId, ctx, A, sdk) {
     const startMs = new Date(ctx.ends_at).getTime() - (ctx.session_minutes + 2) * 60000;
     return {
-        slotId, A, sdk, token: ctx.token, model: ctx.model, scene: ctx.scene,
+        slotId, A, sdk, token: ctx.token, model: ctx.model, voice: ctx.voice, degraded: !!ctx.degraded, scene: ctx.scene,
         sceneNames: Object.fromEntries((ctx.scenes || []).map((s) => [s.id, s.label])),
         endMs: startMs + ctx.session_minutes * 60000, totalMs: ctx.session_minutes * 60000,
         session: null, handle: null, reconnects: 0, opened: false,
@@ -433,15 +452,21 @@ async function connectLive(isRetry) {
     const ai = new adv.sdk.GoogleGenAI({ apiKey: adv.token });
     const config = { responseModalities: [adv.sdk.Modality.AUDIO] };
     if (adv.handle) config.sessionResumption = { handle: adv.handle };
+    if (adv.degraded) {                                          // o token não travou estes campos: enviamos aqui
+        config.inputAudioTranscription = {};
+        config.outputAudioTranscription = {};
+        config.contextWindowCompression = { slidingWindow: {} };
+        if (adv.voice) config.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: adv.voice } } };
+    }
 
     adv.session = await ai.live.connect({
         model: adv.model,
         config,
         callbacks: {
             onopen: () => { adv.opened = true; },
-            onmessage: (m) => onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e)),
-            onerror: (e) => console.warn('[diarias] ws erro:', e?.message || e),
-            onclose: () => onLiveClosed(),
+            onmessage: (m) => { adv.gotMsg = true; onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e)); },
+            onerror: (e) => { adv.lastErr = String(e?.message || e?.error?.message || 'erro de conexão'); console.warn('[diarias] ws erro:', adv.lastErr); },
+            onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); onLiveClosed(); },
         },
     });
 
@@ -464,6 +489,10 @@ function sendAudio(b64) {
 
 function onLiveClosed() {
     const adv = S.adv; if (!adv || adv.finished || adv.closing) return;
+    if (!adv.gotMsg) {                                           // recusada logo na abertura (token/config/modelo)
+        failStart('O Mestre recusou a conexão', `${adv.lastClose || ''}\n${adv.lastErr || ''}\nmodelo: ${adv.model}${adv.degraded ? ' (config enxuta)' : ''}`.trim());
+        return;
+    }
     const left = adv.endMs + GIVEUP_AFTER_S * 1000 - serverNow();
     if (adv.reconnects < 3 && left > 0) {
         adv.reconnects++;
@@ -779,6 +808,11 @@ function bindUI() {
     $('howClose').onclick = () => closeOv('howModal');
     $('briefCancel').onclick = () => closeOv('briefModal');
     $('briefGo').onclick = startAdventure;
+    $('errClose').onclick = () => closeOv('errModal');
+    $('errCopy').onclick = async () => {
+        try { await navigator.clipboard.writeText($('errText').textContent); toast('Texto copiado.'); }
+        catch (_) { const r = document.createRange(); r.selectNodeContents($('errText')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selecionado: copie manualmente.'); }
+    };
 
     $('btnMic').onclick = () => {
         const A = S.adv?.A; if (!A) return;
@@ -801,7 +835,7 @@ function bindUI() {
         showView('lobby');
         await refreshState();
     };
-    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay') closeOv(e.target.id); });
+    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal') closeOv(e.target.id); });
 }
 
 async function boot() {

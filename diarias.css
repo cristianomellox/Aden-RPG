@@ -308,3 +308,8 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 }
 @media (max-height: 640px) { .master { top: 10%; } .orb { transform-origin: center; } .hero-title h1 { font-size: 1.7em; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+
+/* diagnóstico de erro */
+.err-pre { margin: 0 0 14px; padding: 10px 12px; max-height: 38vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .72em; line-height: 1.5; color: #ffb5b5;
+    background: rgba(0,0,0,.55); border: 1px solid rgba(255,90,90,.35); border-radius: 6px; -webkit-user-select: text; user-select: text; }

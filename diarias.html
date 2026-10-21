@@ -177,6 +177,19 @@
         </div>
     </div>
 
+    <!-- ═════════ MODAL: DIAGNÓSTICO (mostra o erro real, útil no celular) ═════════ -->
+    <div id="errModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box">
+            <h3 class="dm-title" id="errTitle">Algo deu errado</h3>
+            <p class="dm-sub">Se precisar de ajuda, envie o texto abaixo ao suporte.</p>
+            <pre id="errText" class="err-pre"></pre>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="errCopy">Copiar</button>
+                <button class="btn-epic sm" id="errClose">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast" role="status"></div>
 
     <!-- ═════════ MENU LATERAL (mesmo padrão da Mineração) ═════════ -->

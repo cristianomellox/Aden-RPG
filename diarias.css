@@ -313,3 +313,9 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 .err-pre { margin: 0 0 14px; padding: 10px 12px; max-height: 38vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .72em; line-height: 1.5; color: #ffb5b5;
     background: rgba(0,0,0,.55); border: 1px solid rgba(255,90,90,.35); border-radius: 6px; -webkit-user-select: text; user-select: text; }
+
+/* dica de recompensa */
+.quest-card p.tip, .dm-box p.tip { margin: 10px 0; padding: 9px 12px; font-size: .78em; line-height: 1.55; text-align: left; font-style: italic;
+    color: #f1e3b8; background: rgba(168,130,53,.12); border-left: 3px solid var(--gold-light); border-radius: 3px; }
+.dm-box p.tip { margin: 0 0 14px; }
+.dm-box p.tip.paid { color: #ffd9a8; border-left-color: var(--ember); background: rgba(255,122,26,.1); }

@@ -34,6 +34,10 @@ const ERR = {
     not_allowed: 'Sua conta não pode participar.',
     gemini_token_failed: 'O Mestre não respondeu. Tente novamente em instantes.',
     unauthorized: 'Sessão expirada. Entre novamente no jogo.',
+    free_not_used: 'Use primeiro a sua aventura gratuita de hoje.',
+    extra_already_today: 'Você já usou a aventura extra de hoje.',
+    not_enough_gold: 'Você não tem ouro suficiente.',
+    no_theme: 'O Mestre ainda não tem aventuras preparadas.',
 };
 const friendly = (m) => ERR[String(m || '').trim()] || 'Algo deu errado. Tente novamente.';
 
@@ -219,29 +223,48 @@ async function refreshState() {
 
 function renderCard(html) { $('questCard').innerHTML = html; }
 
+const TIP = 'Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas, usando seus 15 minutos.';
+
+function extraBlock(st) {
+    const x = st.extra; if (!x) return '';
+    if (x.available) return `<button class="btn-epic" id="btnExtra">Aventura extra · ${x.cost} de ouro</button>
+        <p class="hint">Disponível a qualquer momento, sem disputar as vagas gratuitas. O ouro é cobrado ao entrar.</p>`;
+    if (x.reason === 'not_enough_gold') return `<button class="btn-epic" disabled>Aventura extra · ${x.cost} de ouro</button>
+        <p class="hint">Ouro insuficiente (você tem ${nf(x.gold)}).</p>`;
+    if (x.reason === 'extra_used') return '<p class="hint">Você já usou as suas duas aventuras de hoje.</p>';
+    return '';
+}
+
 function renderLobby() {
     const st = S.state; if (!st) return;
     const my = st.my_slot, ev = st.event;
-    const bg = $('lobbyBg');
-    paintScene(bg, ev?.scene || '');
+    const paid = my?.kind === 'paid';
+    paintScene($('lobbyBg'), ev?.scene || '');
 
     if (my && my.status === 'reserved') {
-        renderCard(`
+        renderCard(paid ? `
+            <span class="chip ok">Aventura extra</span>
+            <h2>O Mestre aguarda você</h2>
+            <p>O custo de <b style="color:#fff3cf">${st.extra?.cost ?? 10} de ouro</b> é cobrado ao entrar.</p>
+            <p class="tip">${TIP}</p>
+            <p class="hint" data-role="t-hint"></p>
+            <button class="btn-epic" id="btnStart" disabled>Entrar na aventura</button>` : `
             <span class="chip ok">Vaga garantida</span>
             <h2>Sua aventura começa em</h2>
             <div class="big-timer" data-role="t-start">--:--</div>
+            <p class="tip">${TIP}</p>
             <p class="hint" data-role="t-hint"></p>
             <button class="btn-epic" id="btnStart" disabled>Entrar na aventura</button>`);
-        $('btnStart').onclick = () => openOv('briefModal');
+        $('btnStart').onclick = openBrief;
     } else if (my && my.status === 'completed') {
         renderCard(`
             <div class="qc-icon">✦</div>
-            <span class="chip ok">Aventura concluída</span>
-            <h2>Volte amanhã, herói</h2>
+            <span class="chip ok">${paid ? 'Aventura extra concluída' : 'Aventura concluída'}</span>
+            <h2>${paid ? 'Até amanhã, herói' : 'Volte amanhã, herói'}</h2>
             <p>Sua nota foi <b style="color:#fff3cf">${my.score_total ?? 0}</b> e você recebeu
                <b style="color:#fff3cf">${nf(my.reward_xp)} XP</b> e <b style="color:#fff3cf">${nf(my.reward_crystals)} cristais</b>.</p>
             ${my.chronicle ? `<div class="chronicle"><h4>Crônica do dia</h4>${esc(my.chronicle)}</div>` : ''}
-            <p class="hint">O Mestre aparece de novo amanhã.</p>`);
+            ${extraBlock(st) || '<p class="hint">O Mestre aparece de novo amanhã.</p>'}`);
     } else if (my && my.status === 'in_progress') {
         const pend = readPending(my.id);
         renderCard(`
@@ -255,7 +278,8 @@ function renderLobby() {
             <div class="qc-icon">☾</div>
             <span class="chip bad">${my.status === 'no_show' ? 'Chamado perdido' : 'Aventura abandonada'}</span>
             <h2>${my.status === 'no_show' ? 'Você não compareceu' : 'A história ficou inacabada'}</h2>
-            <p>${my.status === 'no_show' ? 'A vaga passou para outro herói.' : 'Sem conclusão, não há recompensa.'} Uma nova chance surge amanhã.</p>`);
+            <p>${my.status === 'no_show' ? 'A vaga passou para outro herói.' : 'Sem conclusão, não há recompensa.'}</p>
+            ${extraBlock(st) || '<p class="hint">Uma nova chance surge amanhã.</p>'}`);
     } else if (ev && ev.open_slots > 0) {
         const gems = [0, 1, 2].map((i) => `<div class="slot-gem ${i < ev.open_slots ? 'free' : ''}"></div>`).join('');
         renderCard(`
@@ -264,6 +288,7 @@ function renderLobby() {
             <p class="qc-place">✧ ${esc(sceneLabel(ev.scene))} ✧</p>
             <div class="slots">${gems}</div>
             <p><b style="color:#fff3cf">${ev.open_slots}</b> ${ev.open_slots === 1 ? 'vaga restante' : 'vagas restantes'} · encerra em <span data-role="t-close">--:--</span></p>
+            <p class="tip">${TIP}</p>
             <button class="btn-epic" id="btnJoin">Aceitar o chamado</button>`);
         $('btnJoin').onclick = joinEvent;
     } else if (ev) {
@@ -279,6 +304,7 @@ function renderLobby() {
             <p class="hint">Ative as notificações para ser avisado.</p>
             <button class="btn-epic" disabled>Aguardando o Mestre</button>`);
     }
+    const bx = $('btnExtra'); if (bx) bx.onclick = buyExtra;
     tickLobby();
 }
 
@@ -291,13 +317,13 @@ function tickLobby() {
     if (my && my.status === 'reserved') {
         const start = new Date(my.scheduled_start).getTime(), dead = new Date(my.start_deadline).getTime();
         const tStart = q('t-start'), hint = q('t-hint'), btn = $('btnStart');
-        if (now < start - 20000) {
-            tStart.textContent = mmss(start - now);
-            hint.textContent = 'Fique nesta tela. Quando o relógio zerar, o botão será liberado.';
+        if (now < start) {                                        // só libera quando o relógio chega a zero
+            if (tStart) tStart.textContent = mmss(start - now);
+            if (hint) hint.textContent = 'Fique nesta tela. Quando o relógio zerar, o botão será liberado.';
             if (btn) btn.disabled = true;
         } else if (now <= dead) {
-            tStart.textContent = '00:00';
-            hint.textContent = `Entre agora! Tolerância: ${mmss(dead - now)}`;
+            if (tStart) tStart.textContent = '00:00';
+            if (hint) hint.textContent = `Entre agora! Tolerância: ${mmss(dead - now)}`;
             if (btn) btn.disabled = false;
         } else {
             refreshState();
@@ -305,6 +331,27 @@ function tickLobby() {
     } else if (ev && q('t-close')) {
         q('t-close').textContent = mmss(new Date(ev.closes_at).getTime() - now);
     }
+}
+
+function openBrief() {
+    const my = S.state?.my_slot, cost = S.state?.extra?.cost ?? 10;
+    const paid = my?.kind === 'paid';
+    $('briefPaid').style.display = paid ? 'block' : 'none';
+    $('briefPaid').textContent = `Aventura extra: ${cost} de ouro serão cobrados ao começar.`;
+    openOv('briefModal');
+}
+
+async function buyExtra() {
+    const cost = S.state?.extra?.cost ?? 10;
+    if (!confirm(`Gastar ${cost} de ouro em uma aventura extra? O ouro só é cobrado quando você entrar na aventura.`)) return;
+    busy(true, 'Chamando o Mestre…');
+    try {
+        const { error } = await supabase.rpc('mission_buy_extra');
+        if (error) throw new Error(error.message);
+        toast('Aventura extra liberada! Entre quando quiser.');
+    } catch (e) { toast(friendly(e.message), true); }
+    busy(false);
+    await refreshState();
 }
 
 async function joinEvent() {
@@ -403,6 +450,12 @@ async function failStart(why, detail) {
 }
 
 async function startAdventure() {
+    if (S.starting) return;                                    // evita toque duplo
+    S.starting = true;
+    try { await _startAdventure(); } finally { S.starting = false; }
+}
+
+async function _startAdventure() {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
     closeOv('briefModal');
     busy(true, 'Preparando o microfone…');
@@ -464,7 +517,13 @@ async function connectLive(isRetry) {
         config,
         callbacks: {
             onopen: () => { adv.opened = true; },
-            onmessage: (m) => { adv.gotMsg = true; onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e)); },
+            onmessage: (m) => {
+                if (!adv.gotMsg) {
+                    adv.gotMsg = true; adv.liveMs = Date.now();
+                    callFn('mission-token', { slot_id: adv.slotId, action: 'live' }).catch(() => {});
+                }
+                onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
+            },
             onerror: (e) => { adv.lastErr = String(e?.message || e?.error?.message || 'erro de conexão'); console.warn('[diarias] ws erro:', adv.lastErr); },
             onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); onLiveClosed(); },
         },
@@ -718,10 +777,11 @@ async function finishAdventure(payload, fallback) {
     adv.finished = true;
     if (!fallback) await drainPlayback(adv.A);                    // deixa o mestre terminar a última frase
     const slotId = adv.slotId, sceneId = adv.scene;
+    const clientSeconds = adv.liveMs ? Math.round((Date.now() - adv.liveMs) / 1000) : null;
     teardown(); S.adv = null; closeOv('diceOverlay');
 
     const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: 'vitoria_parcial', chronicle: '' };
-    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, scene: sceneId };
+    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, scene: sceneId, client_seconds: clientSeconds };
     localStorage.setItem(pendKey(slotId), JSON.stringify(pending));   // garante o envio mesmo se a página fechar
     await submitFinish(pending);
 }
@@ -729,7 +789,7 @@ async function finishAdventure(payload, fallback) {
 async function submitFinish(pending) {
     busy(true, 'O Mestre pesa seus feitos…');
     try {
-        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle });
+        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle, client_seconds: pending.client_seconds });
         localStorage.removeItem(pendKey(pending.slot_id));
         busy(false);
         showResult(out.result, pending.scene);
@@ -777,7 +837,7 @@ function showResult(r, sceneId) {
         </div>
         ${r.leveled_up ? `<div class="levelup">▲ Subiu para o nível ${esc(r.new_level)}!</div>` : ''}
         ${r.chronicle ? `<div class="chronicle"><h4>Crônica do dia</h4>${esc(r.chronicle)}</div>` : ''}
-        <p class="res-note">Você jogou ${r.minutes_played ?? '—'} min · ${r.reward_pct ?? 0}% da recompensa máxima${r.concluded ? ' · história concluída' : ''}</p>
+        <p class="res-note">Você jogou ${fmtPlayed(r.seconds_played)} · ${r.reward_pct ?? 0}% da recompensa máxima${r.concluded ? ' · história concluída' : ''}</p>
         <button class="btn-epic" id="btnBack">Voltar</button>`;
     $('btnBack').onclick = async () => { showView('lobby'); await refreshState(); };
 
@@ -788,6 +848,11 @@ function showResult(r, sceneId) {
         countUp($('rwXp'), r.xp || 0, 1800);
         countUp($('rwCr'), r.crystals || 0, 2000);
     }, 250));
+}
+
+function fmtPlayed(sec) {
+    const s = Math.max(0, Math.round(Number(sec) || 0));
+    return s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s` : `${s} s`;
 }
 
 function countUp(el, to, ms) {

@@ -319,3 +319,98 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
     color: #f1e3b8; background: rgba(168,130,53,.12); border-left: 3px solid var(--gold-light); border-radius: 3px; }
 .dm-box p.tip { margin: 0 0 14px; }
 .dm-box p.tip.paid { color: #ffd9a8; border-left-color: var(--ember); background: rgba(255,122,26,.1); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   v2 — DUELO (HP em %), BOLSA, COMPRA
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 3 escolhas sempre: uma por linha, compactas */
+.choices { flex-direction: column; align-items: stretch; gap: 6px; }
+.choice-btn { width: 100%; font-size: .78em; padding: 8px 12px; text-align: center; }
+
+/* ── Duelo: jogador (esquerda) × inimigo (direita), logo abaixo do orbe ── */
+.duel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: min(92vw, 340px); margin-top: 2px; }
+.duel-side { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 7px 8px 9px; box-sizing: border-box;
+    background: rgba(10,8,5,.74); border: 1px solid var(--gold-base); border-radius: 5px; backdrop-filter: blur(4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.6); transition: opacity .4s ease, transform .4s ease, filter .6s ease; }
+.duel-side.foe { opacity: 0; transform: translateY(6px); border-color: #a0402a; grid-column: 2; }
+.duel-side.you { grid-column: 1; }
+.duel-side.foe.show { opacity: 1; transform: none; }
+.duel-side.foe.dead { filter: grayscale(1) brightness(.6); }
+.duel-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .64em; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold-light); text-shadow: 0 1px 3px #000; }
+.duel-side.foe .duel-name { color: #ffb38a; }
+.duel-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; background: #111; border: 2px solid var(--gold-light); box-shadow: 0 0 12px rgba(0,0,0,.8); }
+.duel-side.foe .duel-avatar { border-color: #d2552b; }
+
+/* barra de HP (mesmo estilo do Chefe Mundial) */
+.hp-bar { position: relative; width: 100%; height: 16px; background: #333; border: 1px solid #777; border-radius: 12px; overflow: hidden; }
+.hp-fill { height: 100%; width: 100%; border-right: 1px solid yellow; transition: width .35s ease-out, background .5s ease; position: relative; }
+.hp-bar.you .hp-fill { background: linear-gradient(to right, #28a028, #40c040); }
+.hp-bar.you.mid .hp-fill { background: linear-gradient(to right, #c28a12, #f0b429); }
+.hp-bar.you.low .hp-fill { background: linear-gradient(to right, #b01818, #e23a3a); }
+.hp-bar.foe .hp-fill { background: linear-gradient(to right, #dc2020, #ff5a00); }
+.hp-fill::after { content: ''; position: absolute; top: 0; left: -40%; width: 30%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent); animation: sb-hp-sheen 2.2s infinite; }
+@keyframes sb-hp-sheen { 0% { left: -40%; } 100% { left: 140%; } }
+.hp-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: .66em; font-weight: bold; color: #fff; white-space: nowrap;
+    text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000; }
+
+/* dano / cura flutuando e tremor de impacto */
+.hp-float { position: absolute; left: 50%; top: 38%; z-index: 3; pointer-events: none; font-size: 1.15em; font-weight: bold; white-space: nowrap;
+    text-shadow: 0 2px 6px #000, 0 0 10px currentColor; animation: hpfloat 1.3s ease-out forwards; }
+.hp-float.dmg { color: #ff6b5a; } .hp-float.heal { color: var(--ok); }
+@keyframes hpfloat { 0% { opacity: 0; transform: translate(-50%, 0) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -10px) scale(1.25); }
+    100% { opacity: 0; transform: translate(-50%, -48px) scale(1); } }
+.duel-side.hit { animation: duelhit .42s ease; }
+@keyframes duelhit { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+.duel-side.you.hit { box-shadow: 0 0 22px rgba(255,60,60,.7); }
+.duel-side.you.healed { box-shadow: 0 0 22px rgba(111,224,143,.7); }
+
+/* telas baixas: orbe menor para sobrar espaço ao duelo */
+@media (max-height: 760px) {
+    .master { top: 8%; gap: 6px; }
+    .orb { width: 84px; height: 84px; } .orb .core { width: 46px; height: 46px; }
+    .captions { max-height: 22vh; min-height: 64px; }
+}
+@media (max-height: 640px) {
+    .master { top: 7%; } .orb { width: 70px; height: 70px; } .orb .core { width: 40px; height: 40px; }
+    .duel-avatar { width: 52px; height: 52px; }
+}
+
+/* ── Modal da bolsa ── */
+.items-box { max-width: 460px; display: flex; flex-direction: column; overflow: hidden; }
+.items-box .dm-sub { font-style: normal; color: #bdb49c; line-height: 1.5; }
+.bag-head { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 2px 6px; font-size: .72em; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-light); }
+.bag-head b { font-size: 1.15em; color: #fff3cf; letter-spacing: 1px; }
+.bag-head b.full { color: var(--ok); }
+.bag-head small { letter-spacing: .5px; text-transform: none; color: #8d8573; }
+.bag-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.bag-slot { aspect-ratio: 1; display: grid; place-items: center; padding: 4px; box-sizing: border-box; border-radius: 6px; cursor: default;
+    background: rgba(0,0,0,.45); border: 1px dashed var(--gold-dark); }
+.bag-slot.filled { cursor: pointer; border: 1px solid var(--gold-base); background: radial-gradient(circle at 50% 35%, rgba(168,130,53,.28), rgba(10,8,5,.85)); box-shadow: inset 0 0 12px rgba(168,130,53,.2); animation: pop .25s ease both; }
+.bag-slot.filled:active { transform: scale(.93); }
+.bag-slot svg { width: 100%; height: 100%; }
+.item-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 2px 2px 8px; margin-bottom: 6px; }
+.item-grid::-webkit-scrollbar { width: 3px; } .item-grid::-webkit-scrollbar-thumb { background: var(--gold-dark); }
+.item-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 9px; text-align: center; cursor: pointer; font-family: inherit;
+    color: #e0dccc; border-radius: 6px; background: linear-gradient(160deg, rgba(34,28,20,.95), rgba(14,11,8,.97)); border: 1px solid var(--gold-dark); transition: transform .12s, border-color .2s, box-shadow .2s; }
+.item-card:active { transform: scale(.96); }
+.item-card.has { border-color: var(--gold-light); box-shadow: 0 0 14px rgba(230,194,122,.28); }
+.item-card.maxed { filter: grayscale(.8) brightness(.6); cursor: not-allowed; }
+.item-card svg { width: 46px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7)); }
+.item-card b { font-size: .72em; letter-spacing: .5px; color: var(--gold-light); line-height: 1.25; }
+.item-card span { font-size: .64em; line-height: 1.4; color: #aaa18b; }
+.item-card .qty { position: absolute; top: 5px; right: 6px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; display: none; place-items: center;
+    font-size: .72em; font-weight: bold; color: #1a1000; border-radius: 99px; background: linear-gradient(var(--gold-light), var(--gold-base)); border: 1px solid #fff3cf; }
+.item-card.has .qty { display: grid; }
+
+/* ── Modal de compra ── */
+.buy-box { max-width: 340px; text-align: center; }
+.buy-price { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 2px 0 12px; }
+.buy-price b { font-size: 2.4em; color: #fff3cf; text-shadow: 0 0 18px rgba(230,194,122,.6); font-variant-numeric: tabular-nums; }
+.buy-price small { font-size: .7em; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-base); }
+.buy-price .coin { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff3cf;
+    background: radial-gradient(circle at 35% 30%, #fff3cf, var(--gold-light) 45%, var(--gold-base)); box-shadow: 0 0 16px rgba(230,194,122,.55), inset 0 -4px 8px rgba(74,53,16,.6); }
+.buy-text { margin: 0 0 8px; font-size: .8em; line-height: 1.6; color: #cfc6ae; }
+.buy-bal { margin: 0 0 16px; text-align: center; } .buy-bal b { color: var(--gold-light); }
+.item-card .qty { font-style: normal; }

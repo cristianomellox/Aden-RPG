@@ -10,8 +10,22 @@ const SCENE_BASE = ASSETS + 'missoes/';                    // <id do cenário>.w
 const GENAI_URL = 'https://cdn.jsdelivr.net/npm/@google/genai/+esm';
 const POLL_MS = 20000;
 const SEND_CHUNK = 1280;                                   // 80 ms de áudio a 16 kHz
-const WARN_AT_S = 180;                                     // aviso: restam 3 min
+const WARN_AT_S = 120;                                     // aviso: restam 2 min → cenas finais
 const END_AT_S = 60;                                       // ENCERRAR: resta 1 min
+const EARLY_END_GUARD_S = 150;                             // end_adventure é recusado antes disso (exceto se o herói cair)
+const EXTRA_COST_FALLBACK = 25;
+const BAG_SIZE = 8;
+const HEAL_POTION = 20;                                    // % de HP da poção de cura
+const BOSS_MAX_HIT = 25;                                   // dano máximo (%) por golpe em chefe (luta longa)
+const PLAYER_MAX_HIT = 35;                                 // dano máximo (%) por evento no herói
+const ENEMY_IMG = ASSETS + 'mission_ene.webp';
+const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
+const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 8;
+// marcos de ritmo enviados ao Mestre (segundos desde o início da sessão)
+const MARKS = [
+    { at: 180, text: '[SISTEMA] MARCO (3 min de 15): se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
+    { at: 480, text: '[SISTEMA] MARCO (8 min de 15): aproxime o herói do lugar do objetivo. Gere tensão e prepare o CHEFE, cuja luta deve ser longa e emocionante.' },
+];
 const GIVEUP_AFTER_S = 75;                                 // sem fim após 15:00 + 75 s → envia nota neutra
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +52,7 @@ const ERR = {
     extra_already_today: 'Você já usou a aventura extra de hoje.',
     not_enough_gold: 'Você não tem ouro suficiente.',
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
+    invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
 };
 const friendly = (m) => ERR[String(m || '').trim()] || 'Algo deu errado. Tente novamente.';
 
@@ -49,7 +64,7 @@ function showDebug(title, text) {
 
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
-    view: 'lobby', busy: false, adv: null,
+    view: 'lobby', busy: false, adv: null, hero: null, bag: [],
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -245,7 +260,7 @@ function renderLobby() {
         renderCard(paid ? `
             <span class="chip ok">Aventura extra</span>
             <h2>O Mestre aguarda você</h2>
-            <p>O custo de <b style="color:#fff3cf">${st.extra?.cost ?? 10} de ouro</b> é cobrado ao entrar.</p>
+            <p>O custo de <b style="color:#fff3cf">${st.extra?.cost ?? EXTRA_COST_FALLBACK} de ouro</b> é cobrado ao entrar.</p>
             <p class="tip">${TIP}</p>
             <p class="hint" data-role="t-hint"></p>
             <button class="btn-epic" id="btnStart" disabled>Entrar na aventura</button>` : `
@@ -314,6 +329,12 @@ function tickLobby() {
     const my = st.my_slot, ev = st.event;
     const q = (r) => $('questCard').querySelector(`[data-role="${r}"]`);
 
+    if ($('itemsModal').classList.contains('open') && my?.status === 'reserved') {     // tolerância correndo durante a escolha
+        const left = new Date(my.start_deadline).getTime() - now;
+        $('itemsTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
+        if (left <= 0) closeOv('itemsModal');
+    }
+
     if (my && my.status === 'reserved') {
         const start = new Date(my.scheduled_start).getTime(), dead = new Date(my.start_deadline).getTime();
         const tStart = q('t-start'), hint = q('t-hint'), btn = $('btnStart');
@@ -334,16 +355,22 @@ function tickLobby() {
 }
 
 function openBrief() {
-    const my = S.state?.my_slot, cost = S.state?.extra?.cost ?? 10;
+    const my = S.state?.my_slot, cost = S.state?.extra?.cost ?? EXTRA_COST_FALLBACK;
     const paid = my?.kind === 'paid';
     $('briefPaid').style.display = paid ? 'block' : 'none';
     $('briefPaid').textContent = `Aventura extra: ${cost} de ouro serão cobrados ao começar.`;
     openOv('briefModal');
 }
 
-async function buyExtra() {
-    const cost = S.state?.extra?.cost ?? 10;
-    if (!confirm(`Gastar ${cost} de ouro em uma aventura extra? O ouro só é cobrado quando você entrar na aventura.`)) return;
+function buyExtra() {                                          // abre o modal de confirmação
+    const x = S.state?.extra || {};
+    $('buyCost').textContent = x.cost ?? EXTRA_COST_FALLBACK;
+    $('buyGold').textContent = nf(x.gold);
+    openOv('buyModal');
+}
+
+async function confirmBuyExtra() {
+    closeOv('buyModal');
     busy(true, 'Chamando o Mestre…');
     try {
         const { error } = await supabase.rpc('mission_buy_extra');
@@ -367,6 +394,179 @@ async function joinEvent() {
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------------------------------------------------------------------
+// PERFIL DO HERÓI: nome e avatar vêm do IndexedDB (owners_store → player_store) e só
+// vão ao Supabase se faltar algo. O Mestre NÃO usa este nome: o servidor usa o do banco.
+// ---------------------------------------------------------------------
+function idbGet(store, key) {
+    return new Promise((resolve) => {
+        let req;
+        try { req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION); } catch (_) { return resolve(null); }
+        req.onupgradeneeded = (e) => {                           // mesmo schema do resto do jogo
+            const db = e.target.result;
+            ['auth_store', 'player_store', 'owners_store', 'bonds_store'].forEach((n) => {
+                if (!db.objectStoreNames.contains(n)) db.createObjectStore(n, { keyPath: (n === 'auth_store' || n === 'player_store') ? 'key' : 'id' });
+            });
+        };
+        req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
+        req.onsuccess = () => {
+            const db = req.result;
+            try {
+                const r = db.transaction(store, 'readonly').objectStore(store).get(key);
+                r.onsuccess = () => { db.close(); resolve(r.result || null); };
+                r.onerror = () => { db.close(); resolve(null); };
+            } catch (_) { try { db.close(); } catch (__) { /* ok */ } resolve(null); }
+        };
+    });
+}
+
+// tolera { id, name, avatar_url } e também { key|id, value|data: { name, avatar_url } }
+function pickProfile(rec) {
+    if (!rec) return null;
+    const d = rec.value || rec.data || rec;
+    const name = d.name || d.player_name || d.nickname || d.username || '';
+    const avatar = d.avatar_url || d.avatar || d.avatarUrl || '';
+    return (name || avatar) ? { name: String(name), avatar: String(avatar) } : null;
+}
+
+async function loadHeroProfile() {
+    let h = pickProfile(await idbGet('owners_store', S.uid)) || { name: '', avatar: '' };
+    if (!h.name || !h.avatar) {
+        const p = pickProfile(await idbGet('player_store', 'player_data'));
+        if (p) h = { name: h.name || p.name, avatar: h.avatar || p.avatar };
+    }
+    if (!h.name || !h.avatar) {                                  // último recurso: rede
+        try {
+            const { data } = await supabase.from('players').select('name,avatar_url').eq('id', S.uid).single();
+            if (data) h = { name: h.name || data.name || '', avatar: h.avatar || data.avatar_url || '' };
+        } catch (_) { /* sem rede: segue com o que tem */ }
+    }
+    S.hero = h;
+}
+
+// ---------------------------------------------------------------------
+// BOLSA: 11 itens possíveis, o jogador leva exatamente 8 (repetições permitidas)
+// ---------------------------------------------------------------------
+const _svg = (inner) => `<svg viewBox="0 0 48 48" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+const _star = (cx, cy, n, r1, r2, rot = -90) => Array.from({ length: n * 2 }, (_, i) => {
+    const a = (rot + i * 180 / n) * Math.PI / 180, r = i % 2 ? r2 : r1;
+    return (cx + r * Math.cos(a)).toFixed(1) + ',' + (cy + r * Math.sin(a)).toFixed(1);
+}).join(' ');
+const _rays = (cx, cy, n, r1, r2) => Array.from({ length: n }, (_, i) => {
+    const a = (i * 360 / n) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+    return `M${(cx + r1 * c).toFixed(1)} ${(cy + r1 * sn).toFixed(1)}L${(cx + r2 * c).toFixed(1)} ${(cy + r2 * sn).toFixed(1)}`;
+}).join('');
+
+const ITEMS = [
+    { id: 'pocao', name: 'Poção de cura', desc: 'Cura 20% do seu HP.',
+      svg: _svg('<path d="M19 6h10M21 6v10L11 35a5 5 0 0 0 4.4 7.4h17.2A5 5 0 0 0 37 35L27 16V6" fill="#1c1420" stroke="#e6c27a" stroke-width="2.2"/><path d="M14.2 31h19.6l3.1 5.2A3 3 0 0 1 34.3 41H13.7a3 3 0 0 1-2.6-4.8z" fill="#e5334f" stroke="none"/><path d="M24 25v7M20.5 28.5h7" stroke="#fff" stroke-width="2.4"/><circle cx="31" cy="23" r="1.6" fill="#ff9aa8" stroke="none"/>') },
+    { id: 'faca', name: 'Pequena faca', desc: 'Lâmina curta: cortar, arremessar, forçar algo.',
+      svg: _svg('<g transform="rotate(40 24 24)"><path d="M24 3l5 19-5 4-5-4z" fill="#d7dde3" stroke="#8793a0" stroke-width="1.6"/><path d="M24 5v19" stroke="#8793a0" stroke-width="1.2"/><rect x="15" y="26" width="18" height="4" rx="1.5" fill="#e6c27a" stroke="#a88235" stroke-width="1.4"/><rect x="21.5" y="30" width="5" height="11" rx="1.5" fill="#6b3f1d" stroke="#3b210d" stroke-width="1.4"/><circle cx="24" cy="43" r="2.6" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/></g>') },
+    { id: 'corda', name: 'Corda', desc: 'Escalar, amarrar, atravessar vãos.',
+      svg: _svg('<circle cx="22" cy="26" r="15" stroke="#c9a45c" stroke-width="6"/><circle cx="22" cy="26" r="15" stroke="#6b4a1c" stroke-width="6" stroke-dasharray="3 5"/><circle cx="22" cy="26" r="7.5" stroke="#c9a45c" stroke-width="5"/><circle cx="22" cy="26" r="7.5" stroke="#6b4a1c" stroke-width="5" stroke-dasharray="3 5"/><path d="M34 14c6-6 10 0 7 7" stroke="#c9a45c" stroke-width="4"/>') },
+    { id: 'mapa', name: 'Mapa da região', desc: 'Revela caminhos, atalhos e perigos da região.',
+      svg: _svg('<path d="M6 12l12-4 12 4 12-4v28l-12 4-12-4-12 4z" fill="#d9bf8a" stroke="#7a5a22" stroke-width="2"/><path d="M18 8v28M30 12v28" stroke="#9c7a3a" stroke-width="1.4"/><path d="M11 30c5-8 9 2 14-6s8 2 11-6" stroke="#b3361f" stroke-width="2" stroke-dasharray="2 3"/><path d="M34 28l5 5M39 28l-5 5" stroke="#b3361f" stroke-width="2.6"/>') },
+    { id: 'enc_atordoamento', name: 'Encantamento de atordoamento', desc: 'Chance de deixar o inimigo atordoado.',
+      svg: _svg(`<circle cx="24" cy="25" r="7" fill="#5b3fa8" stroke="#d9c8ff" stroke-width="1.6"/><ellipse cx="24" cy="25" rx="18" ry="7" stroke="#b89cff" stroke-width="2" stroke-dasharray="3 3"/><polygon points="${_star(10, 14, 4, 6, 2)}" fill="#ffe27a" stroke="#c9961b" stroke-width="1"/><polygon points="${_star(37, 11, 4, 5, 1.8)}" fill="#ffe27a" stroke="#c9961b" stroke-width="1"/><polygon points="${_star(30, 38, 4, 5.5, 2)}" fill="#ffe27a" stroke="#c9961b" stroke-width="1"/>`) },
+    { id: 'enc_iluminacao', name: 'Encantamento de iluminação', desc: 'Chance de iluminar um ambiente escuro.',
+      svg: _svg(`<path d="${_rays(24, 24, 8, 13, 20)}" stroke="#ffd35a" stroke-width="3"/><circle cx="24" cy="24" r="8.5" fill="#ffe27a" stroke="#f4b400" stroke-width="2"/><circle cx="21.5" cy="21.5" r="2.5" fill="#fff8d6" stroke="none"/>`) },
+    { id: 'enc_explosao', name: 'Encantamento de explosão', desc: 'Chance de explodir uma pequena área.',
+      svg: _svg(`<polygon points="${_star(24, 24, 9, 21, 10)}" fill="#ff8a1f" stroke="#ffd27a" stroke-width="2"/><polygon points="${_star(24, 24, 9, 12.5, 6, -70)}" fill="#ffe27a" stroke="none"/>`) },
+    { id: 'enc_fogo', name: 'Encantamento de fogo', desc: 'Adiciona fogo ao próximo ataque (apenas um).',
+      svg: _svg('<path d="M24 5c1 8 11 11 11 22a11 11 0 0 1-22 0c0-5 3-8 5-11 .5 4 2 6 4 6-2-6-1-11 2-17z" fill="#ff6a1a" stroke="#ffb35a" stroke-width="2"/><path d="M24 22c1 4 6 5 6 10a6 6 0 0 1-12 0c0-3 2-5 3-6 0 2 1 3 2 3-1-3-1-5 1-7z" fill="#ffe27a" stroke="none"/>') },
+    { id: 'enc_gelo', name: 'Encantamento de gelo', desc: 'Adiciona gelo ao próximo ataque (apenas um).',
+      svg: _svg('<path d="M24 5v38M7.5 14.5l33 19M7.5 33.5l33-19" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 9l5 4 5-4M19 39l5-4 5 4M9 24l5 1 .5-5M39 24l-5 1-.5-5" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4" fill="#d8f6ff" stroke="#9fe3ff" stroke-width="1.6"/>') },
+    { id: 'enc_sombras', name: 'Encantamento de sombras', desc: 'Chance de escurecer o ambiente por instantes.',
+      svg: _svg('<path d="M31 6a18 18 0 1 0 11 29A15 15 0 0 1 31 6z" fill="#3a2d63" stroke="#9b87d9" stroke-width="2"/><circle cx="14" cy="14" r="1.6" fill="#cbb8ff" stroke="none"/><circle cx="38" cy="12" r="1.2" fill="#cbb8ff" stroke="none"/><circle cx="40" cy="22" r="1.4" fill="#cbb8ff" stroke="none"/><path d="M15 31c3-3 6 0 9-3" stroke="#6f5bb3" stroke-width="2"/>') },
+    { id: 'enc_furtividade', name: 'Encantamento da furtividade', desc: 'Chance de ficar invisível por instantes.',
+      svg: _svg('<path d="M3 24s8-13 21-13 21 13 21 13-8 13-21 13S3 24 3 24z" fill="#1a2230" stroke="#8fb4d9" stroke-width="2"/><circle cx="24" cy="24" r="7" fill="#5a86b3" stroke="#cfe3f5" stroke-width="1.6"/><circle cx="24" cy="24" r="3" fill="#0b1018" stroke="none"/><path d="M8 41L40 7" stroke="#e6c27a" stroke-width="3"/>') },
+];
+const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; return o; }, {});
+
+function openLoadout() {
+    closeOv('briefModal');
+    S.bag = [];
+    buildItemGrid();
+    renderBag();
+    openOv('itemsModal');
+}
+
+function buildItemGrid() {
+    const g = $('itemGrid'); g.innerHTML = '';
+    ITEMS.forEach((it) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'item-card'; b.dataset.id = it.id;
+        b.innerHTML = `<em class="qty">0</em>${it.svg}<b>${esc(it.name)}</b><span>${esc(it.desc)}</span>`;
+        b.onclick = () => {
+            if (S.bag.length >= BAG_SIZE) { toast('Bolsa cheia. Toque num item da bolsa para removê-lo.', true); return; }
+            S.bag.push(it.id); renderBag();
+        };
+        g.appendChild(b);
+    });
+}
+
+function renderBag() {
+    const slots = $('bagSlots'); slots.innerHTML = '';
+    for (let i = 0; i < BAG_SIZE; i++) {
+        const id = S.bag[i], d = document.createElement('div');
+        if (id) {
+            d.className = 'bag-slot filled'; d.title = ITEM_BY_ID[id].name + ' (toque para remover)';
+            d.innerHTML = ITEM_BY_ID[id].svg;
+            d.onclick = () => { S.bag.splice(i, 1); renderBag(); };
+        } else d.className = 'bag-slot';
+        slots.appendChild(d);
+    }
+    const n = S.bag.length, counts = bagCounts();
+    $('bagCount').textContent = `${n}/${BAG_SIZE}`; $('bagCount').classList.toggle('full', n === BAG_SIZE);
+    $('itemsGo').disabled = n !== BAG_SIZE;
+    $('itemGrid').querySelectorAll('.item-card').forEach((c) => {
+        const q = counts[c.dataset.id] || 0;
+        c.classList.toggle('has', q > 0); c.classList.toggle('maxed', n >= BAG_SIZE);
+        c.querySelector('.qty').textContent = q;
+    });
+}
+
+// ---------------------------------------------------------------------
+// DUELO: HP do herói (esquerda) e do inimigo (direita), sempre em %
+// ---------------------------------------------------------------------
+function setHp(side, pct) {
+    pct = clamp(Math.round(pct), 0, 100);
+    $('hp' + side + 'Fill').style.width = pct + '%';
+    $('hp' + side + 'Text').textContent = pct + '%';
+    if (side === 'You') { const b = $('hpYouBar'); b.classList.toggle('low', pct <= 25); b.classList.toggle('mid', pct > 25 && pct <= 50); }
+}
+
+function floatHp(side, text, kind) {                           // kind: 'dmg' | 'heal'
+    const box = $('duel' + side);
+    const f = document.createElement('span'); f.className = 'hp-float ' + kind; f.textContent = text;
+    box.appendChild(f); setTimeout(() => f.remove(), 1400);
+    if (kind === 'dmg') { box.classList.remove('hit'); void box.offsetWidth; box.classList.add('hit'); setTimeout(() => box.classList.remove('hit'), 450); }
+    else { box.classList.add('healed'); setTimeout(() => box.classList.remove('healed'), 700); }
+}
+
+function renderDuel() {
+    const a = S.adv; if (!a) return;
+    $('duelYouName').textContent = a.hero.name;
+    const img = $('duelYouImg'); img.onerror = () => { img.onerror = null; img.src = DEFAULT_AVATAR; };
+    img.src = a.hero.avatar;
+    $('duelFoeImg').onerror = () => { $('duelFoeImg').onerror = null; $('duelFoeImg').style.visibility = 'hidden'; };
+    $('duelFoeImg').src = ENEMY_IMG;
+    setHp('You', a.hp);
+    const foe = $('duelFoe');
+    if (a.enemy) {
+        $('duelFoeName').textContent = a.enemy.name; setHp('Foe', a.enemy.hp);
+        foe.classList.remove('dead'); foe.classList.add('show');
+    } else foe.classList.remove('show', 'dead');
+}
+
+function defeatFoe(adv) {
+    setHp('Foe', 0); $('duelFoe').classList.add('dead');
+    setTimeout(() => { if (S.adv === adv && !adv.enemy) $('duelFoe').classList.remove('show', 'dead'); }, 2400);
+}
 
 // ---------------------------------------------------------------------
 // ÁUDIO: captura (16 kHz PCM) e reprodução (24 kHz PCM)
@@ -449,15 +649,15 @@ async function failStart(why, detail) {
     await refreshState();
 }
 
-async function startAdventure() {
+async function startAdventure(loadout) {
     if (S.starting) return;                                    // evita toque duplo
     S.starting = true;
-    try { await _startAdventure(); } finally { S.starting = false; }
+    try { await _startAdventure(loadout); } finally { S.starting = false; }
 }
 
-async function _startAdventure() {
+async function _startAdventure(loadout) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('briefModal');
+    closeOv('itemsModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -465,7 +665,7 @@ async function _startAdventure() {
         A = await initAudio();                                   // 1º: microfone (se negar, a vaga não é gasta)
         A.headphones = $('chkPhones').checked;
         busy(true, 'Invocando o Mestre…');
-        ctx = await callFn('mission-token', { slot_id: my.id });
+        ctx = await callFn('mission-token', { slot_id: my.id, loadout });   // o cronômetro só começa aqui, depois da bolsa
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
         await connectLive(false);
@@ -497,6 +697,10 @@ function newAdv(slotId, ctx, A, sdk) {
         warned: false, forced: false, finished: false, closing: false,
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
         timer: null, raf: null, wake: null,
+        // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
+        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {},
+        inv: { ...(ctx.loadout || {}) },
+        hero: { name: S.hero?.name || ctx.hero_name || 'Herói', avatar: S.hero?.avatar || DEFAULT_AVATAR },
     };
 }
 
@@ -530,7 +734,7 @@ async function connectLive(isRetry) {
     });
 
     if (!isRetry) {
-        sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas e pergunte o nome do jogador.');
+        sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
     }
 }
 
@@ -596,11 +800,79 @@ async function onLiveMessage(msg) {
 }
 
 const ROLL_HINT = {
-    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário, com um benefício extra.',
-    success: 'Sucesso. Narre o êxito e faça a história avançar.',
-    failure: 'Falha. Narre a falha e as consequências, e ofereça 2 ou 3 alternativas ao jogador. Não trave a história.',
-    critical_failure: 'Falha crítica! Narre uma complicação séria, mas mantenha saídas e alternativas para o jogador.',
+    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage. Termine com 3 opções (offer_choices).',
+    success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage. Termine com 3 opções (offer_choices).',
+    failure: 'Falha. Narre a falha e as consequências; em combate o inimigo contra-ataca e você aplica dano ao herói com damage. Termine com 3 opções (offer_choices).',
+    critical_failure: 'Falha crítica! Narre uma complicação séria (em combate, um golpe duro do inimigo aplicado com damage), mas mantenha saídas. Termine com 3 opções (offer_choices).',
 };
+
+const hpState = (adv) => ({
+    hp_heroi_percent: adv.hp,
+    combate: adv.enemy ? { inimigo: adv.enemy.name, hp_inimigo_percent: adv.enemy.hp, chefe: adv.enemy.boss } : null,
+});
+
+function toolStartCombat(adv, args) {
+    if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
+    if (adv.enemy) return { ok: false, erro: `Já há um combate em andamento contra ${adv.enemy.name} (HP ${adv.enemy.hp}%). Ele só termina quando o HP do inimigo chegar a 0.`, ...hpState(adv) };
+    const name = String(args.enemy_name || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 28) || 'Inimigos';
+    adv.enemy = { name, hp: 100, boss: !!args.is_boss };
+    renderDuel();
+    return { ok: true, ...hpState(adv), instrucao: 'Combate iniciado. Só termina com a morte do inimigo (HP 0%): fugir, negociar ou se esconder não funcionam mais. Termine com 3 opções de combate.' };
+}
+
+function toolDamage(adv, args) {
+    if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".', ...hpState(adv) };
+    const target = args.target === 'player' ? 'player' : 'enemy';
+    let pct = clamp(Math.round(Number(args.percent) || 0), 1, 100);
+    const finalPhase = adv.endMs - serverNow() <= WARN_AT_S * 1000;
+
+    if (target === 'enemy') {
+        if (!adv.enemy) return { ok: false, erro: 'Não há inimigo em combate. Chame start_combat antes de aplicar dano.', ...hpState(adv) };
+        if (adv.enemy.boss) pct = Math.min(pct, finalPhase ? 45 : BOSS_MAX_HIT);      // chefe: luta longa (exceto no final)
+        adv.enemy.hp = Math.max(0, adv.enemy.hp - pct);
+        floatHp('Foe', '−' + pct + '%', 'dmg'); setHp('Foe', adv.enemy.hp);
+        if (adv.enemy.hp <= 0) {
+            const nome = adv.enemy.name; adv.enemy = null; defeatFoe(adv);
+            return { ok: true, aplicado_percent: pct, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte e retome a história, terminando com 3 opções.` };
+        }
+        return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'Narre o golpe e o contra-ataque se couber, terminando com 3 opções.' };
+    }
+
+    pct = Math.min(pct, PLAYER_MAX_HIT);
+    adv.hp = Math.max(0, adv.hp - pct);
+    floatHp('You', '−' + pct + '%', 'dmg'); setHp('You', adv.hp);
+    if (adv.hp <= 0) {
+        adv.dead = true;
+        clearTimeout(adv.deadTimer);
+        adv.deadTimer = setTimeout(() => { if (S.adv === adv && !adv.finished) finishAdventure(null, true); }, 60000);   // rede de segurança
+        return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'O HP do herói chegou a 0%. A aventura termina agora: narre a queda do herói em tom épico (sem violência gráfica), faça um breve resumo e chame end_adventure com outcome "derrota".' };
+    }
+    return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: adv.hp <= 25 ? 'O herói está muito ferido; narre isso e dê 3 opções.' : 'Narre o dano e dê 3 opções.' };
+}
+
+function toolUseItem(adv, args) {
+    if (adv.dead) return { ok: false, erro: 'O herói já caiu.' };
+    const id = String(args.item || ''), it = ITEM_BY_ID[id];
+    if (!it || !(id in adv.inv)) return { ok: false, erro: 'O herói NÃO levou este item na bolsa. Negue o uso, em personagem, e ofereça 3 opções válidas.' };
+    if (adv.inv[id] <= 0) return { ok: false, erro: `O herói já usou todas as unidades de "${it.name}" que levou. Negue o uso, em personagem.`, restantes: 0 };
+    let extra = {};
+    if (id === 'pocao') {
+        if (adv.hp >= 100) return { ok: false, erro: 'O HP do herói já está cheio; a poção NÃO foi gasta. Diga isso ao jogador.', restantes: adv.inv[id] };
+        const before = adv.hp; adv.hp = Math.min(100, adv.hp + HEAL_POTION);
+        setHp('You', adv.hp); floatHp('You', '+' + (adv.hp - before) + '%', 'heal');
+        extra = { curou_percent: adv.hp - before };
+    }
+    adv.inv[id]--;
+    toast(`${it.name}: restam ${adv.inv[id]}`);
+    return { ok: true, item: it.name, restantes: adv.inv[id], ...extra, ...hpState(adv),
+        instrucao: id.startsWith('enc_') && !['enc_fogo', 'enc_gelo'].includes(id) ? 'Item gasto. Agora chame roll_check (facil ou normal) para decidir se o efeito funcionou.' : 'Item gasto. Narre o uso.' };
+}
+
+function toolStatus(adv) {
+    return { ok: true, ...hpState(adv),
+        bolsa: Object.entries(adv.inv).map(([id, q]) => ({ item: ITEM_BY_ID[id]?.name || id, restantes: q })),
+        instrucao: 'Diga ao jogador a quantidade EXATA de cada item (inclusive os já consumidos, com zero).' };
+}
 
 async function onToolCall(calls) {
     const adv = S.adv;
@@ -608,15 +880,29 @@ async function onToolCall(calls) {
     for (const c of calls) {
         let out = { ok: true };
         try {
+            const a = c.args || {};
             if (c.name === 'set_scene') {
-                setScene(String(c.args?.scene || ''));
+                setScene(String(a.scene || ''));
             } else if (c.name === 'offer_choices') {
-                showChoices(Array.isArray(c.args?.choices) ? c.args.choices : []);
+                showChoices(Array.isArray(a.choices) ? a.choices : []);
             } else if (c.name === 'roll_check') {
-                out = await doRoll(c.args || {});
+                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : await doRoll(a);
+            } else if (c.name === 'start_combat') {
+                out = toolStartCombat(adv, a);
+            } else if (c.name === 'damage') {
+                out = toolDamage(adv, a);
+            } else if (c.name === 'use_item') {
+                out = toolUseItem(adv, a);
+            } else if (c.name === 'get_status') {
+                out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
-                adv.endPayload = c.args || {};
-                out = { ok: true };
+                const left = adv.endMs - serverNow();
+                if (!adv.dead && left > EARLY_END_GUARD_S * 1000) {
+                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Continue a aventura e só encerre quando o sistema avisar que restam 2 minutos.' };
+                } else {
+                    adv.endPayload = { ...a };
+                    if (adv.dead) adv.endPayload.outcome = 'derrota';
+                }
             }
         } catch (e) { out = { ok: false, erro: String(e.message || e) }; }
         responses.push({ id: c.id, name: c.name, response: out });
@@ -651,11 +937,11 @@ async function doRoll(args) {
     const good = r.result === 'success' || r.result === 'critical_success';
     const label = { critical_success: 'Sucesso crítico!', success: 'Sucesso', failure: 'Falha', critical_failure: 'Falha crítica!' }[r.result];
     $('diceResult').textContent = label; $('diceResult').className = 'dice-result ' + (good ? 's' : 'f');
-    $('diceMath').textContent = `d20 ${r.roll} ${r.modifier >= 0 ? '+' : '−'} ${Math.abs(r.modifier)} = ${r.total}  ·  CD ${r.dc}`;
+    $('diceMath').textContent = `d20: ${r.roll}  ·  precisa de ${r.dc} ou mais`;
     await sleep(1900);
     closeOv('diceOverlay');
     setMasterState('listening');
-    return { resultado: r.result, dado: r.roll, modificador: r.modifier, total: r.total, instrucao: ROLL_HINT[r.result] };
+    return { resultado: r.result, dado: r.roll, precisava: r.dc, instrucao: ROLL_HINT[r.result] };
 }
 
 // ----- cenário e escolhas -----
@@ -675,12 +961,13 @@ function showChoices(list) {
     list.slice(0, 3).forEach((txt, i) => {
         const b = document.createElement('button');
         b.className = 'choice-btn'; b.style.animationDelay = i * 0.08 + 's';
-        b.textContent = String(txt).slice(0, 80);
+        b.textContent = String(txt).slice(0, 60);
         b.onclick = () => { box.innerHTML = ''; sendText(`O jogador escolheu: ${txt}`); };
         box.appendChild(b);
     });
-    // some quando o mestre voltar a falar após a escolha
-    setTimeout(() => { if (box.children.length) box.innerHTML = ''; }, 45000);
+    // permanecem até o jogador escolher, o Mestre oferecer novas, ou 2,5 min
+    clearTimeout(showChoices._t);
+    showChoices._t = setTimeout(() => { if (box.children.length) box.innerHTML = ''; }, 150000);
 }
 
 // ----- palco -----
@@ -695,6 +982,7 @@ function enterStage() {
     showView('stage');
     $('capMaster').textContent = ''; $('capYou').textContent = ''; $('choices').innerHTML = '';
     $('hudRolls').textContent = '0';
+    renderDuel();
     $('sceneA').classList.remove('show'); $('sceneB').classList.remove('show');
     adv.activeSceneLayer = 'B'; setScene(adv.scene);
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
@@ -747,13 +1035,17 @@ function advTick() {
     t.classList.toggle('warn', left <= WARN_AT_S * 1000 && left > END_AT_S * 1000);
     t.classList.toggle('crit', left <= END_AT_S * 1000);
 
-    if (!adv.warned && left <= WARN_AT_S * 1000) {
-        adv.warned = true;
-        sendText('[SISTEMA] Restam 3 minutos. Conduza a história para o clímax e o desfecho.');
-    }
-    if (!adv.forced && left <= END_AT_S * 1000) {
-        adv.forced = true;
-        sendText('[SISTEMA] ENCERRAR. Narre o desfecho agora (30 a 60 segundos), resuma o desempenho do jogador e chame end_adventure.');
+    if (!adv.dead) {
+        const elapsedS = (adv.totalMs - left) / 1000;
+        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; sendText(m.text); }
+        if (!adv.warned && left <= WARN_AT_S * 1000) {
+            adv.warned = true;
+            sendText('[SISTEMA] RESTAM 2 MINUTOS. Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo e o desfecho. Não inicie novos combates.');
+        }
+        if (!adv.forced && left <= END_AT_S * 1000) {
+            adv.forced = true;
+            sendText('[SISTEMA] ENCERRAR. Narre o desfecho agora (30 a 60 segundos), resuma o desempenho do jogador e chame end_adventure.');
+        }
     }
     if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true);   // o mestre não encerrou: envia nota neutra
 }
@@ -762,7 +1054,7 @@ function advTick() {
 function teardown() {
     const adv = S.adv; if (!adv) return;
     adv.closing = true;
-    clearInterval(adv.timer); cancelAnimationFrame(adv.raf);
+    clearInterval(adv.timer); cancelAnimationFrame(adv.raf); clearTimeout(adv.deadTimer);
     try { adv.session?.close(); } catch (_) { /* ok */ }
     try { adv.A.node.port.onmessage = null; adv.A.stream.getTracks().forEach((t) => t.stop()); adv.A.ctx.close(); } catch (_) { /* ok */ }
     try { adv.wake?.release(); } catch (_) { /* ok */ }
@@ -780,7 +1072,7 @@ async function finishAdventure(payload, fallback) {
     const clientSeconds = adv.liveMs ? Math.round((Date.now() - adv.liveMs) / 1000) : null;
     teardown(); S.adv = null; closeOv('diceOverlay');
 
-    const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: 'vitoria_parcial', chronicle: '' };
+    const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: adv.dead ? 'derrota' : 'vitoria_parcial', chronicle: '' };
     const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, scene: sceneId, client_seconds: clientSeconds };
     localStorage.setItem(pendKey(slotId), JSON.stringify(pending));   // garante o envio mesmo se a página fechar
     await submitFinish(pending);
@@ -872,7 +1164,11 @@ function bindUI() {
     $('howBtn').onclick = () => openOv('howModal');
     $('howClose').onclick = () => closeOv('howModal');
     $('briefCancel').onclick = () => closeOv('briefModal');
-    $('briefGo').onclick = startAdventure;
+    $('briefGo').onclick = openLoadout;                        // 1º a bolsa; o Mestre e o cronômetro só começam depois
+    $('itemsCancel').onclick = () => closeOv('itemsModal');
+    $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) startAdventure(bagCounts()); };
+    $('buyCancel').onclick = () => closeOv('buyModal');
+    $('buyConfirm').onclick = confirmBuyExtra;
     $('errClose').onclick = () => closeOv('errModal');
     $('errCopy').onclick = async () => {
         try { await navigator.clipboard.writeText($('errText').textContent); toast('Texto copiado.'); }
@@ -900,7 +1196,7 @@ function bindUI() {
         showView('lobby');
         await refreshState();
     };
-    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal') closeOv(e.target.id); });
+    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal') closeOv(e.target.id); });
 }
 
 async function boot() {
@@ -909,6 +1205,7 @@ async function boot() {
     const { data } = await supabase.auth.getSession();
     if (!data?.session) { location.href = 'index.html'; return; }
     S.uid = data.session.user.id;
+    loadHeroProfile().catch(() => {});                          // IndexedDB: não bloqueia a tela
     await loadSceneLabels();
     await refreshState();
     S.poll = setInterval(() => { if (S.view === 'lobby') refreshState(); }, POLL_MS);

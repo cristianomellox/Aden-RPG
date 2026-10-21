@@ -80,6 +80,19 @@
                     <div class="core"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 6.6L21 9l-5.2 4.2L17.5 20 12 16.3 6.5 20l1.7-6.8L3 9l6.6-.4z"/></svg></div>
                 </div>
                 <div class="master-state" id="masterState">O Mestre desperta…</div>
+
+                <div class="duel" id="duel">
+                    <div class="duel-side you" id="duelYou">
+                        <div class="duel-name" id="duelYouName">—</div>
+                        <img class="duel-avatar" id="duelYouImg" alt="" src="https://aden-rpg.pages.dev/avatar01.webp">
+                        <div class="hp-bar you" id="hpYouBar"><div class="hp-fill" id="hpYouFill"></div><div class="hp-text" id="hpYouText">100%</div></div>
+                    </div>
+                    <div class="duel-side foe" id="duelFoe">
+                        <div class="duel-name" id="duelFoeName">—</div>
+                        <img class="duel-avatar" id="duelFoeImg" alt="" src="https://aden-rpg.pages.dev/assets/mission_ene.webp">
+                        <div class="hp-bar foe" id="hpFoeBar"><div class="hp-fill" id="hpFoeFill"></div><div class="hp-text" id="hpFoeText">100%</div></div>
+                    </div>
+                </div>
             </div>
 
             <div class="stage-bottom">
@@ -146,7 +159,9 @@
                 <li><b>Microfone:</b> o navegador vai pedir permissão. Fale normalmente.</li>
                 <li><b>Ambiente:</b> prefira um lugar silencioso.</li>
                 <li><b>Dados:</b> cada ação arriscada é decidida por um d20. Falhar faz parte da história.</li>
-                <li><b>Tempo:</b> 15 minutos. Ao terminar, o Mestre avalia seu desempenho.</li>
+                <li><b>Bolsa:</b> antes de começar você escolhe 8 itens. Só eles (e sua arma) podem ser usados.</li>
+                <li><b>Vida:</b> você e os inimigos têm HP em %. Se o seu chegar a 0, a aventura termina.</li>
+                <li><b>Tempo:</b> 15 minutos, contados só depois da escolha dos itens. Ao terminar, o Mestre avalia seu desempenho.</li>
                 <li><b>Atenção:</b> depois de começar, não é possível pausar nem repetir.</li>
             </ul>
             <p class="tip">Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas, usando seus 15 minutos.</p>
@@ -163,6 +178,38 @@
         </div>
     </div>
 
+    <!-- ═════════ MODAL: BOLSA (escolha de 8 itens) ═════════ -->
+    <div id="itemsModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box items-box">
+            <h3 class="dm-title">Bolsa de aventura</h3>
+            <p class="dm-sub">Escolha 8 itens que podem ser usados durante sua aventura. Escolha com sabedoria, pois pode mudar o rumo da história e ser decisivo!</p>
+            <div class="bag-head"><span>Sua bolsa</span><b id="bagCount">0/8</b></div>
+            <div class="bag-slots" id="bagSlots"></div>
+            <div class="bag-head"><span>Itens disponíveis</span><small>toque para adicionar</small></div>
+            <div class="item-grid" id="itemGrid"></div>
+            <p class="hint" id="itemsTimer"></p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="itemsCancel">Voltar</button>
+                <button class="btn-epic sm" id="itemsGo" disabled>Começar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════ MODAL: COMPRA DA AVENTURA EXTRA ═════════ -->
+    <div id="buyModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Aventura extra</h3>
+            <p class="dm-sub">Uma segunda jornada hoje, sem disputar vagas</p>
+            <div class="buy-price"><span class="coin"></span><b id="buyCost">25</b><small>de ouro</small></div>
+            <p class="buy-text">O ouro só é cobrado quando você entrar na aventura, e é devolvido se a conexão com o Mestre falhar antes de ele começar a falar.</p>
+            <p class="hint buy-bal">Seu ouro: <b id="buyGold">0</b></p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="buyCancel">Cancelar</button>
+                <button class="btn-epic sm" id="buyConfirm">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ═════════ MODAL: COMO FUNCIONA ═════════ -->
     <div id="howModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box">
@@ -172,9 +219,10 @@
                 <li><b>O Mestre aparece</b> em horários aleatórios ao longo do dia, num local diferente.</li>
                 <li><b>Três vagas</b> por aparição. Quem aceita o chamado recebe um horário; cada herói joga no seu, sozinho.</li>
                 <li><b>Uma aventura por dia</b> por jogador. Perdeu o horário? A vaga passa para outro herói.</li>
-                <li><b>Converse de verdade:</b> descreva o que seu herói faz. Ações arriscadas rolam um <b>d20</b>; quanto maior seu poder de combate, melhores as chances.</li>
+                <li><b>Converse de verdade:</b> descreva o que seu herói faz. Ações arriscadas rolam um <b>d20</b>; o resultado depende da sorte, mas <b>quanto maior seu poder de combate, mais duro é o mundo</b>: inimigos mais fortes, mais emboscadas e chefes mais difíceis.</li>
+                <li><b>Bolsa e vida:</b> você escolhe 8 itens antes de começar e acompanha seu HP e o dos inimigos em %. Cada item vale uma vez, e nada além deles (e da sua arma) pode ser usado.</li>
                 <li><b>Recompensas:</b> XP (1% do nível atual) e até 3000 cristais, conforme seu desempenho e o tempo de aventura. Terminar rápido demais rende menos; concluir a história dentro dos 15 minutos rende o máximo.</li>
-                <li><b>Aventura extra:</b> depois da gratuita, você pode jogar uma segunda vez no dia por 10 de ouro, a qualquer momento, sem disputar as vagas.</li>
+                <li><b>Aventura extra:</b> depois da gratuita, você pode jogar uma segunda vez no dia por 25 de ouro, a qualquer momento, sem disputar as vagas.</li>
             </ul>
             <p class="tip">Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas, usando seus 15 minutos.</p>
             <div class="dm-actions"><button class="btn-epic sm" id="howClose">Entendi</button></div>

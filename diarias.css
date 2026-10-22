@@ -414,3 +414,26 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 .buy-text { margin: 0 0 8px; font-size: .8em; line-height: 1.6; color: #cfc6ae; }
 .buy-bal { margin: 0 0 16px; text-align: center; } .buy-bal b { color: var(--gold-light); }
 .item-card .qty { font-style: normal; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   v3 — sem opções em texto, botão Bolsa durante a aventura
+   ══════════════════════════════════════════════════════════════════════ */
+.controls { gap: 4px; }
+.ctl-btn { width: 58px; }
+.ctl-btn small b { display: inline-grid; place-items: center; min-width: 14px; height: 14px; margin-left: 2px; padding: 0 3px; box-sizing: border-box;
+    font-size: 1.05em; color: #1a1000; border-radius: 99px; background: var(--gold-light); letter-spacing: 0; }
+
+.bagview-box { max-width: 380px; }
+.bagview-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; max-height: 50vh; overflow-y: auto; }
+.bagview-row { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px;
+    background: linear-gradient(160deg, rgba(34,28,20,.95), rgba(14,11,8,.97)); border: 1px solid var(--gold-base); }
+.bagview-row svg { width: 38px; height: 38px; }
+.bagview-row b { display: block; font-size: .8em; color: var(--gold-light); letter-spacing: .5px; }
+.bagview-row span { font-size: .66em; color: #aaa18b; line-height: 1.35; }
+.bagview-row .left { font-size: 1.05em; font-weight: bold; color: #fff3cf; font-variant-numeric: tabular-nums; text-align: right; }
+.bagview-row .left small { display: block; font-size: .58em; font-weight: normal; letter-spacing: 1px; color: #8d8573; text-transform: uppercase; }
+.bagview-row.empty { opacity: .45; filter: grayscale(.9); border-color: var(--gold-dark); }
+.bagview-row.empty .left { color: #888; }
+.bagview-note { margin: 0 0 12px; text-align: center; }
+.res-adv { margin: 0 0 4px; font-size: .78em; letter-spacing: 2px; color: var(--arcane); text-transform: uppercase; }
+.res-note.warn { color: #d9a56a; font-style: italic; }

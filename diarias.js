@@ -18,13 +18,14 @@ const BAG_SIZE = 8;
 const HEAL_POTION = 20;                                    // % de HP da poção de cura
 const BOSS_MAX_HIT = 25;                                   // dano máximo (%) por golpe em chefe (luta longa)
 const PLAYER_MAX_HIT = 35;                                 // dano máximo (%) por evento no herói
+const MIN_HIT_COMMON = 25;                                 // dano mínimo (%) de um golpe em criatura comum (morre em até 4 golpes)
 const ENEMY_IMG = ASSETS + 'mission_ene.webp';
 const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
 const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 8;
 // marcos de ritmo enviados ao Mestre (segundos desde o início da sessão)
 const MARKS = [
-    { at: 180, text: '[SISTEMA] MARCO (3 min de 15): se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
-    { at: 480, text: '[SISTEMA] MARCO (8 min de 15): aproxime o herói do lugar do objetivo. Gere tensão e prepare o CHEFE, cuja luta deve ser longa e emocionante.' },
+    { at: 180, text: '[SISTEMA] MARCO (3 min de 15), NÃO responda falando agora; aplique na sua próxima fala: se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
+    { at: 480, text: '[SISTEMA] MARCO (8 min de 15), NÃO responda falando agora; aplique na sua próxima fala: aproxime o herói do lugar do objetivo. Gere tensão e prepare o CHEFE, cuja luta deve ser longa e emocionante.' },
 ];
 const GIVEUP_AFTER_S = 75;                                 // sem fim após 15:00 + 75 s → envia nota neutra
 
@@ -53,6 +54,8 @@ const ERR = {
     not_enough_gold: 'Você não tem ouro suficiente.',
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
+    extra_limit: 'Você já usou todas as aventuras extras de hoje.',
+    extra_pending: 'Você já tem uma aventura extra esperando por você.',
 };
 const friendly = (m) => ERR[String(m || '').trim()] || 'Algo deu errado. Tente novamente.';
 
@@ -242,11 +245,12 @@ const TIP = 'Dica: conduza a história e realize mais ações para ter um desemp
 
 function extraBlock(st) {
     const x = st.extra; if (!x) return '';
+    const n = x.bought ?? 0, max = x.max ?? 3;
     if (x.available) return `<button class="btn-epic" id="btnExtra">Aventura extra · ${x.cost} de ouro</button>
-        <p class="hint">Disponível a qualquer momento, sem disputar as vagas gratuitas. O ouro é cobrado ao entrar.</p>`;
+        <p class="hint">Extras de hoje: ${n} de ${max}. Disponível a qualquer momento, sem disputar as vagas gratuitas. O ouro é cobrado ao entrar.</p>`;
     if (x.reason === 'not_enough_gold') return `<button class="btn-epic" disabled>Aventura extra · ${x.cost} de ouro</button>
-        <p class="hint">Ouro insuficiente (você tem ${nf(x.gold)}).</p>`;
-    if (x.reason === 'extra_used') return '<p class="hint">Você já usou as suas duas aventuras de hoje.</p>';
+        <p class="hint">Ouro insuficiente (você tem ${nf(x.gold)}). Extras de hoje: ${n} de ${max}.</p>`;
+    if (x.reason === 'extra_limit') return `<p class="hint">Você já usou as ${max} aventuras extras de hoje.</p>`;
     return '';
 }
 
@@ -275,7 +279,8 @@ function renderLobby() {
         renderCard(`
             <div class="qc-icon">✦</div>
             <span class="chip ok">${paid ? 'Aventura extra concluída' : 'Aventura concluída'}</span>
-            <h2>${paid ? 'Até amanhã, herói' : 'Volte amanhã, herói'}</h2>
+            <h2>${paid ? 'Aventura encerrada' : 'Volte amanhã, herói'}</h2>
+            ${my.adventure_title ? `<p class="qc-place">✧ ${esc(my.adventure_title)} ✧</p>` : ''}
             <p>Sua nota foi <b style="color:#fff3cf">${my.score_total ?? 0}</b> e você recebeu
                <b style="color:#fff3cf">${nf(my.reward_xp)} XP</b> e <b style="color:#fff3cf">${nf(my.reward_crystals)} cristais</b>.</p>
             ${my.chronicle ? `<div class="chronicle"><h4>Crônica do dia</h4>${esc(my.chronicle)}</div>` : ''}
@@ -299,8 +304,8 @@ function renderLobby() {
         const gems = [0, 1, 2].map((i) => `<div class="slot-gem ${i < ev.open_slots ? 'free' : ''}"></div>`).join('');
         renderCard(`
             <span class="chip live">● O Mestre apareceu</span>
-            <h2>${esc(ev.title)}</h2>
-            <p class="qc-place">✧ ${esc(sceneLabel(ev.scene))} ✧</p>
+            <h2>Uma nova lenda aguarda</h2>
+            <p class="qc-place">✧ O Mestre criará uma aventura só para você ✧</p>
             <div class="slots">${gems}</div>
             <p><b style="color:#fff3cf">${ev.open_slots}</b> ${ev.open_slots === 1 ? 'vaga restante' : 'vagas restantes'} · encerra em <span data-role="t-close">--:--</span></p>
             <p class="tip">${TIP}</p>
@@ -309,7 +314,7 @@ function renderLobby() {
     } else if (ev) {
         renderCard(`
             <span class="chip bad">Vagas esgotadas</span>
-            <h2>${esc(ev.title)}</h2>
+            <h2>As vagas acabaram</h2>
             <p>Os três heróis já foram escolhidos. Fique atento: o Mestre voltará a aparecer.</p>`);
     } else {
         renderCard(`
@@ -366,6 +371,7 @@ function buyExtra() {                                          // abre o modal d
     const x = S.state?.extra || {};
     $('buyCost').textContent = x.cost ?? EXTRA_COST_FALLBACK;
     $('buyGold').textContent = nf(x.gold);
+    $('buyCount').textContent = `${(x.bought ?? 0) + 1} de ${x.max ?? 3}`;
     openOv('buyModal');
 }
 
@@ -698,7 +704,7 @@ function newAdv(slotId, ctx, A, sdk) {
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
-        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {},
+        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, lastRoll: null, hist: [], invStart: { ...(ctx.loadout || {}) },
         inv: { ...(ctx.loadout || {}) },
         hero: { name: S.hero?.name || ctx.hero_name || 'Herói', avatar: S.hero?.avatar || DEFAULT_AVATAR },
     };
@@ -726,6 +732,7 @@ async function connectLive(isRetry) {
                     adv.gotMsg = true; adv.liveMs = Date.now();
                     callFn('mission-token', { slot_id: adv.slotId, action: 'live' }).catch(() => {});
                 }
+                adv.reconnects = 0;                                   // conexão saudável: zera as tentativas
                 onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
             },
             onerror: (e) => { adv.lastErr = String(e?.message || e?.error?.message || 'erro de conexão'); console.warn('[diarias] ws erro:', adv.lastErr); },
@@ -733,9 +740,26 @@ async function connectLive(isRetry) {
         },
     });
 
-    if (!isRetry) {
+    if (isRetry) {
+        sendText(recapText(adv));                                // o contexto pode não voltar com o handle: reenvia o estado
+    } else {
         sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
     }
+}
+
+// Texto de retomada após reconexão: estado do jogo + últimas falas (o handle nem sempre restaura o contexto)
+function recapText(adv) {
+    const left = Math.max(0, adv.endMs - serverNow());
+    const elapsedMin = Math.floor((adv.totalMs - left) / 60000);
+    const bag = Object.entries(adv.inv).map(([id, q]) => `${ITEM_BY_ID[id]?.name || id} x${q}`).join(', ');
+    const hist = adv.hist.slice(-6).map((h) => `${h.who}: ${h.text}`);
+    if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
+    if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
+    return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
+        + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
+        + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
+        + 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.';
 }
 
 function sendText(text) {
@@ -757,13 +781,14 @@ function onLiveClosed() {
         return;
     }
     const left = adv.endMs + GIVEUP_AFTER_S * 1000 - serverNow();
-    if (adv.reconnects < 3 && left > 0) {
+    if (adv.reconnects < 6 && left > 0) {
         adv.reconnects++;
         setMasterState('thinking', 'Reconectando…');
         setTimeout(() => { if (S.adv === adv && !adv.finished) connectLive(true).catch(() => onLiveClosed()); }, 900 * adv.reconnects);
     } else if (!adv.finished) {
+        console.warn('[diarias] conexão perdida:', adv.lastClose, adv.lastErr);
         toast('Conexão perdida com o Mestre.', true);
-        finishAdventure(null, true);
+        finishAdventure(null, true, 'connection_lost');
     }
 }
 
@@ -784,7 +809,12 @@ async function onLiveMessage(msg) {
             if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) playPcm24(adv.A, p.inlineData.data);
         }
         if (sc.outputTranscription?.text) {
-            if (adv.newTurn) { adv.masterBuf = ''; adv.youBuf = ''; $('capYou').textContent = ''; adv.newTurn = false; }
+            if (adv.newTurn) {
+                if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
+                if (adv.youBuf) adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) });
+                if (adv.hist.length > 10) adv.hist.splice(0, adv.hist.length - 10);
+                adv.masterBuf = ''; adv.youBuf = ''; $('capYou').textContent = ''; adv.newTurn = false;
+            }
             adv.masterBuf += sc.outputTranscription.text;
             $('capMaster').textContent = adv.masterBuf.slice(-420);
             $('capMaster').scrollTop = 99999;
@@ -800,10 +830,10 @@ async function onLiveMessage(msg) {
 }
 
 const ROLL_HINT = {
-    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage. Termine com 3 opções (offer_choices).',
-    success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage. Termine com 3 opções (offer_choices).',
-    failure: 'Falha. Narre a falha e as consequências; em combate o inimigo contra-ataca e você aplica dano ao herói com damage. Termine com 3 opções (offer_choices).',
-    critical_failure: 'Falha crítica! Narre uma complicação séria (em combate, um golpe duro do inimigo aplicado com damage), mas mantenha saídas. Termine com 3 opções (offer_choices).',
+    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
+    success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
+    failure: 'Falha. Narre a falha e as consequências; em combate o inimigo contra-ataca e você aplica dano ao herói com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
+    critical_failure: 'Falha crítica! Narre uma complicação séria (em combate, um golpe duro do inimigo aplicado com damage), mas mantenha saídas. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
 };
 
 const hpState = (adv) => ({
@@ -817,37 +847,78 @@ function toolStartCombat(adv, args) {
     const name = String(args.enemy_name || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 28) || 'Inimigos';
     adv.enemy = { name, hp: 100, boss: !!args.is_boss };
     renderDuel();
-    return { ok: true, ...hpState(adv), instrucao: 'Combate iniciado. Só termina com a morte do inimigo (HP 0%): fugir, negociar ou se esconder não funcionam mais. Termine com 3 opções de combate.' };
+    return { ok: true, ...hpState(adv), instrucao: 'Combate iniciado. Só termina com a morte do inimigo (HP 0%): fugir, negociar ou se esconder não funcionam mais. Descreva o inimigo, deixe-o falar em primeira pessoa e diga 3 opções de combate em voz alta; depois PARE e espere o jogador.' };
+}
+
+// Dano real = base do Mestre × fator do dado. Maior dado → mais dano; 20 natural = crítico (×2);
+// criatura comum às vezes leva crítico surpresa; chefe nunca (luta longa).
+function takeLastRoll(adv) {
+    const lr = adv.lastRoll && Date.now() - adv.lastRoll.t < 90000 ? adv.lastRoll : null;
+    return lr;
 }
 
 function toolDamage(adv, args) {
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".', ...hpState(adv) };
     const target = args.target === 'player' ? 'player' : 'enemy';
-    let pct = clamp(Math.round(Number(args.percent) || 0), 1, 100);
+    const base = clamp(Math.round(Number(args.base_percent ?? args.percent) || 0), 1, 100);
     const finalPhase = adv.endMs - serverNow() <= WARN_AT_S * 1000;
+    const lr = takeLastRoll(adv);
 
     if (target === 'enemy') {
         if (!adv.enemy) return { ok: false, erro: 'Não há inimigo em combate. Chame start_combat antes de aplicar dano.', ...hpState(adv) };
-        if (adv.enemy.boss) pct = Math.min(pct, finalPhase ? 45 : BOSS_MAX_HIT);      // chefe: luta longa (exceto no final)
+        const boss = adv.enemy.boss;
+        let f = 1, crit = false;
+        if (lr) {
+            adv.lastRoll = null;                                           // cada rolagem vale para um golpe
+            if (lr.result === 'critical_success') { f = 2; crit = true; }
+            else if (lr.result === 'success') f = 0.6 + 0.04 * lr.roll;    // dado 8 → ×0,92 · 12 → ×1,08 · 16 → ×1,24 · 19 → ×1,36
+            else f = 0.5;                                                  // dano após falha: raspão
+        }
+        if (!boss && !crit && lr?.result === 'success' && Math.random() < 0.15) { f *= 1.8; crit = true; }   // crítico surpresa
+        let pct = Math.round(base * f);
+        if (boss) pct = clamp(pct, 3, finalPhase ? 45 : BOSS_MAX_HIT);     // chefe: luta longa (exceto no final)
+        else pct = clamp(pct, MIN_HIT_COMMON, 100);                        // criatura comum: nunca vira "mini-chefe"
         adv.enemy.hp = Math.max(0, adv.enemy.hp - pct);
-        floatHp('Foe', '−' + pct + '%', 'dmg'); setHp('Foe', adv.enemy.hp);
+        floatHp('Foe', (crit ? 'CRÍTICO −' : '−') + pct + '%', 'dmg'); setHp('Foe', adv.enemy.hp);
+        const intensidade = crit ? 'critico' : f >= 1.2 ? 'forte' : f < 0.95 ? 'fraco' : 'normal';
         if (adv.enemy.hp <= 0) {
             const nome = adv.enemy.name; adv.enemy = null; defeatFoe(adv);
-            return { ok: true, aplicado_percent: pct, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte e retome a história, terminando com 3 opções.` };
+            return { ok: true, aplicado_percent: pct, intensidade, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
         }
-        return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'Narre o golpe e o contra-ataque se couber, terminando com 3 opções.' };
+        return { ok: true, aplicado_percent: pct, intensidade, ...hpState(adv), instrucao: `Golpe ${intensidade}. Narre à altura, deixe o inimigo reagir (pode falar em primeira pessoa), diga 3 opções em voz alta e PARE para o jogador responder.` };
     }
 
-    pct = Math.min(pct, PLAYER_MAX_HIT);
+    let f = 1;
+    if (lr && (lr.result === 'critical_failure' || lr.result === 'failure')) {
+        if (lr.result === 'critical_failure') f = 1.5;
+        adv.lastRoll = null;
+    }
+    const pct = Math.min(Math.round(base * f), PLAYER_MAX_HIT);
     adv.hp = Math.max(0, adv.hp - pct);
     floatHp('You', '−' + pct + '%', 'dmg'); setHp('You', adv.hp);
     if (adv.hp <= 0) {
         adv.dead = true;
         clearTimeout(adv.deadTimer);
-        adv.deadTimer = setTimeout(() => { if (S.adv === adv && !adv.finished) finishAdventure(null, true); }, 60000);   // rede de segurança
+        adv.deadTimer = setTimeout(() => { if (S.adv === adv && !adv.finished) finishAdventure(null, true, 'dead_timeout'); }, 60000);   // rede de segurança
         return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'O HP do herói chegou a 0%. A aventura termina agora: narre a queda do herói em tom épico (sem violência gráfica), faça um breve resumo e chame end_adventure com outcome "derrota".' };
     }
-    return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: adv.hp <= 25 ? 'O herói está muito ferido; narre isso e dê 3 opções.' : 'Narre o dano e dê 3 opções.' };
+    return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: adv.hp <= 25 ? 'O herói está muito ferido; narre isso, diga 3 opções em voz alta e PARE para o jogador responder.' : 'Narre o dano, diga 3 opções em voz alta e PARE para o jogador responder.' };
+}
+
+// ----- bolsa durante a aventura -----
+function updateBagBadge() {
+    const a = S.adv; if (!a) return;
+    $('bagBadge').textContent = Object.values(a.inv).reduce((n, q) => n + q, 0);
+}
+
+function openBagView() {
+    const a = S.adv; if (!a) return;
+    $('bagViewList').innerHTML = Object.keys(a.invStart).map((id) => {
+        const it = ITEM_BY_ID[id], left = a.inv[id] ?? 0, total = a.invStart[id];
+        return `<div class="bagview-row ${left <= 0 ? 'empty' : ''}">${it.svg}<div><b>${esc(it.name)}</b><span>${esc(it.desc)}</span></div>`
+             + `<div class="left">${left}<small>de ${total}</small></div></div>`;
+    }).join('');
+    openOv('bagViewModal');
 }
 
 function toolUseItem(adv, args) {
@@ -864,6 +935,7 @@ function toolUseItem(adv, args) {
     }
     adv.inv[id]--;
     toast(`${it.name}: restam ${adv.inv[id]}`);
+    updateBagBadge();
     return { ok: true, item: it.name, restantes: adv.inv[id], ...extra, ...hpState(adv),
         instrucao: id.startsWith('enc_') && !['enc_fogo', 'enc_gelo'].includes(id) ? 'Item gasto. Agora chame roll_check (facil ou normal) para decidir se o efeito funcionou.' : 'Item gasto. Narre o uso.' };
 }
@@ -883,8 +955,6 @@ async function onToolCall(calls) {
             const a = c.args || {};
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
-            } else if (c.name === 'offer_choices') {
-                showChoices(Array.isArray(a.choices) ? a.choices : []);
             } else if (c.name === 'roll_check') {
                 out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : await doRoll(a);
             } else if (c.name === 'start_combat') {
@@ -932,6 +1002,7 @@ async function doRoll(args) {
     if (!r) { closeOv('diceOverlay'); setMasterState('listening'); return { erro: 'A rolagem falhou. Decida o resultado de forma equilibrada.' }; }
 
     adv.rolls++; $('hudRolls').textContent = adv.rolls;
+    adv.lastRoll = { roll: r.roll, result: r.result, t: Date.now() };
     $('d20Num').textContent = r.roll;
     d.className = 'd20 settle' + (r.result === 'critical_success' ? ' crit-s' : r.result === 'critical_failure' ? ' crit-f' : '');
     const good = r.result === 'success' || r.result === 'critical_success';
@@ -956,20 +1027,6 @@ function setScene(id) {
     $('hudSceneName').textContent = adv.sceneNames[id] || sceneLabel(id);
 }
 
-function showChoices(list) {
-    const box = $('choices'); box.innerHTML = '';
-    list.slice(0, 3).forEach((txt, i) => {
-        const b = document.createElement('button');
-        b.className = 'choice-btn'; b.style.animationDelay = i * 0.08 + 's';
-        b.textContent = String(txt).slice(0, 60);
-        b.onclick = () => { box.innerHTML = ''; sendText(`O jogador escolheu: ${txt}`); };
-        box.appendChild(b);
-    });
-    // permanecem até o jogador escolher, o Mestre oferecer novas, ou 2,5 min
-    clearTimeout(showChoices._t);
-    showChoices._t = setTimeout(() => { if (box.children.length) box.innerHTML = ''; }, 150000);
-}
-
 // ----- palco -----
 function setMasterState(state, label) {
     const m = $('master'); m.dataset.state = state;
@@ -980,9 +1037,9 @@ function setMasterState(state, label) {
 function enterStage() {
     const adv = S.adv;
     showView('stage');
-    $('capMaster').textContent = ''; $('capYou').textContent = ''; $('choices').innerHTML = '';
+    $('capMaster').textContent = ''; $('capYou').textContent = '';
     $('hudRolls').textContent = '0';
-    renderDuel();
+    renderDuel(); updateBagBadge();
     $('sceneA').classList.remove('show'); $('sceneB').classList.remove('show');
     adv.activeSceneLayer = 'B'; setScene(adv.scene);
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
@@ -1040,14 +1097,14 @@ function advTick() {
         for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; sendText(m.text); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            sendText('[SISTEMA] RESTAM 2 MINUTOS. Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo e o desfecho. Não inicie novos combates.');
+            sendText('[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo e o desfecho. Não inicie novos combates.');
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true;
             sendText('[SISTEMA] ENCERRAR. Narre o desfecho agora (30 a 60 segundos), resuma o desempenho do jogador e chame end_adventure.');
         }
     }
-    if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true);   // o mestre não encerrou: envia nota neutra
+    if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true, 'master_timeout');   // o mestre não encerrou: envia nota neutra
 }
 
 // ----- encerramento -----
@@ -1064,16 +1121,17 @@ function teardown() {
 const pendKey = (slot) => 'aden_daily_pending_' + slot;
 const readPending = (slot) => { try { return JSON.parse(localStorage.getItem(pendKey(slot)) || 'null'); } catch (_) { return null; } };
 
-async function finishAdventure(payload, fallback) {
+async function finishAdventure(payload, fallback, reason) {
     const adv = S.adv; if (!adv || adv.finished) return;
     adv.finished = true;
     if (!fallback) await drainPlayback(adv.A);                    // deixa o mestre terminar a última frase
     const slotId = adv.slotId, sceneId = adv.scene;
     const clientSeconds = adv.liveMs ? Math.round((Date.now() - adv.liveMs) / 1000) : null;
-    teardown(); S.adv = null; closeOv('diceOverlay');
+    teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
 
     const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: adv.dead ? 'derrota' : 'vitoria_parcial', chronicle: '' };
-    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, scene: sceneId, client_seconds: clientSeconds };
+    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, title: p.title || '', scene: sceneId, client_seconds: clientSeconds, reason: reason || (fallback ? 'fallback' : 'master') };
+    console.info('[diarias] encerrando aventura. motivo:', pending.reason);
     localStorage.setItem(pendKey(slotId), JSON.stringify(pending));   // garante o envio mesmo se a página fechar
     await submitFinish(pending);
 }
@@ -1081,10 +1139,10 @@ async function finishAdventure(payload, fallback) {
 async function submitFinish(pending) {
     busy(true, 'O Mestre pesa seus feitos…');
     try {
-        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle, client_seconds: pending.client_seconds });
+        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle, title: pending.title, client_seconds: pending.client_seconds });
         localStorage.removeItem(pendKey(pending.slot_id));
         busy(false);
-        showResult(out.result, pending.scene);
+        showResult(out.result, pending.scene, pending.reason);
     } catch (e) {
         busy(false);
         toast(friendly(e.message) + ' Seu resultado ficou guardado.', true);
@@ -1103,7 +1161,7 @@ async function maybeSendPending(force) {
 }
 
 // ----- resultado -----
-function showResult(r, sceneId) {
+function showResult(r, sceneId, reason) {
     showView('result');
     paintScene($('resultBg'), sceneId || '');
     const d = r.detail || {};
@@ -1114,6 +1172,7 @@ function showResult(r, sceneId) {
     $('resultPanel').innerHTML = `
         <div class="res-eyebrow">Crônica encerrada</div>
         <h2 class="res-title ${bad ? 'bad' : ''}">${names[r.outcome] || 'Aventura concluída'}</h2>
+        ${r.title ? `<p class="res-adv">✧ ${esc(r.title)} ✧</p>` : ''}
         <div class="score-ring">
             <svg viewBox="0 0 130 130" width="130" height="130">
                 <circle cx="65" cy="65" r="56" fill="none" stroke="rgba(168,130,53,.25)" stroke-width="8"></circle>
@@ -1130,6 +1189,7 @@ function showResult(r, sceneId) {
         ${r.leveled_up ? `<div class="levelup">▲ Subiu para o nível ${esc(r.new_level)}!</div>` : ''}
         ${r.chronicle ? `<div class="chronicle"><h4>Crônica do dia</h4>${esc(r.chronicle)}</div>` : ''}
         <p class="res-note">Você jogou ${fmtPlayed(r.seconds_played)} · ${r.reward_pct ?? 0}% da recompensa máxima${r.concluded ? ' · história concluída' : ''}</p>
+        ${REASON_NOTE[reason] ? `<p class="res-note warn">${REASON_NOTE[reason]}</p>` : ''}
         <button class="btn-epic" id="btnBack">Voltar</button>`;
     $('btnBack').onclick = async () => { showView('lobby'); await refreshState(); };
 
@@ -1141,6 +1201,12 @@ function showResult(r, sceneId) {
         countUp($('rwCr'), r.crystals || 0, 2000);
     }, 250));
 }
+
+const REASON_NOTE = {
+    connection_lost: 'A conexão com o Mestre caiu e não voltou. Nota neutra; a recompensa foi calculada pelo tempo jogado.',
+    master_timeout: 'O Mestre não chegou a encerrar a história a tempo. Nota neutra; a recompensa foi calculada pelo tempo jogado.',
+    dead_timeout: 'O herói caiu em combate.',
+};
 
 function fmtPlayed(sec) {
     const s = Math.max(0, Math.round(Number(sec) || 0));
@@ -1181,6 +1247,8 @@ function bindUI() {
         $('btnMic').setAttribute('aria-pressed', String(A.micMuted));
         $('btnMic').classList.toggle('live', !A.micMuted);
     };
+    $('btnBag').onclick = openBagView;
+    $('bagViewClose').onclick = () => closeOv('bagViewModal');
     $('btnPhones').onclick = () => {
         const A = S.adv?.A; if (!A) return;
         A.headphones = !A.headphones;
@@ -1191,7 +1259,7 @@ function bindUI() {
         const adv = S.adv; if (!adv) return;
         if (!confirm('Abandonar a aventura? Você perderá a recompensa e não poderá jogar de novo hoje.')) return;
         adv.finished = true;
-        teardown(); S.adv = null; closeOv('diceOverlay');
+        teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
         toast('Você abandonou a aventura.', true);
         showView('lobby');
         await refreshState();

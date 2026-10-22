@@ -96,8 +96,6 @@
             </div>
 
             <div class="stage-bottom">
-                <div class="choices" id="choices"></div>
-
                 <div class="captions">
                     <div class="cap-master" id="capMaster"></div>
                     <div class="cap-you" id="capYou"></div>
@@ -107,6 +105,11 @@
                     <button class="ctl-btn" id="btnPhones" aria-pressed="false" title="Modo fones: permite interromper o Mestre">
                         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
                         <small>Fones</small>
+                    </button>
+
+                    <button class="ctl-btn" id="btnBag" title="Ver itens da bolsa">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1.5 12a1 1 0 0 1-1 1.1h-13a1 1 0 0 1-1-1.1z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+                        <small>Bolsa <b id="bagBadge">8</b></small>
                     </button>
 
                     <button class="mic-btn" id="btnMic" aria-pressed="false" title="Silenciar / ativar microfone">
@@ -195,11 +198,22 @@
         </div>
     </div>
 
+    <!-- ═════════ MODAL: BOLSA DURANTE A AVENTURA ═════════ -->
+    <div id="bagViewModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box bagview-box">
+            <h3 class="dm-title">Sua bolsa</h3>
+            <p class="dm-sub">Itens que restam nesta aventura</p>
+            <div class="bagview-list" id="bagViewList"></div>
+            <p class="hint bagview-note">Cada item só pode ser usado uma vez por unidade. Sua arma principal é ilimitada.</p>
+            <div class="dm-actions"><button class="btn-epic sm" id="bagViewClose">Fechar</button></div>
+        </div>
+    </div>
+
     <!-- ═════════ MODAL: COMPRA DA AVENTURA EXTRA ═════════ -->
     <div id="buyModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box buy-box">
             <h3 class="dm-title">Aventura extra</h3>
-            <p class="dm-sub">Uma segunda jornada hoje, sem disputar vagas</p>
+            <p class="dm-sub">Mais uma jornada hoje, sem disputar vagas · <span id="buyCount">1 de 3</span></p>
             <div class="buy-price"><span class="coin"></span><b id="buyCost">25</b><small>de ouro</small></div>
             <p class="buy-text">O ouro só é cobrado quando você entrar na aventura, e é devolvido se a conexão com o Mestre falhar antes de ele começar a falar.</p>
             <p class="hint buy-bal">Seu ouro: <b id="buyGold">0</b></p>
@@ -216,13 +230,13 @@
             <h3 class="dm-title">Como funcionam as Diárias</h3>
             <p class="dm-sub">Aventuras narradas ao vivo pelo Mestre</p>
             <ul class="dm-list">
-                <li><b>O Mestre aparece</b> em horários aleatórios ao longo do dia, num local diferente.</li>
+                <li><b>O Mestre aparece</b> em horários aleatórios ao longo do dia e <b>cria uma aventura inédita</b> para cada herói.</li>
                 <li><b>Três vagas</b> por aparição. Quem aceita o chamado recebe um horário; cada herói joga no seu, sozinho.</li>
                 <li><b>Uma aventura por dia</b> por jogador. Perdeu o horário? A vaga passa para outro herói.</li>
                 <li><b>Converse de verdade:</b> descreva o que seu herói faz. Ações arriscadas rolam um <b>d20</b>; o resultado depende da sorte, mas <b>quanto maior seu poder de combate, mais duro é o mundo</b>: inimigos mais fortes, mais emboscadas e chefes mais difíceis.</li>
                 <li><b>Bolsa e vida:</b> você escolhe 8 itens antes de começar e acompanha seu HP e o dos inimigos em %. Cada item vale uma vez, e nada além deles (e da sua arma) pode ser usado.</li>
                 <li><b>Recompensas:</b> XP (1% do nível atual) e até 3000 cristais, conforme seu desempenho e o tempo de aventura. Terminar rápido demais rende menos; concluir a história dentro dos 15 minutos rende o máximo.</li>
-                <li><b>Aventura extra:</b> depois da gratuita, você pode jogar uma segunda vez no dia por 25 de ouro, a qualquer momento, sem disputar as vagas.</li>
+                <li><b>Aventuras extras:</b> depois da gratuita, você pode jogar até <b>3 vezes a mais</b> no dia, por 25 de ouro cada, a qualquer momento e sem disputar as vagas.</li>
             </ul>
             <p class="tip">Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas, usando seus 15 minutos.</p>
             <div class="dm-actions"><button class="btn-epic sm" id="howClose">Entendi</button></div>

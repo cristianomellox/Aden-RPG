@@ -12,7 +12,9 @@ const POLL_MS = 20000;
 const SEND_CHUNK = 1280;                                   // 80 ms de áudio a 16 kHz
 const WARN_AT_S = 120;                                     // aviso: restam 2 min → cenas finais
 const END_AT_S = 60;                                       // ENCERRAR: resta 1 min
-const EARLY_END_GUARD_S = 150;                             // end_adventure é recusado antes disso (exceto se o herói cair)
+const EARLY_END_GUARD_S = 60;                              // end_adventure só é aceito quando resta 1 min ou menos (exceto se o herói cair)
+// Voz do jogador: sensibilidade baixa evita que ruído/eco/respiração corte o Mestre no meio da frase
+const VAD_CFG = { automaticActivityDetection: { startOfSpeechSensitivity: 'START_SENSITIVITY_LOW', endOfSpeechSensitivity: 'END_SENSITIVITY_LOW', prefixPaddingMs: 120, silenceDurationMs: 800 } };
 const EXTRA_COST_FALLBACK = 25;
 const BAG_SIZE = 8;
 const HEAL_POTION = 20;                                    // % de HP da poção de cura
@@ -362,7 +364,8 @@ function tickLobby() {
     }
 }
 
-function openBrief() {
+async function openBrief() {
+    if (!(await window.AdenMic?.precheck?.())) return;          // microfone bloqueado: modal com tutorial e NÃO inicia
     const my = S.state?.my_slot, cost = S.state?.extra?.cost ?? EXTRA_COST_FALLBACK;
     const paid = my?.kind === 'paid';
     $('briefPaid').style.display = paid ? 'block' : 'none';
@@ -628,7 +631,7 @@ function b64FromFloats(arr) {
     return btoa(bin);
 }
 
-const masterSpeaking = (A) => A.ctx.currentTime < A.nextTime + 0.35;
+const masterSpeaking = (A) => A.ctx.currentTime < A.nextTime + 0.5;
 
 function playPcm24(A, b64) {
     const bin = atob(b64), n = bin.length >> 1;
@@ -669,6 +672,17 @@ async function failStart(why, detail) {
     await refreshState();
 }
 
+// O idioma escolhido fica em players.language (set_player_language). Quem escolheu o idioma antes de logar
+// só tem o cookie googtrans: sincronizamos aqui, sem bloquear o início se falhar.
+const LANGS_OK = ['pt','en','es','zh-CN','ja','ko','id','tl','ru','it','fr','hi','ms','vi','ar'];
+async function syncLanguage() {
+    try {
+        const m = document.cookie.split(';').map((c) => c.trim()).find((c) => c.startsWith('googtrans='));
+        const lang = m ? decodeURIComponent(m.split('=')[1] || '').split('/').pop() : 'pt';
+        if (lang && LANGS_OK.includes(lang)) await supabase.rpc('set_player_language', { p_lang: lang });
+    } catch (_) { /* best-effort */ }
+}
+
 async function startAdventure(loadout) {
     if (S.starting) return;                                    // evita toque duplo
     S.starting = true;
@@ -685,6 +699,7 @@ async function _startAdventure(loadout) {
         A = await initAudio();                                   // 1º: microfone (se negar, a vaga não é gasta)
         A.headphones = $('chkPhones').checked;
         busy(true, 'Invocando o Mestre…');
+        await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         ctx = await callFn('mission-token', { slot_id: my.id, loadout });   // o cronômetro só começa aqui, depois da bolsa
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
@@ -697,7 +712,7 @@ async function _startAdventure(loadout) {
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
-        if (denied) toast('Permita o microfone para jogar.', true);
+        if (denied) { toast('Permita o microfone para jogar.', true); window.AdenMic?.showBlocked?.(); }
         else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
         await refreshState();
         return;
@@ -715,6 +730,7 @@ function newAdv(slotId, ctx, A, sdk) {
         endMs: startMs + ctx.session_minutes * 60000, totalMs: ctx.session_minutes * 60000,
         session: null, handle: null, reconnects: 0, opened: false,
         warned: false, forced: false, finished: false, closing: false,
+        turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false,
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
@@ -730,6 +746,7 @@ async function connectLive(isRetry) {
     const config = { responseModalities: [adv.sdk.Modality.AUDIO] };
     if (adv.handle) config.sessionResumption = { handle: adv.handle };
     if (adv.degraded) {                                          // o token não travou estes campos: enviamos aqui
+        config.realtimeInputConfig = VAD_CFG;
         config.inputAudioTranscription = {};
         config.outputAudioTranscription = {};
         config.contextWindowCompression = { slidingWindow: {} };
@@ -755,7 +772,8 @@ async function connectLive(isRetry) {
     });
 
     if (isRetry) {
-        sendText(recapText(adv));                                // o contexto pode não voltar com o handle: reenvia o estado
+        // Retomada limpa (handle válido e o Mestre não estava devendo/cortado): não envia nada, senão ele repete a fala.
+        if (!(adv.handle && adv.turnDone)) sendText(recapText(adv));
     } else {
         sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
     }
@@ -806,21 +824,49 @@ function onLiveClosed() {
     }
 }
 
+// Troca de conexão planejada (goAway): só fecha quando o Mestre está calado (ou no limite do aviso do servidor).
+function softReconnect(adv, timeLeft) {
+    if (adv.reconnecting) return;
+    adv.reconnecting = true;
+    const secs = parseFloat(String(timeLeft || '')) || 10;
+    const deadline = Date.now() + clamp(secs * 1000 - 3000, 1000, 12000);
+    const wait = () => {
+        if (S.adv !== adv || adv.finished) return;
+        const idle = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy;
+        if (idle || Date.now() > deadline) { adv.reconnecting = false; try { adv.session.close(); } catch (_) { /* ok */ } return; }
+        setTimeout(wait, 200);
+    };
+    wait();
+}
+
+// Avisos [SISTEMA]: um texto em tempo real faz o Gemini responder na hora (e corta a fala do Mestre).
+// Por isso: os suaves vão junto da PRÓXIMA resposta de ferramenta; se não houver, saem quando o Mestre estiver calado
+// e o jogador também; os urgentes (ENCERRAR) esperam o Mestre terminar a frase (no máximo 8 s).
+function queueNote(adv, text, urgent) { adv.notes.push({ text, urgent: !!urgent, at: Date.now() }); }
+function flushNotes(adv) {
+    if (!adv.notes.length || adv.finished || !adv.session) return;
+    const now = Date.now();
+    const idle = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && now - adv.lastPlayerAt > 1500;
+    const urgent = adv.notes.some((n) => n.urgent);
+    if (!idle) { if (!(urgent && now - adv.notes.find((n) => n.urgent).at > 8000)) return; }
+    else if (!urgent && now - adv.notes[0].at < 40000) return;   // suave: dá 40 s para pegar carona numa ferramenta
+    const text = adv.notes.map((n) => n.text).join(' ');
+    adv.notes = [];
+    sendText(text);
+}
+
 // ----- mensagens do Gemini -----
 async function onLiveMessage(msg) {
     const adv = S.adv; if (!adv) return;
 
     if (msg.sessionResumptionUpdate?.newHandle && msg.sessionResumptionUpdate.resumable !== false) adv.handle = msg.sessionResumptionUpdate.newHandle;
-    if (msg.goAway) {
-        // o servidor vai encerrar a conexão: reconecta usando o handle (mesmo token)
-        try { adv.session.close(); } catch (_) { /* ok */ }
-    }
+    if (msg.goAway) softReconnect(adv, msg.goAway.timeLeft);   // espera o Mestre terminar a frase antes de trocar a conexão
 
     const sc = msg.serverContent;
     if (sc) {
-        if (sc.interrupted) { flushPlayback(adv.A); adv.newTurn = true; }
+        if (sc.interrupted) { flushPlayback(adv.A); adv.newTurn = true; adv.turnDone = true; }
         for (const p of sc.modelTurn?.parts || []) {
-            if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) playPcm24(adv.A, p.inlineData.data);
+            if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) { adv.turnDone = false; playPcm24(adv.A, p.inlineData.data); }
         }
         if (sc.outputTranscription?.text) {
             if (adv.newTurn) {
@@ -834,10 +880,11 @@ async function onLiveMessage(msg) {
             $('capMaster').scrollTop = 99999;
         }
         if (sc.inputTranscription?.text) {
+            adv.turnDone = false; adv.lastPlayerAt = Date.now();      // o jogador falou: o Mestre agora deve uma resposta
             adv.youBuf += sc.inputTranscription.text;
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
-        if (sc.turnComplete) adv.newTurn = true;
+        if (sc.turnComplete) { adv.newTurn = true; adv.turnDone = true; }
     }
 
     if (msg.toolCall?.functionCalls?.length) await onToolCall(msg.toolCall.functionCalls);
@@ -982,6 +1029,7 @@ function toolStatus(adv) {
 
 async function onToolCall(calls) {
     const adv = S.adv;
+    adv.toolBusy = true;
     const responses = [];
     for (const c of calls) {
         let out = { ok: true };
@@ -1002,7 +1050,7 @@ async function onToolCall(calls) {
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
                 if (!adv.dead && left > EARLY_END_GUARD_S * 1000) {
-                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Continue a aventura e só encerre quando o sistema avisar que restam 2 minutos.' };
+                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Continue a aventura e só encerre quando o sistema enviar [SISTEMA] ENCERRAR (resta 1 minuto).' };
                 } else {
                     adv.endPayload = { ...a };
                     if (adv.dead) adv.endPayload.outcome = 'derrota';
@@ -1011,6 +1059,13 @@ async function onToolCall(calls) {
         } catch (e) { out = { ok: false, erro: String(e.message || e) }; }
         responses.push({ id: c.id, name: c.name, response: out });
     }
+    const soft = adv.notes.filter((n) => !n.urgent);
+    if (soft.length && responses.length) {                        // carona: o Mestre lê o aviso na resposta da ferramenta, sem fala extra
+        adv.notes = adv.notes.filter((n) => n.urgent);
+        const last = responses[responses.length - 1];
+        last.response = { ...last.response, aviso_sistema: soft.map((n) => n.text.replace('[SISTEMA] ', '')).join(' ') };
+    }
+    adv.toolBusy = false;
     try { adv.session.sendToolResponse({ functionResponses: responses }); } catch (e) { console.warn(e); }
     if (adv.endPayload && !adv.finished) finishAdventure(adv.endPayload, false);   // o epílogo já foi narrado antes da chamada
 }
@@ -1128,16 +1183,17 @@ function advTick() {
 
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
-        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; sendText(m.text); }
+        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            sendText('[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo e o desfecho. Não inicie novos combates.');
+            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo. NÃO encerre ainda e NÃO chame end_adventure: o desfecho final só começa quando você receber [SISTEMA] ENCERRAR, quando restar 1 minuto. Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true;
-            sendText('[SISTEMA] ENCERRAR. Narre o desfecho agora (30 a 60 segundos), resuma o desempenho do jogador e chame end_adventure.');
+            queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
+    flushNotes(adv);
     if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true, 'master_timeout');   // o mestre não encerrou: envia nota neutra
 }
 

@@ -774,7 +774,7 @@ function newAdv(slotId, ctx, A, sdk) {
         endMs: startMs + ctx.session_minutes * 60000, totalMs: ctx.session_minutes * 60000,
         session: null, handle: null, reconnects: 0, opened: false,
         warned: false, forced: false, finished: false, closing: false,
-        turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false,
+        turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
@@ -811,31 +811,37 @@ async function connectLive(isRetry) {
                 onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
             },
             onerror: (e) => { adv.lastErr = String(e?.message || e?.error?.message || 'erro de conexão'); console.warn('[diarias] ws erro:', adv.lastErr); },
-            onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); onLiveClosed(); },
+            onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); adv.connected = false; onLiveClosed(); },
         },
     });
 
+    adv.connected = true;
     if (isRetry) {
-        // Retomada limpa (handle válido e o Mestre não estava devendo/cortado): não envia nada, senão ele repete a fala.
-        if (!(adv.handle && adv.turnDone)) sendText(recapText(adv));
+        // SEMPRE reenvia o estado: o handle de retomada nem sempre restaura o contexto (sem isto o Mestre recomeça a história).
+        // Se o jogador falou durante a queda, o áudio guardado é reenviado primeiro e o Mestre responde a ele.
+        const buf = adv.pendingAudio.splice(0);
+        const speech = buf.some((c) => c.loud);
+        if (speech) buf.forEach((c) => { try { adv.session.sendRealtimeInput({ audio: { data: c.b64, mimeType: 'audio/pcm;rate=16000' } }); } catch (_) { /* ok */ } });
+        sendText(recapText(adv, speech));
     } else {
         sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
     }
 }
 
 // Texto de retomada após reconexão: estado do jogo + últimas falas (o handle nem sempre restaura o contexto)
-function recapText(adv) {
+function recapText(adv, spoke = false) {
     const left = Math.max(0, adv.endMs - serverNow());
     const elapsedMin = Math.floor((adv.totalMs - left) / 60000);
     const bag = Object.entries(adv.inv).map(([id, q]) => `${ITEM_BY_ID[id]?.name || id} x${q}`).join(', ');
-    const hist = adv.hist.slice(-6).map((h) => `${h.who}: ${h.text}`);
+    const hist = adv.hist.slice(-14).map((h) => `${h.who}: ${h.text}`);
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
         + (adv.bossDown ? 'O CHEFE JÁ FOI DERROTADO. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
-        + (adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
+        + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
+            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
 }
 
 function sendText(text) {
@@ -844,8 +850,21 @@ function sendText(text) {
     catch (_) { try { s.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true }); } catch (e) { console.warn(e); } }
 }
 
+// energia do trecho (PCM16): decide se o jogador falou durante a queda
+function chunkLoud(b64) {
+    try {
+        const bin = atob(b64); let sum = 0, n = 0;
+        for (let i = 0; i + 1 < bin.length; i += 8) { let v = bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8); if (v > 32767) v -= 65536; sum += v * v; n++; }
+        return n > 0 && Math.sqrt(sum / n) > 700;
+    } catch (_) { return false; }
+}
+
 function sendAudio(b64) {
-    const s = S.adv?.session; if (!s) return;
+    const adv = S.adv; const s = adv?.session; if (!s) return;
+    if (adv.connected === false) {                                // conexão fora: guarda ~20 s de áudio para reenviar na volta
+        if (adv.gotMsg) { adv.pendingAudio.push({ b64, loud: chunkLoud(b64) }); if (adv.pendingAudio.length > 80) adv.pendingAudio.shift(); }
+        return;
+    }
     try { s.sendRealtimeInput({ audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } }); }
     catch (_) { /* conexão fechando: ignora */ }
 }
@@ -877,7 +896,7 @@ function softReconnect(adv, timeLeft) {
     const deadline = Date.now() + clamp(secs * 1000 - 3000, 1000, 12000);
     const wait = () => {
         if (S.adv !== adv || adv.finished) return;
-        const idle = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy;
+        const idle = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && Date.now() - adv.lastPlayerAt > 2500;
         if (idle || Date.now() > deadline) { adv.reconnecting = false; try { adv.session.close(); } catch (_) { /* ok */ } return; }
         setTimeout(wait, 200);
     };
@@ -917,7 +936,7 @@ async function onLiveMessage(msg) {
             if (adv.newTurn) {
                 if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
                 if (adv.youBuf) adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) });
-                if (adv.hist.length > 10) adv.hist.splice(0, adv.hist.length - 10);
+                if (adv.hist.length > 24) adv.hist.splice(0, adv.hist.length - 24);
                 adv.masterBuf = ''; adv.youBuf = ''; $('capYou').textContent = ''; adv.newTurn = false;
             }
             adv.masterBuf += sc.outputTranscription.text;

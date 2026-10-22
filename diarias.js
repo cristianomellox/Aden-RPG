@@ -34,6 +34,7 @@ const MARKS = [
     { at: 1260, text: '[SISTEMA] MARCO (21 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o chefe ainda não apareceu, ele deve entrar em cena AGORA, para o confronto caber no tempo que resta.' },
 ];
 const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
+const END_OK_S = 20 * 60;                                  // a partir daqui o Mestre pode encerrar quando o jogador escolher concluir
 const GIVEUP_AFTER_S = 75;                                 // sem fim após 15:00 + 75 s → envia nota neutra
 
 const $ = (id) => document.getElementById(id);
@@ -838,7 +839,7 @@ function recapText(adv, spoke = false) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + (adv.bossDown ? 'O CHEFE JÁ FOI DERROTADO. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.bossDown ? 'O CHEFE JÁ FOI DERROTADO: estamos no FINAL (retorno, entrega e opções finais). ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
             : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
@@ -1023,8 +1024,8 @@ function toolDamage(adv, args) {
                 const cedo = elapsedS(adv) < BOSS_MIN_S;
                 return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, chefe_derrotado: nome, ...hpState(adv),
                     instrucao: cedo
-                        ? `O chefe ${nome} foi derrotado cedo demais. Narre a morte à altura do golpe (${intensidade}) e CONTINUE a história com as consequências, um epílogo vivo e novas cenas (sem novo chefe) até receber [SISTEMA] ENCERRAR. Termine dizendo 3 opções de ação em voz alta e PARE.`
-                        : `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e PARE (sem listar opções). O jogo enviará [SISTEMA] ENCERRAR em seguida: aí você narra o desfecho e chama end_adventure.` };
+                        ? `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC/ponto de partida, entrega, agradecimento e depois as 3 opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz). O encerramento só será aceito a partir de ${Math.ceil((BOSS_MIN_S - elapsedS(adv)) / 60)} min: se o jogador quiser concluir antes disso, conduza mais uma cena curta e ofereça as opções de novo.`
+                        : `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC/ponto de partida (não deixe o herói parado onde lutou), entrega, agradecimento e, se restarem mais de 2 minutos, as 3 opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz). NÃO chame end_adventure até o jogador escolher concluir (ou o sistema enviar ENCERRAR).` };
             }
             return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
         }
@@ -1121,8 +1122,8 @@ async function onToolCall(calls) {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
-                if (!adv.dead && !bossReady(adv) && left > EARLY_END_GUARD_S * 1000) {
-                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Continue a aventura e só encerre quando o sistema enviar [SISTEMA] ENCERRAR (resta 1 minuto).' };
+                if (!adv.dead && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
+                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Se o objetivo já foi cumprido, conduza o retorno, a entrega e as opções finais; só dá para concluir depois que o chefe cair (com 15 min de aventura), aos 20 min, ou quando o sistema enviar [SISTEMA] ENCERRAR.' };
                 } else {
                     adv.endPayload = { ...a };
                     if (adv.dead) adv.endPayload.outcome = 'derrota';
@@ -1259,13 +1260,11 @@ function advTick() {
         for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo. NÃO encerre ainda e NÃO chame end_adventure: o desfecho final só começa quando você receber [SISTEMA] ENCERRAR, quando restar 1 minuto. Não inicie novos combates.', false);
+            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá direto ao retorno e à entrega (sem novas jornadas nem opções finais se o tempo for curto). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
-        if (!adv.forced && (left <= END_AT_S * 1000 || bossReady(adv))) {
+        if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true;                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            queueNote(adv, adv.bossDown
-                ? '[SISTEMA] ENCERRAR. O chefe foi derrotado. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.'
-                : '[SISTEMA] ENCERRAR. Resta 1 minuto. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
+            queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
     flushNotes(adv);

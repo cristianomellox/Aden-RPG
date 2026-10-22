@@ -29,9 +29,11 @@ const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
 const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 8;
 // marcos de ritmo enviados ao Mestre (segundos desde o início da sessão)
 const MARKS = [
-    { at: 180, text: '[SISTEMA] MARCO (3 min de 15), NÃO responda falando agora; aplique na sua próxima fala: se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
-    { at: 480, text: '[SISTEMA] MARCO (8 min de 15), NÃO responda falando agora; aplique na sua próxima fala: aproxime o herói do lugar do objetivo. Gere tensão e prepare o CHEFE, cuja luta deve ser longa e emocionante.' },
+    { at: 300, text: '[SISTEMA] MARCO (5 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
+    { at: 900, text: '[SISTEMA] MARCO (15 min de 30), NÃO responda falando agora; aplique na sua próxima fala: a partir de agora o herói se aproxima do lugar do objetivo e o CHEFE pode finalmente aparecer. Gere tensão e prepare a luta, que deve ser longa e emocionante.' },
+    { at: 1260, text: '[SISTEMA] MARCO (21 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o chefe ainda não apareceu, ele deve entrar em cena AGORA, para o confronto caber no tempo que resta.' },
 ];
+const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
 const GIVEUP_AFTER_S = 75;                                 // sem fim após 15:00 + 75 s → envia nota neutra
 
 const $ = (id) => document.getElementById(id);
@@ -61,8 +63,28 @@ const ERR = {
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
     extra_limit: 'Você já usou todas as aventuras extras de hoje.',
     extra_pending: 'Você já tem uma aventura extra esperando por você.',
+    master_busy: 'O Mestre está ocupado com outros aventureiros. Tente novamente em alguns minutos.',
+    gemini_unavailable: 'O Mestre está indisponível no momento. Tente novamente em alguns minutos.',
+    gemini_auth: 'O Mestre está em manutenção. Tente novamente mais tarde.',
+    server_not_configured: 'O Mestre está em manutenção. Tente novamente mais tarde.',
+    prepare_failed: 'Não foi possível preparar a aventura. Tente novamente.',
+    no_connection: 'Sem conexão com o servidor. Verifique a sua internet e tente novamente.',
 };
-const friendly = (m) => ERR[String(m || '').trim()] || 'Algo deu errado. Tente novamente.';
+const BUSY_MSG = ERR.master_busy;
+
+// Classifica o texto de um erro vindo do Gemini / da rede (códigos HTTP, status gRPC e códigos de fechamento do WebSocket)
+function geminiKind(text) {
+    const t = String(text || '');
+    if (/failed to send|failed to fetch|networkerror|network request failed|load failed/i.test(t)) return 'no_connection';
+    if (/\b429\b|quota|resource[_ ]?exhaust|rate.?limit|too many|overload|exceed/i.test(t)) return 'master_busy';
+    if (/\b40[13]\b|unauthenticated|permission[_ ]denied|api key|token.*(expired|invalid)|expired/i.test(t)) return 'gemini_auth';
+    if (/\b50[0-4]\b|internal|unavailable|deadline|time-?out|\b101[13]\b/i.test(t)) return 'gemini_unavailable';
+    return null;
+}
+const friendly = (m) => {
+    const k = String(m || '').trim();
+    return ERR[k] || ERR[geminiKind(k)] || 'Algo deu errado. Tente novamente.';
+};
 
 function showDebug(title, text) {
     $('errTitle').textContent = title || 'Algo deu errado';
@@ -246,7 +268,7 @@ async function refreshState() {
 
 function renderCard(html) { $('questCard').innerHTML = html; }
 
-const TIP = 'Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas, usando seus 15 minutos.';
+const TIP = 'Dica: conduza a história e realize mais ações para ter um desempenho melhor nas recompensas. Derrote o chefe depois de 15 minutos de aventura (e antes de acabar o tempo) para ganhar a recompensa máxima.';
 
 function extraBlock(st) {
     const x = st.extra; if (!x) return '';
@@ -631,6 +653,9 @@ function b64FromFloats(arr) {
     return btoa(bin);
 }
 
+const elapsedS = (adv) => (adv.totalMs - (adv.endMs - serverNow())) / 1000;
+const bossReady = (adv) => !!adv.bossDown && elapsedS(adv) >= BOSS_MIN_S;
+
 const masterSpeaking = (A) => A.ctx.currentTime < A.nextTime + 0.5;
 
 function playPcm24(A, b64) {
@@ -658,6 +683,24 @@ async function drainPlayback(A, maxMs = 9000) {
     while (masterSpeaking(A) && Date.now() - t0 < maxMs) await sleep(150);
 }
 
+// Encerramento: espera o Mestre falar TUDO antes de sair da tela. O áudio chega mais rápido que o tempo real,
+// então a fila de reprodução pode ter bem mais de 9 s. Só sai quando (a) o servidor sinalizou fim de turno e
+// o áudio acabou, ou (b) ficou em silêncio por um tempo; teto de segurança de 75 s.
+async function awaitMasterDone(adv, maxMs = 75000) {
+    const t0 = Date.now();
+    let quietSince = 0;
+    while (Date.now() - t0 < maxMs) {
+        const talking = masterSpeaking(adv.A);
+        if (talking) quietSince = 0;
+        else {
+            quietSince = quietSince || Date.now();
+            const needed = adv.turnDone ? 1200 : 5000;           // sem fim de turno: o Mestre ainda pode continuar após a ferramenta
+            if (Date.now() - quietSince > needed) break;
+        }
+        await sleep(150);
+    }
+}
+
 // ---------------------------------------------------------------------
 // AVENTURA
 // ---------------------------------------------------------------------
@@ -668,7 +711,7 @@ async function failStart(why, detail) {
     closeOv('diceOverlay'); busy(false);
     if (slot) { try { await callFn('mission-token', { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
     showView('lobby');
-    showDebug(why, detail);
+    if (why === BUSY_MSG) toast(why, true); else showDebug(why, detail);
     await refreshState();
 }
 
@@ -713,6 +756,7 @@ async function _startAdventure(loadout) {
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
         if (denied) { toast('Permita o microfone para jogar.', true); window.AdenMic?.showBlocked?.(); }
+        else if (friendly(e.message) === BUSY_MSG) toast(BUSY_MSG, true);   // lotado: aviso simples, a vaga continua sua
         else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
         await refreshState();
         return;
@@ -789,7 +833,7 @@ function recapText(adv) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.bossDown ? 'O CHEFE JÁ FOI DERROTADO. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
 }
@@ -809,7 +853,7 @@ function sendAudio(b64) {
 function onLiveClosed() {
     const adv = S.adv; if (!adv || adv.finished || adv.closing) return;
     if (!adv.gotMsg) {                                           // recusada logo na abertura (token/config/modelo)
-        failStart('O Mestre recusou a conexão', `${adv.lastClose || ''}\n${adv.lastErr || ''}\nmodelo: ${adv.model}${adv.degraded ? ' (config enxuta)' : ''}`.trim());
+        failStart(ERR[geminiKind(`${adv.lastClose || ''} ${adv.lastErr || ''}`)] || 'O Mestre recusou a conexão', `${adv.lastClose || ''}\n${adv.lastErr || ''}\nmodelo: ${adv.model}${adv.degraded ? ' (config enxuta)' : ''}`.trim());
         return;
     }
     const left = adv.endMs + GIVEUP_AFTER_S * 1000 - serverNow();
@@ -819,7 +863,8 @@ function onLiveClosed() {
         setTimeout(() => { if (S.adv === adv && !adv.finished) connectLive(true).catch(() => onLiveClosed()); }, 900 * adv.reconnects);
     } else if (!adv.finished) {
         console.warn('[diarias] conexão perdida:', adv.lastClose, adv.lastErr);
-        toast('Conexão perdida com o Mestre.', true);
+        const k = geminiKind(`${adv.lastClose || ''} ${adv.lastErr || ''}`);
+        toast(k === 'master_busy' ? 'O Mestre ficou ocupado e a conexão caiu.' : k === 'gemini_unavailable' ? 'O Mestre ficou indisponível e a conexão caiu.' : 'Conexão perdida com o Mestre.', true);
         finishAdventure(null, true, 'connection_lost');
     }
 }
@@ -864,7 +909,7 @@ async function onLiveMessage(msg) {
 
     const sc = msg.serverContent;
     if (sc) {
-        if (sc.interrupted) { flushPlayback(adv.A); adv.newTurn = true; adv.turnDone = true; }
+        if (sc.interrupted) { if (!adv.ending && !adv.forced) flushPlayback(adv.A); adv.newTurn = true; adv.turnDone = true; }
         for (const p of sc.modelTurn?.parts || []) {
             if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) { adv.turnDone = false; playPcm24(adv.A, p.inlineData.data); }
         }
@@ -953,7 +998,15 @@ function toolDamage(adv, args) {
         floatHp('Foe', (crit ? 'CRÍTICO −' : '−') + pct + '%', 'dmg'); setHp('Foe', adv.enemy.hp);
         const intensidade = crit ? 'critico' : f >= 1.2 ? 'forte' : f < 0.95 ? 'fraco' : 'normal';
         if (adv.enemy.hp <= 0) {
-            const nome = adv.enemy.name; adv.enemy = null; defeatFoe(adv);
+            const nome = adv.enemy.name, eraChefe = !!adv.enemy.boss; adv.enemy = null; defeatFoe(adv);
+            if (eraChefe) {
+                adv.bossDown = true;
+                const cedo = elapsedS(adv) < BOSS_MIN_S;
+                return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, chefe_derrotado: nome, ...hpState(adv),
+                    instrucao: cedo
+                        ? `O chefe ${nome} foi derrotado cedo demais. Narre a morte à altura do golpe (${intensidade}) e CONTINUE a história com as consequências, um epílogo vivo e novas cenas (sem novo chefe) até receber [SISTEMA] ENCERRAR. Termine dizendo 3 opções de ação em voz alta e PARE.`
+                        : `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e PARE (sem listar opções). O jogo enviará [SISTEMA] ENCERRAR em seguida: aí você narra o desfecho e chama end_adventure.` };
+            }
             return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
         }
         return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, ...hpState(adv), instrucao: `Golpe ${intensidade}. Narre à altura, deixe o inimigo reagir (pode falar em primeira pessoa) e apenas pergunte o que o herói faz, SEM listar opções (estamos em combate). PARE e espere o jogador.` };
@@ -1049,11 +1102,12 @@ async function onToolCall(calls) {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
-                if (!adv.dead && left > EARLY_END_GUARD_S * 1000) {
+                if (!adv.dead && !bossReady(adv) && left > EARLY_END_GUARD_S * 1000) {
                     out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Continue a aventura e só encerre quando o sistema enviar [SISTEMA] ENCERRAR (resta 1 minuto).' };
                 } else {
                     adv.endPayload = { ...a };
                     if (adv.dead) adv.endPayload.outcome = 'derrota';
+                    out = { ok: true, aviso: 'Aventura encerrada e registrada. Termine a frase atual se estiver no meio dela; não inicie nada novo nem responda ao jogador.' };
                 }
             }
         } catch (e) { out = { ok: false, erro: String(e.message || e) }; }
@@ -1138,7 +1192,7 @@ function enterStage() {
     // microfone → servidor (reduz 48/44,1 kHz para 16 kHz e envia blocos de 80 ms)
     const A = adv.A, ratio = A.ctx.sampleRate / 16000;
     A.node.port.onmessage = (e) => {
-        if (A.micMuted || (!A.headphones && masterSpeaking(A))) return;       // sem eco: não ouve enquanto o mestre fala
+        if (A.micMuted || A.endMute || (!A.headphones && masterSpeaking(A))) return;       // sem eco: não ouve enquanto o mestre fala
         const f = e.data, outLen = Math.floor(f.length / ratio);
         for (let i = 0; i < outLen; i++) {
             const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio));
@@ -1188,9 +1242,11 @@ function advTick() {
             adv.warned = true;
             queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; depois o objetivo. NÃO encerre ainda e NÃO chame end_adventure: o desfecho final só começa quando você receber [SISTEMA] ENCERRAR, quando restar 1 minuto. Não inicie novos combates.', false);
         }
-        if (!adv.forced && left <= END_AT_S * 1000) {
-            adv.forced = true;
-            queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
+        if (!adv.forced && (left <= END_AT_S * 1000 || bossReady(adv))) {
+            adv.forced = true; adv.A.endMute = true;                  // a partir do ENCERRAR o Mestre fala sem ser cortado
+            queueNote(adv, adv.bossDown
+                ? '[SISTEMA] ENCERRAR. O chefe foi derrotado. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.'
+                : '[SISTEMA] ENCERRAR. Resta 1 minuto. Narre o desfecho agora (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
     flushNotes(adv);
@@ -1214,13 +1270,17 @@ const readPending = (slot) => { try { return JSON.parse(localStorage.getItem(pen
 async function finishAdventure(payload, fallback, reason) {
     const adv = S.adv; if (!adv || adv.finished) return;
     adv.finished = true;
-    if (!fallback) await drainPlayback(adv.A);                    // deixa o mestre terminar a última frase
+    if (!fallback) {
+        adv.ending = true; adv.A.endMute = true;                  // ninguém interrompe o desfecho (nem ruído do microfone)
+        await awaitMasterDone(adv);                               // deixa o mestre terminar TODA a fala
+    }
     const slotId = adv.slotId, sceneId = adv.scene;
+    const bossDown = !!adv.bossDown;
     const clientSeconds = adv.liveMs ? Math.round((Date.now() - adv.liveMs) / 1000) : null;
     teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
 
     const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: adv.dead ? 'derrota' : 'vitoria_parcial', chronicle: '' };
-    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, title: p.title || '', scene: sceneId, client_seconds: clientSeconds, reason: reason || (fallback ? 'fallback' : 'master') };
+    const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, title: p.title || '', scene: sceneId, client_seconds: clientSeconds, boss: bossDown, reason: reason || (fallback ? 'fallback' : 'master') };
     console.info('[diarias] encerrando aventura. motivo:', pending.reason);
     localStorage.setItem(pendKey(slotId), JSON.stringify(pending));   // garante o envio mesmo se a página fechar
     await submitFinish(pending);
@@ -1229,7 +1289,7 @@ async function finishAdventure(payload, fallback, reason) {
 async function submitFinish(pending) {
     busy(true, 'O Mestre pesa seus feitos…');
     try {
-        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle, title: pending.title, client_seconds: pending.client_seconds });
+        const out = await callFn('mission-finish', { slot_id: pending.slot_id, detail: pending.detail, outcome: pending.outcome, chronicle: pending.chronicle, title: pending.title, client_seconds: pending.client_seconds, boss_defeated: !!pending.boss });
         localStorage.removeItem(pendKey(pending.slot_id));
         busy(false);
         showResult(out.result, pending.scene, pending.reason);

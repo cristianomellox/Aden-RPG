@@ -20,6 +20,9 @@ const BOSS_MAX_HIT = 25;                                   // dano máximo (%) p
 const PLAYER_MAX_HIT = 35;                                 // dano máximo (%) por evento no herói
 const MIN_HIT_COMMON = 25;                                 // dano mínimo (%) de um golpe em criatura comum (morre em até 4 golpes)
 const ENEMY_IMG = ASSETS + 'mission_ene.webp';
+// O jogo põe um emoji antes do nome de quem vence batalhas de guilda; ele é removido antes de qualquer uso.
+const EMOJI_RE = /[\p{Extended_Pictographic}\p{So}\p{Regional_Indicator}\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu;
+const stripEmoji = (t) => String(t ?? '').replace(EMOJI_RE, '').replace(/\s+/g, ' ').trim();
 const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
 const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 8;
 // marcos de ritmo enviados ao Mestre (segundos desde o início da sessão)
@@ -449,7 +452,7 @@ async function loadHeroProfile() {
             if (data) h = { name: h.name || data.name || '', avatar: h.avatar || data.avatar_url || '' };
         } catch (_) { /* sem rede: segue com o que tem */ }
     }
-    S.hero = h;
+    S.hero = { name: stripEmoji(h.name), avatar: h.avatar };
 }
 
 // ---------------------------------------------------------------------
@@ -463,6 +466,11 @@ const _star = (cx, cy, n, r1, r2, rot = -90) => Array.from({ length: n * 2 }, (_
 const _rays = (cx, cy, n, r1, r2) => Array.from({ length: n }, (_, i) => {
     const a = (i * 360 / n) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
     return `M${(cx + r1 * c).toFixed(1)} ${(cy + r1 * sn).toFixed(1)}L${(cx + r2 * c).toFixed(1)} ${(cy + r2 * sn).toFixed(1)}`;
+}).join('');
+
+const _spiral = (cx, cy, turns, rmax) => Array.from({ length: 61 }, (_, i) => {
+    const t = i / 60, a = t * turns * 2 * Math.PI, r = t * rmax;
+    return (i ? 'L' : 'M') + (cx + r * Math.cos(a)).toFixed(1) + ' ' + (cy + r * Math.sin(a)).toFixed(1);
 }).join('');
 
 const ITEMS = [
@@ -486,6 +494,12 @@ const ITEMS = [
       svg: _svg('<path d="M24 5v38M7.5 14.5l33 19M7.5 33.5l33-19" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 9l5 4 5-4M19 39l5-4 5 4M9 24l5 1 .5-5M39 24l-5 1-.5-5" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4" fill="#d8f6ff" stroke="#9fe3ff" stroke-width="1.6"/>') },
     { id: 'enc_sombras', name: 'Encantamento de sombras', desc: 'Chance de escurecer o ambiente por instantes.',
       svg: _svg('<path d="M31 6a18 18 0 1 0 11 29A15 15 0 0 1 31 6z" fill="#3a2d63" stroke="#9b87d9" stroke-width="2"/><circle cx="14" cy="14" r="1.6" fill="#cbb8ff" stroke="none"/><circle cx="38" cy="12" r="1.2" fill="#cbb8ff" stroke="none"/><circle cx="40" cy="22" r="1.4" fill="#cbb8ff" stroke="none"/><path d="M15 31c3-3 6 0 9-3" stroke="#6f5bb3" stroke-width="2"/>') },
+    { id: 'enc_critico', name: 'Encantamento de dano crítico', desc: 'O próximo ataque bem-sucedido causa o dobro de dano. Se errar, continua válido.',
+      svg: _svg(`<polygon points="${_star(24, 24, 8, 21, 12)}" fill="#c0262f" stroke="#ffd27a" stroke-width="2"/><polygon points="${_star(24, 24, 8, 16, 9, -67.5)}" fill="#e8454f" stroke="none"/><text x="24" y="30" text-anchor="middle" font-size="15" font-weight="bold" font-family="sans-serif" fill="#fff" stroke="none">×2</text>`) },
+    { id: 'enc_controle', name: 'Encantamento de controle mental', desc: 'Chance de controlar a mente de um animal ou ser vivo para uma ação.',
+      svg: _svg(`<circle cx="24" cy="24" r="18" fill="#2a1740" stroke="#c77dff" stroke-width="2"/><path d="${_spiral(24, 24, 2.6, 13.5)}" stroke="#e8c4ff" stroke-width="2"/><circle cx="24" cy="24" r="2" fill="#fff" stroke="none"/><path d="M24 6V2M9.5 10L7 7.5M38.5 10L41 7.5" stroke="#c77dff" stroke-width="2"/>`) },
+    { id: 'enc_verdade', name: 'Encantamento da verdade', desc: 'Chance de forçar uma pessoa a dizer apenas a verdade.',
+      svg: _svg('<path d="M24 8v31M14 41h20" stroke="#e6c27a" stroke-width="3"/><path d="M9 14l15-4 15 4" stroke="#e6c27a" stroke-width="2.6"/><path d="M9 14L4 26a5 4 0 0 0 10 0zM39 14L34 26a5 4 0 0 0 10 0z" fill="#f4e3b0" stroke="#a88235" stroke-width="1.6"/><circle cx="24" cy="7" r="3.2" fill="#ffe27a" stroke="#a88235" stroke-width="1.4"/>') },
     { id: 'enc_furtividade', name: 'Encantamento da furtividade', desc: 'Chance de ficar invisível por instantes.',
       svg: _svg('<path d="M3 24s8-13 21-13 21 13 21 13-8 13-21 13S3 24 3 24z" fill="#1a2230" stroke="#8fb4d9" stroke-width="2"/><circle cx="24" cy="24" r="7" fill="#5a86b3" stroke="#cfe3f5" stroke-width="1.6"/><circle cx="24" cy="24" r="3" fill="#0b1018" stroke="none"/><path d="M8 41L40 7" stroke="#e6c27a" stroke-width="3"/>') },
 ];
@@ -704,9 +718,9 @@ function newAdv(slotId, ctx, A, sdk) {
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
-        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, lastRoll: null, hist: [], invStart: { ...(ctx.loadout || {}) },
+        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, lastRoll: null, critArmed: false, hist: [], invStart: { ...(ctx.loadout || {}) },
         inv: { ...(ctx.loadout || {}) },
-        hero: { name: S.hero?.name || ctx.hero_name || 'Herói', avatar: S.hero?.avatar || DEFAULT_AVATAR },
+        hero: { name: stripEmoji(S.hero?.name || ctx.hero_name) || 'Herói', avatar: S.hero?.avatar || DEFAULT_AVATAR },
     };
 }
 
@@ -757,9 +771,9 @@ function recapText(adv) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
-        + 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.';
+        + (adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
 }
 
 function sendText(text) {
@@ -830,16 +844,22 @@ async function onLiveMessage(msg) {
 }
 
 const ROLL_HINT = {
-    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
-    success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
-    failure: 'Falha. Narre a falha e as consequências; em combate o inimigo contra-ataca e você aplica dano ao herói com damage. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
-    critical_failure: 'Falha crítica! Narre uma complicação séria (em combate, um golpe duro do inimigo aplicado com damage), mas mantenha saídas. Termine dizendo 3 opções em voz alta e então PARE e espere o jogador responder.',
+    critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage.',
+    success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage.',
+    failure: 'Falha. Narre a falha e as consequências; em combate o inimigo contra-ataca e você aplica dano ao herói com damage.',
+    critical_failure: 'Falha crítica! Narre uma complicação séria (em combate, um golpe duro do inimigo aplicado com damage), mas mantenha saídas.',
 };
 
 const hpState = (adv) => ({
     hp_heroi_percent: adv.hp,
+    encantamento_critico_armado: !!adv.critArmed,
     combate: adv.enemy ? { inimigo: adv.enemy.name, hp_inimigo_percent: adv.enemy.hp, chefe: adv.enemy.boss } : null,
 });
+
+// Fora de combate o Mestre dá 3 opções em voz; em combate, narra rápido e só pergunta o que o herói faz.
+const nextStep = (adv) => adv.enemy
+    ? 'Estamos em COMBATE: narre curto (2 a 3 frases), deixe o inimigo reagir e apenas pergunte o que o herói faz, SEM listar opções. Depois PARE e espere o jogador.'
+    : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
 
 function toolStartCombat(adv, args) {
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
@@ -847,7 +867,7 @@ function toolStartCombat(adv, args) {
     const name = String(args.enemy_name || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 28) || 'Inimigos';
     adv.enemy = { name, hp: 100, boss: !!args.is_boss };
     renderDuel();
-    return { ok: true, ...hpState(adv), instrucao: 'Combate iniciado. Só termina com a morte do inimigo (HP 0%): fugir, negociar ou se esconder não funcionam mais. Descreva o inimigo, deixe-o falar em primeira pessoa e diga 3 opções de combate em voz alta; depois PARE e espere o jogador.' };
+    return { ok: true, ...hpState(adv), instrucao: 'Combate iniciado. Só termina com a morte do inimigo (HP 0%): fugir, negociar ou se esconder não funcionam mais. Descreva o inimigo, deixe-o falar em primeira pessoa e pergunte o que o herói faz, SEM listar opções durante o combate; depois PARE e espere o jogador.' };
 }
 
 // Dano real = base do Mestre × fator do dado. Maior dado → mais dano; 20 natural = crítico (×2);
@@ -875,17 +895,21 @@ function toolDamage(adv, args) {
             else f = 0.5;                                                  // dano após falha: raspão
         }
         if (!boss && !crit && lr?.result === 'success' && Math.random() < 0.15) { f *= 1.8; crit = true; }   // crítico surpresa
+        // Encantamento de dano crítico: dobra o próximo ataque BEM-SUCEDIDO; se o dado falhou, continua armado
+        let encCrit = false;
+        if (adv.critArmed && (!lr || lr.result === 'success' || lr.result === 'critical_success')) { f *= 2; crit = true; encCrit = true; adv.critArmed = false; }
+        const extraInfo = encCrit ? { encantamento_critico_usado: true } : {};
         let pct = Math.round(base * f);
-        if (boss) pct = clamp(pct, 3, finalPhase ? 45 : BOSS_MAX_HIT);     // chefe: luta longa (exceto no final)
+        if (boss) pct = clamp(pct, 3, finalPhase ? 45 : (encCrit ? 40 : BOSS_MAX_HIT));     // chefe: luta longa (exceto no final)
         else pct = clamp(pct, MIN_HIT_COMMON, 100);                        // criatura comum: nunca vira "mini-chefe"
         adv.enemy.hp = Math.max(0, adv.enemy.hp - pct);
         floatHp('Foe', (crit ? 'CRÍTICO −' : '−') + pct + '%', 'dmg'); setHp('Foe', adv.enemy.hp);
         const intensidade = crit ? 'critico' : f >= 1.2 ? 'forte' : f < 0.95 ? 'fraco' : 'normal';
         if (adv.enemy.hp <= 0) {
             const nome = adv.enemy.name; adv.enemy = null; defeatFoe(adv);
-            return { ok: true, aplicado_percent: pct, intensidade, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
+            return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
         }
-        return { ok: true, aplicado_percent: pct, intensidade, ...hpState(adv), instrucao: `Golpe ${intensidade}. Narre à altura, deixe o inimigo reagir (pode falar em primeira pessoa), diga 3 opções em voz alta e PARE para o jogador responder.` };
+        return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, ...hpState(adv), instrucao: `Golpe ${intensidade}. Narre à altura, deixe o inimigo reagir (pode falar em primeira pessoa) e apenas pergunte o que o herói faz, SEM listar opções (estamos em combate). PARE e espere o jogador.` };
     }
 
     let f = 1;
@@ -902,7 +926,7 @@ function toolDamage(adv, args) {
         adv.deadTimer = setTimeout(() => { if (S.adv === adv && !adv.finished) finishAdventure(null, true, 'dead_timeout'); }, 60000);   // rede de segurança
         return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'O HP do herói chegou a 0%. A aventura termina agora: narre a queda do herói em tom épico (sem violência gráfica), faça um breve resumo e chame end_adventure com outcome "derrota".' };
     }
-    return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: adv.hp <= 25 ? 'O herói está muito ferido; narre isso, diga 3 opções em voz alta e PARE para o jogador responder.' : 'Narre o dano, diga 3 opções em voz alta e PARE para o jogador responder.' };
+    return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: (adv.hp <= 25 ? 'O herói está muito ferido; narre isso. ' : 'Narre o dano. ') + nextStep(adv) };
 }
 
 // ----- bolsa durante a aventura -----
@@ -921,10 +945,16 @@ function openBagView() {
     openOv('bagViewModal');
 }
 
+function useHint(id, adv) {
+    if (id === 'enc_critico') return 'Item gasto. O PRÓXIMO ataque bem-sucedido do herói causará o DOBRO de dano (o jogo aplica sozinho; se o ataque falhar, o encantamento continua válido). Narre o herói canalizando o poder, sem rolar dado agora. ' + nextStep(adv);
+    if (id.startsWith('enc_') && id !== 'enc_fogo' && id !== 'enc_gelo') return 'Item gasto. Agora chame roll_check (facil ou normal; dificil contra alvos fortes) para decidir se o efeito funcionou.';
+    return 'Item gasto. Narre o uso. ' + nextStep(adv);
+}
+
 function toolUseItem(adv, args) {
     if (adv.dead) return { ok: false, erro: 'O herói já caiu.' };
     const id = String(args.item || ''), it = ITEM_BY_ID[id];
-    if (!it || !(id in adv.inv)) return { ok: false, erro: 'O herói NÃO levou este item na bolsa. Negue o uso, em personagem, e ofereça 3 opções válidas.' };
+    if (!it || !(id in adv.inv)) return { ok: false, erro: 'O herói NÃO levou este item na bolsa. Negue o uso, em personagem. ' + nextStep(adv), };
     if (adv.inv[id] <= 0) return { ok: false, erro: `O herói já usou todas as unidades de "${it.name}" que levou. Negue o uso, em personagem.`, restantes: 0 };
     let extra = {};
     if (id === 'pocao') {
@@ -933,11 +963,15 @@ function toolUseItem(adv, args) {
         setHp('You', adv.hp); floatHp('You', '+' + (adv.hp - before) + '%', 'heal');
         extra = { curou_percent: adv.hp - before };
     }
+    if (id === 'enc_critico') {
+        if (adv.critArmed) return { ok: false, erro: 'Um encantamento de dano crítico JÁ está armado para o próximo ataque bem-sucedido; o item NÃO foi gasto.', restantes: adv.inv[id] };
+        adv.critArmed = true;
+    }
     adv.inv[id]--;
     toast(`${it.name}: restam ${adv.inv[id]}`);
     updateBagBadge();
     return { ok: true, item: it.name, restantes: adv.inv[id], ...extra, ...hpState(adv),
-        instrucao: id.startsWith('enc_') && !['enc_fogo', 'enc_gelo'].includes(id) ? 'Item gasto. Agora chame roll_check (facil ou normal) para decidir se o efeito funcionou.' : 'Item gasto. Narre o uso.' };
+        instrucao: useHint(id, adv) };
 }
 
 function toolStatus(adv) {
@@ -1012,7 +1046,7 @@ async function doRoll(args) {
     await sleep(1900);
     closeOv('diceOverlay');
     setMasterState('listening');
-    return { resultado: r.result, dado: r.roll, precisava: r.dc, instrucao: ROLL_HINT[r.result] };
+    return { resultado: r.result, dado: r.roll, precisava: r.dc, instrucao: ROLL_HINT[r.result] + ' ' + nextStep(adv) };
 }
 
 // ----- cenário e escolhas -----

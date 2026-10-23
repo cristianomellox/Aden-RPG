@@ -28,20 +28,11 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 #pageTitle { font-size: 1.05em; font-weight: bold; flex-grow: 1; text-align: center; color: #e0dccc; letter-spacing: 1px; }
 
 /* ── Raiz das visões ── */
-#dailyRoot { position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; overflow: hidden; background: #000; }
+#dailyRoot { position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 1; background: transparent; }   /* o fundo é o skybox (diarias_skybox.js) */
 .view { position: absolute; inset: 0; opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
 .view.active { opacity: 1; pointer-events: auto; visibility: visible; }
 
 /* ═════════════════════════ SAGUÃO ═════════════════════════ */
-.lobby-bg {
-    position: absolute; inset: -4%;
-    background: radial-gradient(ellipse at 50% 30%, #2a1f12 0%, #120d08 55%, #050403 100%);
-    background-size: cover; background-position: center;
-    animation: kenburns 28s ease-in-out infinite alternate;
-    filter: brightness(.7) saturate(1.1);
-    transition: background-image .8s;
-}
-@keyframes kenburns { from { transform: scale(1) translate(0,0); } to { transform: scale(1.09) translate(-1.5%, -1%); } }
 .lobby-vignette, .stage-vignette {
     position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,.78) 100%),
@@ -71,7 +62,7 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 .lobby-scroll {
     position: relative; z-index: 2; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
     display: flex; flex-direction: column; align-items: center; gap: 18px;
-    padding: 22px 16px calc(28px + env(safe-area-inset-bottom)); box-sizing: border-box;
+    padding: 34px 16px calc(28px + env(safe-area-inset-bottom)); box-sizing: border-box;
 }
 .lobby-scroll::-webkit-scrollbar { width: 3px; }
 .lobby-scroll::-webkit-scrollbar-thumb { background: var(--gold-dark); }
@@ -155,12 +146,6 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═════════════════════════ PALCO ═════════════════════════ */
-.scene-layer {
-    position: absolute; inset: -3%; opacity: 0; transition: opacity 1.6s ease;
-    background: radial-gradient(ellipse at 50% 40%, #2a2218, #090705);
-    background-size: cover; background-position: center; animation: kenburns 34s ease-in-out infinite alternate;
-}
-.scene-layer.show { opacity: 1; }
 .stage-fog { position: absolute; inset: 0; pointer-events: none; opacity: .35;
     background: radial-gradient(ellipse 60% 25% at 20% 75%, rgba(255,255,255,.18), transparent),
                 radial-gradient(ellipse 55% 22% at 80% 60%, rgba(255,255,255,.14), transparent);
@@ -168,7 +153,7 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 @keyframes fog { from { transform: translateX(-4%); } to { transform: translateX(4%); } }
 
 /* HUD */
-.hud-top { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 5; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+.hud-top { position: absolute; top: 32px; left: 10px; right: 10px; z-index: 5; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
 .hud-chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: .76em; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold-light);
     background: rgba(10,8,5,.72); border: 1px solid var(--gold-base); border-radius: 3px; backdrop-filter: blur(4px); min-width: 70px; }
 .hud-chip .pin { width: 8px; height: 8px; background: var(--ember); transform: rotate(45deg); box-shadow: 0 0 10px var(--ember); }
@@ -275,7 +260,7 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 .toast.err { border-color: var(--bad); color: #ffb5b5; }
 
 /* ═════════════════════════ RESULTADO ═════════════════════════ */
-.result-scroll { position: relative; z-index: 3; height: 100%; overflow-y: auto; display: flex; padding: 20px 14px calc(30px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.result-scroll { position: relative; z-index: 3; height: 100%; overflow-y: auto; display: flex; padding: 34px 14px calc(30px + env(safe-area-inset-bottom)); box-sizing: border-box; }
 .result-panel { margin: auto; width: 100%; max-width: 480px; padding: 26px 20px; box-sizing: border-box; text-align: center; color: #e0dccc; position: relative;
     background: linear-gradient(160deg, rgba(34,28,20,.94), rgba(10,8,5,.96)); border: 2px solid var(--gold-base); border-radius: 6px;
     box-shadow: 0 16px 50px #000, 0 0 40px rgba(168,130,53,.25), inset 0 0 40px rgba(168,130,53,.12); animation: pop .7s ease both; }
@@ -437,3 +422,31 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
 .bagview-note { margin: 0 0 12px; text-align: center; }
 .res-adv { margin: 0 0 4px; font-size: .78em; letter-spacing: 2px; color: var(--arcane); text-transform: uppercase; }
 .res-note.warn { color: #d9a56a; font-style: italic; }
+
+/* ══════════════════ HUD RECOLHÍVEL + SKYBOX (mesmo padrão da guilda) ══════════════════
+   O botão (diarias_hud_toggle.js) liga body.hud-hidden. Com a interface recolhida só o
+   skybox fica visível e o arrastar gira a câmera em qualquer ponto da tela. */
+#playerTopBar, .hud-top, .stage-bottom, .lobby-scroll, .result-scroll, .master,
+.embers, .stage-fog, .lobby-vignette, .stage-vignette {
+    transition: transform .35s cubic-bezier(.4,0,.2,1), opacity .35s cubic-bezier(.4,0,.2,1), visibility 0s linear 0s;
+}
+body.hud-hidden #playerTopBar, body.hud-hidden .hud-top,
+body.hud-hidden .stage-bottom, body.hud-hidden .lobby-scroll, body.hud-hidden .result-scroll,
+body.hud-hidden .master, body.hud-hidden .embers, body.hud-hidden .stage-fog,
+body.hud-hidden .lobby-vignette, body.hud-hidden .stage-vignette {
+    opacity: 0; visibility: hidden; pointer-events: none !important;
+    transition: transform .35s cubic-bezier(.4,0,.2,1), opacity .35s cubic-bezier(.4,0,.2,1), visibility 0s linear .35s;
+}
+body.hud-hidden #playerTopBar, body.hud-hidden .hud-top { transform: translateY(-120%); }
+body.hud-hidden .stage-bottom { transform: translateY(120%); }
+
+.hud-toggle-btn {
+    position: fixed; top: var(--topbar-h); left: 50%; transform: translateX(-50%); z-index: 1200;
+    display: flex; align-items: center; justify-content: center; width: 52px; height: 26px; padding: 0;
+    border: 4px solid #c9a94a; border-top: none; border-radius: 0 0 12px 12px;
+    color: #e8cf7a; background: #000; cursor: pointer;
+    transition: top .35s cubic-bezier(.4,0,.2,1), background .2s;
+}
+.hud-toggle-btn:hover { background: #241b08; }
+.hud-toggle-btn:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 2px; }
+body.hud-hidden .hud-toggle-btn { top: 0; }

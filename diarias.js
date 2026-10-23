@@ -6,7 +6,6 @@
 import { supabase } from './supabaseClient.js';
 
 const ASSETS = 'https://aden-rpg.pages.dev/assets/';
-const SCENE_BASE = ASSETS + 'missoes/';                    // <id do cenário>.webp
 const GENAI_URL = 'https://cdn.jsdelivr.net/npm/@google/genai/+esm';
 const POLL_MS = 20000;
 const SEND_CHUNK = 1280;                                   // 80 ms de áudio a 16 kHz
@@ -117,8 +116,11 @@ function busy(on, text) {
     on ? openOv('busyOverlay') : closeOv('busyOverlay');
 }
 function showView(v) {
+    const changed = S.view !== v;
     S.view = v;
     ['Lobby', 'Stage', 'Result'].forEach((n) => $('view' + n).classList.toggle('active', n.toLowerCase() === v));
+    if (changed) window.DiariasHud?.show();                    // trocou de tela: mostra a interface de novo
+    if (v === 'lobby') paintScene('');                         // saguão = /assets/diarias.png (idempotente)
 }
 const sceneLabel = (id) => S.scenes[id] || String(id || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
@@ -134,25 +136,24 @@ async function callFn(name, body) {
     return data;
 }
 
-// Cenário: tenta o asset; se não existir, usa um degradê temático
-const FALLBACK_BG = {
-    floresta: 'radial-gradient(ellipse at 50% 35%, #1d3d27, #07130b)',
-    caverna: 'radial-gradient(ellipse at 50% 35%, #2b2347, #0a0814)',
-    ruinas: 'radial-gradient(ellipse at 50% 35%, #4a3b27, #120d08)',
-    vila: 'radial-gradient(ellipse at 50% 35%, #4a3317, #140d06)',
-    montanha: 'radial-gradient(ellipse at 50% 35%, #2a3f57, #070b12)',
-    pantano: 'radial-gradient(ellipse at 50% 35%, #25402f, #08110c)',
+// Cenário 360°: /assets/<id>.png vira skybox (diarias_skybox.js), com crossfade e rotação lenta.
+// Sem imagem (ou se falhar ao carregar), o skybox usa este degradê temático [centro, bordas].
+const LOBBY_SCENE = 'diarias';                              // /assets/diarias.png: tela inicial
+const FALLBACK_SKY = {
+    floresta: ['#1d3d27', '#07130b'],
+    caverna: ['#2b2347', '#0a0814'],
+    ruinas: ['#4a3b27', '#120d08'],
+    vila: ['#4a3317', '#140d06'],
+    montanha: ['#2a3f57', '#070b12'],
+    pantano: ['#25402f', '#08110c'],
+    penumbra: ['#1a1f33', '#04050a'],
+    torre: ['#3a3358', '#0b0916'],
+    taverna: ['#5a3a1c', '#170d05'],
+    desfiladeiro: ['#6a3a1f', '#1a0c05'],
 };
-const _sceneOk = new Map();                                   // id → true/false (evita pedir a mesma imagem de novo)
-function paintScene(el, sceneId) {
-    if (!sceneId) { el.style.backgroundImage = ''; return; }
-    const url = SCENE_BASE + encodeURIComponent(sceneId) + '.webp';
-    const apply = (ok) => { el.style.backgroundImage = ok ? `url("${url}")` : (FALLBACK_BG[sceneId] || ''); };
-    if (_sceneOk.has(sceneId)) return apply(_sceneOk.get(sceneId));
-    const img = new Image();
-    img.onload = () => { _sceneOk.set(sceneId, true); apply(true); };
-    img.onerror = () => { _sceneOk.set(sceneId, false); apply(false); };
-    img.src = url;
+function paintScene(sceneId) {
+    const id = sceneId || LOBBY_SCENE;
+    window.DiariasSkybox?.show(id, FALLBACK_SKY[id]);
 }
 
 // ---------------------------------------------------------------------
@@ -260,7 +261,13 @@ async function loadSceneLabels() {
 async function refreshState() {
     if (S.adv || S.busy) return;
     const { data, error } = await supabase.rpc('mission_get_state');
-    if (error) { renderCard('<p class="hint">Não foi possível consultar o Mestre agora.</p>'); return; }
+    if (error) {
+        if (/not_authenticated|jwt|401/i.test(error.message || '')) {   // id local pode estar velho: confere a sessão de verdade
+            const { data: sd } = await supabase.auth.getSession();
+            if (!sd?.session) { location.href = 'index.html'; return; }
+        }
+        renderCard('<p class="hint">Não foi possível consultar o Mestre agora.</p>'); return;
+    }
     S.state = data;
     S.offset = new Date(data.now).getTime() - Date.now();
     await maybeSendPending();
@@ -286,7 +293,6 @@ function renderLobby() {
     const st = S.state; if (!st) return;
     const my = st.my_slot, ev = st.event;
     const paid = my?.kind === 'paid';
-    paintScene($('lobbyBg'), ev?.scene || '');
 
     if (my && my.status === 'reserved') {
         renderCard(paid ? `
@@ -775,8 +781,8 @@ function newAdv(slotId, ctx, A, sdk) {
         endMs: startMs + ctx.session_minutes * 60000, totalMs: ctx.session_minutes * 60000,
         session: null, handle: null, reconnects: 0, opened: false,
         warned: false, forced: false, finished: false, closing: false,
-        turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
-        rolls: 0, masterBuf: '', youBuf: '', newTurn: true, activeSceneLayer: 'A',
+        epilogue: false, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
+        rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
         hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, lastRoll: null, critArmed: false, hist: [], invStart: { ...(ctx.loadout || {}) },
@@ -839,10 +845,10 @@ function recapText(adv, spoke = false) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + (adv.bossDown ? 'O CHEFE JÁ FOI DERROTADO: estamos no FINAL (retorno, entrega e opções finais). ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo e passeios até o jogador escolher concluir. NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
-            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
+            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta e, se couber, repita as opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
 }
 
 function sendText(text) {
@@ -974,6 +980,7 @@ const nextStep = (adv) => adv.enemy
     : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
 
 function toolStartCombat(adv, args) {
+    if (adv.epilogue) return { ok: false, erro: 'Estamos no EPÍLOGO: a missão já foi cumprida. NÃO há mais combates, chefes nem inimigos. Conduza apenas diálogo e passeios até o jogador escolher concluir ou o sistema enviar ENCERRAR.', ...hpState(adv) };
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
     if (adv.enemy) return { ok: false, erro: `Já há um combate em andamento contra ${adv.enemy.name} (HP ${adv.enemy.hp}%). Ele só termina quando o HP do inimigo chegar a 0.`, ...hpState(adv) };
     const name = String(args.enemy_name || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 28) || 'Inimigos';
@@ -1020,7 +1027,7 @@ function toolDamage(adv, args) {
         if (adv.enemy.hp <= 0) {
             const nome = adv.enemy.name, eraChefe = !!adv.enemy.boss; adv.enemy = null; defeatFoe(adv);
             if (eraChefe) {
-                adv.bossDown = true;
+                adv.bossDown = true; adv.epilogue = true;                 // objetivo cumprido: sem mais combates
                 const cedo = elapsedS(adv) < BOSS_MIN_S;
                 return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, chefe_derrotado: nome, ...hpState(adv),
                     instrucao: cedo
@@ -1118,6 +1125,9 @@ async function onToolCall(calls) {
                 out = toolDamage(adv, a);
             } else if (c.name === 'use_item') {
                 out = toolUseItem(adv, a);
+            } else if (c.name === 'objective_complete') {
+                adv.epilogue = true;
+                out = { ok: true, instrucao: 'Epílogo iniciado: o objetivo foi cumprido. A partir de agora NÃO há mais combates nem chefes. Conduza o retorno, a entrega, o diálogo e as opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz).' };
             } else if (c.name === 'get_status') {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
@@ -1182,11 +1192,7 @@ async function doRoll(args) {
 function setScene(id) {
     const adv = S.adv; if (!adv || !id) return;
     adv.scene = id;
-    const next = adv.activeSceneLayer === 'A' ? 'B' : 'A';
-    const from = $('scene' + adv.activeSceneLayer), to = $('scene' + next);
-    paintScene(to, id);
-    setTimeout(() => { to.classList.add('show'); from.classList.remove('show'); }, 250);
-    adv.activeSceneLayer = next;
+    paintScene(id);                                            // crossfade para o novo skybox
     $('hudSceneName').textContent = adv.sceneNames[id] || sceneLabel(id);
 }
 
@@ -1203,8 +1209,7 @@ function enterStage() {
     $('capMaster').textContent = ''; $('capYou').textContent = '';
     $('hudRolls').textContent = '0';
     renderDuel(); updateBagBadge();
-    $('sceneA').classList.remove('show'); $('sceneB').classList.remove('show');
-    adv.activeSceneLayer = 'B'; setScene(adv.scene);
+    setScene(adv.scene);                                       // começa a trocar do saguão para o cenário da aventura
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
     $('btnMic').setAttribute('aria-pressed', 'false'); $('btnMic').classList.add('live');
     setMasterState('idle');
@@ -1257,7 +1262,7 @@ function advTick() {
 
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
-        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; queueNote(adv, m.text, false); }
+        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
             queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá direto ao retorno e à entrega (sem novas jornadas nem opções finais se o tempo for curto). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
@@ -1331,7 +1336,7 @@ async function maybeSendPending(force) {
 // ----- resultado -----
 function showResult(r, sceneId, reason) {
     showView('result');
-    paintScene($('resultBg'), sceneId || '');
+    if (sceneId) paintScene(sceneId);                          // sem id: mantém o skybox atual
     const d = r.detail || {};
     const names = { vitoria: 'Vitória', vitoria_parcial: 'Vitória parcial', fuga: 'Fuga', derrota: 'Derrota' };
     const bad = r.outcome === 'derrota' || r.outcome === 'fuga';
@@ -1435,12 +1440,43 @@ function bindUI() {
     document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal') closeOv(e.target.id); });
 }
 
+// --- AUTH OTIMISTA (ZERO EGRESS) — mesmo padrão da guilda ---
+// Descobre o id do jogador localmente (IndexedDB global → cache do player → token do Supabase no
+// localStorage) para não chamar auth.getSession() na rede a cada abertura da página.
+async function getLocalUserId() {
+    try {                                                      // 1. GlobalDB: { key:'current_session', value: <sessão> }
+        const rec = await idbGet('auth_store', 'current_session');
+        const v = rec?.value;
+        const id = v?.user?.id || v?.value?.user?.id || v?.session?.user?.id;
+        if (id) return id;
+    } catch (_) { /* segue */ }
+    try {                                                      // 2. cache do player
+        const c = JSON.parse(localStorage.getItem('player_data_cache') || 'null');
+        if (c?.data?.id && c.expires > Date.now()) return c.data.id;
+    } catch (_) { /* segue */ }
+    try {                                                      // 3. token interno do Supabase
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sess = JSON.parse(localStorage.getItem(k));
+                const id = sess?.user?.id || sess?.currentSession?.user?.id;
+                if (id) return id;
+            }
+        }
+    } catch (_) { /* segue */ }
+    return null;
+}
+
 async function boot() {
     buildMenu();
     bindUI();
-    const { data } = await supabase.auth.getSession();
-    if (!data?.session) { location.href = 'index.html'; return; }
-    S.uid = data.session.user.id;
+    let uid = await getLocalUserId();
+    if (!uid) {                                                // fallback: só então pergunta ao Supabase
+        const { data } = await supabase.auth.getSession();
+        uid = data?.session?.user?.id || null;
+    }
+    if (!uid) { location.href = 'index.html'; return; }
+    S.uid = uid;
     loadHeroProfile().catch(() => {});                          // IndexedDB: não bloqueia a tela
     await loadSceneLabels();
     await refreshState();

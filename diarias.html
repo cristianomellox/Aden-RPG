@@ -100,6 +100,27 @@
                         <img class="duel-avatar" id="duelFoeImg" alt="" src="https://aden-rpg.pages.dev/assets/mission_ene.webp">
                         <div class="hp-bar foe" id="hpFoeBar"><div class="hp-fill" id="hpFoeFill"></div><div class="hp-text" id="hpFoeText">100%</div></div>
                     </div>
+                    <!-- Botão "Finalizar aventura": ocupa o lugar do inimigo depois que o objetivo é entregue -->
+                    <button type="button" class="duel-side finish" id="btnFinish" aria-label="Finalizar aventura">
+                        <div class="duel-name">Objetivo cumprido</div>
+                        <div class="finish-badge">
+                            <svg viewBox="0 0 48 48" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M8 31c-3-9 0-17 7-22M40 31c3-9 0-17-7-22" stroke="#c9a45c" stroke-width="2"/>
+                                <ellipse cx="9" cy="22" rx="2.2" ry="4" transform="rotate(-20 9 22)" fill="#7fae4a" stroke="none"/>
+                                <ellipse cx="12" cy="14" rx="2.2" ry="4" transform="rotate(-35 12 14)" fill="#7fae4a" stroke="none"/>
+                                <ellipse cx="39" cy="22" rx="2.2" ry="4" transform="rotate(20 39 22)" fill="#7fae4a" stroke="none"/>
+                                <ellipse cx="36" cy="14" rx="2.2" ry="4" transform="rotate(35 36 14)" fill="#7fae4a" stroke="none"/>
+                                <path d="M7 41c6-7 11-9 17-9s11 2 17 9z" fill="#2a1d08" stroke="#a88235" stroke-width="1.6"/>
+                                <path d="M24 33V9" stroke="#e6c27a" stroke-width="2.4"/>
+                                <circle cx="24" cy="8" r="2.2" fill="#ffe27a" stroke="#a88235" stroke-width="1"/>
+                                <g class="finish-flag"><path d="M25.5 11c5-3 8 3 14 0v11c-6 3-9-3-14 0z" fill="#c0262f" stroke="#ffd27a" stroke-width="1.4"/>
+                                    <path d="M32.5 14.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z" fill="#ffe27a" stroke="none"/></g>
+                                <polygon class="finish-spark" points="10,36 11,38 13,39 11,40 10,42 9,40 7,39 9,38" fill="#fff3cf" stroke="none"/>
+                                <polygon class="finish-spark s2" points="39,30 40,32 42,33 40,34 39,36 38,34 36,33 38,32" fill="#fff3cf" stroke="none"/>
+                            </svg>
+                        </div>
+                        <span class="finish-label">Finalizar aventura</span>
+                    </button>
                 </div>
             </div>
 
@@ -168,6 +189,7 @@
             <ul class="dm-list">
                 <li><b>Microfone:</b> o navegador vai pedir permissão. Fale normalmente.</li>
                 <li><b>Ambiente:</b> prefira um lugar silencioso.</li>
+                <li><b>Microfone livre:</b> feche ligações, gravadores e outros apps ou abas que usem o microfone; se ele estiver ocupado, a aventura não começa.</li>
                 <li><b>Dados:</b> cada ação arriscada é decidida por um d20. Falhar faz parte da história.</li>
                 <li><b>Bolsa:</b> antes de começar você escolhe 8 itens. Só eles (e sua arma) podem ser usados.</li>
                 <li><b>Vida:</b> você e os inimigos têm HP em %. Se o seu chegar a 0, a aventura termina.</li>
@@ -231,7 +253,34 @@
         </div>
     </div>
 
-  <!-- ═════════ MODAL: COMO FUNCIONA ═════════ -->
+    <!-- ═════════ MODAL: ABANDONAR AVENTURA ═════════ -->
+    <div id="leaveModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Abandonar aventura</h3>
+            <p class="dm-sub">Esta ação não pode ser desfeita</p>
+            <p class="buy-text">Se abandonar agora, você perderá a recompensa e não poderá jogar de novo hoje.</p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="leaveCancel">Continuar</button>
+                <button class="btn-epic sm" id="leaveConfirm">Abandonar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════ MODAL: FINALIZAR AVENTURA (objetivo concluído) ═════════ -->
+    <div id="finishModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Finalizar aventura</h3>
+            <p class="dm-sub">Objetivo cumprido</p>
+            <p class="buy-text">Você já concluiu o objetivo da aventura. Deseja finalizar?</p>
+            <p class="hint buy-bal" id="finishEarly" style="display:none">A recompensa máxima exige pelo menos 15 minutos de aventura. Continuar aproveitando a história pode render mais.</p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="finishCancel">Continuar na aventura</button>
+                <button class="btn-epic sm" id="finishConfirm">Finalizar</button>
+            </div>
+        </div>
+    </div>
+
+   <!-- ═════════ MODAL: COMO FUNCIONA ═════════ -->
     <div id="howModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box">
             <h3 class="dm-title">Guia do Aventureiro</h3>
@@ -241,7 +290,7 @@
                 <li><b>O Mestre Interativo:</b> Uma Inteligência Artificial avançada atua como o seu Mestre das Lendas. Ele ouve, entende e reage dinamicamente a <b>tudo que você fala</b>. Prepare o microfone, pois sua voz é o seu controle absoluto!</li>
                 <li><b>Ações e Combate por Voz:</b> Esqueça os botões. Quer atacar com sua arma? Quer tentar convencer um guarda ou se esgueirar pelas sombras? <b>Basta dizer ao Mestre!</b> Ele reconhecerá sua intenção e narrará as consequências. Ações de risco rolam um <b>d20</b> automático.</li>
                 <li><b>Sua Bolsa de Itens:</b> Antes da jornada, você escolhe 8 itens. <b>Atenção: você não clica neles para usar.</b> O botão da bolsa serve apenas para você consultar o seu inventário. Para usar uma poção, corda ou encantamento, <b>fale para o Mestre</b> o que deseja usar e ele aplicará o efeito na história.</li>
-                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágico ou realizar uma infiltração furtiva. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
+                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágico ou realizar uma infiltração furtiva (mais tipos em breve). Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
                 <li><b>Epílogo e Liberdade:</b> Cumpriu o objetivo ou derrotou o chefe e ainda sobrou tempo? A aventura não acaba! O jogo entra no <b>Epílogo</b>. Use esse tempo livre para comemorar na taverna, explorar o cenário, conversar com os personagens e descobrir segredos. A imersão é ilimitada até você decidir partir!</li>
                 <li><b>Aventuras Extras:</b> Perdeu o horário ou quer jogar mais? Você pode comprar até <b>3 Aventuras Extras</b> por dia usando Ouro, jogando na hora que quiser, sem precisar disputar as vagas aleatórias.</li>
             </ul>

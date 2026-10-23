@@ -23,13 +23,13 @@
   function watch(s) {
     if (statusObj === s) return;
     statusObj = s;
-    s.onchange = () => { if (s.state !== 'denied') closeModal(true); };
+    s.onchange = () => { if (s.state !== 'denied' && !busyOpen()) closeModal(true); };
   }
 
   // Cobre o caso mais comum: o jogador sai pras Configurações, libera e volta. Onde a consulta existe
   // (Chrome/Android/desktop) o modal fecha sozinho; no iOS (sem consulta) ele fica até o jogador tocar em "Tentar de novo".
   async function recheck() {
-    if (!document.getElementById('adenmic-overlay')) return;
+    if (!document.getElementById('adenmic-overlay') || busyOpen()) return;
     const st = await getState();
     if (st === 'granted' || st === 'prompt') closeModal(true);
   }
@@ -132,6 +132,31 @@
     document.head.appendChild(st);
   }
 
+  const busyOpen = () => document.getElementById('adenmic-overlay')?.dataset.kind === 'busy';
+
+  // Testa se o microfone está livre. O navegador não diz QUEM o usa, mas sinaliza quando está ocupado:
+  // getUserMedia falha (NotReadableError/AbortError) ou a trilha nasce silenciada pelo sistema (muted).
+  // 'ok' | 'busy' | 'denied'
+  async function probe() {
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      const n = e && e.name;
+      if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return 'denied';
+      if (n === 'NotReadableError' || n === 'AbortError' || n === 'TrackStartError') return 'busy';
+      return 'ok';                                       // sem microfone/outro erro: o início da missão trata
+    }
+    try {
+      const tr = stream.getAudioTracks()[0];
+      if (!tr || tr.readyState !== 'live') return 'busy';
+      await new Promise((r) => setTimeout(r, 700));      // dá tempo de o sistema sinalizar o mute
+      return (tr.muted || tr.readyState !== 'live') ? 'busy' : 'ok';
+    } finally {
+      stream.getTracks().forEach((t) => t.stop());
+    }
+  }
+
   function closeModal(granted) {
     const o = document.getElementById('adenmic-overlay');
     if (o) o.remove();
@@ -173,6 +198,36 @@
     });
   }
 
+  function showBusy() {
+    injectStyles();
+    closeModal(false);
+    const overlay = document.createElement('div');
+    overlay.id = 'adenmic-overlay';
+    overlay.dataset.kind = 'busy';
+    overlay.innerHTML = `
+      <div id="adenmic-box" role="dialog" aria-modal="true">
+        <h3>🎙️ Microfone em uso</h3>
+        <p>O microfone está sendo usado por outro app, ligação ou site. Para a aventura não travar nem ser interrompida, ela só começa com o microfone livre.</p>
+        <ol class="adenmic-steps" style="padding:0;list-style:none">
+          <li><span class="num">1</span><span>Encerre <strong>ligações</strong>, chamadas de vídeo, gravadores de voz e assistentes de voz.</span></li>
+          <li><span class="num">2</span><span>Feche <strong>outros apps e abas</strong> que usem o microfone.</span></li>
+          <li><span class="num">3</span><span>Volte aqui e toque em <strong>“Tentar de novo”</strong>.</span></li>
+        </ol>
+        <button class="adenmic-btn" id="adenmic-retry">Tentar de novo</button>
+        <button class="adenmic-btn sec" id="adenmic-close">Fechar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('adenmic-close').addEventListener('click', () => closeModal(false));
+    document.getElementById('adenmic-retry').addEventListener('click', async () => {
+      const btn = document.getElementById('adenmic-retry');
+      if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+      const r = await probe();
+      if (r === 'ok') { closeModal(true); return; }
+      if (r === 'denied') { showBlocked(); return; }
+      if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Ainda em uso — tente de novo'; setTimeout(() => { if (btn.isConnected) btn.textContent = 'Tentar de novo'; }, 2200); }
+    });
+  }
+
   function showUnsupported() {
     injectStyles();
     closeModal(false);
@@ -193,8 +248,13 @@
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showUnsupported(); return false; }
     const st = await getState();
     if (st === 'denied') { showBlocked(); return false; }
+    if (st === 'granted') {                           // já liberado: dá para testar sem abrir pedido de permissão
+      const r = await probe();
+      if (r === 'denied') { showBlocked(); return false; }
+      if (r === 'busy') { showBusy(); return false; }
+    }
     return true;                                      // 'prompt'/'granted'/'unknown': o getUserMedia pede/valida na hora
   }
 
-  window.AdenMic = { precheck, showBlocked, getState };
+  window.AdenMic = { precheck, showBlocked, showBusy, getState };
 })();

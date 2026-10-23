@@ -150,6 +150,10 @@ const FALLBACK_SKY = {
     torre: ['#3a3358', '#0b0916'],
     taverna: ['#5a3a1c', '#170d05'],
     desfiladeiro: ['#6a3a1f', '#1a0c05'],
+    zion: ['#4a4a2a', '#12120a'],
+    capital: ['#3d3a4a', '#0d0c12'],
+    elendor: ['#1f4a3a', '#06140f'],
+    vila_neve: ['#51657a', '#0c121a'],
 };
 function paintScene(sceneId) {
     const id = sceneId || LOBBY_SCENE;
@@ -629,12 +633,36 @@ class PcmCapture extends AudioWorkletProcessor {
 }
 registerProcessor('pcm-capture', PcmCapture);`;
 
+// O navegador não lista quem usa o microfone, mas sinaliza quando outro app/ligação o ocupa:
+// getUserMedia falha (NotReadableError/AbortError) ou a trilha nasce silenciada pelo sistema (muted).
+async function micInUse(stream) {
+    const tr = stream.getAudioTracks()[0];
+    if (!tr || tr.readyState !== 'live') return true;
+    await sleep(700);                                          // dá tempo de o sistema sinalizar o mute
+    return tr.muted || tr.readyState !== 'live';
+}
+
 async function initAudio() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const ctx = new Ctx();
-    await ctx.resume();
-    const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+    let stream = null;
+    try {
+        await ctx.resume();
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        });
+        if (await micInUse(stream)) { const er = new Error('mic_busy'); er.name = 'MicBusyError'; throw er; }
+    } catch (e) {
+        try { stream?.getTracks().forEach((t) => t.stop()); } catch (_) { /* ok */ }
+        try { await ctx.close(); } catch (_) { /* ok */ }
+        throw e;
+    }
+    let lastMuteWarn = 0;                                      // microfone tomado por outro app durante o jogo
+    stream.getAudioTracks()[0].addEventListener('mute', () => {
+        if (S.adv && !S.adv.finished && Date.now() - lastMuteWarn > 20000) {
+            lastMuteWarn = Date.now();
+            toast('O microfone foi interrompido. Algum app ou ligação pode estar usando-o.', true);
+        }
     });
     const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }));
     await ctx.audioWorklet.addModule(url);
@@ -762,7 +790,9 @@ async function _startAdventure(loadout) {
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
-        if (denied) { toast('Permita o microfone para jogar.', true); window.AdenMic?.showBlocked?.(); }
+        const micBusy = e && (e.name === 'MicBusyError' || e.name === 'NotReadableError' || e.name === 'AbortError' || e.name === 'TrackStartError');
+        if (micBusy) { toast('O microfone está em uso por outro app ou site.', true); window.AdenMic?.showBusy?.(); }
+        else if (denied) { toast('Permita o microfone para jogar.', true); window.AdenMic?.showBlocked?.(); }
         else if (friendly(e.message) === BUSY_MSG) toast(BUSY_MSG, true);   // lotado: aviso simples, a vaga continua sua
         else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
         await refreshState();
@@ -781,7 +811,8 @@ function newAdv(slotId, ctx, A, sdk) {
         endMs: startMs + ctx.session_minutes * 60000, totalMs: ctx.session_minutes * 60000,
         session: null, handle: null, reconnects: 0, opened: false,
         warned: false, forced: false, finished: false, closing: false,
-        epilogue: false, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
+        heroFem: ctx.hero_gender === 'f',
+        epilogue: false, delivered: false, playerEnd: false, playerEndAt: 0, epilogueAt: 0, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
@@ -845,10 +876,10 @@ function recapText(adv, spoke = false) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo e passeios até o jogador escolher concluir. NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo, banquetes, festas e passeios até o jogador pedir para finalizar. ' + (adv.delivered ? 'O objetivo JÁ foi entregue ao NPC inicial. ' : 'Se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ') + 'NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
-            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta e, se couber, repita as opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
+            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta, voltando à conversa ou celebração de onde parou (sem listar opções); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
 }
 
 function sendText(text) {
@@ -1027,12 +1058,9 @@ function toolDamage(adv, args) {
         if (adv.enemy.hp <= 0) {
             const nome = adv.enemy.name, eraChefe = !!adv.enemy.boss; adv.enemy = null; defeatFoe(adv);
             if (eraChefe) {
-                adv.bossDown = true; adv.epilogue = true;                 // objetivo cumprido: sem mais combates
-                const cedo = elapsedS(adv) < BOSS_MIN_S;
+                adv.bossDown = true; enterEpilogue(adv);                  // objetivo cumprido: sem mais combates
                 return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, chefe_derrotado: nome, ...hpState(adv),
-                    instrucao: cedo
-                        ? `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC/ponto de partida, entrega, agradecimento e depois as 3 opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz). O encerramento só será aceito a partir de ${Math.ceil((BOSS_MIN_S - elapsedS(adv)) / 60)} min: se o jogador quiser concluir antes disso, conduza mais uma cena curta e ofereça as opções de novo.`
-                        : `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC/ponto de partida (não deixe o herói parado onde lutou), entrega, agradecimento e, se restarem mais de 2 minutos, as 3 opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz). NÃO chame end_adventure até o jogador escolher concluir (ou o sistema enviar ENCERRAR).` };
+                    instrucao: `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC inicial/ponto de partida (não deixe o herói parado onde lutou) e entrega do objetivo (chame objective_delivered quando entregar). Depois, se houver tempo, conduza momentos de descontração, comemoração e diálogo intenso com NPCs (banquete, taverna, festa, passeio ou uma conversa envolvente com ${adv.heroFem ? 'um homem adulto' : 'uma mulher adulta'}), com apenas UMA dica inicial de escolha e SEM listar 3 opções. NÃO chame end_adventure até o jogador pedir para finalizar (ou o sistema enviar FINALIZAR/ENCERRAR).` };
             }
             return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
         }
@@ -1126,14 +1154,20 @@ async function onToolCall(calls) {
             } else if (c.name === 'use_item') {
                 out = toolUseItem(adv, a);
             } else if (c.name === 'objective_complete') {
-                adv.epilogue = true;
-                out = { ok: true, instrucao: 'Epílogo iniciado: o objetivo foi cumprido. A partir de agora NÃO há mais combates nem chefes. Conduza o retorno, a entrega, o diálogo e as opções finais (ir a mais algum lugar / falar com mais alguém / concluir e seguir seu caminho em paz).' };
+                enterEpilogue(adv);
+                out = { ok: true, instrucao: 'Epílogo iniciado: o objetivo foi cumprido. A partir de agora NÃO há mais combates nem chefes. Conduza o retorno ao NPC inicial e a entrega (chame objective_delivered ao entregar). Depois, conduza celebração e diálogo intenso com NPCs (banquete, taverna, festa, passeio, ' + (adv.heroFem ? 'um homem adulto' : 'uma mulher adulta') + ' envolvente), com apenas UMA dica inicial de escolha e SEM listar 3 opções.' };
+            } else if (c.name === 'objective_delivered') {
+                if (!adv.epilogue) out = { ok: false, erro: 'O objetivo ainda não foi cumprido. Só chame objective_delivered depois de objective_complete ou da queda do chefe.' };
+                else {
+                    adv.delivered = true; syncEpilogueUI();
+                    out = { ok: true, instrucao: 'Entrega registrada (NÃO mencione nenhum botão). Se restar mais de 2 minutos, conduza celebração, banquete, festa, passeio ou conversa intensa com NPCs, com apenas UMA dica inicial de escolha (sem listar 3 opções). Só encerre quando o jogador pedir para finalizar, o sistema enviar FINALIZAR ou ENCERRAR.' };
+                }
             } else if (c.name === 'get_status') {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
-                if (!adv.dead && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
-                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe e cenas finais. Se o objetivo já foi cumprido, conduza o retorno, a entrega e as opções finais; só dá para concluir depois que o chefe cair (com 15 min de aventura), aos 20 min, ou quando o sistema enviar [SISTEMA] ENCERRAR.' };
+                if (!adv.dead && !adv.delivered && !adv.playerEnd && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
+                    out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe, entrega e celebração. Só dá para encerrar depois que o objetivo for entregue (objective_delivered) e o jogador pedir para finalizar, quando o sistema enviar [SISTEMA] FINALIZAR ou [SISTEMA] ENCERRAR, ou se o herói cair.' };
                 } else {
                     adv.endPayload = { ...a };
                     if (adv.dead) adv.endPayload.outcome = 'derrota';
@@ -1213,6 +1247,7 @@ function enterStage() {
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
     $('btnMic').setAttribute('aria-pressed', 'false'); $('btnMic').classList.add('live');
     setMasterState('idle');
+    syncEpilogueUI();
 
     // microfone → servidor (reduz 48/44,1 kHz para 16 kHz e envia blocos de 80 ms)
     const A = adv.A, ratio = A.ctx.sampleRate / 16000;
@@ -1251,6 +1286,49 @@ function enterStage() {
 
 function guardUnload(e) { if (S.adv && !S.adv.finished) { e.preventDefault(); e.returnValue = ''; } }
 
+// ----- epílogo: objetivo cumprido → some o "Sair"; entrega feita → aparece o botão "Finalizar aventura" -----
+function enterEpilogue(adv) {
+    if (adv.epilogue) return;
+    adv.epilogue = true; adv.epilogueAt = Date.now();
+    syncEpilogueUI();
+}
+
+function syncEpilogueUI() {
+    const a = S.adv;
+    const done = !!a && a.epilogue;
+    const leave = $('btnLeave');
+    leave.classList.toggle('gone', done); leave.disabled = done; leave.tabIndex = done ? -1 : 0;
+    if (done) closeOv('leaveModal');
+    const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
+    $('duel').classList.toggle('finish-on', show);
+    $('btnFinish').classList.toggle('show', show);
+    if (!show) closeOv('finishModal');
+}
+
+function openFinishConfirm() {
+    const a = S.adv; if (!a || a.finished || a.playerEnd) return;
+    $('finishEarly').style.display = elapsedS(a) < BOSS_MIN_S ? 'block' : 'none';
+    openOv('finishModal');
+}
+
+function confirmFinish() {
+    closeOv('finishModal');
+    const a = S.adv; if (!a || a.finished || a.playerEnd) return;
+    a.playerEnd = true; a.playerEndAt = Date.now(); a.A.endMute = true;   // ninguém interrompe a despedida
+    syncEpilogueUI();
+    queueNote(a, '[SISTEMA] FINALIZAR. O jogador escolheu finalizar a aventura. Faça agora a despedida em 30 a 45 segundos (um último momento com o NPC ou o cenário, a frase final da história e um resumo do desempenho do herói) e chame end_adventure. Não inicie nada novo nem faça perguntas.', true);
+}
+
+async function abandonAdventure() {
+    closeOv('leaveModal');
+    const adv = S.adv; if (!adv || adv.epilogue) return;
+    adv.finished = true;
+    teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
+    toast('Você abandonou a aventura.', true);
+    showView('lobby');
+    await refreshState();
+}
+
 function advTick() {
     const adv = S.adv; if (!adv || adv.finished) return;
     const left = adv.endMs - serverNow();
@@ -1265,13 +1343,17 @@ function advTick() {
         for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá direto ao retorno e à entrega (sem novas jornadas nem opções finais se o tempo for curto). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
+            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
-            adv.forced = true; adv.A.endMute = true;                  // a partir do ENCERRAR o Mestre fala sem ser cortado
+            adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
             queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
+    // rede de segurança: o Mestre esqueceu de chamar objective_delivered → libera o botão depois de 3 min de epílogo
+    if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
+    // o jogador tocou em Finalizar e o Mestre não encerrou: envia nota neutra
+    if (adv.playerEnd && Date.now() - adv.playerEndAt > 75000) { finishAdventure(null, true, 'master_timeout'); return; }
     flushNotes(adv);
     if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true, 'master_timeout');   // o mestre não encerrou: envia nota neutra
 }
@@ -1285,6 +1367,7 @@ function teardown() {
     try { adv.A.node.port.onmessage = null; adv.A.stream.getTracks().forEach((t) => t.stop()); adv.A.ctx.close(); } catch (_) { /* ok */ }
     try { adv.wake?.release(); } catch (_) { /* ok */ }
     window.removeEventListener('beforeunload', guardUnload);
+    closeOv('leaveModal'); closeOv('finishModal');
 }
 
 const pendKey = (slot) => 'aden_daily_pending_' + slot;
@@ -1428,15 +1511,12 @@ function bindUI() {
         $('btnPhones').setAttribute('aria-pressed', String(A.headphones));
         toast(A.headphones ? 'Modo fones: você pode interromper o Mestre.' : 'Modo alto-falante: o Mestre termina de falar antes de ouvir.');
     };
-    $('btnLeave').onclick = async () => {
-        const adv = S.adv; if (!adv) return;
-        if (!confirm('Abandonar a aventura? Você perderá a recompensa e não poderá jogar de novo hoje.')) return;
-        adv.finished = true;
-        teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
-        toast('Você abandonou a aventura.', true);
-        showView('lobby');
-        await refreshState();
-    };
+    $('btnLeave').onclick = () => { const adv = S.adv; if (!adv || adv.epilogue) return; openOv('leaveModal'); };   // modal, não confirm()
+    $('leaveCancel').onclick = () => closeOv('leaveModal');
+    $('leaveConfirm').onclick = abandonAdventure;
+    $('btnFinish').onclick = openFinishConfirm;
+    $('finishCancel').onclick = () => closeOv('finishModal');
+    $('finishConfirm').onclick = confirmFinish;
     document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal') closeOv(e.target.id); });
 }
 

@@ -450,3 +450,45 @@ body.hud-hidden .stage-bottom { transform: translateY(120%); }
 .hud-toggle-btn:hover { background: #241b08; }
 .hud-toggle-btn:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 2px; }
 body.hud-hidden .hud-toggle-btn { top: 0; }
+
+/* ── Epílogo: "Sair" some quando o objetivo é cumprido ── */
+.ctl-btn.gone { visibility: hidden; pointer-events: none; }
+
+/* ── Botão "Finalizar aventura": ocupa o lugar do inimigo no duelo ── */
+.duel-side.finish { display: none; grid-column: 2; cursor: pointer; font: inherit; color: inherit; -webkit-appearance: none; appearance: none;
+    -webkit-tap-highlight-color: transparent; border-color: var(--gold-light);
+    background: radial-gradient(ellipse at 50% 0%, rgba(230,194,122,.22), rgba(10,8,5,.82) 70%); }
+.duel-side.finish.show { display: flex; animation: finPop .7s cubic-bezier(.2,1.5,.4,1) both, finGlow 1.8s ease-in-out .7s infinite; }
+.duel.finish-on .duel-side.foe { display: none; }
+.duel-side.finish:active { transform: scale(.96); }
+.duel-side.finish .duel-name { color: #fff3cf; }
+@keyframes finPop { from { opacity: 0; transform: scale(.6) translateY(10px); } }
+@keyframes finGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(230,194,122,.35), 0 6px 16px rgba(0,0,0,.6); border-color: var(--gold-base); }
+    50% { box-shadow: 0 0 26px rgba(255,215,0,.85), 0 0 46px rgba(230,194,122,.45), 0 6px 16px rgba(0,0,0,.6); border-color: #fff3cf; }
+}
+.finish-badge { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, #3a2a0a, #120c03 70%); border: 2px solid var(--gold-light); box-shadow: 0 0 12px rgba(0,0,0,.8); }
+.finish-badge::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--gold-light); opacity: 0; animation: finPing 1.8s ease-out infinite; }
+@keyframes finPing { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+.finish-badge svg { width: 46px; height: 46px; overflow: visible; }
+.finish-flag { transform-box: fill-box; transform-origin: left center; animation: flagwave 1.4s ease-in-out infinite; }
+@keyframes flagwave { 0%, 100% { transform: skewY(0) scaleX(1); } 50% { transform: skewY(-7deg) scaleX(.92); } }
+.finish-spark { transform-box: fill-box; transform-origin: center; animation: finTwinkle 1.6s ease-in-out infinite; }
+.finish-spark.s2 { animation-delay: .8s; }
+@keyframes finTwinkle { 0%, 100% { opacity: .2; transform: scale(.5); } 50% { opacity: 1; transform: scale(1.2); } }
+.finish-label { position: relative; overflow: hidden; width: 100%; box-sizing: border-box; padding: 4px 4px; text-align: center; border-radius: 12px;
+    font-size: .6em; font-weight: bold; letter-spacing: .8px; text-transform: uppercase; color: #1a1000; white-space: nowrap;
+    background: linear-gradient(to top, var(--gold-base), var(--gold-light)); border: 1px solid #fff3cf; }
+.finish-label::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: sb-hp-sheen 1.8s infinite; }
+@media (max-height: 640px) { .finish-badge { width: 52px; height: 52px; } .finish-badge svg { width: 40px; height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .duel-side.finish.show, .finish-flag, .finish-spark, .finish-badge::after, .finish-label::after { animation: none; } }
+
+/* ── Legibilidade sobre o skybox: sombra nos textos que ficam FORA de caixas com fundo ── */
+:root { --txt-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 10px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.8); }
+#pageTitle, .eyebrow, .hero-sub, .master-state { text-shadow: var(--txt-shadow); }
+.eyebrow { color: var(--gold-light); }
+.hero-sub { color: #e6dec6; }
+.top-bar-link svg, #howBtn { filter: drop-shadow(0 1px 3px #000) drop-shadow(0 0 6px rgba(0,0,0,.9)); }
+

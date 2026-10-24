@@ -127,9 +127,9 @@ const sceneLabel = (id) => S.scenes[id] || String(id || '').replace(/_/g, ' ').r
 async function callFn(name, body) {
     const { data, error } = await supabase.functions.invoke(name, { body });
     if (error) {
-        let msg = error.message, detail = '';
-        try { const j = await error.context.json(); msg = j.error || msg; detail = j.detail || ''; } catch (_) { /* ignora */ }
-        const err = new Error(msg); err.detail = detail;
+        let msg = error.message, detail = '', retryAt = null;
+        try { const j = await error.context.json(); msg = j.error || msg; detail = j.detail || ''; retryAt = j.retry_at || null; } catch (_) { /* ignora */ }
+        const err = new Error(msg); err.detail = detail; err.retry_at = retryAt;
         throw err;
     }
     if (data && data.error) throw new Error(data.error);
@@ -438,6 +438,22 @@ function renderLobby() {
     tickLobby();
 }
 
+// Botão de iniciar em modo espera: cronômetro no lugar do texto, cinza e desabilitado. label=null restaura.
+function setStartWait(btn, label) {
+    if (!btn) return;
+    if (label) {
+        btn.disabled = true;
+        btn.dataset.waiting = '1';
+        btn.style.filter = 'grayscale(1)';
+        btn.style.cursor = 'not-allowed';
+        if (btn.textContent !== label) btn.textContent = label;
+    } else if (btn.dataset.waiting) {
+        delete btn.dataset.waiting;
+        btn.style.filter = ''; btn.style.cursor = '';
+        btn.textContent = 'Entrar na aventura';
+    }
+}
+
 function tickLobby() {
     const st = S.state; if (!st || S.view !== 'lobby' || S.adv) return;
     const now = serverNow();
@@ -459,8 +475,16 @@ function tickLobby() {
             if (btn) btn.disabled = true;
         } else if (now <= dead) {
             if (tStart) tStart.textContent = '00:00';
-            if (hint) hint.textContent = `Entre agora! Tolerância: ${mmss(dead - now)}`;
-            if (btn) btn.disabled = false;
+            const wait = S.busyFor === my.id ? S.busyUntil - now : 0;   // lotado: espera a próxima vaga abrir
+            if (wait > 0) {
+                if (hint) hint.textContent = 'Todas as vagas do Mestre estão ocupadas. O botão libera quando uma vaga abrir. Sua vaga continua garantida.';
+                setStartWait(btn, mmss(wait));
+            } else {
+                if (S.busyFor === my.id) { S.busyUntil = 0; S.busyFor = null; }
+                setStartWait(btn, null);                                // volta ao texto normal
+                if (hint) hint.textContent = `Entre agora! Tolerância: ${mmss(dead - now)}`;
+                if (btn) btn.disabled = false;
+            }
         } else {
             refreshState();
         }
@@ -851,6 +875,7 @@ async function _startAdventure(loadout) {
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         ctx = await callFn('mission-token', { slot_id: my.id, loadout });   // o cronômetro só começa aqui, depois da bolsa
+        S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
         await connectLive(false);
@@ -865,7 +890,11 @@ async function _startAdventure(loadout) {
         const micBusy = e && (e.name === 'MicBusyError' || e.name === 'NotReadableError' || e.name === 'AbortError' || e.name === 'TrackStartError');
         if (micBusy) { toast('O microfone está em uso por outro app ou site.', true); window.AdenMic?.showBusy?.(); }
         else if (denied) { toast('Permita o microfone para jogar.', true); window.AdenMic?.showBlocked?.(); }
-        else if (friendly(e.message) === BUSY_MSG) toast(BUSY_MSG, true);   // lotado: aviso simples, a vaga continua sua
+        else if (e.message === 'master_busy' && e.retry_at) {    // todas as vagas do Mestre ocupadas: o botão vira cronômetro até abrir uma
+            S.busyUntil = new Date(e.retry_at).getTime(); S.busyFor = my.id;
+            toast('Todas as vagas do Mestre estão ocupadas. Sua vaga continua garantida.', true);
+        }
+        else if (friendly(e.message) === BUSY_MSG) toast(BUSY_MSG, true);   // lotado (cota do Gemini): aviso simples, a vaga continua sua
         else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
         await refreshState();
         return;
@@ -1374,6 +1403,7 @@ function syncEpilogueUI() {
     const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
     $('duel').classList.toggle('finish-on', show);
     $('btnFinish').classList.toggle('show', show);
+    $('btnFinish').style.pointerEvents = show ? 'auto' : '';   // o HUD do duelo pode ter pointer-events:none no CSS; o botão precisa receber o toque
     if (!show) closeOv('finishModal');
 }
 

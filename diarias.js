@@ -171,7 +171,7 @@ function buildMenu() {
         {
             name: 'Aventura', icon: A + 'expm.webp', isDropdown: true, notifKeys: ['afk', 'diarias'], subItems: [
                 { name: 'Aventura AFK', url: 'afk.html', key: 'afk' },
-                { name: 'Missões Diárias', url: 'diarias.html', key: 'diarias' },
+                { name: 'Mestre das Lendas', url: 'diarias.html', key: 'diarias' },
             ],
         },
         { name: 'Mineração', url: 'mines.html', icon: A + 'recursos.webp' },

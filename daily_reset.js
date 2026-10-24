@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Mapeamento dos botões (Apenas os que somem com clique/reset diário)
     const targets = [
         // Menu Iniciar (Footer)
-        // Aventura (menu pai 'btnAventuraToggle'): AFK reseta 00:00 UTC, Missões Diárias reseta 03:00 UTC
+        // Aventura (menu pai 'btnAventuraToggle'): AFK reseta 00:00 UTC, Mestre das Lendas reseta 03:00 UTC
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnDiarias', key: 'diarias', type: 'daily', isSubmenu: true, parentGroup: 'recursos', resetHourUTC: 3 },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
         catch (e) { return {}; }
     };
 
-    // Reset por horário próprio (ex.: Missões Diárias às 03:00 UTC).
+    // Reset por horário próprio (ex.: Mestre das Lendas às 03:00 UTC).
     // O "dia" desses alvos começa em resetHourUTC; o marcador guarda a data do período atual.
     // A chave 'aden_last_<key>_reset_utc' é a MESMA usada pelos menus laterais das outras páginas.
     const checkTimedResets = (status) => {
@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // 1a. Menu pai "Aventura": bolinha se AFK OU Missões Diárias estiver pendente
+        // 1a. Menu pai "Aventura": bolinha se AFK OU Mestre das Lendas estiver pendente
         const btnAventura = document.getElementById('btnAventuraToggle');
         if (btnAventura) {
             if (status['afk'] === true || status['diarias'] === true) {

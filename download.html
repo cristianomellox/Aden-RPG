@@ -307,6 +307,8 @@
             transition: border-color 0.25s, transform 0.2s, box-shadow 0.2s;
             box-shadow: 0 2px 12px rgba(0,0,0,0.5);
             min-width: 255px;
+          max-height: 450px;
+          overflow-y: auto;
         }
         .feat-card:hover {
             border-color: var(--gold-dark); transform: translateY(-5px);
@@ -904,12 +906,12 @@
     <div id="description-panel" class="reveal">
         <h2 data-i18n="desc_title" data-lang-en="Welcome to Aden">Bem-vindo a Aden</h2>
         <p data-i18n="desc_p1"
-           data-lang-en="Dive into a deep strategic RPG world, designed for fans of classic browser games and modern idle, gacha, turn-based, and dungeon mechanics. You are the chosen hero to restore balance, but raw power is not enough — you will need allies, economy, and tactics.">
-            Mergulhe em um mundo de RPG estratégico profundo, projetado para fãs de jogos de navegador clássicos e mecânicas modernas de idle, gacha, turno e masmorras. Você é o herói escolhido para restaurar o equilíbrio, mas o poder bruto não é suficiente — você precisará de aliados, economia e tática.
+           data-lang-en="Dive into a deep strategic RPG world, designed for fans of browser games and modern idle, gacha, turn-based, and dungeon mechanics. You are the chosen hero to restore balance, but raw power is not enough — you will need allies, economy, and tactics.">
+            Mergulhe em um mundo de RPG estratégico profundo, projetado para fãs de jogos de navegador e mecânicas modernas de idle, gacha, turno e masmorras. Você é o herói escolhido para restaurar o equilíbrio, mas o poder bruto não é suficiente — você precisará de aliados, economia e tática.
         </p>
         <p data-i18n="desc_p2"
-           data-lang-en="Unlike games with heavy graphics that drain your battery, Aden focuses on depth, community, and strategy. You know those browser games that, although they seem simple, are extremely addictive? That is the core of the game! Moreover, in Aden RPG Online you don't need to spend hours doing boring, exhausting quests — you can have fun progressing without compromising your precious time.">
-            Ao contrário de jogos com gráficos pesados que esgotam sua bateria, Aden foca em profundidade, comunidade e estratégia. Sabe aqueles jogos de navegador que, embora pareçam simples, são extremamente viciantes? Esse é o núcleo do jogo! Além disso, em Aden RPG Online você não precisa passar horas realizando missões chatas — você pode se divertir evoluindo sem comprometer seu precioso tempo.
+           data-lang-en="Unlike games with inconvenient difficulties, Aden focuses on depth, community, and strategy. You know those browser games that, although they seem simple, are extremely addictive? That is the core of the game! Moreover, in Aden RPG Online you don't need to spend hours doing boring, exhausting quests — you can have fun progressing without compromising your precious time.">
+            Ao contrário de jogos com dificuldades incovenientes, Aden foca em profundidade, comunidade e estratégia. Sabe aqueles jogos de navegador que, embora pareçam simples, são extremamente viciantes? Esse é o núcleo do jogo! Além disso, em Aden RPG Online você não precisa passar horas realizando missões chatas — você pode se divertir evoluindo sem comprometer seu precioso tempo.
         </p>
     </div>
 
@@ -971,22 +973,23 @@
             </div>
             <div class="feat-card">
                 <div class="feat-icon-wrap">
-                    <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                   <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M8 8 4 20M16 8l4 12M4 20h16"/><path d="M8 20l4-4 4 4"/>
+                   </svg>
+                  
+                </div>
+                <h3 data-i18n="f6_title" data-lang-en="The Master">Mestre das Lendas</h3>
+                <p data-i18n="f6_body" data-lang-en="Live the ultimate roleplay experience with Daily Quests: brand-new adventures narrated in real time by an Artificial Intelligence Game Master. Forget action buttons; here, your voice is the absolute controller. Speak into the microphone to interrogate suspects, cast spells, negotiate with characters, or attack epic bosses, while the world reacts dynamically to your every word.">Viva a experiência definitiva de roleplay com as Missões Diárias: aventuras inéditas narradas em tempo real por um Mestre de Inteligência Artificial. Esqueça os botões de ação; aqui, sua voz é o controle absoluto. Fale no microfone para interrogar suspeitos, conjurar magias, negociar com personagens ou atacar chefes épicos, enquanto o mundo reage dinamicamente a cada palavra sua.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                  <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 21V9l9-6 9 6v12H3z"/>
                         <rect x="9" y="14" width="6" height="7" rx="0.5"/>
                         <polyline points="3 9 3 5 7 5 7 9"/>
                         <polyline points="17 9 17 5 21 5 21 9"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f6_title" data-lang-en="Forts">Fortalezas</h3>
-                <p data-i18n="f6_body" data-lang-en="Attack other players' fortresses and defend yours with diverse troops. Use your attack and defense strategy.">Ataque fortalezas de outros jogadores e defenda a sua com tropas diversas. Use sua estratégia de ataque e defesa!</p>
-            </div>
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="8" r="4"/>
-                        <path d="M8 8 4 20M16 8l4 12M4 20h16"/><path d="M8 20l4-4 4 4"/>
-                    </svg>
+                  </svg>  
                 </div>
                 <h3 data-i18n="f7_title" data-lang-en="Instances">Instâncias</h3>
                 <p data-i18n="f7_body" data-lang-en="Face the Ancient Ruins: 25 players across 50 rooms. After 3 minutes the rooms collapse. Eliminate opponents and be the last survivor.">Enfrente as Ruínas Ancestrais: 25 jogadores em 50 salas. Após 3 minutos as salas colapsam. Elimine os oponentes e seja o último sobrevivente.</p>
@@ -1003,13 +1006,17 @@
             </div>
             <div class="feat-card">
                 <div class="feat-icon-wrap">
-                    <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                    </svg>
+                    
+<svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Balão traseiro -->
+    <path d="M13 3.5h5a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-1v3l-3-3"/>
+
+    <!-- Balão dianteiro -->
+    <path d="M3 7.5h8a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H8l-3 3v-3H3a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3z" transform="translate(1 -1)"/>
+</svg>
                 </div>
-                <h3 data-i18n="f9_title" data-lang-en="15 Languages">Suporte Multi-idioma</h3>
-                <p data-i18n="f9_body" data-lang-en="Fully localized in 15 languages, including Portuguese, English, Russian, Spanish, and Chinese.">Totalmente localizado em 15 idiomas, incluindo Português, Inglês, Russo, Espanhol e Chinês.</p>
+                <h3 data-i18n="f9_title" data-lang-en="Social Area">Área Social</h3>
+                <p data-i18n="f9_body" data-lang-en="Chat in text or voice in the Taverns with other players. A social area for you to follow other players, give gifts, make friends or couples, post photos, and more. And you can play while you chat!">Converse nas Tavernas em chat de texto ou por voz com outros jogadores. Área social para você seguir outros jogadores, presentear, criar laços de amizade ou casal, postar fotos, e mais. E você pode jogar enquanto conversa!</p>
             </div>
         </div>
     </section>

@@ -197,12 +197,72 @@ function checkAndHandleExpiry() {
 
     if (changed) {
         saveSkinCache({ active_frame: cache.active_frame, active_video: cache.active_video });
-        const user = window.globalUser;
-        if (user) {
-            supabase.rpc('cleanup_expired_skins', { p_player_id: user.id })
-                    .then(() => window.loadPlayerAndItems?.(true));
-        }
+        _requestServerCleanup();
     }
+}
+
+// Pede ao servidor para apagar as skins vencidas. Antes disso era seguido de um
+// loadPlayerAndItems(true) (download completo = egress alto + corrida com o boot).
+// Agora o estado local já é limpo por purgeExpired() e o delta traz só os "remove".
+let _lastCleanupAt = 0;
+function _requestServerCleanup() {
+    const user = window.globalUser;
+    if (!user) return;
+    if (Date.now() - _lastCleanupAt < 15000) return; // throttle
+    _lastCleanupAt = Date.now();
+    Promise.resolve(supabase.rpc('cleanup_expired_skins', { p_player_id: user.id }))
+        .then(({ error } = {}) => { if (error) console.warn('[Skin] cleanup_expired_skins falhou:', error.message); })
+        .catch(e => console.warn('[Skin] cleanup_expired_skins falhou:', e));
+}
+
+// ─── Limpeza LOCAL de skins vencidas (IndexedDB + tela + modal) ───────
+// Não gasta egress: usa só window.allInventoryItems (já em memória) e o localStorage.
+function _isSkinItemExpired(i) {
+    if (!i || !i.expires_at) return false;                          // permanente / sem timer
+    if (i.items?.item_type?.toLowerCase() !== 'skin') return false; // (placeholder = ignora até hidratar)
+    if (i.items.skin_duration_hours === null) return false;         // permanente
+    return new Date(i.expires_at) <= Date.now();
+}
+
+// opts.persist: regrava o IndexedDB (padrão true; use false se um saveCache já vem logo depois)
+// opts.render : redesenha a bolsa (padrão true; use false se um renderUI já vem logo depois)
+// Retorna quantas skins foram removidas da lista local.
+function purgeExpired({ persist = true, render = true } = {}) {
+    const items = window.allInventoryItems || [];
+    const expiredIds = new Set();
+    for (let k = items.length - 1; k >= 0; k--) {
+        if (_isSkinItemExpired(items[k])) { expiredIds.add(items[k].id); items.splice(k, 1); }
+    }
+
+    // Exibição (moldura/fundo): limpa se o item sumiu/expirou OU se o timer do cache já venceu
+    const cache = loadSkinCache() || {};
+    const patch = {};
+    if (cache.active_frame && (expiredIds.has(cache.active_frame.inventory_item_id) || isExpiredData(cache.active_frame))) {
+        patch.active_frame = null;
+        _removeFrame();
+    }
+    if (cache.active_video && (expiredIds.has(cache.active_video.inventory_item_id) || isExpiredData(cache.active_video))) {
+        patch.active_video = null;
+        _swapVideo(document.getElementById('background-video'), DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
+    }
+    if (Object.keys(patch).length) {
+        saveSkinCache(patch);
+        _invalidateTavSkinCache(window.globalUser?.id);
+    }
+
+    if (expiredIds.size === 0 && !Object.keys(patch).length) return 0;
+
+    window.allInventoryItems = items;
+    window.equippedItems = items.filter(i => i.equipped_slot !== null && i.quantity > 0);
+
+    if (persist && expiredIds.size) {
+        Promise.resolve(window.saveCache?.(items, window.playerBaseStats || {}, undefined))
+            .catch(e => console.warn('[Skin] Falha ao regravar IndexedDB:', e));
+    }
+    if (render) window.renderUI?.();
+
+    _requestServerCleanup(); // alinha o servidor (no-op se o sync_inventory já limpou)
+    return expiredIds.size;
 }
 
 // ─── Reconciliação com Servidor ───────────────────────────────────────
@@ -238,7 +298,10 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
         } else {
             const skinItem = items.find(i => i.id === serverFrameId);
             const def = _skinDef(skinItem);
-            if (def?.skin_frame_url) {
+            if (skinItem && _isSkinItemExpired(skinItem)) {
+                newCache.active_frame = null;
+                _removeFrame();
+            } else if (def?.skin_frame_url) {
                 newCache.active_frame = {
                     inventory_item_id : serverFrameId,
                     frame_url         : def.skin_frame_url,
@@ -258,7 +321,10 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
         } else {
             const skinItem = items.find(i => i.id === serverVideoId);
             const def = _skinDef(skinItem);
-            if (def?.skin_video_url) {
+            if (skinItem && _isSkinItemExpired(skinItem)) {
+                newCache.active_video = null;
+                _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
+            } else if (def?.skin_video_url) {
                 newCache.active_video = {
                     inventory_item_id : serverVideoId,
                     video_url         : def.skin_video_url,
@@ -604,6 +670,9 @@ function openSkinManagerModal() {
     const modal = document.getElementById('skinManagerModal');
     if (!modal) return;
 
+    // Remove da seleção/exibição tudo que já expirou antes de montar a lista
+    purgeExpired();
+
     const cache = loadSkinCache();
     const items = window.allInventoryItems || [];
 
@@ -729,6 +798,11 @@ function init() {
     // 4. Eventos (idempotente)
     if (window.__skinUIBound) return;
     window.__skinUIBound = true;
+
+    // Skin que vence com a página aberta / aba que volta do segundo plano (100% local, sem rede)
+    const _expiryTick = () => { if (!document.hidden) purgeExpired(); };
+    setInterval(_expiryTick, 30000);
+    document.addEventListener('visibilitychange', _expiryTick);
     document.getElementById('skinConfigBtn')
         ?.addEventListener('click', openSkinManagerModal);
     document.getElementById('closeSkinManagerModal')
@@ -746,6 +820,7 @@ window.skinSystem = {
     init,
     showSkinDetails,
     reconcileWithServer,
+    purgeExpired,
     formatExpiryTime,
     openSkinManagerModal
 };

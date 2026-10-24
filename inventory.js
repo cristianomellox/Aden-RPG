@@ -472,6 +472,7 @@ async function bootstrapData() {
         const retry = async () => {
             if (await ensureDefinitionsLoaded()) {
                 rehydrateAll();
+                window.skinSystem?.purgeExpired?.({ persist: true, render: false });
                 renderUI();
                 window.skinSystem?.reconcileWithServer?.(...(window.__lastActiveSkinIds || [undefined, undefined]));
                 return true;
@@ -629,6 +630,7 @@ async function _loadPlayerAndItems(forceRefresh = false) {
             allInventoryItems = localItems.map(item => hydrateItem({ ...item }));
             playerBaseStats = localStats || {};
             equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
+            window.skinSystem?.purgeExpired?.({ persist: true, render: false }); // skins vencidas somem já do IndexedDB/tela
             renderUI();
         }
     } catch (e) {
@@ -671,6 +673,8 @@ async function _loadPlayerAndItems(forceRefresh = false) {
 
         allInventoryItems = mergedList;
         equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
+        // Rede de segurança caso o servidor ainda devolva skin vencida no upsert (o saveCache abaixo já persiste)
+        window.skinSystem?.purgeExpired?.({ persist: false, render: false });
 
         if (deltaData.player_stats) playerBaseStats = deltaData.player_stats;
 
@@ -717,6 +721,7 @@ async function fullDownload() {
     const rawItems = playerData.cached_inventory || [];
     allInventoryItems = rawItems.map(item => hydrateItem({ ...item }));
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null && item.quantity > 0);
+    window.skinSystem?.purgeExpired?.({ persist: false, render: false });
 
     renderUI();
 

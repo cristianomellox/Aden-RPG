@@ -768,7 +768,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const assetBase = "https://aden-rpg.pages.dev/assets/";
   const menuItems = [
     { name:"Tela inicial", url:"index.html", icon:assetBase+"homeic.webp" },
-    { name:"Aventura AFK", url:"afk.html", icon:assetBase+"expm.webp", key:'afk' },
+    { name:"Aventura", icon:assetBase+"expm.webp", isDropdown:true, notifKeys:['afk','diarias'], subItems:[
+      {name:"Aventura AFK",url:"afk.html",key:'afk'},
+      {name:"Missões Diárias",url:"diarias.html",key:'diarias'},
+    ]},
     { name:"Mineração", url:"mines.html", icon:assetBase+"recursos.webp" },
     { name:"Áreas de Caça", icon:assetBase+"mapicon.webp", isDropdown:true, subItems:[
       {name:"Covil de Kelts",url:"covil_de_kelts.html"},
@@ -822,13 +825,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+
+    // --- RESET DAS MISSÕES DIÁRIAS (03:00 UTC) — chave compartilhada com index/daily_reset.js ---
+    const ensureDiariasDailyReset = () => {
+        try {
+            const KEY_STATUS = 'aden_daily_actions_status';
+            const KEY_MARK = 'aden_last_diarias_reset_utc';
+            // "Dia" das Diárias começa às 03:00 UTC
+            const period = new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0];
+            if (localStorage.getItem(KEY_MARK) !== period) {
+                let st = {};
+                try { st = JSON.parse(localStorage.getItem(KEY_STATUS) || '{}'); } catch (e) {}
+                st.diarias = true;
+                localStorage.setItem(KEY_STATUS, JSON.stringify(st));
+                localStorage.setItem(KEY_MARK, period);
+            }
+        } catch (e) {}
+    };
+    ensureDiariasDailyReset();
+
   if (menuList) {
     menuList.innerHTML="";
     menuItems.forEach(item => {
       const li=document.createElement("li"); li.className="menu-item";
       if (item.isDropdown) {
         const isSubActive=item.subItems.some(s=>s.url===MANUAL_CURRENT_PAGE);
-        const a=document.createElement("a"); a.className="menu-link dropdown-toggle"; a.style.cursor="pointer";
+        const a=document.createElement("a"); a.className="menu-link dropdown-toggle"; a.style.cursor="pointer"; if(item.notifKeys)a.dataset.menuKeys=item.notifKeys.join(',');
         a.innerHTML=`<img src="${item.icon}" class="menu-icon" alt="" onerror="this.style.display='none'"><span>${item.name}</span>${chevronDownSVG}`;
         const subUl=document.createElement("ul"); subUl.className=`submenu-list ${isSubActive?'open':''}`;
         if(isSubActive)li.classList.add('dropdown-active');
@@ -837,8 +859,9 @@ document.addEventListener("DOMContentLoaded", () => {
           const isMatch=sub.url===MANUAL_CURRENT_PAGE;
           const sli=document.createElement("li"); sli.className=`menu-item ${isMatch?'active':''}`;
           const sa=document.createElement("a"); sa.className="menu-link submenu-link"; sa.innerHTML=`<span>${sub.name}</span>`;
-          if(isMatch){sa.style.cursor="default";sa.style.pointerEvents="none";}
-          else{sa.href=sub.url;sa.addEventListener("click",()=>setTimeout(closeMenu,100));}
+          if(sub.key)sa.dataset.menuKey=sub.key;
+          if(isMatch){if(sub.key)clearNotification(sub.key);sa.style.cursor="default";sa.style.pointerEvents="none";}
+          else{sa.href=sub.url;sa.addEventListener("click",()=>{if(sub.key){clearNotification(sub.key);renderSideMenuNotifications();}setTimeout(closeMenu,100);});}
           sli.appendChild(sa); subUl.appendChild(sli);
         });
         li.appendChild(a); li.appendChild(subUl);
@@ -869,6 +892,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Notificações
   const renderSideMenuNotifications=()=>{
+    ensureDiariasDailyReset();
     const STORAGE_KEY_ACTIONS='aden_daily_actions_status';
     let dailyStatus={};
     try{dailyStatus=JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS)||'{}');}catch(e){}
@@ -881,9 +905,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const links=menuList.querySelectorAll('.menu-link');
     links.forEach(link=>{
       const key=link.dataset.menuKey;
-      let show=(key&&dailyStatus[key]===true)||(key==='guild'&&showGuildDot);
+      const pk=link.dataset.menuKeys;
+      let show=(key&&dailyStatus[key]===true)||(key==='guild'&&showGuildDot)||(pk&&pk.split(',').some(k=>dailyStatus[k]===true));
       const ed=link.querySelector('.menu-notification-dot');if(ed)ed.remove();
-      if(show){const d=document.createElement('div');d.className='menu-notification-dot';link.appendChild(d);}
+      if(show){const d=document.createElement('div');d.className='menu-notification-dot';if(link.classList.contains('submenu-link')){d.style.setProperty('left','auto','important');d.style.setProperty('right','18px','important');}link.appendChild(d);}
     });
   };
   renderSideMenuNotifications();

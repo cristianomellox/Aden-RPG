@@ -501,7 +501,16 @@
 
     const menuItems = [
         { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
-        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { 
+            name: "Aventura", 
+            icon: assetBase + "expm.webp",
+            isDropdown: true,
+            notifKeys: ['afk', 'diarias'],
+            subItems: [
+                { name: "Aventura AFK", url: "afk.html", key: 'afk' },
+                { name: "Missões Diárias", url: "diarias.html", key: 'diarias' }
+            ]
+        },
         { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
         { 
             name: "Áreas de Caça", 
@@ -604,6 +613,25 @@
         }
     };
 
+
+    // --- RESET DAS MISSÕES DIÁRIAS (03:00 UTC) — chave compartilhada com index/daily_reset.js ---
+    const ensureDiariasDailyReset = () => {
+        try {
+            const KEY_STATUS = 'aden_daily_actions_status';
+            const KEY_MARK = 'aden_last_diarias_reset_utc';
+            // "Dia" das Diárias começa às 03:00 UTC
+            const period = new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0];
+            if (localStorage.getItem(KEY_MARK) !== period) {
+                let st = {};
+                try { st = JSON.parse(localStorage.getItem(KEY_STATUS) || '{}'); } catch (e) {}
+                st.diarias = true;
+                localStorage.setItem(KEY_STATUS, JSON.stringify(st));
+                localStorage.setItem(KEY_MARK, period);
+            }
+        } catch (e) {}
+    };
+    ensureDiariasDailyReset();
+
     if (menuList) {
         menuList.innerHTML = ""; 
 
@@ -618,6 +646,7 @@
                 const a = document.createElement("a");
                 a.className = "menu-link dropdown-toggle";
                 a.style.cursor = "pointer";
+                if (item.notifKeys) a.dataset.menuKeys = item.notifKeys.join(',');
                 a.innerHTML = `
                     <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                     <span>${item.name}</span>
@@ -645,14 +674,21 @@
                     subA.className = "menu-link submenu-link";
                     subA.innerHTML = `<span>${sub.name}</span>`;
 
+                    if (sub.key) subA.dataset.menuKey = sub.key;
+
                     if (isMatch) {
+                        // Já está nesta página: conta como "aberto" -> limpa a bolinha
+                        if (sub.key) clearNotification(sub.key);
                         subA.style.cursor = "default";
                         subA.style.pointerEvents = "none";
                         subA.style.opacity = "1";
                     } else {
                         subA.href = sub.url;
                         subA.addEventListener("click", (e) => {
-                             // Sem notificação em subitens por enquanto, navegação normal
+                             if (sub.key) {
+                                 clearNotification(sub.key);
+                                 renderSideMenuNotifications();
+                             }
                              setTimeout(closeMenu, 100);
                         });
                     }
@@ -754,6 +790,7 @@
 
     // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
     const renderSideMenuNotifications = () => {
+        ensureDiariasDailyReset();
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
         try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
@@ -779,6 +816,9 @@
             let shouldShow = false;
 
             if (key && dailyStatus[key] === true) shouldShow = true;
+            // Menu pai (ex.: Aventura): mostra se QUALQUER filho estiver pendente
+            const parentKeys = link.dataset.menuKeys;
+            if (parentKeys && parentKeys.split(',').some(k => dailyStatus[k] === true)) shouldShow = true;
             if (key === 'guild' && showGuildDot) shouldShow = true;
 
             const existingDot = link.querySelector('.menu-notification-dot');
@@ -787,6 +827,11 @@
             if (shouldShow) {
                 const dot = document.createElement('div');
                 dot.className = 'menu-notification-dot';
+                if (link.classList.contains('submenu-link')) {
+                    // Subitens não têm ícone: bolinha à direita
+                    dot.style.setProperty('left', 'auto', 'important');
+                    dot.style.setProperty('right', '18px', 'important');
+                }
                 link.appendChild(dot);
             }
         });

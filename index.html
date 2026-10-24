@@ -352,8 +352,22 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
   </div>
 </div>
 <div id="recursosSubmenu" class="footer-submenu" style="display:none;">
-  <div id="btnAfk" onclick="window.location.href = 'afk.html'" class="footer-submenu-btn">
-    <img data-src="https://aden-rpg.pages.dev/assets/expm.webp" class="submenu-icon">Aventura AFK
+  <div id="btnAventuraToggle" class="footer-submenu-btn" style="cursor: pointer; justify-content: space-between;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img data-src="https://aden-rpg.pages.dev/assets/expm.webp" class="submenu-icon">Aventura
+    </div>
+    <svg id="aventuraArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </div>
+
+  <div id="aventuraDropdownContent" style="display: none; flex-direction: column; background-color: rgba(0,0,0,0.3); border-radius: 4px; margin-bottom: 5px;">
+    <div id="btnAfk" onclick="window.location.href = 'afk.html'" class="footer-submenu-btn" style="border: none; background: transparent; padding-left: 25px; justify-content: flex-start;">
+      <span style="font-size: 0.9em; color: #ccc;">↳ Aventura AFK</span>
+    </div>
+    <div id="btnDiarias" onclick="window.location.href = 'diarias.html'" class="footer-submenu-btn" style="border: none; background: transparent; padding-left: 25px; justify-content: flex-start;">
+      <span style="font-size: 0.9em; color: #ccc;">↳ Missões Diárias</span>
+    </div>
   </div>
 
   <div onclick="window.location.href = 'mines.html'" class="footer-submenu-btn">
@@ -1836,6 +1850,24 @@ document.addEventListener("DOMContentLoaded", () => {
             if(areasArrow) {
                 areasArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
                 areasArrow.style.color = isHidden ? 'gold' : 'inherit';
+            }
+        });
+    }
+
+    // Lógica para o Dropdown "Aventura"
+    const btnAventuraToggle = document.getElementById('btnAventuraToggle');
+    const aventuraDropdownContent = document.getElementById('aventuraDropdownContent');
+    const aventuraArrow = document.getElementById('aventuraArrow');
+
+    if(btnAventuraToggle && aventuraDropdownContent) {
+        btnAventuraToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = aventuraDropdownContent.style.display === 'none';
+            aventuraDropdownContent.style.display = isHidden ? 'flex' : 'none';
+
+            if(aventuraArrow) {
+                aventuraArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                aventuraArrow.style.color = isHidden ? 'gold' : 'inherit';
             }
         });
     }

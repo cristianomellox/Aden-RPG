@@ -7,7 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Mapeamento dos botões (Apenas os que somem com clique/reset diário)
     const targets = [
         // Menu Iniciar (Footer)
+        // Aventura (menu pai 'btnAventuraToggle'): AFK reseta 00:00 UTC, Missões Diárias reseta 03:00 UTC
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        { id: 'btnDiarias', key: 'diarias', type: 'daily', isSubmenu: true, parentGroup: 'recursos', resetHourUTC: 3 },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         // Áreas de Caça (apenas filhos via container disparam a ação)
@@ -20,24 +22,52 @@ document.addEventListener("DOMContentLoaded", () => {
         return new Date().toISOString().split('T')[0];
     };
 
+    const readStatus = () => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); }
+        catch (e) { return {}; }
+    };
+
+    // Reset por horário próprio (ex.: Missões Diárias às 03:00 UTC).
+    // O "dia" desses alvos começa em resetHourUTC; o marcador guarda a data do período atual.
+    // A chave 'aden_last_<key>_reset_utc' é a MESMA usada pelos menus laterais das outras páginas.
+    const checkTimedResets = (status) => {
+        let changed = false;
+        targets.forEach(t => {
+            if (!t.resetHourUTC) return;
+            const period = new Date(Date.now() - t.resetHourUTC * 3600 * 1000).toISOString().split('T')[0];
+            const markKey = `aden_last_${t.key}_reset_utc`;
+            if (localStorage.getItem(markKey) !== period) {
+                status[t.key] = true;
+                localStorage.setItem(markKey, period);
+                changed = true;
+            }
+        });
+        if (changed) localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+        return status;
+    };
+
     const checkReset = () => {
         const todayStr = getTodayUTC();
         const lastReset = localStorage.getItem(STORAGE_KEY_DATE);
-        
+        let status;
+
         if (todayStr !== lastReset) {
             console.log("🔄 [Reset System] Novo dia detectado (UTC).");
-            const currentStatus = {};
+            const prev = readStatus();
+            status = {};
             targets.forEach(t => {
-                currentStatus[t.key] = true;
+                // Alvos com horário próprio (diarias) NÃO resetam à meia-noite: preserva o estado
+                status[t.key] = t.resetHourUTC ? (prev[t.key] === true) : true;
             });
             // 'caca' é tratado separadamente dos targets, mas também é diário
-            currentStatus['caca'] = true;
-            
+            status['caca'] = true;
+
             localStorage.setItem(STORAGE_KEY_DATE, todayStr);
-            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(currentStatus));
-            return currentStatus;
-        } 
-        return JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+        } else {
+            status = readStatus();
+        }
+        return checkTimedResets(status);
     };
 
     // Verifica se o evento das Ruínas está ativo (Horários UTC específicos)
@@ -74,6 +104,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
+
+        // 1a. Menu pai "Aventura": bolinha se AFK OU Missões Diárias estiver pendente
+        const btnAventura = document.getElementById('btnAventuraToggle');
+        if (btnAventura) {
+            if (status['afk'] === true || status['diarias'] === true) {
+                pendingRecursos = true;
+                addDotToElement(btnAventura, 'submenu-notification-dot');
+            } else {
+                removeDotFromElement(btnAventura);
+            }
+        }
 
         // 1b. Lógica especial para Áreas de Caça (dots no toggle pai + filhos do dropdown)
         const btnCacaToggle = document.getElementById('btnCacaToggle');
@@ -217,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const handleActionClick = (key) => {
-        const status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+        const status = readStatus();
         if (status[key] === true) {
             status[key] = false;
             localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
@@ -306,13 +347,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Intervalo de verificação (a cada 60s)
     setInterval(() => {
-        const todayStr = getTodayUTC();
-        const lastReset = localStorage.getItem(STORAGE_KEY_DATE);
-        
-        // Se mudou o dia, reseta tudo
-        if (todayStr !== lastReset) {
-            currentStatus = checkReset();
-        }
+        // Relê do localStorage (reset de meia-noite, reset das 03:00 e cliques feitos em
+        // outras abas/páginas pelo menu lateral)
+        currentStatus = checkReset();
         
         // Chama renderDots a cada minuto para atualizar eventos baseados em horário (Ruínas e Guilda)
         // mesmo que o dia não tenha mudado.

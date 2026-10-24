@@ -168,9 +168,13 @@ function buildMenu() {
     const A = ASSETS;
     const items = [
         { name: 'Tela inicial', url: 'index.html', icon: A + 'homeic.webp' },
-        { name: 'Aventura AFK', url: 'afk.html', icon: A + 'expm.webp' },
+        {
+            name: 'Aventura', icon: A + 'expm.webp', isDropdown: true, notifKeys: ['afk', 'diarias'], subItems: [
+                { name: 'Aventura AFK', url: 'afk.html', key: 'afk' },
+                { name: 'Missões Diárias', url: 'diarias.html', key: 'diarias' },
+            ],
+        },
         { name: 'Mineração', url: 'mines.html', icon: A + 'recursos.webp' },
-        { name: 'Missões', icon: A + 'iconmissao.webp', isDropdown: true, subItems: [{ name: 'Diárias', url: 'diarias.html' }] },
         {
             name: 'Áreas de Caça', icon: A + 'mapicon.webp', isDropdown: true, subItems: [
                 { name: 'Covil de Kelts', url: 'covil_de_kelts.html' }, { name: 'Desfiladeiro', url: 'desfiladeiro.html' },
@@ -181,9 +185,9 @@ function buildMenu() {
             ],
         },
         { name: 'Masmorras', icon: A + 'dgs.webp', isDropdown: true, subItems: [{ name: 'Ruínas Ancestrais', url: 'ruins.html' }] },
-        { name: 'Arena PvP', url: 'arena.html', icon: A + 'pvp.webp' },
-        { name: 'Chefe Mundial', url: 'solo_boss.html', icon: A + 'bossm.webp' },
-        { name: 'Guilda', url: 'guild.html', icon: A + 'guilda.webp' },
+        { name: 'Arena PvP', url: 'arena.html', icon: A + 'pvp.webp', key: 'arena' },
+        { name: 'Chefe Mundial', url: 'solo_boss.html', icon: A + 'bossm.webp', key: 'boss' },
+        { name: 'Guilda', url: 'guild.html', icon: A + 'guilda.webp', key: 'guild' },
         { name: 'Bolsa', url: 'inventory.html', icon: A + 'iconbolsa.webp' },
         { name: 'Ranking', url: 'ranking_cp.html', icon: A + 'iconranking.webp' },
         { name: 'Títulos', url: 'titulos.html', icon: A + 'icontitulos.webp' },
@@ -212,6 +216,61 @@ function buildMenu() {
         setTimeout(() => { ov.style.display = 'none'; }, 300);
     };
 
+    // --- NOTIFICAÇÕES (chave compartilhada: aden_daily_actions_status) ---
+    const KEY_STATUS = 'aden_daily_actions_status';
+    const readStatus = () => { try { return JSON.parse(localStorage.getItem(KEY_STATUS) || '{}'); } catch (e) { return {}; } };
+
+    // Reset das Missões Diárias: todo dia às 03:00 UTC
+    const ensureDiariasDailyReset = () => {
+        try {
+            const KEY_MARK = 'aden_last_diarias_reset_utc';
+            const period = new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0];
+            if (localStorage.getItem(KEY_MARK) !== period) {
+                const st = readStatus();
+                st.diarias = true;
+                localStorage.setItem(KEY_STATUS, JSON.stringify(st));
+                localStorage.setItem(KEY_MARK, period);
+            }
+        } catch (e) {}
+    };
+
+    const clearNotification = (key) => {
+        if (!key) return;
+        const st = readStatus();
+        if (st[key] === true) { st[key] = false; localStorage.setItem(KEY_STATUS, JSON.stringify(st)); }
+        if (key === 'guild') {
+            const now = new Date(), day = now.getUTCDay(), h = now.getUTCHours(), m = now.getUTCMinutes();
+            if (day === 6) localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            if (day === 0 && h === 23 && m >= 30) localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+        }
+    };
+
+    const renderNotifications = () => {
+        ensureDiariasDailyReset();
+        const st = readStatus();
+        const now = new Date(), day = now.getUTCDay(), h = now.getUTCHours(), m = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday', KEY_SUN = 'aden_guild_notif_seen_sunday';
+        if (day === 1) { localStorage.removeItem(KEY_SAT); localStorage.removeItem(KEY_SUN); }
+        let guildDot = false;
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) guildDot = true;
+        if (day === 0 && h === 23 && m >= 30 && !localStorage.getItem(KEY_SUN)) guildDot = true;
+
+        list.querySelectorAll('.menu-link').forEach((link) => {
+            const key = link.dataset.menuKey, pk = link.dataset.menuKeys;
+            const show = (key && st[key] === true)
+                || (key === 'guild' && guildDot)
+                || (pk && pk.split(',').some((k) => st[k] === true));
+            link.querySelector('.menu-notification-dot')?.remove();
+            if (show) {
+                const d = document.createElement('div');
+                d.className = 'menu-notification-dot';
+                if (link.classList.contains('submenu-link')) { d.style.left = 'auto'; d.style.right = '18px'; }
+                link.appendChild(d);
+            }
+        });
+    };
+
+    ensureDiariasDailyReset();
     list.innerHTML = '';
     items.forEach((item) => {
         const li = document.createElement('li');
@@ -219,7 +278,8 @@ function buildMenu() {
         if (item.isDropdown) {
             const active = item.subItems.some((s) => s.url === CURRENT);
             const a = document.createElement('a');
-            a.className = 'menu-link dropdown-toggle'; a.style.cursor = 'pointer';
+            a.className = 'menu-link dropdown-toggle'; a.style.cursor = 'pointer'; a.style.position = 'relative';
+            if (item.notifKeys) a.dataset.menuKeys = item.notifKeys.join(',');
             a.innerHTML = `<img src="${item.icon}" class="menu-icon" alt="" onerror="this.style.display='none'"><span>${item.name}</span>${chevron}`;
             const ul = document.createElement('ul');
             ul.className = 'submenu-list' + (active ? ' open' : '');
@@ -230,23 +290,35 @@ function buildMenu() {
                 const sl = document.createElement('li');
                 sl.className = 'menu-item' + (match ? ' active' : '');
                 const sa = document.createElement('a');
-                sa.className = 'menu-link submenu-link';
+                sa.className = 'menu-link submenu-link'; sa.style.position = 'relative';
                 sa.innerHTML = `<span>${sub.name}</span>`;
-                if (match) { sa.style.cursor = 'default'; sa.style.pointerEvents = 'none'; }
-                else { sa.href = sub.url; sa.addEventListener('click', () => setTimeout(closeMenu, 100)); }
+                if (sub.key) sa.dataset.menuKey = sub.key;
+                if (match) {
+                    if (sub.key) clearNotification(sub.key);   // já está na página = "abriu"
+                    sa.style.cursor = 'default'; sa.style.pointerEvents = 'none';
+                } else {
+                    sa.href = sub.url;
+                    sa.addEventListener('click', () => {
+                        if (sub.key) { clearNotification(sub.key); renderNotifications(); }
+                        setTimeout(closeMenu, 100);
+                    });
+                }
                 sl.appendChild(sa); ul.appendChild(sl);
             });
             li.appendChild(a); li.appendChild(ul);
         } else {
             const a = document.createElement('a');
-            a.className = 'menu-link';
+            a.className = 'menu-link'; a.style.position = 'relative';
+            if (item.key) a.dataset.menuKey = item.key;
             a.innerHTML = `<img src="${item.icon}" class="menu-icon" alt="" onerror="this.style.display='none'"><span>${item.name}</span>`;
             a.href = item.url;
+            a.addEventListener('click', () => { if (item.key) { clearNotification(item.key); a.querySelector('.menu-notification-dot')?.remove(); } });
             li.appendChild(a);
         }
         list.appendChild(li);
     });
 
+    renderNotifications();
     openBtn.addEventListener('click', openMenu);
     closeBtn.addEventListener('click', closeMenu);
     ov.addEventListener('click', closeMenu);

@@ -44,8 +44,8 @@
 
             <div class="lobby-scroll">
                 <header class="hero-title">
-                    <span class="eyebrow">O Mestre das Lendas</span>
-                    <h1>Missões Diárias</h1>
+                    <span class="eyebrow">Missões Diárias</span>
+                    <h1>Mestre das Lendas</h1>
                     <div class="divider"><span></span><b></b><span></span></div>
                     <p class="hero-sub">Uma aventura narrada em tempo real, só para você.<br>Suas palavras e a sorte dos dados decidem o destino.</p>
                 </header>
@@ -222,7 +222,36 @@
             <p class="hint" id="itemsTimer"></p>
             <div class="dm-actions">
                 <button class="btn-ghost" id="itemsCancel">Voltar</button>
-                <button class="btn-epic sm" id="itemsGo" disabled>Começar</button>
+                <button class="btn-epic sm" id="itemsGo" disabled>Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════ MODAL: TIPO DE AVENTURA ═════════ -->
+    <div id="typeModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box items-box type-box">
+            <h3 class="dm-title">Tipo de aventura</h3>
+            <p class="dm-sub">Escolha que história o Mestre vai conduzir. As aventuras VIP custam ouro e são cobradas ao começar.</p>
+            <div class="type-grid" id="typeGrid"></div>
+            <p class="hint" id="typeTimer"></p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="typeCancel">Voltar</button>
+                <button class="btn-epic sm" id="typeGo" disabled>Escolher aventura</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════ MODAL: CONFIRMAR AVENTURA VIP ═════════ -->
+    <div id="vipModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Aventura VIP</h3>
+            <p class="dm-sub" id="vipName">—</p>
+            <div class="buy-price"><img class="coin-img" src="/assets/goldcoin.webp" width="40" height="40" alt="" draggable="false"><b id="vipCost">5</b><small>de ouro</small></div>
+            <p class="buy-text">Esta é uma aventura VIP e custa <b id="vipCostTxt">5</b> de ouro. O ouro só é cobrado quando você entrar na aventura, e é devolvido se a conexão com o Mestre falhar antes de ele começar a falar.</p>
+            <p class="hint buy-bal">Seu ouro: <b id="vipGold">0</b></p>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="vipCancel">Cancelar</button>
+                <button class="btn-epic sm" id="vipConfirm">Adquirir</button>
             </div>
         </div>
     </div>
@@ -243,7 +272,7 @@
         <div class="dm-box buy-box">
             <h3 class="dm-title">Aventura extra</h3>
             <p class="dm-sub">Mais uma jornada hoje, sem disputar vagas · <span id="buyCount">1 de 3</span></p>
-            <div class="buy-price"><span class="coin"></span><b id="buyCost">25</b><small>de ouro</small></div>
+            <div class="buy-price"><img class="coin-img" src="/assets/goldcoin.webp" width="40" height="40" alt="" draggable="false"><b id="buyCost">25</b><small>de ouro</small></div>
             <p class="buy-text">O ouro só é cobrado quando você entrar na aventura, e é devolvido se a conexão com o Mestre falhar antes de ele começar a falar.</p>
             <p class="hint buy-bal">Seu ouro: <b id="buyGold">0</b></p>
             <div class="dm-actions">
@@ -286,7 +315,7 @@
             <h3 class="dm-title">Guia do Aventureiro</h3>
             <p class="dm-sub">Sua voz molda o destino em tempo real</p>
             <ul class="dm-list">
-                <li><b>O Chamado do Mestre:</b> O Mestre surge de forma imprevisível ao longo do dia (entre as 21h e as 20h do dia seguinte). A cada aparição, apenas <b>3 heróis</b> são escolhidos. Fique atento para garantir sua vaga gratuita diária!</li>
+                <li><b>O Chamado do Mestre:</b> O Mestre surge de forma imprevisível ao longo do dia (entre as 21h e as 20h do dia seguinte). A cada aparição, apenas <b>3 heróis</b> são escolhidos. Fique atento para garantir sua vaga gratuita diária! Ganhe bastante XP e cristais!</li>
                 <li><b>O Mestre Interativo:</b> Uma Inteligência Artificial avançada atua como o seu Mestre das Lendas. Ele ouve, entende e reage dinamicamente a <b>tudo que você fala</b>. Prepare o microfone, pois sua voz é o seu controle absoluto!</li>
                 <li><b>Ações e Combate por Voz:</b> Esqueça os botões. Quer atacar com sua arma? Quer tentar convencer um guarda ou se esgueirar pelas sombras? <b>Basta dizer ao Mestre!</b> Ele reconhecerá sua intenção e narrará as consequências. Ações de risco rolam um <b>d20</b> automático.</li>
                 <li><b>Sua Bolsa de Itens:</b> Antes da jornada, você escolhe 8 itens. <b>Atenção: você não clica neles para usar.</b> O botão da bolsa serve apenas para você consultar o seu inventário. Para usar uma poção, corda ou encantamento, <b>fale para o Mestre</b> o que deseja usar e ele aplicará o efeito na história.</li>

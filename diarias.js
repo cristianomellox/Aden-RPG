@@ -15,6 +15,8 @@ const EARLY_END_GUARD_S = 60;                              // end_adventure só 
 // Voz do jogador: sensibilidade baixa evita que ruído/eco/respiração corte o Mestre no meio da frase
 const VAD_CFG = { automaticActivityDetection: { startOfSpeechSensitivity: 'START_SENSITIVITY_LOW', endOfSpeechSensitivity: 'END_SENSITIVITY_LOW', prefixPaddingMs: 120, silenceDurationMs: 800 } };
 const EXTRA_COST_FALLBACK = 25;
+const VIP_COST_FALLBACK = 5;                               // custo (ouro) das aventuras VIP; o servidor é quem cobra (mission_config.vip_cost_gold)
+const COIN_IMG = '/assets/goldcoin.webp';
 const BAG_SIZE = 8;
 const HEAL_POTION = 20;                                    // % de HP da poção de cura
 const BOSS_MAX_HIT = 25;                                   // dano máximo (%) por golpe em chefe (luta longa)
@@ -31,6 +33,12 @@ const MARKS = [
     { at: 300, text: '[SISTEMA] MARCO (5 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o herói ainda não recebeu a missão, entregue-a agora e inicie a JORNADA (viagem, estalagens, NPCs, pistas).' },
     { at: 900, text: '[SISTEMA] MARCO (15 min de 30), NÃO responda falando agora; aplique na sua próxima fala: a partir de agora o herói se aproxima do lugar do objetivo e o CHEFE pode finalmente aparecer. Gere tensão e prepare a luta, que deve ser longa e emocionante.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o chefe ainda não apareceu, ele deve entrar em cena AGORA, para o confronto caber no tempo que resta.' },
+];
+// marcos para aventuras SEM chefe/combate (Salão do Amor)
+const MARKS_SOCIAL = [
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: as apresentações já devem ter acontecido; faça o herói circular pelos cômodos e conhecer os convidados mais de perto.' },
+    { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: o clima do salão esquenta; se o herói ainda não está conquistando ninguém, os convidados o procuram, puxam conversa e criam oportunidades de aproximação.' },
+    { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: a noite avança; se ninguém foi conquistado ainda, o convidado mais próximo do herói se declara interessado e dá a última chance de conquista; para o epílogo caber no tempo.' },
 ];
 const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
 const END_OK_S = 20 * 60;                                  // a partir daqui o Mestre pode encerrar quando o jogador escolher concluir
@@ -61,6 +69,7 @@ const ERR = {
     not_enough_gold: 'Você não tem ouro suficiente.',
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
+    invalid_type: 'Tipo de aventura inválido. Escolha novamente.',
     extra_limit: 'Você já usou todas as aventuras extras de hoje.',
     extra_pending: 'Você já tem uma aventura extra esperando por você.',
     master_busy: 'O Mestre está ocupado com outros aventureiros. Tente novamente em alguns minutos.',
@@ -95,6 +104,7 @@ function showDebug(title, text) {
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
+    advType: null, vipOwned: new Set(), vipPending: null,
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -236,6 +246,7 @@ function buildMenu() {
 
     const clearNotification = (key) => {
         if (!key) return;
+        if (key === 'diarias') return;                    // só some quando o jogador INICIA a aventura
         const st = readStatus();
         if (st[key] === true) { st[key] = false; localStorage.setItem(KEY_STATUS, JSON.stringify(st)); }
         if (key === 'guild') {
@@ -465,6 +476,11 @@ function tickLobby() {
         $('itemsTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
         if (left <= 0) closeOv('itemsModal');
     }
+    if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
+        const left = new Date(my.start_deadline).getTime() - now;
+        $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
+        if (left <= 0) { closeOv('vipModal'); closeOv('typeModal'); }
+    }
 
     if (my && my.status === 'reserved') {
         const start = new Date(my.scheduled_start).getTime(), dead = new Date(my.start_deadline).getTime();
@@ -642,6 +658,7 @@ const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; retu
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
+    S.advType = null; S.vipOwned = new Set(); S.vipPending = null;
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -680,6 +697,76 @@ function renderBag() {
         c.classList.toggle('has', q > 0); c.classList.toggle('maxed', n >= BAG_SIZE);
         c.querySelector('.qty').textContent = q;
     });
+}
+
+// ---------------------------------------------------------------------
+// TIPO DE AVENTURA: escolhido depois da bolsa. Comum e Abrigo do frio são grátis; as demais são VIP (ouro).
+// Os ids precisam ser os mesmos de ADVENTURE_TYPES no mission-token.ts e da lista no 06_mission_prepare_start.sql.
+// ---------------------------------------------------------------------
+const _sword = (rot) => `<g transform="rotate(${rot} 24 24)"><path d="M24 2l3.6 4.5V28h-7.2V6.5z" fill="#d7dde3" stroke="#8793a0" stroke-width="1.5"/><path d="M24 5v22" stroke="#8793a0" stroke-width="1"/><rect x="14.5" y="28" width="19" height="4" rx="1.6" fill="#e6c27a" stroke="#a88235" stroke-width="1.3"/><path d="M24 32v8" stroke="#6b4a1c" stroke-width="4"/><circle cx="24" cy="42" r="2.5" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/></g>`;
+const ADV_TYPES = [
+    { id: 'comum', vip: false, name: 'Aventura comum', desc: 'Uma jornada clássica: aceite uma missão, viaje, enfrente inimigos e derrote o chefe.',
+      svg: _svg(_sword(45) + _sword(-45) + '<circle cx="24" cy="24" r="3" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/>') },
+    { id: 'frio', vip: false, name: 'Abrigo do frio', desc: 'Um inverno mágico cai sobre a região. Sobreviva 3 dias num abrigo cheio de medo, fome e criaturas.',
+      svg: _svg('<path d="M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 8l5 4 5-4M19 40l5-4 5 4M8 19.5l6 .5-1.5-5.8M40 28.5l-6-.5 1.5 5.8M8 28.5l6-.5-1.5 5.8M40 19.5l-6 .5 1.5-5.8" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4.2" fill="#d8f6ff" stroke="#6fb8d9" stroke-width="1.4"/>') },
+    { id: 'assassino', vip: true, name: 'Quem é o assassino?', desc: 'Um crime abalou o lugar. Interrogue suspeitos, siga pistas e desmascare o culpado.',
+      svg: _svg('<circle cx="20" cy="20" r="13" fill="#1c2330" stroke="#e6c27a" stroke-width="3"/><path d="M29.5 29.5L42 42" stroke="#6b4a1c" stroke-width="5.5"/><path d="M29.5 29.5L42 42" stroke="#c9a45c" stroke-width="2" stroke-dasharray="2 4"/><path d="M20 10c3.2 5 6.6 8.2 6.6 11.6a6.6 6.6 0 0 1-13.2 0C13.4 18.2 16.8 15 20 10z" fill="#c0262f" stroke="#ffb3b8" stroke-width="1.4"/><circle cx="17.6" cy="22.4" r="1.8" fill="#ff8c96" stroke="none"/>') },
+    { id: 'intriga', vip: true, name: 'Intriga social', desc: 'Banquetes, segredos e alianças. Use lábia e astúcia num jogo de aparências.',
+      svg: _svg('<path d="M5 15c6-4.5 13-5.5 19-2.5 6-3 13-2 19 2.5 0 13-6.5 21-19 21S5 28 5 15z" fill="#5b3fa8" stroke="#d9c8ff" stroke-width="2"/><path d="M11.5 19.5c3.2-2.2 7-1.5 9.2 2-3.4 3.2-7.2 3.2-9.2-2zM36.5 19.5c-3.2-2.2-7-1.5-9.2 2 3.4 3.2 7.2 3.2 9.2-2z" fill="#0b0814" stroke="#ffe27a" stroke-width="1.4"/><path d="M17.5 30c4 3.8 9 3.8 13 0" stroke="#ffe27a" stroke-width="2"/><path d="M24 7l1.6 3.4 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z" fill="#ffe27a" stroke="none"/>') },
+    { id: 'infiltracao', vip: true, name: 'Infiltração', desc: 'Entre sem ser visto num lugar protegido para roubar, resgatar ou plantar algo.',
+      svg: _svg('<path d="M15.5 22v-6.5a8.5 8.5 0 0 1 17 0V22" stroke="#cfe3f5" stroke-width="3.6"/><rect x="9" y="21" width="30" height="21" rx="4.5" fill="#2a2f3a" stroke="#8fb4d9" stroke-width="2"/><circle cx="24" cy="29.5" r="3.8" fill="#0b1018" stroke="none"/><path d="M22.2 32h3.6l1.2 6.5h-6z" fill="#0b1018" stroke="none"/><path d="M13 25h4" stroke="#5a86b3" stroke-width="1.6"/>') },
+    { id: 'maldicao', vip: true, name: 'Maldição e assombração', desc: 'Um lugar assombrado guarda uma verdade trágica. Descubra a origem e liberte o espírito.',
+      svg: _svg('<path d="M9 43V22a15 15 0 0 1 30 0v21l-5.4-4.2-4.8 4.2-4.8-4.2-4.8 4.2-4.8-4.2z" fill="#e8e4f5" stroke="#9b87d9" stroke-width="2"/><ellipse cx="18.6" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="29.4" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="24" cy="30.5" rx="2.5" ry="3.2" fill="#1c1030" stroke="none"/><circle cx="7" cy="9" r="1.6" fill="#cbb8ff" stroke="none"/><circle cx="42" cy="12" r="1.2" fill="#cbb8ff" stroke="none"/><circle cx="40" cy="5" r="1" fill="#cbb8ff" stroke="none"/>') },
+    { id: 'salao_amor', vip: true, name: 'Salão do Amor', desc: 'Doze pessoas, um salão e uma noite para se conhecerem. Conquiste o coração de alguém e viva o romance.',
+      svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
+    { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
+      svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
+];
+const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
+const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
+
+function openTypes() {                                        // depois da bolsa: escolha do tipo de aventura
+    closeOv('itemsModal');
+    buildTypeGrid();
+    openOv('typeModal');
+}
+
+function buildTypeGrid() {
+    const g = $('typeGrid'); g.innerHTML = '';
+    ADV_TYPES.forEach((t) => {
+        const owned = S.vipOwned.has(t.id);
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'type-card' + (S.advType === t.id ? ' sel' : ''); b.dataset.id = t.id;
+        const badge = !t.vip ? '' : owned
+            ? '<em class="vip-badge owned">✓ VIP</em>'
+            : `<em class="vip-badge"><img src="${COIN_IMG}" width="12" height="12" alt="">${vipCost()}</em>`;
+        b.innerHTML = `${badge}<em class="tick">✓</em>${t.svg}<b>${esc(t.name)}</b><span class="desc">${esc(t.desc)}</span>`;
+        b.onclick = () => onTypeClick(t);
+        g.appendChild(b);
+    });
+    $('typeGo').disabled = !S.advType;
+}
+
+function onTypeClick(t) {
+    if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
+    S.advType = S.advType === t.id ? null : t.id;                        // toggle: clicar de novo desmarca
+    buildTypeGrid();
+}
+
+function openVipConfirm(t) {
+    S.vipPending = t;
+    const cost = vipCost(), gold = S.state?.extra?.gold;
+    $('vipName').textContent = t.name;
+    $('vipCost').textContent = cost; $('vipCostTxt').textContent = cost;
+    $('vipGold').textContent = nf(gold); $('vipGold').parentElement.style.display = gold == null ? 'none' : '';   // sem saldo no estado: esconde a linha
+    $('vipConfirm').disabled = gold != null && Number(gold) < cost;      // o servidor confere de novo ao começar
+    openOv('vipModal');
+}
+
+function confirmVip() {
+    const t = S.vipPending; closeOv('vipModal'); if (!t) return;
+    S.vipOwned.add(t.id); S.advType = t.id; S.vipPending = null;         // "adquirida": fica selecionada (o ouro é cobrado ao começar)
+    buildTypeGrid();
 }
 
 // ---------------------------------------------------------------------
@@ -857,15 +944,24 @@ async function syncLanguage() {
     } catch (_) { /* best-effort */ }
 }
 
-async function startAdventure(loadout) {
+async function startAdventure(loadout, advType) {
     if (S.starting) return;                                    // evita toque duplo
     S.starting = true;
-    try { await _startAdventure(loadout); } finally { S.starting = false; }
+    try { await _startAdventure(loadout, advType); } finally { S.starting = false; }
 }
 
-async function _startAdventure(loadout) {
+// Mestre das Lendas: a bolinha de notificação só some quando o jogador realmente INICIA a aventura
+function clearDiariasDot() {
+    try {
+        const k = 'aden_daily_actions_status', st = JSON.parse(localStorage.getItem(k) || '{}');
+        if (st.diarias === true) { st.diarias = false; localStorage.setItem(k, JSON.stringify(st)); }
+        document.querySelectorAll('.menu-link[data-menu-key="diarias"] .menu-notification-dot').forEach((d) => d.remove());
+    } catch (_) { /* ok */ }
+}
+
+async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('itemsModal');
+    closeOv('vipModal'); closeOv('typeModal'); closeOv('itemsModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -874,7 +970,8 @@ async function _startAdventure(loadout) {
         A.headphones = $('chkPhones').checked;
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
-        ctx = await callFn('mission-token', { slot_id: my.id, loadout });   // o cronômetro só começa aqui, depois da bolsa
+        ctx = await callFn('mission-token', { slot_id: my.id, loadout, adventure_type: advType || 'comum' });   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
@@ -913,6 +1010,8 @@ function newAdv(slotId, ctx, A, sdk) {
         session: null, handle: null, reconnects: 0, opened: false,
         warned: false, forced: false, finished: false, closing: false,
         heroFem: ctx.hero_gender === 'f',
+        advType: ctx.adventure_type || 'comum', noCombat: !!ctx.no_combat,
+        sceneKw: parseSceneKeywords(ctx.scenes), kwScanned: 0,
         epilogue: false, delivered: false, playerEnd: false, playerEndAt: 0, epilogueAt: 0, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
@@ -1076,9 +1175,10 @@ async function onLiveMessage(msg) {
                 if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
                 if (adv.youBuf) { adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) }); adv.detourTurns = (adv.detourTurns || 0) + 1; }
                 if (adv.hist.length > 24) adv.hist.splice(0, adv.hist.length - 24);
-                adv.masterBuf = ''; adv.youBuf = ''; $('capYou').textContent = ''; adv.newTurn = false;
+                adv.masterBuf = ''; adv.youBuf = ''; adv.kwScanned = 0; $('capYou').textContent = ''; adv.newTurn = false;
             }
             adv.masterBuf += sc.outputTranscription.text;
+            sceneFromKeywords(adv);                                  // palavra-chave do cenário dita pelo Mestre troca o visual
             $('capMaster').textContent = adv.masterBuf.slice(-420);
             $('capMaster').scrollTop = 99999;
         }
@@ -1112,6 +1212,7 @@ const nextStep = (adv) => adv.enemy
     : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
 
 function toolStartCombat(adv, args) {
+    if (adv.noCombat) return { ok: false, erro: 'Esta aventura NÃO tem combate: resolva tudo com conversa, charme e dados. Narre uma saída social, sem luta.' };
     if (adv.epilogue) return { ok: false, erro: 'Estamos no EPÍLOGO: a missão já foi cumprida. NÃO há mais combates, chefes nem inimigos. Conduza apenas diálogo e passeios até o jogador escolher concluir ou o sistema enviar ENCERRAR.', ...hpState(adv) };
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
     if (adv.enemy) return { ok: false, erro: `Já há um combate em andamento contra ${adv.enemy.name} (HP ${adv.enemy.hp}%). Ele só termina quando o HP do inimigo chegar a 0.`, ...hpState(adv) };
@@ -1324,6 +1425,37 @@ async function doRoll(args) {
     return { resultado: r.result, dado: r.roll, precisava: r.dc, instrucao: ROLL_HINT[r.result] + ' ' + nextStep(adv) };
 }
 
+// ----- cenário por palavra-chave (mission_scenes.keywords, separadas por vírgula ou ponto e vírgula) -----
+const _norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function parseSceneKeywords(scenes) {
+    const out = [];
+    for (const sc of scenes || []) {
+        for (const raw of String(sc.keywords || '').split(/[,;\n]/)) {
+            const k = _norm(raw).trim().replace(/\s+/g, ' ');
+            if (k.length < 3) continue;
+            const re = new RegExp('(^|[^a-z0-9])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+') + '(?![a-z0-9])', 'g');
+            out.push({ id: sc.id, re });
+        }
+    }
+    return out;
+}
+function sceneFromKeywords(adv) {
+    if (!adv.sceneKw?.length || adv.finished) return;
+    const txt = _norm(adv.masterBuf);
+    let best = null;
+    for (const k of adv.sceneKw) {
+        k.re.lastIndex = 0;
+        let m;
+        while ((m = k.re.exec(txt))) {
+            const end = m.index + m[0].length;
+            if (end > adv.kwScanned && (!best || end > best.end)) best = { id: k.id, end };   // só vale palavra NOVA; vence a mais recente
+            if (m.index === k.re.lastIndex) k.re.lastIndex++;
+        }
+    }
+    adv.kwScanned = txt.length;
+    if (best && best.id !== adv.scene) setScene(best.id);
+}
+
 // ----- cenário e escolhas -----
 function setScene(id) {
     const adv = S.adv; if (!adv || !id) return;
@@ -1442,7 +1574,7 @@ const DETOUR_STEPS = [
 ];
 function markProgress(adv) { adv.progressAt = Date.now(); adv.detourTurns = 0; adv.detourNudges = 0; }
 function checkDetour(adv) {
-    if (adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;
+    if (adv.noCombat || adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;   // no Salão do Amor, conversar com os convidados É a missão
     const step = DETOUR_STEPS[adv.detourNudges || 0];
     if (!step) return;
     if ((Date.now() - (adv.progressAt || Date.now())) / 1000 < step.s || (adv.detourTurns || 0) < step.turns) return;
@@ -1464,7 +1596,7 @@ function advTick() {
 
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
-        for (const m of MARKS) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
+        for (const m of (adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
             queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
@@ -1613,7 +1745,11 @@ function bindUI() {
     $('briefCancel').onclick = () => closeOv('briefModal');
     $('briefGo').onclick = openLoadout;                        // 1º a bolsa; o Mestre e o cronômetro só começam depois
     $('itemsCancel').onclick = () => closeOv('itemsModal');
-    $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) startAdventure(bagCounts()); };
+    $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar
+    $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
+    $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
+    $('vipCancel').onclick = () => { S.vipPending = null; closeOv('vipModal'); };
+    $('vipConfirm').onclick = confirmVip;
     $('buyCancel').onclick = () => closeOv('buyModal');
     $('buyConfirm').onclick = confirmBuyExtra;
     $('errClose').onclick = () => closeOv('errModal');

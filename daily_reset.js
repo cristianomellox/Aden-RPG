@@ -9,7 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // Menu Iniciar (Footer)
         // Aventura (menu pai 'btnAventuraToggle'): AFK reseta 00:00 UTC, Mestre das Lendas reseta 03:00 UTC
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
-        { id: 'btnDiarias', key: 'diarias', type: 'daily', isSubmenu: true, parentGroup: 'recursos', resetHourUTC: 3 },
+        // noClickClear: a bolinha NÃO some ao clicar no menu; só some quando o jogador inicia a aventura (diarias.js)
+        { id: 'btnDiarias', key: 'diarias', type: 'daily', isSubmenu: true, parentGroup: 'recursos', resetHourUTC: 3, noClickClear: true },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         // Áreas de Caça (apenas filhos via container disparam a ação)
@@ -320,7 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     targets.forEach(t => {
         const btn = document.getElementById(t.id);
-        if (btn) {
+        if (btn && !t.noClickClear) {
             btn.addEventListener('click', () => handleActionClick(t.key));
         }
     });

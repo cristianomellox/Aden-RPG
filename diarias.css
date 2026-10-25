@@ -492,3 +492,25 @@ body.hud-hidden .hud-toggle-btn { top: 0; }
 .hero-sub { color: #e6dec6; }
 .top-bar-link svg, #howBtn { filter: drop-shadow(0 1px 3px #000) drop-shadow(0 0 6px rgba(0,0,0,.9)); }
 
+
+
+/* ── Moeda de ouro (modais de compra) ── */
+.buy-price .coin-img { width: 40px; height: 40px; flex: 0 0 40px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(230,194,122,.5)); user-select: none; -webkit-user-drag: none; }
+
+/* ── Modal: tipo de aventura ── */
+.type-box { max-width: 480px; }
+.type-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 2px 2px 8px; margin-bottom: 6px; }
+.type-grid::-webkit-scrollbar { width: 3px; } .type-grid::-webkit-scrollbar-thumb { background: var(--gold-dark); }
+.type-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 26px 8px 10px; text-align: center; cursor: pointer; font-family: inherit; color: #e0dccc;
+    border-radius: 6px; background: linear-gradient(160deg, rgba(34,28,20,.95), rgba(14,11,8,.97)); border: 1px solid var(--gold-dark); transition: transform .12s, border-color .2s, box-shadow .2s; }
+.type-card:active { transform: scale(.97); }
+.type-card svg { width: 56px; height: 56px; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7)); }
+.type-card b { font-size: .78em; letter-spacing: .5px; color: var(--gold-light); line-height: 1.25; }
+.type-card span.desc { font-size: .64em; line-height: 1.45; color: #aaa18b; }
+.type-card.sel { border-color: var(--gold-light); box-shadow: 0 0 16px rgba(230,194,122,.35), inset 0 0 14px rgba(168,130,53,.18); background: linear-gradient(160deg, rgba(58,45,24,.97), rgba(20,15,9,.98)); }
+.type-card .tick { position: absolute; top: 6px; left: 7px; width: 18px; height: 18px; border-radius: 50%; display: none; place-items: center; font-size: .7em; font-weight: bold; color: #1a1000; background: linear-gradient(var(--gold-light), var(--gold-base)); border: 1px solid #fff3cf; }
+.type-card.sel .tick { display: grid; }
+.type-card .vip-badge { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px 2px 4px; border-radius: 8px; background: #000; color: #fff3cf; font-size: .68em; font-weight: bold; line-height: 1; font-variant-numeric: tabular-nums; }
+.type-card .vip-badge img { width: 12px; height: 12px; object-fit: contain; display: block; }
+.type-card .vip-badge.owned { color: var(--ok); padding: 3px 7px; letter-spacing: .5px; }
+.type-card em, .vip-badge{font-style:normal}

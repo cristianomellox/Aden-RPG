@@ -814,6 +814,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const clearNotification = (key) => {
     if (!key) return;
+    // Mestre das Lendas: a bolinha só some quando o jogador INICIA a aventura (em diarias.html)
+    if (key === 'diarias') return;
     const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
     let status = {};
     try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS)||'{}'); } catch(e){}

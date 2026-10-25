@@ -1809,6 +1809,8 @@ document.addEventListener("DOMContentLoaded",()=>{
     // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
     const clearNotification = (key) => {
         if (!key) return;
+        // Mestre das Lendas: a bolinha só some quando o jogador INICIA a aventura (em diarias.html)
+        if (key === 'diarias') return;
 
         // 1. Limpa status geral (AFK, Arena, Boss, etc)
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';

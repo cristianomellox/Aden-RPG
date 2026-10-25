@@ -136,9 +136,9 @@ async function callFn(name, body) {
     return data;
 }
 
-// Cenário 360°: /assets/<id>.png vira skybox (diarias_skybox.js), com crossfade e rotação lenta.
+// Cenário 360°: /assets/missions/<id>.png vira skybox (diarias_skybox.js), com crossfade e rotação lenta.
 // Sem imagem (ou se falhar ao carregar), o skybox usa este degradê temático [centro, bordas].
-const LOBBY_SCENE = 'diarias';                              // /assets/diarias.png: tela inicial
+const LOBBY_SCENE = 'diarias';                              // /assets/missions/diarias.png: tela inicial
 const FALLBACK_SKY = {
     floresta: ['#1d3d27', '#07130b'],
     caverna: ['#2b2347', '#0a0814'],

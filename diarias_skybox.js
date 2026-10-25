@@ -14,14 +14,14 @@ import * as TWEEN from '@tweenjs/tween.js';
 // Diferenças em relação à guilda:
 //  • a imagem MUDA durante a aventura: window.DiariasSkybox.show(id) troca o
 //    panorama com crossfade, sem resetar a posição da câmera;
-//  • tela inicial = /assets/diarias.png; cenas = /assets/<id>.png;
+//  • tela inicial = /assets/missions/diarias.png; cenas = /assets/missions/<id>.png;
 //  • se a imagem não existir ou falhar, usa um degradê temático (textura
 //    gerada por canvas) — como era antes com o background-image CSS;
 //  • se o WebGL não estiver disponível, cai para background CSS (imagem ou degradê).
 // ═══════════════════════════════════════════════════════════════════════
 
-const SKY_BASE = '/assets/';                    // mesma origem: WebGL exige CORS em imagens de outro domínio
-const LOBBY_KEY = 'diarias';                    // /assets/diarias.png
+const SKY_BASE = '/assets/missions/';                  // mesma origem: WebGL exige CORS em imagens de outro domínio
+const LOBBY_KEY = 'diarias';                    // /assets/missions/diarias.png
 const DEFAULT_COLORS = ['#2a1f12', '#050403'];  // [centro, bordas] do degradê padrão
 
 // ── Câmera (idêntica à guilda) ────────────────────────────────────────

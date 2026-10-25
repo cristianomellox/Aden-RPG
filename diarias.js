@@ -917,7 +917,7 @@ function newAdv(slotId, ctx, A, sdk) {
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
-        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, lastRoll: null, critArmed: false, hist: [], invStart: { ...(ctx.loadout || {}) },
+        hp: 100, enemy: null, dead: false, deadTimer: null, marks: {}, progressAt: Date.now(), detourTurns: 0, detourNudges: 0, lastRoll: null, critArmed: false, hist: [], invStart: { ...(ctx.loadout || {}) },
         inv: { ...(ctx.loadout || {}) },
         hero: { name: stripEmoji(S.hero?.name || ctx.hero_name) || 'Herói', avatar: S.hero?.avatar || DEFAULT_AVATAR },
     };
@@ -1074,7 +1074,7 @@ async function onLiveMessage(msg) {
         if (sc.outputTranscription?.text) {
             if (adv.newTurn) {
                 if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
-                if (adv.youBuf) adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) });
+                if (adv.youBuf) { adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) }); adv.detourTurns = (adv.detourTurns || 0) + 1; }
                 if (adv.hist.length > 24) adv.hist.splice(0, adv.hist.length - 24);
                 adv.masterBuf = ''; adv.youBuf = ''; $('capYou').textContent = ''; adv.newTurn = false;
             }
@@ -1244,6 +1244,7 @@ async function onToolCall(calls) {
         let out = { ok: true };
         try {
             const a = c.args || {};
+            if (c.name !== 'get_status') markProgress(adv);   // a história andou: zera o contador de desvio
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
             } else if (c.name === 'roll_check') {
@@ -1431,6 +1432,27 @@ async function abandonAdventure() {
     await refreshState();
 }
 
+// ----- foco na missão: se a conversa lateral se arrasta, o jogo avisa o Mestre para o NPC interromper -----
+// "Progresso" = o Mestre usou uma ferramenta da história (cena, dado, combate, dano, item). Sem progresso por
+// DETOUR_AFTER_S e com pelo menos DETOUR_MIN_TURNS falas do jogador, o aviso sai (máx. 3 por trecho, cada vez mais firme).
+const DETOUR_STEPS = [
+    { s: 120, turns: 3, firm: false },
+    { s: 210, turns: 5, firm: true },
+    { s: 300, turns: 7, firm: true },
+];
+function markProgress(adv) { adv.progressAt = Date.now(); adv.detourTurns = 0; adv.detourNudges = 0; }
+function checkDetour(adv) {
+    if (adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;
+    const step = DETOUR_STEPS[adv.detourNudges || 0];
+    if (!step) return;
+    if ((Date.now() - (adv.progressAt || Date.now())) / 1000 < step.s || (adv.detourTurns || 0) < step.turns) return;
+    adv.detourNudges = (adv.detourNudges || 0) + 1;
+    queueNote(adv, step.firm
+        ? '[SISTEMA] FOCO NA MISSÃO (NÃO responda falando agora; aplique na sua PRÓXIMA fala, depois que o jogador falar). O herói segue numa conversa lateral há vários minutos e a missão principal está parada. AGORA o NPC com quem ele fala OU o NPC da missão interrompe de forma firme, em primeira pessoa, e encerra a conversa (vai embora, é chamado ou um evento da missão força o retorno). Mude a cena com set_scene se preciso e coloque o herói de volta no caminho do objetivo, com consequência se ele insistir em ficar. Se a conversa atual JÁ É a da missão (pista, aliado, informação), ignore este aviso.'
+        : '[SISTEMA] FOCO NA MISSÃO (NÃO responda falando agora; aplique na sua PRÓXIMA fala, depois que o jogador falar). Se o herói está numa conversa lateral que não serve à missão principal, ela já passou do limite de cerca de 2 minutos: na sua próxima fala o NPC com quem ele conversa OU o NPC da missão deve interromper de forma natural, dentro do personagem, e devolver o herói à missão (o pedido segue de pé). Se a conversa atual JÁ É a da missão (pista, aliado, informação), ignore este aviso.',
+        false);
+}
+
 function advTick() {
     const adv = S.adv; if (!adv || adv.finished) return;
     const left = adv.endMs - serverNow();
@@ -1456,6 +1478,7 @@ function advTick() {
     if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
     // o jogador tocou em Finalizar e o Mestre não encerrou: envia nota neutra
     if (adv.playerEnd && Date.now() - adv.playerEndAt > 75000) { finishAdventure(null, true, 'master_timeout'); return; }
+    if (!adv.dead) checkDetour(adv);
     flushNotes(adv);
     if (left <= -GIVEUP_AFTER_S * 1000) finishAdventure(null, true, 'master_timeout');   // o mestre não encerrou: envia nota neutra
 }

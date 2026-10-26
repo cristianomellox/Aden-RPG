@@ -55,6 +55,8 @@ const mmss = (ms) => {
 
 const ERR = {
     wrong_password: 'Senha incorreta.',
+    too_many_attempts: 'Muitas tentativas. Aguarde alguns minutos.',
+    invalid_prompt: 'Prompt inválido. Escreva o roteiro do Modo Privado.',
     already_today: 'Você já realizou sua aventura de hoje.',
     event_closed: 'O Mestre já partiu deste lugar.',
     event_full: 'As três vagas já foram preenchidas.',
@@ -105,7 +107,7 @@ function showDebug(title, text) {
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
-    advType: null, vipOwned: new Set(), vipPending: null,
+    advType: null, vipOwned: new Set(), vipPending: null, privatePass: null, privatePrompt: '',
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -496,7 +498,7 @@ function tickLobby() {
     if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
         const left = new Date(my.start_deadline).getTime() - now;
         $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
-        if (left <= 0) { closeOv('vipModal'); closeOv('typeModal'); }
+        if (left <= 0) { closeOv('vipModal'); closeOv('privPassModal'); closeOv('privPromptModal'); closeOv('typeModal'); }
     }
 
     if (my && my.status === 'reserved') {
@@ -675,7 +677,7 @@ const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; retu
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
-    S.advType = null; S.vipOwned = new Set(); S.vipPending = null;
+    S.advType = null; S.vipOwned = new Set(); S.vipPending = null; S.privatePass = null; S.privatePrompt = '';
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -738,7 +740,11 @@ const ADV_TYPES = [
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
+    { id: 'privado', vip: false, private: true, name: 'Modo Privado', desc: 'Modo exclusivo para jogadores VIPs',
+      svg: _svg(`<path d="M15.5 21v-5.5a8.5 8.5 0 0 1 17 0V21" stroke="#e6c27a" stroke-width="3.4"/><rect x="9" y="20" width="30" height="22" rx="4.5" fill="#2a1740" stroke="#cbb8ff" stroke-width="2"/><path d="M24 36.5c-5-3.4-6.6-6-5.2-8.2 1.2-1.7 3.7-1.5 5.2.5 1.5-2 4-2.2 5.2-.5 1.4 2.2-.2 4.8-5.2 8.2z" fill="#e5334f" stroke="#ffb3c1" stroke-width="1.2"/><polygon points="${_star(39, 9, 4, 4, 1.3)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 10, 4, 3.2, 1)}" fill="#ffe27a" stroke="none"/>`) },
 ];
+const ADV_PRIVATE = 'privado';                           // Modo Privado: mesma mecânica do Salão do Amor, mas o roteiro é escrito pelo jogador (senha VIP, sem ouro)
+const isSalao = (t) => t === 'salao_amor' || t === ADV_PRIVATE;
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -754,7 +760,7 @@ function buildTypeGrid() {
         const owned = S.vipOwned.has(t.id);
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'type-card' + (S.advType === t.id ? ' sel' : ''); b.dataset.id = t.id;
-        const badge = !t.vip ? '' : owned
+        const badge = t.private ? '<em class="vip-badge owned">🔒 VIP</em>' : !t.vip ? '' : owned
             ? '<em class="vip-badge owned">✓ VIP</em>'
             : `<em class="vip-badge"><img src="${COIN_IMG}" width="12" height="12" alt="">${vipCost()}</em>`;
         b.innerHTML = `${badge}<em class="tick">✓</em>${t.svg}<b>${esc(t.name)}</b><span class="desc">${esc(t.desc)}</span>`;
@@ -765,9 +771,47 @@ function buildTypeGrid() {
 }
 
 function onTypeClick(t) {
+    if (t.private) { onPrivateClick(t); return; }                        // Modo Privado: senha + prompt, sem ouro
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
     S.advType = S.advType === t.id ? null : t.id;                        // toggle: clicar de novo desmarca
     buildTypeGrid();
+}
+
+// ----- MODO PRIVADO: 1) senha VIP (validada no servidor)  2) prompt escrito pelo jogador -----
+const PRIVATE_PROMPT_MIN = 10, PRIVATE_PROMPT_MAX = 1500;
+function onPrivateClick(t) {
+    if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
+    if (S.privatePass) openPrivatePrompt(); else openPrivatePass();
+}
+function openPrivatePass() {
+    $('privPass').value = ''; $('privPassErr').textContent = ''; $('privPassOk').disabled = false;
+    openOv('privPassModal');
+    setTimeout(() => $('privPass').focus(), 60);
+}
+async function submitPrivatePass() {
+    const pass = $('privPass').value, my = S.state?.my_slot;
+    if (!pass || !my) return;
+    const ok = $('privPassOk'), err = $('privPassErr');
+    ok.disabled = true; err.textContent = '';
+    try {
+        await callFn('mission-token', { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
+        S.privatePass = pass; closeOv('privPassModal'); openPrivatePrompt();
+    } catch (e) {
+        err.textContent = ERR[e.message] || 'Não foi possível validar a senha.'; ok.disabled = false; $('privPass').select();
+    }
+}
+function openPrivatePrompt() {
+    const ta = $('privPrompt'); ta.value = S.privatePrompt || '';
+    $('privPromptErr').textContent = ''; updatePrivCount();
+    openOv('privPromptModal');
+    setTimeout(() => ta.focus(), 60);
+}
+function updatePrivCount() { $('privPromptCount').textContent = `${$('privPrompt').value.length}/${PRIVATE_PROMPT_MAX}`; }
+function confirmPrivatePrompt() {
+    const txt = $('privPrompt').value.trim();
+    if (txt.length < PRIVATE_PROMPT_MIN) { $('privPromptErr').textContent = `Escreva pelo menos ${PRIVATE_PROMPT_MIN} caracteres.`; return; }
+    S.privatePrompt = txt.slice(0, PRIVATE_PROMPT_MAX); S.advType = ADV_PRIVATE;
+    closeOv('privPromptModal'); buildTypeGrid();
 }
 
 function openVipConfirm(t) {
@@ -978,7 +1022,7 @@ function clearDiariasDot() {
 
 async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('vipModal'); closeOv('typeModal'); closeOv('itemsModal');
+    closeOv('vipModal'); closeOv('privPassModal'); closeOv('privPromptModal'); closeOv('typeModal'); closeOv('itemsModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -987,7 +1031,9 @@ async function _startAdventure(loadout, advType) {
         A.headphones = $('chkPhones').checked;
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
-        ctx = await callFn('mission-token', { slot_id: my.id, loadout, adventure_type: advType || 'comum' });   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
+        if (advType === ADV_PRIVATE) { body.private_password = S.privatePass; body.private_prompt = S.privatePrompt; }   // servidor revalida a senha e injeta o prompt no Mestre
+        ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
@@ -1508,13 +1554,13 @@ function toolModoLongo(adv, a) {
     if (!adv.epilogue) return { ok: false, erro: 'Fala longa só existe no epílogo (depois de objective_complete).' };
     if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
     if (tipo === 'briga') {
-        if (adv.advType !== 'salao_amor') return { ok: false, erro: 'A discussão de ciúmes só existe no Salão do Amor.' };
+        if (!isSalao(adv.advType)) return { ok: false, erro: 'A discussão de ciúmes só existe no Salão do Amor.' };
         if (adv.brigaDone) return { ok: false, erro: 'A interrupção de ciúmes já aconteceu. Siga o romance.' };
         adv.brigaDone = true; startLong(adv, 'briga');
         return { ok: true, instrucao: 'Discussão LIGADA. Faça agora a ENTRADA do(a) outro(a) convidado(a) ciumento(a), que invade a cena e implica com o par, e comece a discussão engraçada; o par rebate à altura. NÃO conclua nem pergunte nada ao herói: o jogo enviará "[SISTEMA] CONTINUE" (mínimo 2 minutos) e mandará o fecho no final.' };
     }
     if (tipo === 'sermao') {
-        if (adv.advType === 'salao_amor') return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
+        if (isSalao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
         startLong(adv, 'sermao');
         return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
     }
@@ -1691,7 +1737,7 @@ function confirmFinish() {
     closeOv('finishModal');
     const a = S.adv; if (!a || a.finished || a.playerEnd) return;
     // Salão do Amor: mesmo que o jogador queira finalizar, a interrupção de ciúmes acontece antes (se ainda couber no tempo)
-    if (a.advType === 'salao_amor' && a.epilogue && !a.brigaDone && !a.finishAfterBriga && a.endMs - serverNow() > 200000) {
+    if (isSalao(a.advType) && a.epilogue && !a.brigaDone && !a.finishAfterBriga && a.endMs - serverNow() > 200000) {
         a.finishAfterBriga = true;
         queueNote(a, '[SISTEMA] ANTES DE ENCERRAR: o jogador quer finalizar, mas agora acontece a INTERRUPÇÃO DE CIÚMES. Chame modo_longo com tipo "briga" e faça a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par, como combinado. Não faça despedida ainda.', true);
         setTimeout(() => { if (S.adv === a && a.finishAfterBriga && !a.brigaDone) { a.finishAfterBriga = false; finalizeNow(a); } }, 30000);   // o Mestre não atendeu: finaliza normalmente
@@ -1752,7 +1798,7 @@ function advTick() {
     // rede de segurança: o Mestre esqueceu de chamar objective_delivered → libera o botão depois de 3 min de epílogo
     if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
     // Salão do Amor: a interrupção de ciúmes é obrigatória; se ainda não aconteceu e o tempo está acabando, o Mestre é lembrado
-    if (adv.advType === 'salao_amor' && adv.epilogue && !adv.brigaDone && !adv.brigaNudged && !adv.long && !adv.playerEnd && left < 330000 && left > 200000) {
+    if (isSalao(adv.advType) && adv.epilogue && !adv.brigaDone && !adv.brigaNudged && !adv.long && !adv.playerEnd && left < 330000 && left > 200000) {
         adv.brigaNudged = true;
         queueNote(adv, '[SISTEMA] HORA DA INTERRUPÇÃO DE CIÚMES: ainda não aconteceu. Chame modo_longo com tipo "briga" e faça agora a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par.', true);
     }
@@ -1896,6 +1942,12 @@ function bindUI() {
     $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar
     $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
     $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
+    $('privPassCancel').onclick = () => closeOv('privPassModal');
+    $('privPassOk').onclick = submitPrivatePass;
+    $('privPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPrivatePass(); });
+    $('privPromptCancel').onclick = () => closeOv('privPromptModal');
+    $('privPromptOk').onclick = confirmPrivatePrompt;
+    $('privPrompt').addEventListener('input', updatePrivCount);
     $('vipCancel').onclick = () => { S.vipPending = null; closeOv('vipModal'); };
     $('vipConfirm').onclick = confirmVip;
     $('buyCancel').onclick = () => closeOv('buyModal');

@@ -523,3 +523,10 @@ body.hud-hidden .hud-toggle-btn { top: 0; }
 #frostOverlay.on { opacity: 1; animation: frostBreath 9s ease-in-out infinite; }
 @keyframes frostBreath { 0%, 100% { opacity: .80; } 50% { opacity: 1; } }
 body.hud-hidden #frostOverlay { opacity: .6; }
+
+/* ── Modo Privado: modais de senha e prompt ── */
+.priv-input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; color: #fff; font: inherit; font-size: 1rem; }
+.priv-input:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
+.priv-area { resize: vertical; min-height: 120px; max-height: 40vh; line-height: 1.5; font-size: .9rem; }
+.priv-count { margin-top: 4px; text-align: right; font-size: .68em; color: #8f866f; }
+.priv-err { min-height: 1.2em; margin: 6px 0 10px; color: #ff7b7b; font-size: .82em; text-align: center; }

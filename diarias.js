@@ -54,6 +54,7 @@ const mmss = (ms) => {
 };
 
 const ERR = {
+    wrong_password: 'Senha incorreta.',
     already_today: 'Você já realizou sua aventura de hoje.',
     event_closed: 'O Mestre já partiu deste lugar.',
     event_full: 'As três vagas já foram preenchidas.',
@@ -168,6 +169,22 @@ const FALLBACK_SKY = {
 function paintScene(sceneId) {
     const id = sceneId || LOBBY_SCENE;
     window.DiariasSkybox?.show(id, FALLBACK_SKY[id]);
+    updateColdWeather(sceneId);
+}
+
+// Clima gelado (neve + névoa + geada + color grade, como em solaris.html): terreno ABERTO em tempo de frio.
+//  - cenários de neve/gelo (vila_neve etc.) sempre nevam;
+//  - na aventura "Inverno intenso" (frio), qualquer cenário externo neva (taverna e salão são internos).
+const INDOOR_SCENES = new Set(['taverna', 'salao_amor']);
+const SNOWY_SCENE_RE = /neve|gelo|solaris|razar|inverno|nevasca/i;
+function updateColdWeather(sceneId) {
+    const adv = S.adv;
+    let on = false;
+    if (adv && sceneId) {
+        on = SNOWY_SCENE_RE.test(sceneId) || (adv.advType === 'frio' && !INDOOR_SCENES.has(sceneId) && sceneId !== LOBBY_SCENE);
+    }
+    window.__weatherWant = on;
+    window.DiariasWeather?.set(on);
 }
 
 // ---------------------------------------------------------------------
@@ -1169,7 +1186,10 @@ async function onLiveMessage(msg) {
     if (sc) {
         if (sc.interrupted) { if (!adv.ending && !adv.forced) flushPlayback(adv.A); adv.newTurn = true; adv.turnDone = true; }
         for (const p of sc.modelTurn?.parts || []) {
-            if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) { adv.turnDone = false; playPcm24(adv.A, p.inlineData.data); }
+            if (p.inlineData?.data && String(p.inlineData.mimeType || '').startsWith('audio')) {
+                if (adv.chainSentAt) { const l = Date.now() - adv.chainSentAt; adv.chainSentAt = 0; adv.chainLat = adv.chainLat ? adv.chainLat * 0.5 + l * 0.5 : l; }   // latência do CONTINUE
+                adv.turnDone = false; playPcm24(adv.A, p.inlineData.data);
+            }
         }
         if (sc.outputTranscription?.text) {
             if (adv.newTurn) {
@@ -1187,6 +1207,7 @@ async function onLiveMessage(msg) {
             adv.turnDone = false; adv.lastPlayerAt = Date.now();      // o jogador falou: o Mestre agora deve uma resposta
             adv.youBuf += sc.inputTranscription.text;
             if (adv.long) onPlayerSpeechLong(adv);
+            checkCheatCommand(adv);
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
         if (sc.turnComplete) {
@@ -1217,6 +1238,7 @@ const nextStep = (adv) => adv.enemy
     : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
 
 function toolStartCombat(adv, args) {
+    if (adv.cheatX) return { ok: false, erro: 'MODO X ativo: não há combate nem dados. Continue a cena.' };
     if (adv.noCombat) return { ok: false, erro: 'Esta aventura NÃO tem combate: resolva tudo com conversa, charme e dados. Narre uma saída social, sem luta.' };
     if (adv.epilogue) return { ok: false, erro: 'Estamos no EPÍLOGO: a missão já foi cumprida. NÃO há mais combates, chefes nem inimigos. Conduza apenas diálogo e passeios até o jogador escolher concluir ou o sistema enviar ENCERRAR.', ...hpState(adv) };
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
@@ -1342,6 +1364,44 @@ function toolStatus(adv) {
         instrucao: 'Diga ao jogador a quantidade EXATA de cada item (inclusive os já consumidos, com zero).' };
 }
 
+// ===== CHEAT "MODO X": comando de voz abre modal de senha; a senha é validada só no servidor (mission-token) =====
+const CHEAT_X_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
+const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
+function checkCheatCommand(adv) {
+    if (!adv || adv.cheatX || adv.cheatModal || adv.finished) return;
+    if (CHEAT_X_RE.test(normPt(adv.youBuf))) openCheatModal(adv);
+}
+function openCheatModal(adv) {
+    adv.cheatModal = true;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
+    ov.innerHTML = '<div style="background:#1b1722;color:#f3eefc;border:1px solid #6b4fa3;border-radius:14px;padding:20px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
+        + '<h3 style="margin:0 0 12px;font-size:1.05rem">Digite a senha para ativar esse cheat</h3>'
+        + '<input id="cheatPass" type="password" inputmode="numeric" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #6b4fa3;background:#120f18;color:#fff;font-size:1rem">'
+        + '<div id="cheatErr" style="color:#ff7b7b;font-size:.85rem;min-height:1.2em;margin-top:6px"></div>'
+        + '<div style="display:flex;gap:10px;margin-top:10px"><button id="cheatCancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid #6b4fa3;background:transparent;color:#f3eefc;cursor:pointer">Cancelar</button>'
+        + '<button id="cheatOk" style="flex:1;padding:10px;border-radius:8px;border:0;background:#8a5cf0;color:#fff;font-weight:700;cursor:pointer">Ativar</button></div></div>';
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('#cheatPass'), err = ov.querySelector('#cheatErr'), ok = ov.querySelector('#cheatOk');
+    const close = () => { ov.remove(); adv.cheatModal = false; adv.youBuf = ''; };
+    setTimeout(() => inp.focus(), 50);
+    ov.querySelector('#cheatCancel').onclick = close;
+    const submit = async () => {
+        if (!inp.value) return;
+        ok.disabled = true; err.textContent = '';
+        try {
+            const r = await callFn('mission-token', { slot_id: adv.slotId, action: 'cheat_x', password: inp.value });
+            adv.cheatX = true; adv.cheatModal = false; ov.remove();
+            queueNote(adv, r.instrucao, true);
+            flushNotes(adv);
+        } catch (e) {
+            err.textContent = ERR[e.message] || 'Não foi possível ativar.'; ok.disabled = false; inp.select();
+        }
+    };
+    ok.onclick = submit;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+}
+
 async function onToolCall(calls) {
     const adv = S.adv;
     adv.toolBusy = true;
@@ -1354,7 +1414,7 @@ async function onToolCall(calls) {
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
             } else if (c.name === 'roll_check') {
-                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : await doRoll(a);
+                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.cheatX ? { ok: true, resultado: 'success', instrucao: 'MODO X ativo: não há dados. Narre o êxito, respeitando o decoro (sem cenas explícitas).' } : await doRoll(a);
             } else if (c.name === 'start_combat') {
                 out = toolStartCombat(adv, a);
             } else if (c.name === 'damage') {
@@ -1467,17 +1527,23 @@ function onPlayerSpeechLong(adv) {
 
 function scheduleLong(adv) {
     if (!adv.long || adv.chainTimer) return;
-    adv.chainTimer = setTimeout(() => tryChain(adv, 0), 700);
+    adv.chainTimer = setTimeout(() => tryChain(adv, 0), 80);
 }
 
 function tryChain(adv, waited) {
     adv.chainTimer = null;
     const L = adv.long; if (!L || S.adv !== adv) return;
     if (adv.finished || adv.ending || adv.forced || adv.playerEnd || adv.dead || adv.endMs - serverNow() < 100000) { stopLong(adv); return; }   // reta final: o Mestre cuida da despedida
-    if (!adv.turnDone || masterSpeaking(adv.A) || adv.toolBusy || Date.now() - adv.lastPlayerAt < 1800) {   // espera o áudio acabar
-        if (waited < 20000) adv.chainTimer = setTimeout(() => tryChain(adv, waited + 400), 400);
+    // O áudio chega mais rápido que o tempo real: quando o turno termina no servidor, ainda há segundos de fala na fila.
+    // Em vez de esperar a fila esvaziar (e só então pagar os 2 a 3 s de latência do modelo), envia o CONTINUE quando
+    // restar apenas ~a latência medida; a resposta nova chega justo quando o áudio atual acaba e a fala fica contínua.
+    const leadMs = Math.max(0, (adv.A.nextTime - adv.A.ctx.currentTime) * 1000);
+    const lat = Math.min(5000, Math.max(1200, adv.chainLat || 2600));
+    if (!adv.turnDone || leadMs > lat + 300 || adv.toolBusy || Date.now() - adv.lastPlayerAt < 1800) {
+        if (waited < 60000) adv.chainTimer = setTimeout(() => tryChain(adv, waited + 250), 250);
         return;
     }
+    adv.chainSentAt = Date.now();
     L.turns++;
     if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
         stopLong(adv);

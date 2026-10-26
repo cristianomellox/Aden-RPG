@@ -1189,7 +1189,10 @@ async function onLiveMessage(msg) {
             if (adv.long) onPlayerSpeechLong(adv);
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
-        if (sc.turnComplete) { adv.newTurn = true; adv.turnDone = true; if (adv.long) scheduleLong(adv); }
+        if (sc.turnComplete) {
+            adv.newTurn = true; adv.turnDone = true; if (adv.long) scheduleLong(adv);
+            if (adv.finishAfterBriga && adv.brigaFechoSent) { adv.finishAfterBriga = false; setTimeout(() => finalizeNow(adv), 2500); }   // fecho da briga dito: agora sim a despedida
+        }
     }
 
     if (msg.toolCall?.functionCalls?.length) await onToolCall(msg.toolCall.functionCalls);
@@ -1430,24 +1433,36 @@ async function doRoll(args) {
 }
 
 // ---------------------------------------------------------------------
-// PREGAÇÃO LONGA: o Gemini Live responde curto, então, SÓ durante a pregação de Pantokrator (aceita pelo jogador),
-// o JS envia "[SISTEMA] CONTINUE" a cada fim de turno até passar de 3 min, e então manda o fecho.
+// FALAS LONGAS (o Gemini Live responde curto): o JS envia "[SISTEMA] CONTINUE" a cada fim de turno para parecer UMA fala só.
+//   sermao: pregação de Pantokrator aceita pelo jogador, mínimo 3 min (modos comuns)
+//   briga : discussão de ciúmes no epílogo do Salão do Amor, mínimo 2 min
+// Passado o mínimo, o JS manda o fecho. Nos outros momentos NÃO há continuação forçada.
 // ---------------------------------------------------------------------
-const SERMON_MIN_MS = 3 * 60 * 1000, SERMON_MAX_TURNS = 14;
+const LONG_MIN_MS = { sermao: 3 * 60 * 1000, briga: 2 * 60 * 1000 }, LONG_MAX_TURNS = 14;
 
-function startLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind: 'sermao', startedAt: Date.now(), turns: 0 }; }
+function startLong(adv, kind) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0 }; }
 function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; }
 
 function toolModoLongo(adv, a) {
-    if (!adv.epilogue) return { ok: false, erro: 'A pregação só existe no epílogo (depois de objective_complete).' };
-    if (adv.advType === 'salao_amor') return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
-    if (String(a.tipo || '') !== 'sermao') return { ok: false, erro: 'tipo inválido (use sermao).' };
-    startLong(adv);
-    return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
+    const tipo = String(a.tipo || '');
+    if (!adv.epilogue) return { ok: false, erro: 'Fala longa só existe no epílogo (depois de objective_complete).' };
+    if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
+    if (tipo === 'briga') {
+        if (adv.advType !== 'salao_amor') return { ok: false, erro: 'A discussão de ciúmes só existe no Salão do Amor.' };
+        if (adv.brigaDone) return { ok: false, erro: 'A interrupção de ciúmes já aconteceu. Siga o romance.' };
+        adv.brigaDone = true; startLong(adv, 'briga');
+        return { ok: true, instrucao: 'Discussão LIGADA. Faça agora a ENTRADA do(a) outro(a) convidado(a) ciumento(a), que invade a cena e implica com o par, e comece a discussão engraçada; o par rebate à altura. NÃO conclua nem pergunte nada ao herói: o jogo enviará "[SISTEMA] CONTINUE" (mínimo 2 minutos) e mandará o fecho no final.' };
+    }
+    if (tipo === 'sermao') {
+        if (adv.advType === 'salao_amor') return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
+        startLong(adv, 'sermao');
+        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
+    }
+    return { ok: false, erro: 'tipo inválido (use sermao ou briga).' };
 }
 
 function onPlayerSpeechLong(adv) {
-    if (adv.long && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta)
+    if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta); a briga continua
 }
 
 function scheduleLong(adv) {
@@ -1464,12 +1479,22 @@ function tryChain(adv, waited) {
         return;
     }
     L.turns++;
-    if (Date.now() - L.startedAt >= SERMON_MIN_MS || L.turns > SERMON_MAX_TURNS) {
+    if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
         stopLong(adv);
-        sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        if (L.kind === 'briga') {
+            adv.brigaFechoSent = true;
+            sendText('[SISTEMA] CONTINUE (FECHO DA DISCUSSÃO). Encerre agora a discussão com um desfecho engraçado (o intruso sai bufando, é arrastado, fazem pazes forçadas, etc.) e devolva o clima ao par. '
+                + (adv.finishAfterBriga ? 'NÃO pergunte nada: o herói vai finalizar a aventura em seguida.' : 'Em seguida pergunte ao herói o que ele faz e CALE-SE.'));
+        } else {
+            sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        }
         return;
     }
-    sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
+    if (L.kind === 'briga') {
+        sendText('[SISTEMA] CONTINUE a discussão. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, SEM concluir e sem perguntar nada ao herói: o(a) intruso(a) e o par continuam brigando de forma extremamente engraçada, falas curtas e rápidas alternando os dois (deixe claro quem fala), ciúmes, ofensas criativas, exageros, comparações absurdas, o par rebatendo à altura, o herói sendo puxado pelos dois; pode escalar para empurrões e tapas cômicos (sem ferir de verdade). 5 a 8 frases.');
+    } else {
+        sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
+    }
 }
 
 // ----- cenário por palavra-chave (mission_scenes.keywords, separadas por vírgula ou ponto e vírgula) -----
@@ -1596,6 +1621,18 @@ function openFinishConfirm() {
 function confirmFinish() {
     closeOv('finishModal');
     const a = S.adv; if (!a || a.finished || a.playerEnd) return;
+    // Salão do Amor: mesmo que o jogador queira finalizar, a interrupção de ciúmes acontece antes (se ainda couber no tempo)
+    if (a.advType === 'salao_amor' && a.epilogue && !a.brigaDone && !a.finishAfterBriga && a.endMs - serverNow() > 200000) {
+        a.finishAfterBriga = true;
+        queueNote(a, '[SISTEMA] ANTES DE ENCERRAR: o jogador quer finalizar, mas agora acontece a INTERRUPÇÃO DE CIÚMES. Chame modo_longo com tipo "briga" e faça a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par, como combinado. Não faça despedida ainda.', true);
+        setTimeout(() => { if (S.adv === a && a.finishAfterBriga && !a.brigaDone) { a.finishAfterBriga = false; finalizeNow(a); } }, 30000);   // o Mestre não atendeu: finaliza normalmente
+        return;
+    }
+    finalizeNow(a);
+}
+
+function finalizeNow(a) {
+    if (!a || a.finished || a.playerEnd) return;
     a.playerEnd = true; a.playerEndAt = Date.now(); a.A.endMute = true;   // ninguém interrompe a despedida
     syncEpilogueUI();
     queueNote(a, '[SISTEMA] FINALIZAR. O jogador escolheu finalizar a aventura. Faça agora a despedida em 30 a 45 segundos (um último momento com o NPC ou o cenário, a frase final da história e um resumo do desempenho do herói) e chame end_adventure. Não inicie nada novo nem faça perguntas.', true);
@@ -1655,6 +1692,11 @@ function advTick() {
     }
     // rede de segurança: o Mestre esqueceu de chamar objective_delivered → libera o botão depois de 3 min de epílogo
     if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
+    // Salão do Amor: a interrupção de ciúmes é obrigatória; se ainda não aconteceu e o tempo está acabando, o Mestre é lembrado
+    if (adv.advType === 'salao_amor' && adv.epilogue && !adv.brigaDone && !adv.brigaNudged && !adv.long && !adv.playerEnd && left < 330000 && left > 200000) {
+        adv.brigaNudged = true;
+        queueNote(adv, '[SISTEMA] HORA DA INTERRUPÇÃO DE CIÚMES: ainda não aconteceu. Chame modo_longo com tipo "briga" e faça agora a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par.', true);
+    }
     // o jogador tocou em Finalizar e o Mestre não encerrou: envia nota neutra
     if (adv.playerEnd && Date.now() - adv.playerEndAt > 75000) { finishAdventure(null, true, 'master_timeout'); return; }
     if (!adv.dead) checkDetour(adv);

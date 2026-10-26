@@ -514,3 +514,14 @@ body.hud-hidden .hud-toggle-btn { top: 0; }
 .type-card .vip-badge img { width: 12px; height: 12px; object-fit: contain; display: block; }
 .type-card .vip-badge.owned { color: var(--ok); padding: 3px 7px; letter-spacing: .5px; }
 .type-card em, .vip-badge{font-style:normal}
+
+/* ─── Clima gelado do palco (diarias_weather.js) ─── */
+#weatherCanvas, #weatherGrade, #frostOverlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
+#weatherCanvas { z-index: 1; }
+#weatherGrade { z-index: 1; mix-blend-mode: soft-light;
+    background: radial-gradient(ellipse at 50% 35%, rgba(190,225,255,.30) 0%, rgba(110,160,230,.38) 60%, rgba(40,70,130,.45) 100%); }
+#frostOverlay { z-index: 2; mix-blend-mode: screen; }
+#weatherCanvas.on, #weatherGrade.on { opacity: 1; }
+#frostOverlay.on { opacity: 1; animation: frostBreath 9s ease-in-out infinite; }
+@keyframes frostBreath { 0%, 100% { opacity: .80; } 50% { opacity: 1; } }
+body.hud-hidden #frostOverlay { opacity: .6; }

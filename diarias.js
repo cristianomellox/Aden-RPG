@@ -1391,7 +1391,7 @@ function openCheatModal(adv) {
         ok.disabled = true; err.textContent = '';
         try {
             const r = await callFn('mission-token', { slot_id: adv.slotId, action: 'cheat_x', password: inp.value });
-            adv.cheatX = true; adv.cheatModal = false; ov.remove();
+            adv.cheatX = true; adv.cheatModal = false; ov.remove(); syncCheatUI();
             queueNote(adv, r.instrucao, true);
             flushNotes(adv);
         } catch (e) {
@@ -1665,12 +1665,15 @@ function enterEpilogue(adv) {
     syncEpilogueUI();
 }
 
+function syncCheatUI() {
+    const b = $('btnCheat'); if (!b) return;
+    b.setAttribute('aria-pressed', String(!!S.adv?.cheatX));
+}
+
 function syncEpilogueUI() {
     const a = S.adv;
     const done = !!a && a.epilogue;
-    const leave = $('btnLeave');
-    leave.classList.toggle('gone', done); leave.disabled = done; leave.tabIndex = done ? -1 : 0;
-    if (done) closeOv('leaveModal');
+    syncCheatUI();
     const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
     $('duel').classList.toggle('finish-on', show);
     $('btnFinish').classList.toggle('show', show);
@@ -1702,16 +1705,6 @@ function finalizeNow(a) {
     a.playerEnd = true; a.playerEndAt = Date.now(); a.A.endMute = true;   // ninguém interrompe a despedida
     syncEpilogueUI();
     queueNote(a, '[SISTEMA] FINALIZAR. O jogador escolheu finalizar a aventura. Faça agora a despedida em 30 a 45 segundos (um último momento com o NPC ou o cenário, a frase final da história e um resumo do desempenho do herói) e chame end_adventure. Não inicie nada novo nem faça perguntas.', true);
-}
-
-async function abandonAdventure() {
-    closeOv('leaveModal');
-    const adv = S.adv; if (!adv || adv.epilogue) return;
-    adv.finished = true;
-    teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
-    toast('Você abandonou a aventura.', true);
-    showView('lobby');
-    await refreshState();
 }
 
 // ----- foco na missão: se a conversa lateral se arrasta, o jogo avisa o Mestre para o NPC interromper -----
@@ -1779,7 +1772,7 @@ function teardown() {
     try { adv.A.node.port.onmessage = null; adv.A.stream.getTracks().forEach((t) => t.stop()); adv.A.ctx.close(); } catch (_) { /* ok */ }
     try { adv.wake?.release(); } catch (_) { /* ok */ }
     window.removeEventListener('beforeunload', guardUnload);
-    closeOv('leaveModal'); closeOv('finishModal');
+    closeOv('finishModal');
 }
 
 const pendKey = (slot) => 'aden_daily_pending_' + slot;
@@ -1927,9 +1920,12 @@ function bindUI() {
         $('btnPhones').setAttribute('aria-pressed', String(A.headphones));
         toast(A.headphones ? 'Modo fones: você pode interromper o Mestre.' : 'Modo alto-falante: o Mestre termina de falar antes de ouvir.');
     };
-    $('btnLeave').onclick = () => { const adv = S.adv; if (!adv || adv.epilogue) return; openOv('leaveModal'); };   // modal, não confirm()
-    $('leaveCancel').onclick = () => closeOv('leaveModal');
-    $('leaveConfirm').onclick = abandonAdventure;
+    $('btnCheat').onclick = () => {   // abre direto o modal de senha, pulando a etapa de "Ative o modo X" por voz
+        const adv = S.adv; if (!adv || adv.finished) return;
+        if (adv.cheatX) { toast('O Modo X já está ativo.'); return; }
+        if (adv.cheatModal) return;
+        openCheatModal(adv);
+    };
     $('btnFinish').onclick = openFinishConfirm;
     $('finishCancel').onclick = () => closeOv('finishModal');
     $('finishConfirm').onclick = confirmFinish;

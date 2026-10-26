@@ -145,10 +145,9 @@
                         <svg class="ic-mic" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
                         <svg class="ic-off" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22"/><path d="M9 9v2a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.8"/><path d="M17 16.9A7 7 0 0 1 5 11M19 11a7 7 0 0 1-.1 1.2M12 18v4"/></svg>
                     </button>
-
-                    <button class="ctl-btn danger" id="btnLeave" title="Abandonar aventura">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
-                        <small>Sair</small>
+                    <button class="ctl-btn cheat" id="btnCheat" aria-pressed="false" title="Cheat: ativar modo secreto">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l7.5 3v5.7c0 4.6-3.1 8.4-7.5 10.3-4.4-1.9-7.5-5.7-7.5-10.3V5.5z"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+                        <small>Cheat</small>
                     </button>
                 </div>
             </div>
@@ -282,18 +281,6 @@
         </div>
     </div>
 
-    <!-- ═════════ MODAL: ABANDONAR AVENTURA ═════════ -->
-    <div id="leaveModal" class="overlay dm-modal" aria-hidden="true">
-        <div class="dm-box buy-box">
-            <h3 class="dm-title">Abandonar aventura</h3>
-            <p class="dm-sub">Esta ação não pode ser desfeita</p>
-            <p class="buy-text">Se abandonar agora, você perderá a recompensa e não poderá jogar de novo hoje.</p>
-            <div class="dm-actions">
-                <button class="btn-ghost" id="leaveCancel">Continuar</button>
-                <button class="btn-epic sm" id="leaveConfirm">Abandonar</button>
-            </div>
-        </div>
-    </div>
 
     <!-- ═════════ MODAL: FINALIZAR AVENTURA (objetivo concluído) ═════════ -->
     <div id="finishModal" class="overlay dm-modal" aria-hidden="true">

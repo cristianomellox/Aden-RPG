@@ -1012,7 +1012,7 @@ function newAdv(slotId, ctx, A, sdk) {
         heroFem: ctx.hero_gender === 'f',
         advType: ctx.adventure_type || 'comum', noCombat: !!ctx.no_combat,
         sceneKw: parseSceneKeywords(ctx.scenes), kwScanned: 0,
-        long: null, chainTimer: null, chainLeft: 0,
+        long: null, chainTimer: null,
         epilogue: false, delivered: false, playerEnd: false, playerEndAt: 0, epilogueAt: 0, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
@@ -1430,44 +1430,24 @@ async function doRoll(args) {
 }
 
 // ---------------------------------------------------------------------
-// FALAS LONGAS: o Gemini Live responde curto, então o JS envia "[SISTEMA] CONTINUE" a cada fim de turno,
-// para a fala do par (flerte / Salão do Amor) ou a pregação parecer UMA resposta longa.
-//   flerte  : 2 continuações por fala do jogador, a última termina com pergunta/provocação
-//   salao   : 3 continuações por fala do jogador (epílogo do Salão do Amor), a última termina com pergunta
-//   sermao  : continua até >= 3 min (e no máx. SERMON_MAX_TURNS), então manda o fecho e pergunta se quer mais
+// PREGAÇÃO LONGA: o Gemini Live responde curto, então, SÓ durante a pregação de Pantokrator (aceita pelo jogador),
+// o JS envia "[SISTEMA] CONTINUE" a cada fim de turno até passar de 3 min, e então manda o fecho.
 // ---------------------------------------------------------------------
 const SERMON_MIN_MS = 3 * 60 * 1000, SERMON_MAX_TURNS = 14;
-const CHAIN_N = { flerte: 2, salao: 3 };
 
-function startLong(adv, kind) {
-    clearTimeout(adv.chainTimer); adv.chainTimer = null;
-    adv.long = { kind, startedAt: Date.now(), turns: 0 };
-    adv.chainLeft = CHAIN_N[kind] ?? 0;
-}
-function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; adv.chainLeft = 0; }
+function startLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind: 'sermao', startedAt: Date.now(), turns: 0 }; }
+function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; }
 
 function toolModoLongo(adv, a) {
-    const tipo = String(a.tipo || '');
-    if (!adv.epilogue) return { ok: false, erro: 'O modo de fala longa só existe no epílogo (depois de objective_complete).' };
-    if (tipo === 'fim') { if (adv.long && adv.long.kind !== 'salao') stopLong(adv); return { ok: true }; }
-    if (adv.advType === 'salao_amor') return { ok: false, erro: 'No Salão do Amor o modo longo já está ligado e não existe pregação. Siga o romance.' };
-    if (tipo === 'flerte') {
-        if (adv.long?.kind === 'sermao') return { ok: false, erro: 'Há uma pregação em andamento.' };
-        startLong(adv, 'flerte');
-        return { ok: true, instrucao: 'Modo de fala longa LIGADO. Comece agora a fala ousada do par, tomando a iniciativa. NÃO termine com pergunta nesta parte: o jogo enviará "[SISTEMA] CONTINUE" para você prosseguir.' };
-    }
-    if (tipo === 'sermao') {
-        startLong(adv, 'sermao');
-        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
-    }
-    return { ok: false, erro: 'tipo inválido (use flerte, sermao ou fim).' };
+    if (!adv.epilogue) return { ok: false, erro: 'A pregação só existe no epílogo (depois de objective_complete).' };
+    if (adv.advType === 'salao_amor') return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
+    if (String(a.tipo || '') !== 'sermao') return { ok: false, erro: 'tipo inválido (use sermao).' };
+    startLong(adv);
+    return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
 }
 
 function onPlayerSpeechLong(adv) {
-    const L = adv.long; if (!L) return;
-    if (L.kind === 'sermao') { if (adv.youBuf.trim().length >= 8) stopLong(adv); return; }   // o jogador interrompeu a pregação (ruído curto não conta)
-    adv.chainLeft = CHAIN_N[L.kind] ?? 0;                                                      // o jogador falou: o par ganha novas continuações
-    clearTimeout(adv.chainTimer); adv.chainTimer = null;
+    if (adv.long && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta)
 }
 
 function scheduleLong(adv) {
@@ -1483,34 +1463,13 @@ function tryChain(adv, waited) {
         if (waited < 20000) adv.chainTimer = setTimeout(() => tryChain(adv, waited + 400), 400);
         return;
     }
-    const msg = nextChainMsg(adv, L);
-    if (msg) { L.turns++; sendText(msg); }
-}
-
-function nextChainMsg(adv, L) {
-    if (L.kind === 'sermao') {
-        if (Date.now() - L.startedAt >= SERMON_MIN_MS || L.turns >= SERMON_MAX_TURNS) {
-            stopLong(adv);
-            return '[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.';
-        }
-        return '[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.';
+    L.turns++;
+    if (Date.now() - L.startedAt >= SERMON_MIN_MS || L.turns > SERMON_MAX_TURNS) {
+        stopLong(adv);
+        sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        return;
     }
-    if (adv.chainLeft <= 0) return null;                                                       // fim das continuações: espera o jogador
-    adv.chainLeft--;
-    const last = adv.chainLeft === 0;
-    const fem = adv.heroFem;
-    if (L.kind === 'salao') {
-        const ele = fem ? 'ele' : 'ela';
-        const exc = fem ? 'a ereção, o membro duro' : 'a umidade, estar molhadinha, os mamilos rijos';
-        const roupa = fem ? 'calcinha' : 'cueca';
-        return '[SISTEMA] CONTINUE' + (last ? ' (parte final)' : '') + '. Siga EXATAMENTE de onde parou, na mesma cena, sem repetir nem resumir. '
-            + 'O par é muito ousado, cheio de desejo e CONDUZ tudo: descreva em primeira pessoa e com riqueza de detalhes o que ' + ele + ' está fazendo e o que quer fazer no herói e que o herói faça nele(a): '
-            + 'o corpo (o que vê, toca e sente, pele, calor, cheiro, partes íntimas), a excitação (' + exc + '), a vontade de ver o herói de ' + roupa + ' e depois sem nada, de se mostrar, de experimentar posições e carícias, com falas, gemidos, ritmo e sensações. '
-            + 'Escale a intimidade de forma natural conforme o clima e respeite o consentimento do herói (se ele demonstrar desconforto, pare e mude de cena com carinho). 5 a 8 frases. '
-            + (last ? 'TERMINE com uma provocação ou pergunta ousada ao herói e então CALE-SE e espere.' : 'NÃO faça pergunta nem pare ainda.');
-    }
-    return '[SISTEMA] CONTINUE' + (last ? ' (parte final)' : '') + '. Siga de onde parou, na mesma cena, sem repetir nem resumir. O par segue conduzindo com ousadia e iniciativa, descrevendo com riqueza de detalhes o que faz (olhar, voz, perfume, toque, abraço, beijo, o corpo do herói, o que sente e deseja) e provocando o herói; sensual, sem cenas sexuais explícitas. 4 a 7 frases. '
-        + (last ? 'TERMINE com uma provocação ou pergunta ousada ao herói e então CALE-SE e espere.' : 'NÃO faça pergunta nem pare ainda.');
+    sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
 }
 
 // ----- cenário por palavra-chave (mission_scenes.keywords, separadas por vírgula ou ponto e vírgula) -----
@@ -1612,7 +1571,6 @@ function guardUnload(e) { if (S.adv && !S.adv.finished) { e.preventDefault(); e.
 function enterEpilogue(adv) {
     if (adv.epilogue) return;
     adv.epilogue = true; adv.epilogueAt = Date.now();
-    if (adv.advType === 'salao_amor') startLong(adv, 'salao');   // o par conduz falas longas durante todo o epílogo
     syncEpilogueUI();
 }
 

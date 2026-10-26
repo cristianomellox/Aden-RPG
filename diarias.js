@@ -778,7 +778,7 @@ function onTypeClick(t) {
 }
 
 // ----- MODO PRIVADO: 1) senha VIP (validada no servidor)  2) prompt escrito pelo jogador -----
-const PRIVATE_PROMPT_MIN = 10, PRIVATE_PROMPT_MAX = 1500;
+const PRIVATE_PROMPT_MIN = 10, PRIVATE_PROMPT_MAX = 15000;
 function onPrivateClick(t) {
     if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
     if (S.privatePass) openPrivatePrompt(); else openPrivatePass();

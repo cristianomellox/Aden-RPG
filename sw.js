@@ -8,7 +8,7 @@ const CLOUDINARY_HOST = 'res.cloudinary.com';
 
 // Pastas/arquivos que NUNCA devem ser tratados por este SW (nem cache-forever, nem zip).
 // Itens continuam sendo atualizados direto pelo repositório/Cloudflare Pages.
-const BLOCKED_PATHS = ['/assets/itens/'];
+const BLOCKED_PATHS = ['/assets/itens/', '/assets/missions/'];
 
 const ALLOWED_EXTENSIONS = [
     '.webp', '.webm', '.mp3', '.mp4',

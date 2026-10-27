@@ -119,24 +119,54 @@ function gradientTexture(colors) {
     return tex;
 }
 
-// Nunca rejeita: se a imagem falhar, resolve com o degradê.
+// Imagem grande demais para a GPU/memória (comum em celular) vira textura preta SEM erro. Reduz antes de enviar.
+function fitTexture(tex, key) {
+    const img = tex.image;
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const gl = (_sky && _sky.renderer && _sky.renderer.capabilities.maxTextureSize) || 4096;
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const lim = Math.min(gl, mobile ? 4096 : 8192);
+    console.info('[DiariasSkybox] "' + key + '": ' + w + 'x' + h + ' (limite ' + lim + ')');
+    if (Math.max(w, h) <= lim) return tex;
+    const k = lim / Math.max(w, h);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    tex.dispose();
+    const t2 = new THREE.CanvasTexture(c);
+    t2.colorSpace = THREE.SRGBColorSpace;
+    return t2;
+}
+
+// Tenta .png, depois .webp e .jpg (se o servidor devolver HTML no lugar da imagem, a decodificação falha e passa para o próximo).
+const EXTS = ['.png', '.webp', '.jpg'];
+function loadImageTexture(key, i = 0) {
+    return new Promise((resolve, reject) => {
+        if (i >= EXTS.length) { reject(new Error('sem imagem')); return; }
+        const url = SKY_BASE + encodeURIComponent(key) + EXTS[i];
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(
+            url,
+            (tex) => { tex.colorSpace = THREE.SRGBColorSpace; resolve(fitTexture(tex, key)); },
+            undefined,
+            () => { console.warn('[DiariasSkybox] Falha ao carregar ' + url); loadImageTexture(key, i + 1).then(resolve, reject); }
+        );
+    });
+}
+
+// Nunca rejeita: se a imagem falhar, resolve com o degradê, mas a falha NÃO fica em cache (show() tenta de novo).
 function loadTexture(key, colors) {
     const hit = _cache.get(key);
     if (hit) return hit.promise;
     const entry = { promise: null, tex: null, colors };
-    entry.promise = new Promise((resolve) => {
-        const loader = new THREE.TextureLoader();
-        loader.setCrossOrigin('anonymous');
-        loader.load(
-            urlFor(key),
-            (tex) => { tex.colorSpace = THREE.SRGBColorSpace; entry.tex = tex; resolve(tex); },
-            undefined,
-            () => {
-                console.warn('[DiariasSkybox] Sem imagem para "' + key + '" — usando degradê.');
-                entry.tex = gradientTexture(colors);
-                resolve(entry.tex);
-            }
-        );
+    entry.promise = loadImageTexture(key).then((tex) => { entry.tex = tex; return tex; }).catch(() => {
+        console.warn('[DiariasSkybox] Sem imagem para "' + key + '" (tentei ' + EXTS.join(', ') + ') — usando degradê.');
+        const g = gradientTexture(colors);
+        g.userData.temp = true;
+        entry.tex = g;
+        _cache.delete(key);
+        return g;
     });
     _cache.set(key, entry);
     return entry.promise;
@@ -166,6 +196,7 @@ function finalizeFade() {
     if (prev && prev !== _cur) {
         prev.visible = false;
         prev.material.opacity = 0;
+        if (prev.material.map && prev.material.map.userData && prev.material.map.userData.temp) prev.material.map.dispose();
         prev.material.map = null;          // libera a textura antiga para o descarte
         prev.material.needsUpdate = true;
     }
@@ -207,7 +238,7 @@ function showFlat(key, colors) {
 }
 
 // API: show('floresta', ['#1d3d27', '#07130b']) — id vazio volta à tela inicial.
-async function show(key, colors) {
+async function show(key, colors, retry = 0) {
     key = key || LOBBY_KEY;
     if (!_sky) { _pending = [key, colors]; return; }
     if (key === _wantKey) return;          // já é (ou já está a caminho de ser) este cenário
@@ -217,6 +248,10 @@ async function show(key, colors) {
     const tex = await loadTexture(key, colors || (key === LOBBY_KEY ? DEFAULT_COLORS : undefined));
     if (!_sky || id !== _reqId) return;    // um pedido mais novo chegou enquanto carregava
     swapTo(tex);
+    // a imagem falhou (rede/memória na hora de abrir a aventura): tenta de novo e faz crossfade para ela quando chegar
+    if (tex.userData && tex.userData.temp && retry < 3) {
+        setTimeout(() => { if (_sky && !_flat && _wantKey === key) { _wantKey = null; show(key, colors, retry + 1); } }, 4000 * (retry + 1));
+    }
 }
 
 // ── Arrastar (mouse + toque) ──────────────────────────────────────────

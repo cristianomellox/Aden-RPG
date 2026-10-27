@@ -167,10 +167,13 @@ const FALLBACK_SKY = {
     capital: ['#3d3a4a', '#0d0c12'],
     elendor: ['#1f4a3a', '#06140f'],
     vila_neve: ['#51657a', '#0c121a'],
+    salao_amor: ['#6a2a3f', '#150810'],
+    fenda_temporal: ['#2a3a6a', '#080b18'],
 };
+const DEFAULT_SKY = ['#2a2438', '#0a0810'];                 // cenário sem degradê próprio nunca fica preto
 function paintScene(sceneId) {
     const id = sceneId || LOBBY_SCENE;
-    window.DiariasSkybox?.show(id, FALLBACK_SKY[id]);
+    window.DiariasSkybox?.show(id, FALLBACK_SKY[id] || DEFAULT_SKY);
     updateColdWeather(sceneId);
 }
 
@@ -1140,7 +1143,7 @@ function recapText(adv, spoke = false) {
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
-        + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo, banquetes, festas e passeios até o jogador pedir para finalizar. ' + (adv.delivered ? 'O objetivo JÁ foi entregue ao NPC inicial. ' : 'Se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ') + 'NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        + (adv.modoX ? 'NÃO há mais rolagens de dados: não chame roll_check. ' : '') + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo, banquetes, festas e passeios até o jogador pedir para finalizar. ' + (adv.delivered ? 'O objetivo JÁ foi entregue ao NPC inicial. ' : 'Se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ') + 'NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
             : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta, voltando à conversa ou celebração de onde parou (sem listar opções); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
@@ -1253,7 +1256,7 @@ async function onLiveMessage(msg) {
             adv.turnDone = false; adv.lastPlayerAt = Date.now();      // o jogador falou: o Mestre agora deve uma resposta
             adv.youBuf += sc.inputTranscription.text;
             if (adv.long) onPlayerSpeechLong(adv);
-            checkCheatCommand(adv);
+            checkSpecialCommand(adv);
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
         if (sc.turnComplete) {
@@ -1284,7 +1287,7 @@ const nextStep = (adv) => adv.enemy
     : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
 
 function toolStartCombat(adv, args) {
-    if (adv.cheatX) return { ok: false, erro: 'MODO X ativo: não há combate nem dados. Continue a cena.' };
+    if (adv.modoX) return { ok: false, erro: 'Objetivo já cumprido (código especial): não há mais combate nem dados. Continue o epílogo.' };
     if (adv.noCombat) return { ok: false, erro: 'Esta aventura NÃO tem combate: resolva tudo com conversa, charme e dados. Narre uma saída social, sem luta.' };
     if (adv.epilogue) return { ok: false, erro: 'Estamos no EPÍLOGO: a missão já foi cumprida. NÃO há mais combates, chefes nem inimigos. Conduza apenas diálogo e passeios até o jogador escolher concluir ou o sistema enviar ENCERRAR.', ...hpState(adv) };
     if (adv.dead) return { ok: false, erro: 'O herói já caiu. Narre a derrota e chame end_adventure com outcome "derrota".' };
@@ -1410,42 +1413,59 @@ function toolStatus(adv) {
         instrucao: 'Diga ao jogador a quantidade EXATA de cada item (inclusive os já consumidos, com zero).' };
 }
 
-// ===== CHEAT "MODO X": comando de voz abre modal de senha; a senha é validada só no servidor (mission-token) =====
-const CHEAT_X_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
+// ===== CÓDIGOS ESPECIAIS: o botão "Especial" (ou o comando de voz) abre o modal; a senha é validada só no servidor (mission-token) =====
+// Cada código desbloqueia algo diferente. Por enquanto: "modo_x" = pula direto para o epílogo, com o objetivo cumprido, em qualquer aventura.
+const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
-function checkCheatCommand(adv) {
-    if (!adv || adv.cheatX || adv.cheatModal || adv.finished) return;
-    if (CHEAT_X_RE.test(normPt(adv.youBuf))) openCheatModal(adv);
+function checkSpecialCommand(adv) {
+    if (!adv || adv.specialModal || adv.finished) return;
+    if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
-function openCheatModal(adv) {
-    adv.cheatModal = true;
+function openSpecialModal(adv) {
+    if (!adv || adv.finished || adv.specialModal) return;
+    adv.specialModal = true;
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
-    ov.innerHTML = '<div style="background:#1b1722;color:#f3eefc;border:1px solid #6b4fa3;border-radius:14px;padding:20px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
-        + '<h3 style="margin:0 0 12px;font-size:1.05rem">Digite a senha para ativar esse cheat</h3>'
-        + '<input id="cheatPass" type="password" inputmode="numeric" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #6b4fa3;background:#120f18;color:#fff;font-size:1rem">'
-        + '<div id="cheatErr" style="color:#ff7b7b;font-size:.85rem;min-height:1.2em;margin-top:6px"></div>'
-        + '<div style="display:flex;gap:10px;margin-top:10px"><button id="cheatCancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid #6b4fa3;background:transparent;color:#f3eefc;cursor:pointer">Cancelar</button>'
-        + '<button id="cheatOk" style="flex:1;padding:10px;border-radius:8px;border:0;background:#8a5cf0;color:#fff;font-weight:700;cursor:pointer">Ativar</button></div></div>';
+    ov.innerHTML = '<div style="background:#1b1722;color:#f3eefc;border:1px solid #a3792f;border-radius:14px;padding:20px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 10px 40px rgba(0,0,0,.6)">'
+        + '<h3 style="margin:0 0 4px;font-size:1.05rem">Código Especial</h3>'
+        + '<p style="margin:0 0 12px;font-size:.85rem;color:#c9bfdc">Digite o código para desbloquear uma vantagem.</p>'
+        + '<input id="specialPass" type="password" inputmode="numeric" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #a3792f;background:#120f18;color:#fff;font-size:1rem">'
+        + '<div id="specialErr" style="color:#ff7b7b;font-size:.85rem;min-height:1.2em;margin-top:6px"></div>'
+        + '<div style="display:flex;gap:10px;margin-top:10px"><button id="specialCancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid #a3792f;background:transparent;color:#f3eefc;cursor:pointer">Cancelar</button>'
+        + '<button id="specialOk" style="flex:1;padding:10px;border-radius:8px;border:0;background:#d9a441;color:#1a1204;font-weight:700;cursor:pointer">Ativar</button></div></div>';
     document.body.appendChild(ov);
-    const inp = ov.querySelector('#cheatPass'), err = ov.querySelector('#cheatErr'), ok = ov.querySelector('#cheatOk');
-    const close = () => { ov.remove(); adv.cheatModal = false; adv.youBuf = ''; };
+    const inp = ov.querySelector('#specialPass'), err = ov.querySelector('#specialErr'), ok = ov.querySelector('#specialOk');
+    const close = () => { ov.remove(); adv.specialModal = false; adv.youBuf = ''; };
     setTimeout(() => inp.focus(), 50);
-    ov.querySelector('#cheatCancel').onclick = close;
+    ov.querySelector('#specialCancel').onclick = close;
     const submit = async () => {
         if (!inp.value) return;
         ok.disabled = true; err.textContent = '';
         try {
-            const r = await callFn('mission-token', { slot_id: adv.slotId, action: 'cheat_x', password: inp.value });
-            adv.cheatX = true; adv.cheatModal = false; ov.remove(); syncCheatUI();
-            queueNote(adv, r.instrucao, true);
-            flushNotes(adv);
+            const r = await callFn('mission-token', { slot_id: adv.slotId, action: 'special_code', password: inp.value });
+            close();
+            applySpecialCode(adv, r);
         } catch (e) {
             err.textContent = ERR[e.message] || 'Não foi possível ativar.'; ok.disabled = false; inp.select();
         }
     };
     ok.onclick = submit;
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+}
+function applySpecialCode(adv, r) {
+    if (!adv || S.adv !== adv || adv.finished) return;
+    if (r.codigo === 'modo_x') {
+        if (adv.dead) { toast('O herói já caiu.'); return; }
+        if (adv.epilogue) { toast('O epílogo já começou.'); return; }
+        if (adv.enemy) { adv.enemy = null; defeatFoe(adv); }   // encerra o combate em andamento
+        adv.modoX = true;                                     // sem mais dados e sem mais combate (como se o objetivo tivesse sido cumprido)
+        enterEpilogue(adv);                                   // objetivo cumprido: sem mais combates ou chefes
+        queueNote(adv, r.instrucao, true);
+        flushNotes(adv);
+        toast('Código ativado: o epílogo começou.');
+        return;
+    }
+    toast('Código especial ativado.');
 }
 
 async function onToolCall(calls) {
@@ -1460,7 +1480,7 @@ async function onToolCall(calls) {
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
             } else if (c.name === 'roll_check') {
-                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.cheatX ? { ok: true, resultado: 'success', instrucao: 'MODO X ativo: não há dados. Narre o êxito, respeitando o decoro (sem cenas explícitas).' } : await doRoll(a);
+                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.modoX ? { ok: true, resultado: 'success', instrucao: 'Objetivo já cumprido (código especial): não há mais dados. Narre o êxito e continue o epílogo.' } : await doRoll(a);
             } else if (c.name === 'start_combat') {
                 out = toolStartCombat(adv, a);
             } else if (c.name === 'damage') {
@@ -1711,15 +1731,9 @@ function enterEpilogue(adv) {
     syncEpilogueUI();
 }
 
-function syncCheatUI() {
-    const b = $('btnCheat'); if (!b) return;
-    b.setAttribute('aria-pressed', String(!!S.adv?.cheatX));
-}
-
 function syncEpilogueUI() {
     const a = S.adv;
     const done = !!a && a.epilogue;
-    syncCheatUI();
     const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
     $('duel').classList.toggle('finish-on', show);
     $('btnFinish').classList.toggle('show', show);
@@ -1972,11 +1986,9 @@ function bindUI() {
         $('btnPhones').setAttribute('aria-pressed', String(A.headphones));
         toast(A.headphones ? 'Modo fones: você pode interromper o Mestre.' : 'Modo alto-falante: o Mestre termina de falar antes de ouvir.');
     };
-    $('btnCheat').onclick = () => {   // abre direto o modal de senha, pulando a etapa de "Ative o modo X" por voz
+    $('btnSpecial').onclick = () => {   // abre direto o modal "Código Especial", sem passar pelo comando de voz
         const adv = S.adv; if (!adv || adv.finished) return;
-        if (adv.cheatX) { toast('O Modo X já está ativo.'); return; }
-        if (adv.cheatModal) return;
-        openCheatModal(adv);
+        openSpecialModal(adv);
     };
     $('btnFinish').onclick = openFinishConfirm;
     $('finishCancel').onclick = () => closeOv('finishModal');

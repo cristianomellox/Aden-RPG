@@ -203,8 +203,7 @@ body.daily-page { padding-bottom: 0; overflow: hidden; background: #000; }
     background: rgba(10,8,5,.75); color: var(--gold-light); border: 1px solid var(--gold-dark); }
 .ctl-btn small { font-size: .6em; letter-spacing: 1.5px; text-transform: uppercase; }
 .ctl-btn[aria-pressed="true"] { color: #1a1000; background: linear-gradient(var(--gold-light), var(--gold-base)); border-color: #fff3cf; }
-.ctl-btn.cheat { color: #c9a8ff; border-color: #6b4fa3; }
-.ctl-btn.cheat[aria-pressed="true"] { color: #1a0a33; background: linear-gradient(#d9c2ff, #9a6cf5); border-color: #efe4ff; cursor: default; }
+.ctl-btn.special { color: #ffd479; border-color: #a3792f; }
 .mic-btn { position: relative; width: 74px; height: 74px; border-radius: 50%; cursor: pointer; display: grid; place-items: center; color: #1a1000;
     background: radial-gradient(circle at 35% 30%, #fff3cf, var(--gold-light) 40%, var(--gold-base)); border: 3px solid #fff3cf; box-shadow: 0 6px 20px rgba(0,0,0,.8), 0 0 24px rgba(230,194,122,.5); }
 .mic-btn::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 2px solid var(--arcane); opacity: 0; }

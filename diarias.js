@@ -746,8 +746,9 @@ const ADV_TYPES = [
     { id: 'privado', vip: false, private: true, name: 'Modo Privado', desc: 'Modo exclusivo para jogadores VIPs',
       svg: _svg(`<path d="M15.5 21v-5.5a8.5 8.5 0 0 1 17 0V21" stroke="#e6c27a" stroke-width="3.4"/><rect x="9" y="20" width="30" height="22" rx="4.5" fill="#2a1740" stroke="#cbb8ff" stroke-width="2"/><path d="M24 36.5c-5-3.4-6.6-6-5.2-8.2 1.2-1.7 3.7-1.5 5.2.5 1.5-2 4-2.2 5.2-.5 1.4 2.2-.2 4.8-5.2 8.2z" fill="#e5334f" stroke="#ffb3c1" stroke-width="1.2"/><polygon points="${_star(39, 9, 4, 4, 1.3)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 10, 4, 3.2, 1)}" fill="#ffe27a" stroke="none"/>`) },
 ];
-const ADV_PRIVATE = 'privado';                           // Modo Privado: mesma mecânica do Salão do Amor, mas o roteiro é escrito pelo jogador (senha VIP, sem ouro)
-const isSalao = (t) => t === 'salao_amor' || t === ADV_PRIVATE;
+const ADV_PRIVATE = 'privado';                           // Modo Privado: função própria (mission-token-private). Puro diálogo, sem dados e sem combate, roteiro escrito pelo jogador (senha VIP, sem ouro)
+const isSalao = (t) => t === 'salao_amor' || t === ADV_PRIVATE;   // sem combate e sem pregação
+const TOKEN_FN_PRIVATE = 'mission-token-private';
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -797,7 +798,7 @@ async function submitPrivatePass() {
     const ok = $('privPassOk'), err = $('privPassErr');
     ok.disabled = true; err.textContent = '';
     try {
-        await callFn('mission-token', { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
+        await callFn(TOKEN_FN_PRIVATE, { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
         S.privatePass = pass; closeOv('privPassModal'); openPrivatePrompt();
     } catch (e) {
         err.textContent = ERR[e.message] || 'Não foi possível validar a senha.'; ok.disabled = false; $('privPass').select();
@@ -1036,11 +1037,12 @@ async function _startAdventure(loadout, advType) {
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
         if (advType === ADV_PRIVATE) { body.private_password = S.privatePass; body.private_prompt = S.privatePrompt; }   // servidor revalida a senha e injeta o prompt no Mestre
-        ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        ctx = await callFn(advType === ADV_PRIVATE ? TOKEN_FN_PRIVATE : 'mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
+        if (S.adv.advType === ADV_PRIVATE) { enterEpilogue(S.adv); S.adv.delivered = true; }   // Modo Privado: sem missão, chefe ou dados; libera 'Finalizar' e o diálogo longo desde o início
         await connectLive(false);
     } catch (e) {
         console.error('[diarias] falha ao iniciar:', e);
@@ -1141,6 +1143,12 @@ function recapText(adv, spoke = false) {
     const hist = adv.hist.slice(-14).map((h) => `${h.who}: ${h.text}`);
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
+    if (adv.advType === ADV_PRIVATE) {
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena do Modo Privado, sem recomeçar e sem repetir a abertura. Herói: ${adv.hero.name}. Não há dados, combate nem objetivo: apenas diálogo e interpretação do roteiro do jogador. `
+            + `Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+            + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
+            + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a cena.' : 'Retome com UMA frase curta, voltando à conversa de onde parou, e espere o jogador.');
+    }
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
         + (adv.modoX ? 'NÃO há mais rolagens de dados: não chame roll_check. ' : '') + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo, banquetes, festas e passeios até o jogador pedir para finalizar. ' + (adv.delivered ? 'O objetivo JÁ foi entregue ao NPC inicial. ' : 'Se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ') + 'NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
@@ -1245,7 +1253,7 @@ async function onLiveMessage(msg) {
                 if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
                 if (adv.youBuf) { adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) }); adv.detourTurns = (adv.detourTurns || 0) + 1; }
                 if (adv.hist.length > 24) adv.hist.splice(0, adv.hist.length - 24);
-                adv.masterBuf = ''; adv.youBuf = ''; adv.kwScanned = 0; $('capYou').textContent = ''; adv.newTurn = false;
+                adv.masterBuf = ''; adv.youBuf = ''; adv.dlgMarked = false; adv.kwScanned = 0; $('capYou').textContent = ''; adv.newTurn = false;
             }
             adv.masterBuf += sc.outputTranscription.text;
             sceneFromKeywords(adv);                                  // palavra-chave do cenário dita pelo Mestre troca o visual
@@ -1257,11 +1265,11 @@ async function onLiveMessage(msg) {
             adv.youBuf += sc.inputTranscription.text;
             if (adv.long) onPlayerSpeechLong(adv);
             checkSpecialCommand(adv);
+            checkDialogCommand(adv);
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
         if (sc.turnComplete) {
             adv.newTurn = true; adv.turnDone = true; if (adv.long) scheduleLong(adv);
-            if (adv.finishAfterBriga && adv.brigaFechoSent) { adv.finishAfterBriga = false; setTimeout(() => finalizeNow(adv), 2500); }   // fecho da briga dito: agora sim a despedida
         }
     }
 
@@ -1379,6 +1387,7 @@ function openBagView() {
 }
 
 function useHint(id, adv) {
+    if (adv.advType === ADV_PRIVATE) return 'Item gasto. Neste modo o efeito SEMPRE funciona por completo, sem dado e sem falha. Narre o uso com sucesso e continue a cena; depois PARE e espere o jogador.';
     if (id === 'enc_critico') return 'Item gasto. O PRÓXIMO ataque bem-sucedido do herói causará o DOBRO de dano (o jogo aplica sozinho; se o ataque falhar, o encantamento continua válido). Narre o herói canalizando o poder, sem rolar dado agora. ' + nextStep(adv);
     if (id.startsWith('enc_') && id !== 'enc_fogo' && id !== 'enc_gelo') return 'Item gasto. Agora chame roll_check (facil ou normal; dificil contra alvos fortes) para decidir se o efeito funcionou.';
     return 'Item gasto. Narre o uso. ' + nextStep(adv);
@@ -1418,11 +1427,12 @@ function toolStatus(adv) {
 const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
 function checkSpecialCommand(adv) {
-    if (!adv || adv.specialModal || adv.finished) return;
+    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_PRIVATE) return;
     if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
 function openSpecialModal(adv) {
     if (!adv || adv.finished || adv.specialModal) return;
+    if (adv.advType === ADV_PRIVATE) { toast('Códigos especiais não se aplicam ao Modo Privado.'); return; }
     adv.specialModal = true;
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
@@ -1480,7 +1490,7 @@ async function onToolCall(calls) {
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
             } else if (c.name === 'roll_check') {
-                out = adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.modoX ? { ok: true, resultado: 'success', instrucao: 'Objetivo já cumprido (código especial): não há mais dados. Narre o êxito e continue o epílogo.' } : await doRoll(a);
+                out = adv.advType === ADV_PRIVATE ? { ok: true, resultado: 'success', instrucao: 'Modo Privado: não há dados, tudo o que o herói tenta dá CERTO. Narre o êxito e continue a cena.' } : adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.modoX ? { ok: true, resultado: 'success', instrucao: 'Objetivo já cumprido (código especial): não há mais dados. Narre o êxito e continue o epílogo.' } : await doRoll(a);
             } else if (c.name === 'start_combat') {
                 out = toolStartCombat(adv, a);
             } else if (c.name === 'damage') {
@@ -1560,35 +1570,50 @@ async function doRoll(args) {
 
 // ---------------------------------------------------------------------
 // FALAS LONGAS (o Gemini Live responde curto): o JS envia "[SISTEMA] CONTINUE" a cada fim de turno para parecer UMA fala só.
-//   sermao: pregação de Pantokrator aceita pelo jogador, mínimo 3 min (modos comuns)
-//   briga : discussão de ciúmes no epílogo do Salão do Amor, mínimo 2 min
+//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator; na Fenda Temporal, Jesus Cristo), mínimo 3 min (modos comuns)
+//   dialogo: DIÁLOGO LONGO do Modo Privado: NPCs conversam entre si em primeira pessoa, mínimo 2 min. O jogador ativa por voz
+//            ("Diálogo longo", "Ativar diálogo longo", "Ativar diálogo longo entre (npcs)"); pode repetir quantas vezes quiser.
 // Passado o mínimo, o JS manda o fecho. Nos outros momentos NÃO há continuação forçada.
 // ---------------------------------------------------------------------
-const LONG_MIN_MS = { sermao: 3 * 60 * 1000, briga: 2 * 60 * 1000 }, LONG_MAX_TURNS = 14;
+const LONG_MIN_MS = { sermao: 3 * 60 * 1000, dialogo: 2 * 60 * 1000 }, LONG_MAX_TURNS = 14;
 
-function startLong(adv, kind) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0 }; }
+function startLong(adv, kind, extra) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0, ...(extra || {}) }; adv.dlgReqAt = 0; }
 function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; }
+
+const cleanNpcs = (t) => String(t || '').replace(/[\u0000-\u001f\u007f"'`{}<>\\]/g, ' ').replace(/\s+/g, ' ').replace(/[.!?…,;:\s]+$/, '').trim().slice(0, 120);
 
 function toolModoLongo(adv, a) {
     const tipo = String(a.tipo || '');
     if (!adv.epilogue) return { ok: false, erro: 'Fala longa só existe no epílogo (depois de objective_complete).' };
     if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
-    if (tipo === 'briga') {
-        if (!isSalao(adv.advType)) return { ok: false, erro: 'A discussão de ciúmes só existe no Salão do Amor.' };
-        if (adv.brigaDone) return { ok: false, erro: 'A interrupção de ciúmes já aconteceu. Siga o romance.' };
-        adv.brigaDone = true; startLong(adv, 'briga');
-        return { ok: true, instrucao: 'Discussão LIGADA. Faça agora a ENTRADA do(a) outro(a) convidado(a) ciumento(a), que invade a cena e implica com o par, e comece a discussão engraçada; o par rebate à altura. NÃO conclua nem pergunte nada ao herói: o jogo enviará "[SISTEMA] CONTINUE" (mínimo 2 minutos) e mandará o fecho no final.' };
+    if (tipo === 'dialogo') {
+        if (adv.advType !== ADV_PRIVATE) return { ok: false, erro: 'O diálogo longo só existe no Modo Privado.' };
+        const npcs = cleanNpcs(a.npcs) || cleanNpcs(adv.dlgNpcs);
+        startLong(adv, 'dialogo', { npcs });
+        return { ok: true, instrucao: 'Diálogo longo LIGADO' + (npcs ? ' entre ' + npcs : ' (escolha os NPCs do roteiro que fizerem mais sentido agora)') + '. Comece AGORA o diálogo EM PRIMEIRA PESSOA entre os NPCs (no máximo uma frase curta de cena antes), de acordo com o roteiro do jogador, alternando as falas e deixando claro quem fala. NÃO conclua e NÃO pergunte nada ao herói: o jogo enviará "[SISTEMA] CONTINUE" (mínimo 2 minutos) e mandará o fecho no final.' };
     }
     if (tipo === 'sermao') {
-        if (isSalao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação. Siga o romance.' };
+        if (isSalao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação.' };
         startLong(adv, 'sermao');
-        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
+        return adv.advType === 'fenda_temporal'
+            ? { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema e comece a pregação cristã na voz de um NPC sábio do evento, com JESUS CRISTO como centro dos ensinamentos (mundo real, sem Aden), e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' }
+            : { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
     }
-    return { ok: false, erro: 'tipo inválido (use sermao ou briga).' };
+    return { ok: false, erro: 'tipo inválido (use sermao' + (adv.advType === ADV_PRIVATE ? ' ou dialogo' : '') + ').' };
+}
+
+// Detecta o comando de voz "diálogo longo" na transcrição do jogador. A ferramenta modo_longo é o caminho normal;
+// se o Mestre não a chamar em alguns segundos, o jogo reforça com uma nota (rede de segurança em advTick).
+function checkDialogCommand(adv) {
+    if (!adv || adv.advType !== ADV_PRIVATE || adv.finished || adv.long) return;
+    if (!/dialogo longo/.test(normPt(adv.youBuf))) return;
+    const m = adv.youBuf.match(/di[aá]logo\s+longo(?:\s+entre\s+(.+))?/i);
+    adv.dlgNpcs = m && m[1] ? cleanNpcs(m[1]) : '';
+    if (!adv.dlgMarked) { adv.dlgMarked = true; adv.dlgReqAt = Date.now(); }
 }
 
 function onPlayerSpeechLong(adv) {
-    if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta); a briga continua
+    if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta); o diálogo longo continua
 }
 
 function scheduleLong(adv) {
@@ -1613,17 +1638,17 @@ function tryChain(adv, waited) {
     L.turns++;
     if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
         stopLong(adv);
-        if (L.kind === 'briga') {
-            adv.brigaFechoSent = true;
-            sendText('[SISTEMA] CONTINUE (FECHO DA DISCUSSÃO). Encerre agora a discussão com um desfecho engraçado (o intruso sai bufando, é arrastado, fazem pazes forçadas, etc.) e devolva o clima ao par. '
-                + (adv.finishAfterBriga ? 'NÃO pergunte nada: o herói vai finalizar a aventura em seguida.' : 'Em seguida pergunte ao herói o que ele faz e CALE-SE.'));
+        if (L.kind === 'dialogo') {
+            sendText('[SISTEMA] CONTINUE (FECHO DO DIÁLOGO). Conclua agora o diálogo' + (L.npcs ? ' entre ' + L.npcs : '') + ' num ponto natural, coerente com o roteiro do jogador, e devolva a cena ao herói. Em seguida pergunte ao herói o que ele faz e CALE-SE.');
         } else {
             sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
         }
         return;
     }
-    if (L.kind === 'briga') {
-        sendText('[SISTEMA] CONTINUE a discussão. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, SEM concluir e sem perguntar nada ao herói: o(a) intruso(a) e o par continuam brigando de forma extremamente engraçada, falas curtas e rápidas alternando os dois (deixe claro quem fala), ciúmes, ofensas criativas, exageros, comparações absurdas, o par rebatendo à altura, o herói sendo puxado pelos dois; pode escalar para empurrões e tapas cômicos (sem ferir de verdade). 5 a 8 frases.');
+    if (L.kind === 'dialogo') {
+        sendText('[SISTEMA] CONTINUE o diálogo' + (L.npcs ? ' entre ' + L.npcs : ' entre os NPCs') + '. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, SEM concluir e sem perguntar nada ao herói: falas em PRIMEIRA PESSOA alternando os personagens (deixe claro quem fala), cada um com personalidade, emoção e jeito de falar próprios, de acordo com o roteiro do jogador; aprofunde o assunto, a tensão, o humor e a intimidade, sem pressa. 5 a 8 frases.');
+    } else if (adv.advType === 'fenda_temporal') {
+        sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos e parábolas de Jesus Cristo, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
     } else {
         sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
     }
@@ -1750,13 +1775,6 @@ function openFinishConfirm() {
 function confirmFinish() {
     closeOv('finishModal');
     const a = S.adv; if (!a || a.finished || a.playerEnd) return;
-    // Salão do Amor: mesmo que o jogador queira finalizar, a interrupção de ciúmes acontece antes (se ainda couber no tempo)
-    if (isSalao(a.advType) && a.epilogue && !a.brigaDone && !a.finishAfterBriga && a.endMs - serverNow() > 200000) {
-        a.finishAfterBriga = true;
-        queueNote(a, '[SISTEMA] ANTES DE ENCERRAR: o jogador quer finalizar, mas agora acontece a INTERRUPÇÃO DE CIÚMES. Chame modo_longo com tipo "briga" e faça a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par, como combinado. Não faça despedida ainda.', true);
-        setTimeout(() => { if (S.adv === a && a.finishAfterBriga && !a.brigaDone) { a.finishAfterBriga = false; finalizeNow(a); } }, 30000);   // o Mestre não atendeu: finaliza normalmente
-        return;
-    }
     finalizeNow(a);
 }
 
@@ -1802,19 +1820,21 @@ function advTick() {
         for (const m of (adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
+            if (adv.advType === ADV_PRIVATE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a cena a um fechamento natural e caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            else queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
+            if (adv.advType === ADV_PRIVATE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida da cena (30 a 45 segundos), resuma a noite em tom de narrador e chame end_adventure.', true);
+            else queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
     // rede de segurança: o Mestre esqueceu de chamar objective_delivered → libera o botão depois de 3 min de epílogo
     if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
-    // Salão do Amor: a interrupção de ciúmes é obrigatória; se ainda não aconteceu e o tempo está acabando, o Mestre é lembrado
-    if (isSalao(adv.advType) && adv.epilogue && !adv.brigaDone && !adv.brigaNudged && !adv.long && !adv.playerEnd && left < 330000 && left > 200000) {
-        adv.brigaNudged = true;
-        queueNote(adv, '[SISTEMA] HORA DA INTERRUPÇÃO DE CIÚMES: ainda não aconteceu. Chame modo_longo com tipo "briga" e faça agora a entrada engraçada do(a) outro(a) convidado(a) ciumento(a) discutindo com o par.', true);
+    // Modo Privado: rede de segurança do "diálogo longo" (o Mestre não chamou modo_longo depois do pedido do jogador)
+    if (adv.dlgReqAt && !adv.long && adv.turnDone && !adv.toolBusy && !adv.playerEnd && !adv.forced && left > 100000 && Date.now() - adv.dlgReqAt > 9000 && !masterSpeaking(adv.A)) {
+        const n = cleanNpcs(adv.dlgNpcs); adv.dlgReqAt = 0;
+        queueNote(adv, '[SISTEMA] O jogador pediu DIÁLOGO LONGO' + (n ? ' entre ' + n : '') + '. Chame AGORA modo_longo com tipo "dialogo"' + (n ? ' e npcs "' + n + '"' : '') + ' e comece o diálogo em primeira pessoa entre os NPCs, como combinado.', true);
     }
     // o jogador tocou em Finalizar e o Mestre não encerrou: envia nota neutra
     if (adv.playerEnd && Date.now() - adv.playerEndAt > 75000) { finishAdventure(null, true, 'master_timeout'); return; }

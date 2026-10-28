@@ -748,6 +748,7 @@ const ADV_TYPES = [
 ];
 const ADV_PRIVATE = 'privado';                           // Modo Privado: mesma mecânica do Salão do Amor, mas o roteiro é escrito pelo jogador (senha VIP, sem ouro)
 const isSalao = (t) => t === 'salao_amor' || t === ADV_PRIVATE;
+const tokenFn = (t) => (t === ADV_PRIVATE ? 'mission-token-private' : 'mission-token');   // o Modo Privado tem função própria (prompt exclusivo)
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -797,7 +798,7 @@ async function submitPrivatePass() {
     const ok = $('privPassOk'), err = $('privPassErr');
     ok.disabled = true; err.textContent = '';
     try {
-        await callFn('mission-token', { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
+        await callFn('mission-token-private', { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
         S.privatePass = pass; closeOv('privPassModal'); openPrivatePrompt();
     } catch (e) {
         err.textContent = ERR[e.message] || 'Não foi possível validar a senha.'; ok.disabled = false; $('privPass').select();
@@ -991,7 +992,7 @@ async function failStart(why, detail) {
     const slot = adv?.slotId;
     if (adv) { adv.finished = true; teardown(); S.adv = null; }
     closeOv('diceOverlay'); busy(false);
-    if (slot) { try { await callFn('mission-token', { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
+    if (slot) { try { await callFn(tokenFn(adv?.advType), { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
     showView('lobby');
     if (why === BUSY_MSG) toast(why, true); else showDebug(why, detail);
     await refreshState();
@@ -1036,7 +1037,7 @@ async function _startAdventure(loadout, advType) {
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
         if (advType === ADV_PRIVATE) { body.private_password = S.privatePass; body.private_prompt = S.privatePrompt; }   // servidor revalida a senha e injeta o prompt no Mestre
-        ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        ctx = await callFn(tokenFn(advType), body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
@@ -1046,7 +1047,7 @@ async function _startAdventure(loadout, advType) {
         console.error('[diarias] falha ao iniciar:', e);
         if (S.adv) teardown();
         else if (A) { try { A.stream.getTracks().forEach((t) => t.stop()); A.ctx.close(); } catch (_) { /* ok */ } }
-        if (ctx?.slot_id) { try { await callFn('mission-token', { slot_id: ctx.slot_id, action: 'revert' }); } catch (_) { /* ok */ } }
+        if (ctx?.slot_id) { try { await callFn(tokenFn(advType), { slot_id: ctx.slot_id, action: 'revert' }); } catch (_) { /* ok */ } }
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -1110,7 +1111,7 @@ async function connectLive(isRetry) {
             onmessage: (m) => {
                 if (!adv.gotMsg) {
                     adv.gotMsg = true; adv.liveMs = Date.now();
-                    callFn('mission-token', { slot_id: adv.slotId, action: 'live' }).catch(() => {});
+                    callFn(tokenFn(adv.advType), { slot_id: adv.slotId, action: 'live' }).catch(() => {});
                 }
                 adv.reconnects = 0;                                   // conexão saudável: zera as tentativas
                 onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
@@ -1442,7 +1443,7 @@ function openSpecialModal(adv) {
         if (!inp.value) return;
         ok.disabled = true; err.textContent = '';
         try {
-            const r = await callFn('mission-token', { slot_id: adv.slotId, action: 'special_code', password: inp.value });
+            const r = await callFn(tokenFn(adv.advType), { slot_id: adv.slotId, action: 'special_code', password: inp.value });
             close();
             applySpecialCode(adv, r);
         } catch (e) {

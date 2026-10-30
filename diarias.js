@@ -848,6 +848,7 @@ async function confirmFenda() {
                 toast(`Tema confirmado: ${r.theme}`);
             } catch (e) {
                 ok.disabled = false; err.textContent = '';
+                console.warn('[diarias] validate_theme:', e.message, e.detail || '');
                 toast(ERR[e.message] || 'Não foi possível verificar o tema agora.', true);   // ex.: "Esse tema não é válido…"
                 return;
             }

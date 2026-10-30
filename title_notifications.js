@@ -73,7 +73,7 @@ function injectStyles() {
 async function checkTitleUpdates() {
     const { data: cities, error } = await supabase
         .from('guild_battle_cities')
-        .select('id, name, owner, last_title_update')
+        .select('id, name, owner, last_title_update, last_title_by, last_title_target')
         .not('last_title_update', 'is', null);
 
     if (error || !cities) return;
@@ -100,6 +100,11 @@ async function checkTitleUpdates() {
 }
 
 // --- 3. Processamento de Dados ---
+
+// Remove o emoji de título do começo do nome (ex.: "👑 Fulano" -> "Fulano")
+function stripTitleIcons(name) {
+    return (name || '').replace(/(?:👑|⚜️?|🤡|🔰|🛡️?)\s*/gu, '').trim();
+}
 
 async function processUpdates(cities) {
     // Carrega cache de donos anteriores
@@ -150,6 +155,24 @@ async function processUpdates(cities) {
              ownersUpdated = true;
         }
 
+        // Quem fez a última alteração: o regente ou o consorte da cidade?
+        let actorTitle = leaderTitle;
+        let actorName = leaderName;
+        if (city.last_title_by && city.last_title_by !== guildData.leader_id) {
+            const { data: actor } = await supabase
+                .from('players')
+                .select('name, gender')
+                .eq('id', city.last_title_by)
+                .single();
+            if (actor) {
+                const male = (actor.gender || 'Masculino') === 'Masculino';
+                actorName = stripTitleIcons(actor.name);
+                actorTitle = city.id === 1
+                    ? (male ? 'Rei Consorte' : 'Rainha Consorte')
+                    : (male ? 'Lord Consorte' : 'Lady Consorte');
+            }
+        }
+
         // B. Busca Nobres (Títulos normais)
         // Só busca se NÃO for uma troca de dono imediata (para evitar spam se o rei limpar a mesa)
         // Ou busca sempre, mas geralmente na troca de dono os títulos são resetados.
@@ -184,11 +207,13 @@ async function processUpdates(cities) {
             // Isso força mines.js, ruins.js e demais páginas a rebuscarem os
             // nomes corretos na próxima vez que carregarem.
             const freshIds = freshNobles.map(n => n.id).filter(Boolean);
-            invalidateOwnersCache([...new Set([...freshIds, ...previousNobleIds])]);
+            invalidateOwnersCache([...new Set([...freshIds, ...(previousNobleIds || [])])]);
         }
 
         if (nobles && nobles.length > 0) {
-            nobles.forEach(noble => {
+            // Anuncia só o título da última nomeação (e não todos os nobres da cidade a cada alteração).
+            // Em remoções last_title_target é NULL: nada a anunciar, só o cache é atualizado.
+            nobles.filter(noble => noble.id === city.last_title_target).forEach(noble => {
                 let roleName = 'Nobre';
                 if (city.id === 1 && TITLE_MAP[noble.nobless]) {
                     roleName = (noble.gender === 'Masculino') ? TITLE_MAP[noble.nobless].m : TITLE_MAP[noble.nobless].f;
@@ -201,8 +226,8 @@ async function processUpdates(cities) {
 
                 queueNotification({
                     type: 'title_grant',
-                    leaderTitle,
-                    leaderName,
+                    leaderTitle: actorTitle,
+                    leaderName: actorName,
                     targetName: noble.name,
                     roleName,
                     cityName: city.name

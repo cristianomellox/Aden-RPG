@@ -790,6 +790,7 @@ function onTypeClick(t) {
 
 // ----- FENDA TEMPORAL: tema personalizado -----
 // Os ids precisam ser os mesmos de FENDA_PRESETS no mission-token.ts. "outro" abre Sistema (o Mestre escolhe) ou Definir (o jogador digita; o servidor confere).
+const FENDA_DEBUG = true;   // TEMPORÁRIO: mostra o diagnóstico da verificação do tema num modal copiável; ponha false depois
 const FENDA_OPTS = [
     { id: 'julio_cesar', name: 'Júlio César' },
     { id: 'ragnar', name: 'Ragnar Lothbrok' },
@@ -849,6 +850,7 @@ async function confirmFenda() {
             } catch (e) {
                 ok.disabled = false; err.textContent = '';
                 console.warn('[diarias] validate_theme:', e.message, e.detail || '');
+                if (FENDA_DEBUG) showDebug('Diagnóstico do tema', `erro: ${e.message}\n\n${e.detail || '(sem detalhe do servidor: a função mission-token atualizada foi publicada?)'}`);   // temporário: copie e envie
                 toast(ERR[e.message] || 'Não foi possível verificar o tema agora.', true);   // ex.: "Esse tema não é válido…"
                 return;
             }

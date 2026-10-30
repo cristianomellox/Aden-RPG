@@ -255,26 +255,32 @@
         </div>
     </div>
 
-    <!-- ═════════ MODAL: FENDA TEMPORAL — PERSONALIZAR TEMA ═════════ -->
-    <div id="fendaModal" class="overlay dm-modal" aria-hidden="true">
-        <div class="dm-box buy-box fenda-box">
-            <h3 class="dm-title">Fenda Temporal</h3>
-            <p class="dm-sub">Escolha o tema da sua viagem (opcional)</p>
-            <div class="fenda-list" id="fendaList"></div>
-            <div class="fenda-other" id="fendaOther" style="display:none">
-                <div class="fenda-seg">
-                    <button type="button" class="fenda-segbtn sel" id="fendaOtherSys">Sistema</button>
-                    <button type="button" class="fenda-segbtn" id="fendaOtherDef">Definir</button>
-                </div>
-                <div id="fendaCustom" style="display:none">
-                    <input id="fendaText" class="fenda-input" type="text" maxlength="80" autocomplete="off" placeholder="Ex.: Cleópatra, Harry Potter, Napoleão…">
-                </div>
-            </div>
-            <p class="hint" id="fendaHint"></p>
-            <div id="fendaErr" class="fenda-err"></div>
+    <!-- ═════════ MODAL: MODO PRIVADO — SENHA VIP ═════════ -->
+    <div id="privPassModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Modo Privado</h3>
+            <p class="dm-sub">Modo exclusivo para jogadores VIPs</p>
+            <p class="buy-text">Digite a senha para modo vip</p>
+            <input id="privPass" class="priv-input" type="password" inputmode="numeric" autocomplete="off">
+            <div id="privPassErr" class="priv-err"></div>
             <div class="dm-actions">
-                <button class="btn-ghost" id="fendaCancel">Cancelar</button>
-                <button class="btn-epic sm" id="fendaOk">Confirmar</button>
+                <button class="btn-ghost" id="privPassCancel">Cancelar</button>
+                <button class="btn-epic sm" id="privPassOk">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════ MODAL: MODO PRIVADO — PROMPT DO JOGADOR ═════════ -->
+    <div id="privPromptModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box">
+            <h3 class="dm-title">Modo Privado</h3>
+            <p class="dm-sub">Escreva como quer que a história aconteça</p>
+            <textarea id="privPrompt" class="priv-input priv-area" rows="7" maxlength="15000" placeholder="Descreva o cenário, os personagens, o clima e o que o Mestre deve fazer…"></textarea>
+            <div class="priv-count" id="privPromptCount">0/15000</div>
+            <div id="privPromptErr" class="priv-err"></div>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="privPromptCancel">Cancelar</button>
+                <button class="btn-epic sm" id="privPromptOk">Confirmar</button>
             </div>
         </div>
     </div>
@@ -330,7 +336,7 @@
                 <li><b>O Mestre Interativo:</b> Uma Inteligência Artificial avançada atua como o seu Mestre das Lendas. Ele ouve, entende e reage dinamicamente a <b>tudo que você fala</b>. Prepare o microfone, pois sua voz é o seu controle absoluto!</li>
                 <li><b>Ações e Combate por Voz:</b> Esqueça os botões. Quer atacar com sua arma? Quer tentar convencer um guarda ou se esgueirar pelas sombras? <b>Basta dizer ao Mestre!</b> Ele reconhecerá sua intenção e narrará as consequências. Ações de risco rolam um <b>d20</b> automático.</li>
                 <li><b>Sua Bolsa de Itens:</b> Antes da jornada, você escolhe 8 itens. <b>Atenção: você não clica neles para usar.</b> O botão da bolsa serve apenas para você consultar o seu inventário. Para usar uma poção, corda ou encantamento, <b>fale para o Mestre</b> o que deseja usar e ele aplicará o efeito na história.</li>
-                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágica,realizar uma infiltração furtiva, participar do Salão do Amor e conquistar seu par, embarcar na Fenda Temporal e viver um momento da história ou de uma obra famosa, com o tema que você escolher (Júlio César, Joana d'Arc, Os Três Mosqueteiros, Harry Potter, e muito mais), ou mergulhar na Fé Cristã, gratuita, para reviver um acontecimento bíblico ao lado dos apóstolos e conversar com eles. Mais tipos em breve. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
+                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágica,realizar uma infiltração furtiva, participar do Salão do Amor e conquistar seu par, embarcar na Fenda Temporal e reviver um momento da história real do mundo real: Júlio César, Tróia, Batalhas medievais, entre outros. Mais tipos em breve. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
                 <li><b>Epílogo e Liberdade:</b> Cumpriu o objetivo ou derrotou o chefe e ainda sobrou tempo? A aventura não acaba! O jogo entra no <b>Epílogo</b>. Use esse tempo livre para comemorar na taverna, explorar o cenário, conversar com os personagens e descobrir segredos. A imersão é ilimitada até você decidir partir!</li>
                 <li><b>Aventuras Extras:</b> Perdeu o horário ou quer jogar mais? Você pode comprar até <b>3 Aventuras Extras</b> por dia usando Ouro, jogando na hora que quiser, sem precisar disputar as vagas aleatórias.</li>
             </ul>

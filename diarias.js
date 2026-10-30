@@ -40,12 +40,6 @@ const MARKS_SOCIAL = [
     { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: o clima do salão esquenta; se o herói ainda não está conquistando ninguém, os convidados o procuram, puxam conversa e criam oportunidades de aproximação.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: a noite avança; se ninguém foi conquistado ainda, o convidado mais próximo do herói se declara interessado e dá a última chance de conquista; para o epílogo caber no tempo.' },
 ];
-// marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico precisa caber antes da conversa com os apóstolos)
-const MARKS_FE = [
-    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; o acontecimento bíblico precisa estar em andamento, FIEL aos relatos e sem inventar nada.' },
-    { at: 840, text: '[SISTEMA] MARCO (14 min), NÃO responda falando agora; aplique na sua próxima fala: leve o acontecimento ao seu desfecho nos próximos minutos, exatamente como nos relatos; depois chame objective_complete e objective_delivered e passe à conversa em particular com o(s) apóstolo(s).' },
-    { at: 1140, text: '[SISTEMA] MARCO (19 min), NÃO responda falando agora; aplique na sua próxima fala: se o acontecimento ainda não terminou, conclua-o AGORA, fiel aos relatos, para sobrar tempo de conversar com o(s) apóstolo(s).' },
-];
 const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
 const END_OK_S = 20 * 60;                                  // a partir daqui o Mestre pode encerrar quando o jogador escolher concluir
 const GIVEUP_AFTER_S = 75;                                 // sem fim após 15:00 + 75 s → envia nota neutra
@@ -62,8 +56,7 @@ const mmss = (ms) => {
 const ERR = {
     wrong_password: 'Senha incorreta.',
     too_many_attempts: 'Muitas tentativas. Aguarde alguns minutos.',
-    invalid_theme: 'Esse tema não é válido: não encontrei nenhum personagem, evento ou obra com esse nome.',
-    validation_unavailable: 'Não foi possível verificar o tema agora. Tente novamente em instantes.',
+    invalid_prompt: 'Prompt inválido. Escreva o roteiro do Modo Privado.',
     already_today: 'Você já realizou sua aventura de hoje.',
     event_closed: 'O Mestre já partiu deste lugar.',
     event_full: 'As três vagas já foram preenchidas.',
@@ -114,7 +107,7 @@ function showDebug(title, text) {
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
-    advType: null, vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
+    advType: null, vipOwned: new Set(), vipPending: null, privatePass: null, privatePrompt: '',
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -508,7 +501,7 @@ function tickLobby() {
     if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
         const left = new Date(my.start_deadline).getTime() - now;
         $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
-        if (left <= 0) { closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); }
+        if (left <= 0) { closeOv('vipModal'); closeOv('privPassModal'); closeOv('privPromptModal'); closeOv('typeModal'); }
     }
 
     if (my && my.status === 'reserved') {
@@ -687,7 +680,7 @@ const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; retu
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
-    S.advType = null; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null;
+    S.advType = null; S.vipOwned = new Set(); S.vipPending = null; S.privatePass = null; S.privatePrompt = '';
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -729,7 +722,7 @@ function renderBag() {
 }
 
 // ---------------------------------------------------------------------
-// TIPO DE AVENTURA: escolhido depois da bolsa. Comum, Abrigo do frio e Fé Cristã são grátis; as demais são VIP (ouro).
+// TIPO DE AVENTURA: escolhido depois da bolsa. Comum e Abrigo do frio são grátis; as demais são VIP (ouro).
 // Os ids precisam ser os mesmos de ADVENTURE_TYPES no mission-token.ts e da lista no 06_mission_prepare_start.sql.
 // ---------------------------------------------------------------------
 const _sword = (rot) => `<g transform="rotate(${rot} 24 24)"><path d="M24 2l3.6 4.5V28h-7.2V6.5z" fill="#d7dde3" stroke="#8793a0" stroke-width="1.5"/><path d="M24 5v22" stroke="#8793a0" stroke-width="1"/><rect x="14.5" y="28" width="19" height="4" rx="1.6" fill="#e6c27a" stroke="#a88235" stroke-width="1.3"/><path d="M24 32v8" stroke="#6b4a1c" stroke-width="4"/><circle cx="24" cy="42" r="2.5" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/></g>`;
@@ -738,8 +731,6 @@ const ADV_TYPES = [
       svg: _svg(_sword(45) + _sword(-45) + '<circle cx="24" cy="24" r="3" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/>') },
     { id: 'frio', vip: false, name: 'Abrigo do frio', desc: 'Um inverno mágico cai sobre a região. Sobreviva 3 dias num abrigo cheio de medo, fome e criaturas.',
       svg: _svg('<path d="M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 8l5 4 5-4M19 40l5-4 5 4M8 19.5l6 .5-1.5-5.8M40 28.5l-6-.5 1.5 5.8M8 28.5l6-.5-1.5 5.8M40 19.5l-6 .5 1.5-5.8" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4.2" fill="#d8f6ff" stroke="#6fb8d9" stroke-width="1.4"/>') },
-    { id: 'fe_crista', vip: false, name: 'Fé Cristã', desc: 'Você é transportado para a época dos apóstolos para reviver momentos bíblicos e ter uma conversa com eles.',
-      svg: _svg('<circle cx="24" cy="24" r="20" fill="#2a1d0a" stroke="#e6c27a" stroke-width="1.6" opacity=".9"/><path d="M24 7v34M14 18h20" stroke="#ffe27a" stroke-width="5.2"/><path d="M24 7v34M14 18h20" stroke="#a88235" stroke-width="1.4"/><path d="M8 40c5-3 11-3 16 0 5-3 11-3 16 0" stroke="#fff3cf" stroke-width="1.6"/><path d="M24 2v3M10 8l2 2M38 8l-2 2" stroke="#fff3cf" stroke-width="1.6"/>') },
     { id: 'assassino', vip: true, name: 'Quem é o assassino?', desc: 'Um crime abalou o lugar. Interrogue suspeitos, siga pistas e desmascare o culpado.',
       svg: _svg('<circle cx="20" cy="20" r="13" fill="#1c2330" stroke="#e6c27a" stroke-width="3"/><path d="M29.5 29.5L42 42" stroke="#6b4a1c" stroke-width="5.5"/><path d="M29.5 29.5L42 42" stroke="#c9a45c" stroke-width="2" stroke-dasharray="2 4"/><path d="M20 10c3.2 5 6.6 8.2 6.6 11.6a6.6 6.6 0 0 1-13.2 0C13.4 18.2 16.8 15 20 10z" fill="#c0262f" stroke="#ffb3b8" stroke-width="1.4"/><circle cx="17.6" cy="22.4" r="1.8" fill="#ff8c96" stroke="none"/>') },
     { id: 'intriga', vip: true, name: 'Intriga social', desc: 'Banquetes, segredos e alianças. Use lábia e astúcia num jogo de aparências.',
@@ -752,9 +743,12 @@ const ADV_TYPES = [
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
+    { id: 'privado', vip: false, private: true, name: 'Modo Privado', desc: 'Modo exclusivo para jogadores VIPs',
+      svg: _svg(`<path d="M15.5 21v-5.5a8.5 8.5 0 0 1 17 0V21" stroke="#e6c27a" stroke-width="3.4"/><rect x="9" y="20" width="30" height="22" rx="4.5" fill="#2a1740" stroke="#cbb8ff" stroke-width="2"/><path d="M24 36.5c-5-3.4-6.6-6-5.2-8.2 1.2-1.7 3.7-1.5 5.2.5 1.5-2 4-2.2 5.2-.5 1.4 2.2-.2 4.8-5.2 8.2z" fill="#e5334f" stroke="#ffb3c1" stroke-width="1.2"/><polygon points="${_star(39, 9, 4, 4, 1.3)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 10, 4, 3.2, 1)}" fill="#ffe27a" stroke="none"/>`) },
 ];
-const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
-const isSemPregacao = (t) => t === 'salao_amor' || t === ADV_FE;   // sem pregação (modo_longo)
+const ADV_PRIVATE = 'privado';                           // Modo Privado: função própria (mission-token-private). Puro diálogo, sem dados e sem combate, roteiro escrito pelo jogador (senha VIP, sem ouro)
+const isSalao = (t) => t === 'salao_amor' || t === ADV_PRIVATE;   // sem combate e sem pregação
+const TOKEN_FN_PRIVATE = 'mission-token-private';
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -770,7 +764,7 @@ function buildTypeGrid() {
         const owned = S.vipOwned.has(t.id);
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'type-card' + (S.advType === t.id ? ' sel' : ''); b.dataset.id = t.id;
-        const badge = !t.vip ? '' : owned
+        const badge = t.private ? '<em class="vip-badge owned">🔒 VIP</em>' : !t.vip ? '' : owned
             ? '<em class="vip-badge owned">✓ VIP</em>'
             : `<em class="vip-badge"><img src="${COIN_IMG}" width="12" height="12" alt="">${vipCost()}</em>`;
         b.innerHTML = `${badge}<em class="tick">✓</em>${t.svg}<b>${esc(t.name)}</b><span class="desc">${esc(t.desc)}</span>`;
@@ -781,84 +775,47 @@ function buildTypeGrid() {
 }
 
 function onTypeClick(t) {
+    if (t.private) { onPrivateClick(t); return; }                        // Modo Privado: senha + prompt, sem ouro
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
-    if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
-    if (t.id === 'fenda_temporal') { openFenda(); return; }              // Fenda Temporal: personalizar o tema antes de selecionar
-    S.advType = t.id;
+    S.advType = S.advType === t.id ? null : t.id;                        // toggle: clicar de novo desmarca
     buildTypeGrid();
 }
 
-// ----- FENDA TEMPORAL: tema personalizado -----
-// Os ids precisam ser os mesmos de FENDA_PRESETS no mission-token.ts. "outro" abre Sistema (o Mestre escolhe) ou Definir (o jogador digita; o servidor confere).
-const FENDA_DEBUG = true;   // TEMPORÁRIO: mostra o diagnóstico da verificação do tema num modal copiável; ponha false depois
-const FENDA_OPTS = [
-    { id: 'julio_cesar', name: 'Júlio César' },
-    { id: 'ragnar', name: 'Ragnar Lothbrok' },
-    { id: 'alexandre', name: 'Alexandre, o Grande' },
-    { id: 'genghis', name: 'Genghis Khan' },
-    { id: 'cem_anos', name: 'A Guerra dos Cem Anos' },
-    { id: 'mosqueteiros', name: 'Os Três Mosqueteiros' },
-    { id: 'joana', name: "Joana d'Arc" },
-    { id: 'outro', name: 'Outro' },
-];
-function openFenda() {
-    const f = S.fenda || {};
-    S.fendaDraft = { choice: f.uiChoice || null, other: f.uiOther || 'sistema', text: f.uiText || '' };
-    $('fendaText').value = S.fendaDraft.text; $('fendaErr').textContent = ''; $('fendaOk').disabled = false;
-    buildFendaList();
-    openOv('fendaModal');
+// ----- MODO PRIVADO: 1) senha VIP (validada no servidor)  2) prompt escrito pelo jogador -----
+const PRIVATE_PROMPT_MIN = 10, PRIVATE_PROMPT_MAX = 15000;
+function onPrivateClick(t) {
+    if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
+    if (S.privatePass) openPrivatePrompt(); else openPrivatePass();
 }
-function buildFendaList() {
-    const d = S.fendaDraft, box = $('fendaList'); box.innerHTML = '';
-    FENDA_OPTS.forEach((o) => {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'fenda-opt' + (d.choice === o.id ? ' sel' : ''); b.dataset.id = o.id;
-        b.innerHTML = `<i class="fenda-tog" aria-hidden="true"></i><span>${esc(o.name)}</span>`;
-        b.onclick = () => { d.choice = d.choice === o.id ? null : o.id; buildFendaList(); };   // toggle: clicar de novo desmarca
-        box.appendChild(b);
-    });
-    const outro = d.choice === 'outro';
-    $('fendaOther').style.display = outro ? '' : 'none';
-    $('fendaOtherSys').classList.toggle('sel', d.other === 'sistema');
-    $('fendaOtherDef').classList.toggle('sel', d.other === 'definir');
-    $('fendaCustom').style.display = outro && d.other === 'definir' ? '' : 'none';
-    $('fendaHint').textContent = !d.choice ? 'Sem escolha, o Mestre decide o tema livremente.'
-        : d.choice !== 'outro' ? ''
-        : d.other === 'sistema' ? 'O Mestre escolherá um tema que não está na lista.'
-        : 'Digite uma pessoa, evento ou obra. O Mestre confere se existe antes de você começar.';
+function openPrivatePass() {
+    $('privPass').value = ''; $('privPassErr').textContent = ''; $('privPassOk').disabled = false;
+    openOv('privPassModal');
+    setTimeout(() => $('privPass').focus(), 60);
 }
-async function confirmFenda() {
-    const d = S.fendaDraft, my = S.state?.my_slot; if (!d) return;
-    const ok = $('fendaOk'), err = $('fendaErr'); err.textContent = '';
-    const keep = { uiChoice: d.choice, uiOther: d.other, uiText: $('fendaText').value };
-    let fenda;
-    if (!d.choice) fenda = { choice: 'livre' };
-    else if (d.choice !== 'outro') fenda = { choice: d.choice };
-    else if (d.other === 'sistema') fenda = { choice: 'sistema' };
-    else {
-        const txt = $('fendaText').value.trim().replace(/\s+/g, ' ');
-        if (txt.length < 3) { err.textContent = 'Digite o tema (pelo menos 3 letras).'; return; }
-        if (!my) return;
-        if (S.fenda?.choice === 'definir' && S.fenda.uiText === txt && S.fenda.theme_proof) fenda = { choice: 'definir', theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo };   // já validado
-        else {
-            ok.disabled = true; err.textContent = 'Verificando o tema…';
-            try {
-                const r = await callFn('mission-token', { slot_id: my.id, action: 'validate_theme', theme: txt });
-                fenda = { choice: 'definir', theme: r.theme, theme_proof: r.theme_proof, mundo: r.mundo };
-                keep.uiText = txt;
-                toast(`Tema confirmado: ${r.theme}`);
-            } catch (e) {
-                ok.disabled = false; err.textContent = '';
-                console.warn('[diarias] validate_theme:', e.message, e.detail || '');
-                if (FENDA_DEBUG) showDebug('Diagnóstico do tema', `erro: ${e.message}\n\n${e.detail || '(sem detalhe do servidor: a função mission-token atualizada foi publicada?)'}`);   // temporário: copie e envie
-                toast(ERR[e.message] || 'Não foi possível verificar o tema agora.', true);   // ex.: "Esse tema não é válido…"
-                return;
-            }
-            ok.disabled = false;
-        }
+async function submitPrivatePass() {
+    const pass = $('privPass').value, my = S.state?.my_slot;
+    if (!pass || !my) return;
+    const ok = $('privPassOk'), err = $('privPassErr');
+    ok.disabled = true; err.textContent = '';
+    try {
+        await callFn(TOKEN_FN_PRIVATE, { slot_id: my.id, action: 'private_check', password: pass });   // só o servidor conhece a senha
+        S.privatePass = pass; closeOv('privPassModal'); openPrivatePrompt();
+    } catch (e) {
+        err.textContent = ERR[e.message] || 'Não foi possível validar a senha.'; ok.disabled = false; $('privPass').select();
     }
-    S.fenda = { ...fenda, ...keep }; S.advType = 'fenda_temporal';
-    closeOv('fendaModal'); buildTypeGrid();
+}
+function openPrivatePrompt() {
+    const ta = $('privPrompt'); ta.value = S.privatePrompt || '';
+    $('privPromptErr').textContent = ''; updatePrivCount();
+    openOv('privPromptModal');
+    setTimeout(() => ta.focus(), 60);
+}
+function updatePrivCount() { $('privPromptCount').textContent = `${$('privPrompt').value.length}/${PRIVATE_PROMPT_MAX}`; }
+function confirmPrivatePrompt() {
+    const txt = $('privPrompt').value.trim();
+    if (txt.length < PRIVATE_PROMPT_MIN) { $('privPromptErr').textContent = `Escreva pelo menos ${PRIVATE_PROMPT_MIN} caracteres.`; return; }
+    S.privatePrompt = txt.slice(0, PRIVATE_PROMPT_MAX); S.advType = ADV_PRIVATE;
+    closeOv('privPromptModal'); buildTypeGrid();
 }
 
 function openVipConfirm(t) {
@@ -873,9 +830,7 @@ function openVipConfirm(t) {
 
 function confirmVip() {
     const t = S.vipPending; closeOv('vipModal'); if (!t) return;
-    S.vipOwned.add(t.id); S.vipPending = null;                           // "adquirida" (o ouro é cobrado ao começar)
-    if (t.id === 'fenda_temporal') { buildTypeGrid(); openFenda(); return; }   // Fenda Temporal: personaliza o tema antes de selecionar
-    S.advType = t.id;
+    S.vipOwned.add(t.id); S.advType = t.id; S.vipPending = null;         // "adquirida": fica selecionada (o ouro é cobrado ao começar)
     buildTypeGrid();
 }
 
@@ -1071,7 +1026,7 @@ function clearDiariasDot() {
 
 async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal');
+    closeOv('vipModal'); closeOv('privPassModal'); closeOv('privPromptModal'); closeOv('typeModal'); closeOv('itemsModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -1081,12 +1036,13 @@ async function _startAdventure(loadout, advType) {
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
-        if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
-        ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        if (advType === ADV_PRIVATE) { body.private_password = S.privatePass; body.private_prompt = S.privatePrompt; }   // servidor revalida a senha e injeta o prompt no Mestre
+        ctx = await callFn(advType === ADV_PRIVATE ? TOKEN_FN_PRIVATE : 'mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
+        if (S.adv.advType === ADV_PRIVATE) { enterEpilogue(S.adv); S.adv.delivered = true; }   // Modo Privado: sem missão, chefe ou dados; libera 'Finalizar' e o diálogo longo desde o início
         await connectLive(false);
     } catch (e) {
         console.error('[diarias] falha ao iniciar:', e);
@@ -1187,12 +1143,11 @@ function recapText(adv, spoke = false) {
     const hist = adv.hist.slice(-14).map((h) => `${h.who}: ${h.text}`);
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
-    if (adv.advType === ADV_FE) {
-        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena da Fé Cristã, sem recomeçar e sem repetir a abertura, SEMPRE fiel aos relatos bíblicos e sem inventar nada. Herói: ${adv.hero.name}. Não há dados, combate nem chefe. `
-            + (adv.epilogue ? 'O acontecimento JÁ terminou: vocês estão na conversa em particular com o(s) apóstolo(s); continue-a. ' : 'O acontecimento ainda está em andamento: continue-o do ponto em que parou. ')
+    if (adv.advType === ADV_PRIVATE) {
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena do Modo Privado, sem recomeçar e sem repetir a abertura. Herói: ${adv.hero.name}. Não há dados, combate nem objetivo: apenas diálogo e interpretação do roteiro do jogador. `
             + `Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
             + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
-            + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, e espere o jogador.');
+            + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a cena.' : 'Retome com UMA frase curta, voltando à conversa de onde parou, e espere o jogador.');
     }
     return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura, sem recomeçar e sem repetir a abertura. `
         + `Herói: ${adv.hero.name}, HP ${adv.hp}%. ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; o combate só termina com a morte dele). ` : 'Sem combate no momento. ')
@@ -1298,7 +1253,7 @@ async function onLiveMessage(msg) {
                 if (adv.masterBuf) adv.hist.push({ who: 'Mestre', text: adv.masterBuf.slice(-320) });
                 if (adv.youBuf) { adv.hist.push({ who: 'Jogador', text: adv.youBuf.trim().slice(-200) }); adv.detourTurns = (adv.detourTurns || 0) + 1; }
                 if (adv.hist.length > 24) adv.hist.splice(0, adv.hist.length - 24);
-                adv.masterBuf = ''; adv.youBuf = ''; adv.kwScanned = 0; $('capYou').textContent = ''; adv.newTurn = false;
+                adv.masterBuf = ''; adv.youBuf = ''; adv.dlgMarked = false; adv.kwScanned = 0; $('capYou').textContent = ''; adv.newTurn = false;
             }
             adv.masterBuf += sc.outputTranscription.text;
             sceneFromKeywords(adv);                                  // palavra-chave do cenário dita pelo Mestre troca o visual
@@ -1310,6 +1265,7 @@ async function onLiveMessage(msg) {
             adv.youBuf += sc.inputTranscription.text;
             if (adv.long) onPlayerSpeechLong(adv);
             checkSpecialCommand(adv);
+            checkDialogCommand(adv);
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
         if (sc.turnComplete) {
@@ -1431,7 +1387,7 @@ function openBagView() {
 }
 
 function useHint(id, adv) {
-    if (adv.advType === ADV_FE) return 'Item gasto. Neste tipo os itens NÃO alteram os acontecimentos bíblicos: narre o uso brevemente, sem mudar nada do relato, e continue a cena fiel aos relatos; depois PARE e espere o jogador.';
+    if (adv.advType === ADV_PRIVATE) return 'Item gasto. Neste modo o efeito SEMPRE funciona por completo, sem dado e sem falha. Narre o uso com sucesso e continue a cena; depois PARE e espere o jogador.';
     if (id === 'enc_critico') return 'Item gasto. O PRÓXIMO ataque bem-sucedido do herói causará o DOBRO de dano (o jogo aplica sozinho; se o ataque falhar, o encantamento continua válido). Narre o herói canalizando o poder, sem rolar dado agora. ' + nextStep(adv);
     if (id.startsWith('enc_') && id !== 'enc_fogo' && id !== 'enc_gelo') return 'Item gasto. Agora chame roll_check (facil ou normal; dificil contra alvos fortes) para decidir se o efeito funcionou.';
     return 'Item gasto. Narre o uso. ' + nextStep(adv);
@@ -1471,12 +1427,12 @@ function toolStatus(adv) {
 const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
 function checkSpecialCommand(adv) {
-    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE) return;
+    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_PRIVATE) return;
     if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
 function openSpecialModal(adv) {
     if (!adv || adv.finished || adv.specialModal) return;
-    if (adv.advType === ADV_FE) { toast('Códigos especiais não se aplicam à Fé Cristã.'); return; }
+    if (adv.advType === ADV_PRIVATE) { toast('Códigos especiais não se aplicam ao Modo Privado.'); return; }
     adv.specialModal = true;
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
@@ -1534,7 +1490,7 @@ async function onToolCall(calls) {
             if (c.name === 'set_scene') {
                 setScene(String(a.scene || ''));
             } else if (c.name === 'roll_check') {
-                out = adv.advType === ADV_FE ? { ok: true, resultado: 'success', instrucao: 'Fé Cristã: não há dados. Os acontecimentos seguem EXATAMENTE como nos relatos bíblicos e o herói não os altera. Narre apenas o que o relato diz, sem criar fatos novos, e continue.' } : adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.modoX ? { ok: true, resultado: 'success', instrucao: 'Objetivo já cumprido (código especial): não há mais dados. Narre o êxito e continue o epílogo.' } : await doRoll(a);
+                out = adv.advType === ADV_PRIVATE ? { ok: true, resultado: 'success', instrucao: 'Modo Privado: não há dados, tudo o que o herói tenta dá CERTO. Narre o êxito e continue a cena.' } : adv.dead ? { ok: false, erro: 'O herói já caiu.' } : adv.modoX ? { ok: true, resultado: 'success', instrucao: 'Objetivo já cumprido (código especial): não há mais dados. Narre o êxito e continue o epílogo.' } : await doRoll(a);
             } else if (c.name === 'start_combat') {
                 out = toolStartCombat(adv, a);
             } else if (c.name === 'damage') {
@@ -1614,12 +1570,14 @@ async function doRoll(args) {
 
 // ---------------------------------------------------------------------
 // FALAS LONGAS (o Gemini Live responde curto): o JS envia "[SISTEMA] CONTINUE" a cada fim de turno para parecer UMA fala só.
-//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator; na Fenda Temporal, Jesus Cristo), mínimo 3 min (não existe no Salão do Amor nem na Fé Cristã)
+//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator; na Fenda Temporal, Jesus Cristo), mínimo 3 min (modos comuns)
+//   dialogo: DIÁLOGO LONGO do Modo Privado: NPCs conversam entre si em primeira pessoa, mínimo 2 min. O jogador ativa por voz
+//            ("Diálogo longo", "Ativar diálogo longo", "Ativar diálogo longo entre (npcs)"); pode repetir quantas vezes quiser.
 // Passado o mínimo, o JS manda o fecho. Nos outros momentos NÃO há continuação forçada.
 // ---------------------------------------------------------------------
-const LONG_MIN_MS = { sermao: 3 * 60 * 1000 }, LONG_MAX_TURNS = 14;
+const LONG_MIN_MS = { sermao: 3 * 60 * 1000, dialogo: 2 * 60 * 1000 }, LONG_MAX_TURNS = 14;
 
-function startLong(adv, kind, extra) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0, ...(extra || {}) }; }
+function startLong(adv, kind, extra) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0, ...(extra || {}) }; adv.dlgReqAt = 0; }
 function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; }
 
 const cleanNpcs = (t) => String(t || '').replace(/[\u0000-\u001f\u007f"'`{}<>\\]/g, ' ').replace(/\s+/g, ' ').replace(/[.!?…,;:\s]+$/, '').trim().slice(0, 120);
@@ -1628,18 +1586,34 @@ function toolModoLongo(adv, a) {
     const tipo = String(a.tipo || '');
     if (!adv.epilogue) return { ok: false, erro: 'Fala longa só existe no epílogo (depois de objective_complete).' };
     if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
+    if (tipo === 'dialogo') {
+        if (adv.advType !== ADV_PRIVATE) return { ok: false, erro: 'O diálogo longo só existe no Modo Privado.' };
+        const npcs = cleanNpcs(a.npcs) || cleanNpcs(adv.dlgNpcs);
+        startLong(adv, 'dialogo', { npcs });
+        return { ok: true, instrucao: 'Diálogo longo LIGADO' + (npcs ? ' entre ' + npcs : ' (escolha os NPCs do roteiro que fizerem mais sentido agora)') + '. Comece AGORA o diálogo EM PRIMEIRA PESSOA entre os NPCs (no máximo uma frase curta de cena antes), de acordo com o roteiro do jogador, alternando as falas e deixando claro quem fala. NÃO conclua e NÃO pergunte nada ao herói: o jogo enviará "[SISTEMA] CONTINUE" (mínimo 2 minutos) e mandará o fecho no final.' };
+    }
     if (tipo === 'sermao') {
-        if (isSemPregacao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação.' };
+        if (isSalao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação.' };
         startLong(adv, 'sermao');
         return adv.advType === 'fenda_temporal'
             ? { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema e comece a pregação cristã na voz de um NPC sábio do evento, com JESUS CRISTO como centro dos ensinamentos (mundo real, sem Aden), e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' }
             : { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
     }
-    return { ok: false, erro: 'tipo inválido (use sermao).' };
+    return { ok: false, erro: 'tipo inválido (use sermao' + (adv.advType === ADV_PRIVATE ? ' ou dialogo' : '') + ').' };
+}
+
+// Detecta o comando de voz "diálogo longo" na transcrição do jogador. A ferramenta modo_longo é o caminho normal;
+// se o Mestre não a chamar em alguns segundos, o jogo reforça com uma nota (rede de segurança em advTick).
+function checkDialogCommand(adv) {
+    if (!adv || adv.advType !== ADV_PRIVATE || adv.finished || adv.long) return;
+    if (!/dialogo longo/.test(normPt(adv.youBuf))) return;
+    const m = adv.youBuf.match(/di[aá]logo\s+longo(?:\s+entre\s+(.+))?/i);
+    adv.dlgNpcs = m && m[1] ? cleanNpcs(m[1]) : '';
+    if (!adv.dlgMarked) { adv.dlgMarked = true; adv.dlgReqAt = Date.now(); }
 }
 
 function onPlayerSpeechLong(adv) {
-    if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta)
+    if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta); o diálogo longo continua
 }
 
 function scheduleLong(adv) {
@@ -1664,10 +1638,16 @@ function tryChain(adv, waited) {
     L.turns++;
     if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
         stopLong(adv);
-        sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        if (L.kind === 'dialogo') {
+            sendText('[SISTEMA] CONTINUE (FECHO DO DIÁLOGO). Conclua agora o diálogo' + (L.npcs ? ' entre ' + L.npcs : '') + ' num ponto natural, coerente com o roteiro do jogador, e devolva a cena ao herói. Em seguida pergunte ao herói o que ele faz e CALE-SE.');
+        } else {
+            sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        }
         return;
     }
-    if (adv.advType === 'fenda_temporal') {
+    if (L.kind === 'dialogo') {
+        sendText('[SISTEMA] CONTINUE o diálogo' + (L.npcs ? ' entre ' + L.npcs : ' entre os NPCs') + '. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, SEM concluir e sem perguntar nada ao herói: falas em PRIMEIRA PESSOA alternando os personagens (deixe claro quem fala), cada um com personalidade, emoção e jeito de falar próprios, de acordo com o roteiro do jogador; aprofunde o assunto, a tensão, o humor e a intimidade, sem pressa. 5 a 8 frases.');
+    } else if (adv.advType === 'fenda_temporal') {
         sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos e parábolas de Jesus Cristo, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
     } else {
         sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
@@ -1837,20 +1817,25 @@ function advTick() {
 
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
-        for (const m of (adv.advType === ADV_FE ? MARKS_FE : adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
+        for (const m of (adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            if (adv.advType === ADV_PRIVATE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a cena a um fechamento natural e caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
             else queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
+            if (adv.advType === ADV_PRIVATE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida da cena (30 a 45 segundos), resuma a noite em tom de narrador e chame end_adventure.', true);
             else queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
     // rede de segurança: o Mestre esqueceu de chamar objective_delivered → libera o botão depois de 3 min de epílogo
     if (adv.epilogue && !adv.delivered && !adv.dead && adv.epilogueAt && Date.now() - adv.epilogueAt > 180000) { adv.delivered = true; syncEpilogueUI(); }
+    // Modo Privado: rede de segurança do "diálogo longo" (o Mestre não chamou modo_longo depois do pedido do jogador)
+    if (adv.dlgReqAt && !adv.long && adv.turnDone && !adv.toolBusy && !adv.playerEnd && !adv.forced && left > 100000 && Date.now() - adv.dlgReqAt > 9000 && !masterSpeaking(adv.A)) {
+        const n = cleanNpcs(adv.dlgNpcs); adv.dlgReqAt = 0;
+        queueNote(adv, '[SISTEMA] O jogador pediu DIÁLOGO LONGO' + (n ? ' entre ' + n : '') + '. Chame AGORA modo_longo com tipo "dialogo"' + (n ? ' e npcs "' + n + '"' : '') + ' e comece o diálogo em primeira pessoa entre os NPCs, como combinado.', true);
+    }
     // o jogador tocou em Finalizar e o Mestre não encerrou: envia nota neutra
     if (adv.playerEnd && Date.now() - adv.playerEndAt > 75000) { finishAdventure(null, true, 'master_timeout'); return; }
     if (!adv.dead) checkDetour(adv);
@@ -1991,11 +1976,12 @@ function bindUI() {
     $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar
     $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
     $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
-    $('fendaCancel').onclick = () => closeOv('fendaModal');
-    $('fendaOk').onclick = confirmFenda;
-    $('fendaOtherSys').onclick = () => { if (S.fendaDraft) { S.fendaDraft.other = 'sistema'; buildFendaList(); } };
-    $('fendaOtherDef').onclick = () => { if (S.fendaDraft) { S.fendaDraft.other = 'definir'; buildFendaList(); setTimeout(() => $('fendaText').focus(), 60); } };
-    $('fendaText').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmFenda(); });
+    $('privPassCancel').onclick = () => closeOv('privPassModal');
+    $('privPassOk').onclick = submitPrivatePass;
+    $('privPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPrivatePass(); });
+    $('privPromptCancel').onclick = () => closeOv('privPromptModal');
+    $('privPromptOk').onclick = confirmPrivatePrompt;
+    $('privPrompt').addEventListener('input', updatePrivCount);
     $('vipCancel').onclick = () => { S.vipPending = null; closeOv('vipModal'); };
     $('vipConfirm').onclick = confirmVip;
     $('buyCancel').onclick = () => closeOv('buyModal');

@@ -523,9 +523,22 @@ body.hud-hidden .hud-toggle-btn { top: 0; }
 @keyframes frostBreath { 0%, 100% { opacity: .80; } 50% { opacity: 1; } }
 body.hud-hidden #frostOverlay { opacity: .6; }
 
-/* ── Modo Privado: modais de senha e prompt ── */
-.priv-input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; color: #fff; font: inherit; font-size: 1rem; }
-.priv-input:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
-.priv-area { resize: vertical; min-height: 120px; max-height: 40vh; line-height: 1.5; font-size: .9rem; }
-.priv-count { margin-top: 4px; text-align: right; font-size: .68em; color: #8f866f; }
-.priv-err { min-height: 1.2em; margin: 6px 0 10px; color: #ff7b7b; font-size: .82em; text-align: center; }
+/* ── Fenda Temporal: personalização do tema ── */
+.fenda-box { max-height: 88vh; display: flex; flex-direction: column; }
+.fenda-list { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; padding: 2px 4px 2px 0; margin: 6px 0 10px; -webkit-overflow-scrolling: touch; }
+.fenda-list::-webkit-scrollbar { width: 3px; } .fenda-list::-webkit-scrollbar-thumb { background: var(--gold-dark); }
+.fenda-opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; cursor: pointer; font: inherit; font-size: .86rem; color: #e0dccc;
+    border-radius: 6px; background: linear-gradient(160deg, rgba(34,28,20,.95), rgba(14,11,8,.97)); border: 1px solid var(--gold-dark); transition: border-color .2s, box-shadow .2s; }
+.fenda-opt:active { transform: scale(.985); }
+.fenda-opt .fenda-tog { position: relative; flex: 0 0 auto; width: 34px; height: 18px; border-radius: 9px; background: #0b0906; border: 1px solid var(--gold-dark); transition: background .2s, border-color .2s; }
+.fenda-opt .fenda-tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #8f866f; transition: transform .2s, background .2s; }
+.fenda-opt.sel { border-color: var(--gold-light); box-shadow: 0 0 12px rgba(230,194,122,.3); color: var(--gold-light); }
+.fenda-opt.sel .fenda-tog { background: rgba(168,130,53,.45); border-color: var(--gold-light); }
+.fenda-opt.sel .fenda-tog::after { transform: translateX(16px); background: var(--gold-light); }
+.fenda-other { margin: 0 0 8px; }
+.fenda-seg { display: flex; gap: 6px; margin-bottom: 8px; }
+.fenda-segbtn { flex: 1; padding: 8px; cursor: pointer; font: inherit; font-size: .82rem; color: #e0dccc; border-radius: 6px; background: #0b0906; border: 1px solid var(--gold-dark); }
+.fenda-segbtn.sel { color: #1a1000; background: linear-gradient(var(--gold-light), var(--gold-base)); border-color: #fff3cf; font-weight: bold; }
+.fenda-input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; color: #fff; font: inherit; font-size: 1rem; }
+.fenda-input:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
+.fenda-err { min-height: 1.2em; margin: 6px 0 10px; color: #ff7b7b; font-size: .82em; text-align: center; }

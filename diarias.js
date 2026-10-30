@@ -754,7 +754,7 @@ const ADV_TYPES = [
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
 ];
 const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
-const isSemPregacao = (t) => t === 'salao_amor' || t === ADV_FE;   // sem pregação (modo_longo)
+const isSemPregacao = (t) => t === 'salao_amor' || t === 'fenda_temporal' || t === ADV_FE;   // sem pregação (modo_longo)
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -1614,7 +1614,7 @@ async function doRoll(args) {
 
 // ---------------------------------------------------------------------
 // FALAS LONGAS (o Gemini Live responde curto): o JS envia "[SISTEMA] CONTINUE" a cada fim de turno para parecer UMA fala só.
-//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator; na Fenda Temporal, Jesus Cristo), mínimo 3 min (não existe no Salão do Amor nem na Fé Cristã)
+//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator), mínimo 3 min (não existe no Salão do Amor, na Fenda Temporal nem na Fé Cristã)
 // Passado o mínimo, o JS manda o fecho. Nos outros momentos NÃO há continuação forçada.
 // ---------------------------------------------------------------------
 const LONG_MIN_MS = { sermao: 3 * 60 * 1000 }, LONG_MAX_TURNS = 14;
@@ -1631,9 +1631,7 @@ function toolModoLongo(adv, a) {
     if (tipo === 'sermao') {
         if (isSemPregacao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação.' };
         startLong(adv, 'sermao');
-        return adv.advType === 'fenda_temporal'
-            ? { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema e comece a pregação cristã na voz de um NPC sábio do evento, com JESUS CRISTO como centro dos ensinamentos (mundo real, sem Aden), e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' }
-            : { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
+        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
     }
     return { ok: false, erro: 'tipo inválido (use sermao).' };
 }
@@ -1667,11 +1665,7 @@ function tryChain(adv, waited) {
         sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
         return;
     }
-    if (adv.advType === 'fenda_temporal') {
-        sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos e parábolas de Jesus Cristo, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
-    } else {
-        sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
-    }
+    sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
 }
 
 // ----- cenário por palavra-chave (mission_scenes.keywords, separadas por vírgula ou ponto e vírgula) -----

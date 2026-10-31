@@ -40,7 +40,7 @@
 
   // ── Tela de "instale o app" com contagem regressiva (substitui o redirect imediato) ──
   // Segundos exibidos antes de mandar o jogador pra /download.
-  const REDIRECT_COUNTDOWN_SECONDS = 15;
+  const REDIRECT_COUNTDOWN_SECONDS = 30;
 
   // true = rastreadores de busca (Googlebot etc.) NÃO são redirecionados nem
   // cobertos pelo overlay: veem a página normal. Recomendado pra indexação.
@@ -48,10 +48,10 @@
   const CRAWLER_UA_RE = /Googlebot|Google-InspectionTool|GoogleOther|AdsBot-Google|Storebot-Google|bingbot|BingPreview|DuckDuckBot|Applebot|YandexBot|Baiduspider/i;
   const isCrawler = CRAWLER_UA_RE.test(navigator.userAgent || '');
 
-  // Módulo ES que monta o skybox dentro do overlay (precisa exportar
-  // `mountGuardSkybox(containerEl)`). Enquanto for null, o overlay usa só a
-  // imagem estática de fundo abaixo.
-  const GUARD_SKYBOX_MODULE = null; // ex.: '/guard_skybox.js'
+  // Módulo ES que monta o skybox (o mesmo da tela de login, com dragões e
+  // pós-processamento) dentro do overlay. Se falhar ao carregar, o overlay
+  // continua funcionando com a imagem estática de fundo abaixo.
+  const GUARD_SKYBOX_MODULE = '/guard_skybox.js';
   const GUARD_FALLBACK_BG   = 'https://aden-rpg.pages.dev/assets/aden_ini.jpg';
 
   // ─────────────────────────────────────────────
@@ -669,8 +669,23 @@
   // ─────────────────────────────────────────────
   // OVERLAY "INSTALE O APP" — skybox + mensagem + contador + botão
   // ─────────────────────────────────────────────
+  // Páginas que não declaram o importmap do Three.js (só o index declara)
+  // precisam dele pro postfx.js. Registrado cedo, antes de qualquer import.
+  function ensureImportMap() {
+    if (document.querySelector('script[type="importmap"]')) return;
+    const im = document.createElement('script');
+    im.type = 'importmap';
+    im.textContent = JSON.stringify({ imports: {
+      'three': 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+      'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/',
+      '@tweenjs/tween.js': 'https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
+    }});
+    document.head.appendChild(im);
+  }
+
   function showInstallCountdown() {
     if (document.getElementById('bg-redirect-overlay')) return;
+    if (GUARD_SKYBOX_MODULE && !isIndex) ensureImportMap();
 
     const RING_C = 2 * Math.PI * 52; // circunferência do círculo (r = 52)
 
@@ -774,11 +789,17 @@
     document.documentElement.classList.add('bg-redirect-lock');
 
     // Skybox (opcional): carregado sob demanda, sem travar a contagem.
+    // Espera o DOM terminar de ser lido: no index o importmap do Three.js
+    // só é declarado mais abaixo no HTML e precisa já estar registrado.
     if (GUARD_SKYBOX_MODULE) {
-      import(GUARD_SKYBOX_MODULE).then(mod => {
-        const mount = mod.mountGuardSkybox || mod.default;
-        if (typeof mount === 'function') return mount(document.getElementById('bg-redirect-sky'));
-      }).catch(err => console.warn('[Aden RPG] Skybox do guard indisponível:', err));
+      const loadSky = () => {
+        import(GUARD_SKYBOX_MODULE).then(mod => {
+          const mount = mod.mountGuardSkybox || mod.default;
+          if (typeof mount === 'function') return mount(document.getElementById('bg-redirect-sky'));
+        }).catch(err => console.warn('[Aden RPG] Skybox do guard indisponível:', err));
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadSky, { once: true });
+      else loadSky();
     }
 
     // Contagem baseada em horário-alvo (não em "ticks"): continua correta

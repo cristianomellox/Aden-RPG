@@ -38,6 +38,22 @@
   // em vez de abrir o fluxo normal de pagamento.
   const RECHARGE_DISABLED = true;
 
+  // ── Tela de "instale o app" com contagem regressiva (substitui o redirect imediato) ──
+  // Segundos exibidos antes de mandar o jogador pra /download.
+  const REDIRECT_COUNTDOWN_SECONDS = 15;
+
+  // true = rastreadores de busca (Googlebot etc.) NÃO são redirecionados nem
+  // cobertos pelo overlay: veem a página normal. Recomendado pra indexação.
+  const SKIP_GATE_FOR_CRAWLERS = true;
+  const CRAWLER_UA_RE = /Googlebot|Google-InspectionTool|GoogleOther|AdsBot-Google|Storebot-Google|bingbot|BingPreview|DuckDuckBot|Applebot|YandexBot|Baiduspider/i;
+  const isCrawler = CRAWLER_UA_RE.test(navigator.userAgent || '');
+
+  // Módulo ES que monta o skybox dentro do overlay (precisa exportar
+  // `mountGuardSkybox(containerEl)`). Enquanto for null, o overlay usa só a
+  // imagem estática de fundo abaixo.
+  const GUARD_SKYBOX_MODULE = null; // ex.: '/guard_skybox.js'
+  const GUARD_FALLBACK_BG   = 'https://aden-rpg.pages.dev/assets/aden_ini.jpg';
+
   // ─────────────────────────────────────────────
   // DETECÇÃO DE PLATAFORMA (definida em platform.js — inclua-o ANTES deste arquivo)
   // ─────────────────────────────────────────────
@@ -649,18 +665,158 @@
     }
   }
 
+  // PWA e TWA (e o APK legado) nunca caem aqui — acesso total liberado.
   // ─────────────────────────────────────────────
-  // 1. GATE DE ACESSO ─ navegador comum é redirecionado pro download
+  // OVERLAY "INSTALE O APP" — skybox + mensagem + contador + botão
+  // ─────────────────────────────────────────────
+  function showInstallCountdown() {
+    if (document.getElementById('bg-redirect-overlay')) return;
+
+    const RING_C = 2 * Math.PI * 52; // circunferência do círculo (r = 52)
+
+    const style = document.createElement('style');
+    style.id = 'bg-redirect-styles';
+    style.textContent = `
+      html.bg-redirect-lock, html.bg-redirect-lock body { overflow: hidden !important; }
+      #bg-redirect-overlay {
+        position: fixed; inset: 0; z-index: 2147483647;
+        display: flex; align-items: center; justify-content: center;
+        background: #0e0a06; overflow: hidden;
+        font-family: 'Cinzel', Georgia, serif;
+        animation: bgRedirFade .35s ease;
+      }
+      @keyframes bgRedirFade { from { opacity: 0; } to { opacity: 1; } }
+      #bg-redirect-sky {
+        position: absolute; inset: 0;
+        background: #0e0a06 url('${GUARD_FALLBACK_BG}') center / cover no-repeat;
+      }
+      #bg-redirect-sky canvas {
+        position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+      }
+      /* vinheta escura: garante leitura do texto sobre qualquer trecho do céu */
+      #bg-redirect-overlay::after {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(ellipse at center,
+          rgba(0,0,0,.55) 0%, rgba(0,0,0,.28) 55%, rgba(0,0,0,.6) 100%);
+      }
+      #bg-redirect-content {
+        position: relative; z-index: 1;
+        display: flex; flex-direction: column; align-items: center;
+        gap: 22px; padding: 24px; max-width: 560px; width: 100%;
+        box-sizing: border-box; text-align: center; color: #fff;
+      }
+      #bg-redirect-msg {
+        margin: 0; font-size: clamp(1.05rem, 4.4vw, 1.5rem);
+        font-weight: 700; line-height: 1.5; letter-spacing: .3px;
+        text-shadow:
+          0 0 4px #000, 0 2px 3px #000, 0 0 12px #000,
+          0 0 24px rgba(0,0,0,.95), 0 0 42px rgba(0,0,0,.9);
+      }
+      #bg-redirect-ring {
+        position: relative; width: 112px; height: 112px;
+        filter: drop-shadow(0 0 8px rgba(0,0,0,.9));
+      }
+      #bg-redirect-ring svg {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        transform: rotate(-90deg);
+      }
+      #bg-redirect-ring circle { fill: rgba(0,0,0,.45); stroke-width: 7; }
+      #bg-redirect-ring .bg-r-track { stroke: rgba(255,255,255,.22); }
+      #bg-redirect-ring .bg-r-prog {
+        stroke: #FFD700; stroke-linecap: round;
+        stroke-dasharray: ${RING_C};
+        stroke-dashoffset: 0;
+        animation: bgRingDrain ${REDIRECT_COUNTDOWN_SECONDS}s linear forwards;
+      }
+      @keyframes bgRingDrain { to { stroke-dashoffset: ${RING_C}; } }
+      #bg-redirect-count {
+        position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        font-size: 2.4rem; font-weight: 900; color: #FFD700;
+        text-shadow: 0 0 6px #000, 0 2px 4px #000, 0 0 18px rgba(0,0,0,.9);
+      }
+      #bg-redirect-btn {
+        background: linear-gradient(to top, #7a4e00, #c98c1a);
+        color: #fff; border: 1px solid #FFD700; border-radius: 10px;
+        padding: 13px 30px; font: inherit; font-size: 1.05rem; font-weight: 700;
+        cursor: pointer; letter-spacing: .4px;
+        text-shadow: 0 1px 3px #000;
+        box-shadow: 0 0 18px rgba(0,0,0,.8), 0 0 14px rgba(201,140,26,.45);
+        transition: filter .2s, transform .1s;
+      }
+      #bg-redirect-btn:hover  { filter: brightness(1.15); }
+      #bg-redirect-btn:active { transform: scale(.97); }
+    `;
+    document.head.appendChild(style);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'bg-redirect-overlay';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.innerHTML = `
+      <div id="bg-redirect-sky"></div>
+      <div id="bg-redirect-content">
+        <p id="bg-redirect-msg">Parece que você não tem Aden RPG Online instalado ainda.
+          Você será redirecionado para a página de download em:</p>
+        <div id="bg-redirect-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="bg-r-track" cx="60" cy="60" r="52"/>
+            <circle class="bg-r-prog"  cx="60" cy="60" r="52"/>
+          </svg>
+          <span id="bg-redirect-count">${REDIRECT_COUNTDOWN_SECONDS}</span>
+        </div>
+        <button id="bg-redirect-btn" type="button">Redirecionar agora!</button>
+      </div>`;
+
+    // Anexa direto no <html>: o guard roda no <head>, antes do <body> existir,
+    // e assim a tela já é coberta desde o primeiro frame.
+    document.documentElement.appendChild(overlay);
+    document.documentElement.classList.add('bg-redirect-lock');
+
+    // Skybox (opcional): carregado sob demanda, sem travar a contagem.
+    if (GUARD_SKYBOX_MODULE) {
+      import(GUARD_SKYBOX_MODULE).then(mod => {
+        const mount = mod.mountGuardSkybox || mod.default;
+        if (typeof mount === 'function') return mount(document.getElementById('bg-redirect-sky'));
+      }).catch(err => console.warn('[Aden RPG] Skybox do guard indisponível:', err));
+    }
+
+    // Contagem baseada em horário-alvo (não em "ticks"): continua correta
+    // mesmo se a aba ficar em segundo plano e o navegador pausar os timers.
+    let redirected = false;
+    const goNow = () => {
+      if (redirected) return;
+      redirected = true;
+      clearInterval(timer);
+      window.location.replace(DOWNLOAD_URL);
+    };
+
+    const deadline = Date.now() + REDIRECT_COUNTDOWN_SECONDS * 1000;
+    const countEl  = overlay.querySelector('#bg-redirect-count');
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      countEl.textContent = left;
+      if (left <= 0) goNow();
+    };
+    const timer = setInterval(tick, 250);
+    document.addEventListener('visibilitychange', tick);
+
+    overlay.querySelector('#bg-redirect-btn').addEventListener('click', goNow);
+  }
+
+  // ─────────────────────────────────────────────
+  // 1. GATE DE ACESSO ─ navegador comum vê o aviso + contagem e vai pro download
   // ─────────────────────────────────────────────
   // PWA e TWA (e o APK legado) nunca caem aqui — acesso total liberado.
-  if (platform.isBrowser && currentPage !== 'download') {
+  // Rastreadores de busca também passam direto (SKIP_GATE_FOR_CRAWLERS).
+  if (platform.isBrowser && currentPage !== 'download' && !(SKIP_GATE_FOR_CRAWLERS && isCrawler)) {
     const mustRedirect = REDIRECT_ALL_PAGES_IF_BROWSER
       ? !PAGES_EXEMPT_FROM_REDIRECT.includes(currentPage)
       : isBlockedPage;
 
     if (mustRedirect) {
-      window.location.replace(DOWNLOAD_URL);
-      return; // Interrompe tudo — a página vai trocar
+      showInstallCountdown();
+      return; // Interrompe o resto do guard — a página vai trocar em instantes
     }
   }
 

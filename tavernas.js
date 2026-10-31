@@ -237,10 +237,23 @@ async function loadOwnersCache() {
 }
 
 // Busca perfis faltantes via Supabase com query direta (sem RPC)
+// Cache NEGATIVO (só em memória): ids já consultados que continuam sem avatar (jogador sem avatar
+// ou inexistente). Antes, como o filtro só olhava "tem avatar?", esses ids eram buscados de novo
+// a cada refreshGlobalAvatars / entrada em sala / re-render da lista.
+const _profileMissAt = {};              // id → timestamp da última consulta sem avatar
+const _PROFILE_MISS_TTL = 10 * 60_000;  // 10 min
+const _profileInflight = new Set();     // ids em consulta (evita pedidos duplicados em paralelo)
 async function fetchMissingProfiles(ids) {
   if (!ids?.length) return;
-  const missing = ids.filter(id => !ownersCache[id]?.avatar_url);
+  const now = Date.now();
+  const missing = [...new Set(ids)].filter(id =>
+    id &&
+    !ownersCache[id]?.avatar_url &&
+    !(_profileMissAt[id] && now - _profileMissAt[id] < _PROFILE_MISS_TTL) &&
+    !_profileInflight.has(id)
+  );
   if (!missing.length) return;
+  missing.forEach(id => _profileInflight.add(id));
   try {
     const sb = getSB();
     if (!sb) return;
@@ -248,12 +261,19 @@ async function fetchMissingProfiles(ids) {
       .from('players')
       .select('id, name, avatar_url, guild_id')
       .in('id', missing);
-    if (error || !data?.length) return;
-    await dbSaveOwners(data);
-    data.forEach(p => {
-      ownersCache[p.id] = { id: p.id, name: p.name, avatar_url: p.avatar_url || null, guild_id: p.guild_id };
-    });
+    if (error) return;   // erro de rede: não marca como "sem avatar" (permite retentativa)
+    const got = data || [];
+    if (got.length) {
+      await dbSaveOwners(got);
+      got.forEach(p => {
+        ownersCache[p.id] = { id: p.id, name: p.name, avatar_url: p.avatar_url || null, guild_id: p.guild_id };
+      });
+    }
+    // Quem veio sem avatar (ou nem veio) entra no cache negativo
+    const tNow = Date.now();
+    missing.forEach(id => { if (!ownersCache[id]?.avatar_url) _profileMissAt[id] = tNow; });
   } catch (e) { console.warn('fetchMissingProfiles:', e); }
+  finally { missing.forEach(id => _profileInflight.delete(id)); }
 }
 
 // ── Mapeamento de Tronos por Cidade ──
@@ -387,14 +407,29 @@ async function openPvChatWithPlayer(playerId, name) {
 window.openPvChatWithPlayer = openPvChatWithPlayer;
 
 // ── Notificação instantânea de PV via Ably (só ativo aqui nas Tavernas) ──
-// Cada jogador escuta seu próprio canal "pv-notify:<id>"; pv.js publica
-// nesse canal do destinatário sempre que envia mensagem/presente/escambo,
-// e aqui isso força o PV a re-sincronizar na hora, sem esperar o polling
-// por tempo do index.html.
+// Canal COMPARTILHADO 'pv-notify' (multiplexado). Antes: 'pv-notify:<id>' — 1 canal
+// por jogador online, e ainda 1 canal extra anexado em cada REMETENTE para cada
+// destinatário que ele já tivesse mensagem (publish anexa o canal), o que estourava
+// o limite de 200 canais simultâneos do plano free.
+// Agora todo mundo assina o mesmo canal e cada evento carrega { to, from, ts };
+// cada cliente ignora localmente o que não é endereçado a ele (mesmo padrão do 'sig:<sala>').
+// Trade-off: cada publish vira fan-out para todos os assinantes (mensagens do Ably).
+// Se isso pesar no futuro, suba PV_NOTIFY_SHARDS (ex.: 4): o jogador passa a usar o
+// canal 'pv-notify:<hash(id) % N>' e o fan-out cai para ~1/N, com só N canais fixos.
+const PV_NOTIFY_SHARDS = 1;
+
+function _tavPvNotifyChannelName(playerId) {
+  if (PV_NOTIFY_SHARDS <= 1) return 'pv-notify';
+  const h = parseInt(String(playerId).replace(/-/g, '').slice(0, 8), 16) || 0;
+  return 'pv-notify:' + (h % PV_NOTIFY_SHARDS);
+}
+
+// pv.js continua chamando window.tavPublishPvNotify(idDoDestinatario) — assinatura inalterada.
 function tavPublishPvNotify(targetPlayerId) {
   try {
-    if (!ablyClient || !targetPlayerId) return;
-    ablyClient.channels.get('pv-notify:' + targetPlayerId).publish('new_message', { from: PLAYER.id, ts: Date.now() });
+    if (!ablyClient || !targetPlayerId || !PLAYER?.id) return;
+    ablyClient.channels.get(_tavPvNotifyChannelName(targetPlayerId))
+      .publish('new_message', { to: targetPlayerId, from: PLAYER.id, ts: Date.now() });
   } catch (_) {}
 }
 window.tavPublishPvNotify = tavPublishPvNotify;
@@ -402,9 +437,11 @@ window.tavPublishPvNotify = tavPublishPvNotify;
 function _tavSubscribePvNotify() {
   try {
     if (!ablyClient || !PLAYER?.id) return;
-    const ch = ablyClient.channels.get('pv-notify:' + PLAYER.id);
+    const ch = ablyClient.channels.get(_tavPvNotifyChannelName(PLAYER.id));
     ch.unsubscribe();
-    ch.subscribe('new_message', () => {
+    ch.subscribe('new_message', (msg) => {
+      // Canal compartilhado: só reage se a mensagem for para mim
+      if (!msg?.data || msg.data.to !== PLAYER.id) return;
       if (typeof window.pvForceRefresh === 'function') window.pvForceRefresh();
     });
   } catch (_) {}
@@ -703,7 +740,22 @@ async function refreshGlobalAvatars() {
 let _presenceHeartbeatTimer = null;
 const PRESENCE_HEARTBEAT_MS = 130_000; // bem abaixo da janela de "stale" da RPC (150s)
 
-async function refreshTavernLobbyCounts() {
+// Throttle: entrar/sair de salas em sequência disparava 1 RPC por saída. Dentro da janela, só
+// re-renderiza com o último mapa em memória (sem rede); chamadas simultâneas dividem a mesma requisição.
+const LOBBY_REFRESH_MIN_MS = 60_000;
+let _lobbyLastFetch = 0;
+let _lobbyInflight  = null;
+function refreshTavernLobbyCounts(force = false) {
+  if (_lobbyInflight) return _lobbyInflight;
+  if (!force && Date.now() - _lobbyLastFetch < LOBBY_REFRESH_MIN_MS) {
+    renderListCards();
+    return Promise.resolve();
+  }
+  _lobbyLastFetch = Date.now();
+  _lobbyInflight = _refreshTavernLobbyCountsNow().finally(() => { _lobbyInflight = null; });
+  return _lobbyInflight;
+}
+async function _refreshTavernLobbyCountsNow() {
   try {
     const sb = getSB();
     if (!sb) return;
@@ -1332,20 +1384,41 @@ function resolveAvatar(clientId, name, size) {
 //  Cache compartilhado: skin_modal_v1_${pid} (24h)
 //  Mesma chave usada por mines, covil, ranking → zero fetch redundante
 // ══════════════════════════════════════════
-const _TAV_SKIN_NS = 'skin_modal_v1_';
+const _TAV_SKIN_NS  = 'skin_modal_v1_';
+const _TAV_SKIN_TTL = 5 * 60 * 1000; // 5 min — skins duram poucos dias, cache longo deixa moldura velha/expirada
 
 function _tavGetSkinCache(pid) {
   try {
     const raw = localStorage.getItem(_TAV_SKIN_NS + pid);
     if (!raw) return undefined;
     const obj = JSON.parse(raw);
-    if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(_TAV_SKIN_NS + pid); return undefined; }
+    const now = Date.now();
+    // `obj.e - now > TTL` → entrada legada gravada com TTL de 24h: descarta (mesma chave, sem migração)
+    if (!obj.e || now >= obj.e || (obj.e - now) > _TAV_SKIN_TTL) { localStorage.removeItem(_TAV_SKIN_NS + pid); return undefined; }
     return obj.v; // { frame_url, video_url }
   } catch(e) { return undefined; }
 }
 
 function _tavSetSkinCache(pid, data) {
-  try { localStorage.setItem(_TAV_SKIN_NS + pid, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+  try { localStorage.setItem(_TAV_SKIN_NS + pid, JSON.stringify({ v: data, e: Date.now() + _TAV_SKIN_TTL })); } catch(e) {}
+}
+
+// Skin do PRÓPRIO jogador: usa aden_skin_cache_v3 (skin_system.js), que tem expires_at.
+// Retorna { frame_url } (url ou null se não há skin / já expirou) ou undefined se o cache do
+// skin_system não existe (aí o chamador cai no skin_modal_v1 / RPC).
+function _tavSelfSkin() {
+  try {
+    const raw = localStorage.getItem('aden_skin_cache_v3');
+    if (raw) {
+      const sys = JSON.parse(raw);
+      if (sys && 'active_frame' in sys) {
+        const f = sys.active_frame;
+        const expired = f?.expires_at && new Date(f.expires_at).getTime() <= Date.now();
+        return { frame_url: (f?.frame_url && !expired) ? f.frame_url : null };
+      }
+    }
+  } catch(_) {}
+  return _tavGetSkinCache(PLAYER.id);
 }
 
 // Aplica / remove moldura num seat-btn pelo seatId
@@ -2557,7 +2630,7 @@ async function _pppLoadPlayerData(playerId) {
       ownersCache[playerId].avatar_url = player.avatar_url;
     }
 
-    // Skin frame
+    // Skin frame — cache de 5 min; expirado/ausente → _tavGetSkinCache devolve undefined e rebusca via RPC
     const skinCache = _tavGetSkinCache(playerId);
     if (skinCache !== undefined) {
       if (skinCache?.frame_url && frameEl) {
@@ -2669,6 +2742,7 @@ async function _tavTogglePppFollow(targetId, targetName) {
       return; // aborta — não atualiza UI
     }
     window._tavFollowingSet.delete(targetId);
+    _tavPersistFollowing();
     _tavUpdatePppFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
     _tavRefreshSocialCount(-1);
@@ -2681,6 +2755,7 @@ async function _tavTogglePppFollow(targetId, targetName) {
     }
   } else {
     window._tavFollowingSet.add(targetId);
+    _tavPersistFollowing();
     _tavUpdatePppFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você seguiu ${targetName}.`, false, 'system');
     try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
@@ -3676,7 +3751,7 @@ async function openMyProfileModal() {
   if (avEl) avEl.src = avatarUrl || makeAvatar(name, 180);
 
   // 5. Apply frame — use cache if available, else fetch async
-  const skinCache = _tavGetSkinCache(PLAYER.id);
+  const skinCache = _tavSelfSkin();
   const frameEl   = document.getElementById('mpm-frame');
   if (frameEl) {
     if (skinCache?.frame_url) {
@@ -3798,7 +3873,7 @@ async function openMyProfileModal() {
         .then(async ({ data: pd }) => {
           if (!pd) return;
           // If skin was fetched async, wait a tick so #mpm-frame src is set
-          if (_tavGetSkinCache(PLAYER.id) === undefined) {
+          if (_tavSelfSkin() === undefined) {
             await new Promise(r => setTimeout(r, 350));
           }
           _featuredBondLoad(PLAYER.id, pd, 'mpm', true).catch(() => {});
@@ -3991,8 +4066,36 @@ function _tavGetBondWith(partnerId) {
   return window._tavBondsMap?.get(partnerId) ?? null;
 }
 
+// Cache em sessionStorage (TTL curto) das listas de seguindo/seguidores: evita baixar a lista
+// inteira a cada carregamento de página. "Seguindo" é gravado de volta a cada follow/unfollow
+// (write-through); "seguidores" só expira por TTL (quem me segue muda sem eu estar aqui).
+const _TAV_SOCIAL_TTL = 5 * 60_000;
+function _tavSocialCacheGet(kind) {
+  try {
+    const raw = sessionStorage.getItem('tav_' + kind + '_' + PLAYER.id);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || !Array.isArray(o.ids) || Date.now() - o.t > _TAV_SOCIAL_TTL) return null;
+    return o.ids;
+  } catch (_) { return null; }
+}
+function _tavSocialCacheSet(kind, idsIterable) {
+  try {
+    sessionStorage.setItem('tav_' + kind + '_' + PLAYER.id, JSON.stringify({ t: Date.now(), ids: [...idsIterable] }));
+  } catch (_) {}
+}
+function _tavPersistFollowing() {
+  if (window._tavFollowingSet) _tavSocialCacheSet('following', window._tavFollowingSet);
+}
+
 async function _tavEnsureFollowingSet() {
   if (window._tavFollowingSet !== null) return;
+  const cachedIds = PLAYER.id ? _tavSocialCacheGet('following') : null;
+  if (cachedIds) {
+    window._tavFollowingSet = new Set(cachedIds);
+    if (currentRoom) setTimeout(updateProximityPairs, 50);
+    return;
+  }
   window._tavFollowingSet = new Set(); // placeholder anti-reentrada
   try {
     const sb = getSB();
@@ -4002,6 +4105,7 @@ async function _tavEnsureFollowingSet() {
     }
     const { data } = await sb.rpc('get_following_ids', { p_player_id: PLAYER.id });
     (data || []).forEach(r => window._tavFollowingSet.add(r.id));
+    _tavPersistFollowing();
     // Set agora populado — reavalia pares se estivermos em uma sala
     if (currentRoom) setTimeout(updateProximityPairs, 50);
   } catch(e) {
@@ -4012,6 +4116,12 @@ async function _tavEnsureFollowingSet() {
 
 async function _tavEnsureFollowersSet() {
   if (window._tavFollowersSet !== null) return;
+  const cachedIds = PLAYER.id ? _tavSocialCacheGet('followers') : null;
+  if (cachedIds) {
+    window._tavFollowersSet = new Set(cachedIds);
+    if (currentRoom) setTimeout(updateProximityPairs, 50);
+    return;
+  }
   window._tavFollowersSet = new Set(); // placeholder anti-reentrada
   try {
     const sb = getSB();
@@ -4025,6 +4135,7 @@ async function _tavEnsureFollowersSet() {
       .select('follower_id')
       .eq('following_id', PLAYER.id);
     (data || []).forEach(r => window._tavFollowersSet.add(r.follower_id));
+    _tavSocialCacheSet('followers', window._tavFollowersSet);
     // Set agora populado — reavalia pares se estivermos em uma sala
     if (currentRoom) setTimeout(updateProximityPairs, 50);
   } catch(e) {
@@ -4127,6 +4238,7 @@ async function _tavToggleFollow(targetId, targetName) {
     }
     // ── Banco confirmou: atualiza UI ──
     window._tavFollowingSet.delete(targetId);
+    _tavPersistFollowing();
     _tavUpdateFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
     _tavRefreshSocialCount(-1);
@@ -4140,6 +4252,7 @@ async function _tavToggleFollow(targetId, targetName) {
   } else {
     // ── Seguir ──
     window._tavFollowingSet.add(targetId);
+    _tavPersistFollowing();
     _tavUpdateFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você seguiu ${targetName}.`, false, 'system');
     try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
@@ -6037,7 +6150,7 @@ async function _featuredBondSave(bondId, bondRow, prefix) {
   const playerAv    = PLAYER.avatar_url || '';
   const frameImgEl  = document.getElementById(prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame');
   const playerFrame = (frameImgEl?.style.display === 'block' && frameImgEl.src)
-    ? frameImgEl.src : _tavGetSkinCache(PLAYER.id)?.frame_url || '';
+    ? frameImgEl.src : _tavSelfSkin()?.frame_url || '';
   _featuredBondClearUI(prefix);
   _featuredBondRender(prefix, playerAv, playerFrame, bondRow, true, autoTier);
   showToast('Laço em destaque atualizado!');
@@ -6058,7 +6171,7 @@ async function _featuredBondRemove(prefix) {
   const playerAv    = PLAYER.avatar_url || '';
   const frameImgEl  = document.getElementById(prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame');
   const playerFrame = (frameImgEl?.style.display === 'block' && frameImgEl.src)
-    ? frameImgEl.src : _tavGetSkinCache(PLAYER.id)?.frame_url || '';
+    ? frameImgEl.src : _tavSelfSkin()?.frame_url || '';
   _featuredBondShowAddState(prefix, playerAv, playerFrame);
   showToast('Destaque removido.');
 }

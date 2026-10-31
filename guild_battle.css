@@ -106,16 +106,26 @@
             margin-top: 20px;
         }
 
-        .city-btn {
-            padding: 25px 10px;
-            font-size: 1em;
-            font-weight: bold;
-            
-        }
+      .city-btn {
+    padding: 25px 10px;
+    font-size: 1em;
+    font-weight: bold;
+    
+    /* --- LINHAS ADICIONADAS --- */
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    color: white;
+    border: 1px solid #c9a94a !important; /* Borda dourada para combinar com o tema */
+    border-radius: 8px;
+    cursor: pointer;
+    text-shadow: 1px 1px 2px black;
+      }
 
         .city-btn.disabled {
-            filter: grayscale(1);
-            border-color: #555;
+            filter: grayscale(1)!important;
+            border-color: #555!important;
         }
 
         /* REQUISIÇÃO 1: Lista de Guildas na Tela de Espera */

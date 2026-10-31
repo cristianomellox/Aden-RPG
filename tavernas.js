@@ -539,6 +539,7 @@ let globalPresenceMap = {};
 //  BOOT
 // ══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
+  if (window.__TAV_FRAMED) return;   // tavernas dentro de iframe overlay: não inicializa nada
   buildSeatsGrid();
   bindTabs();
   bindInputs();
@@ -548,6 +549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadOwnersCache();
   initAbly();
   refreshTavernLobbyCounts(); // popula contagem/avatares da lista + Recentes no boot (Supabase RPC)
+  _tavHandleDeepLink().catch(e => console.warn('[Aden RPG] deep link:', e));
   scaleFont();
   // Inicializa ponto de notificação
   _tavUpdateNotifDot();
@@ -622,6 +624,35 @@ function resetListCards() {
     const avContainer = card.querySelector('.tavern-avatars');
     if (avContainer) avContainer.innerHTML = '';
   });
+}
+
+// ── Deep link: /tavernas?taverna=<slug> ──
+// Abre direto a taverna compartilhada. Se estiver lotada, o jogador fica no
+// lobby e recebe um toast avisando.
+async function _tavHandleDeepLink() {
+  let slug = null;
+  try { slug = new URLSearchParams(location.search).get('taverna'); } catch (_) {}
+  if (!slug) return;
+
+  // Limpa o parâmetro da URL para um refresh não reabrir a sala sozinho
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) {}
+
+  const name = Object.keys(TAVERN_CATALOG).find(n => slugify(n) === slugify(slug));
+  if (!name) { openTavernMissingModal(); return; }
+
+  // Contagem fresca (compartilha a requisição do boot se ela ainda estiver em andamento)
+  try { await refreshTavernLobbyCounts(true); } catch (_) {}
+
+  const info  = globalPresenceMap[slugify(name)];
+  let   count = info?.count || 0;
+  if (info?.members?.some(m => m.id === PLAYER.id)) count--;   // presença antiga minha não conta
+
+  if (count >= ROOM_CAPACITY) {
+    showToast(name + ' está lotada no momento. Tente novamente mais tarde.');
+    return;   // permanece no lobby
+  }
+
+  openRoom(name, count, TAVERN_CATALOG[name].tag);
 }
 
 // Libera o #bottom-nav travado por .nav-locked (idempotente)
@@ -4846,6 +4877,15 @@ function closeIframe() {
   document.getElementById('iframe-overlay').classList.remove('open');
   document.getElementById('iframe-frame').src = '';
 }
+// Se o jogador, navegando dentro do iframe overlay, cair de novo nas Tavernas,
+// a página embutida avisa (ver script no <head> do tavernas.html) e o overlay fecha.
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin) return;
+  if (e.data && e.data.type === 'aden:close-iframe') {
+    closeIframe();
+    showToast('Você já está nas Tavernas.');
+  }
+});
 
 // ══════════════════════════════════════════
 //  TABS + INPUTS
@@ -5675,11 +5715,19 @@ function startRoomNameSlide() {
 // ══════════════════════════════════════════
 const _TAV_SHARE_BASE_URL = 'https://aden-rpg.pages.dev/tavernas';
 
+// Link de compartilhamento aponta direto para a taverna atual (?taverna=<slug>).
+// O slug é o mesmo usado como room id (slugify(nome)), e é resolvido de volta
+// para o nome em _tavHandleDeepLink().
+function _tavShareUrl() {
+  if (!currentRoom) return _TAV_SHARE_BASE_URL;
+  return `${_TAV_SHARE_BASE_URL}?taverna=${encodeURIComponent(currentRoom.id)}`;
+}
+
 function openTavernShareModal() {
   if (!currentRoom) return;
   const roomName = currentRoom.name || 'esta Taverna';
   const shareTextPt = `Meus amigos e eu estamos reunidos conversando na ${roomName}. Venha se juntar a nós!`;
-  const shareUrl  = _TAV_SHARE_BASE_URL;
+  const shareUrl  = _tavShareUrl();
   const lang = (typeof window.getCurrentLangFromCookie === 'function') ? window.getCurrentLangFromCookie() : 'pt';
 
   // Renderiza imediatamente com o texto em PT (não trava esperando rede).
@@ -5728,7 +5776,7 @@ function closeTavernShareModal() {
 }
 
 function copyTavernLink() {
-  navigator.clipboard.writeText(_TAV_SHARE_BASE_URL).then(() => {
+  navigator.clipboard.writeText(_tavShareUrl()).then(() => {
     const lbl = document.getElementById('tav-share-copy-label');
     if (!lbl) return;
     const orig = lbl.textContent;

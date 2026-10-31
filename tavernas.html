@@ -2,6 +2,19 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
+<script>
+/* Bloqueia as Tavernas dentro de iframe (overlay do menu "Navegar"): evita uma
+   taverna dentro da outra. Para o carregamento e pede ao pai que feche o overlay. */
+(function () {
+  var framed = false;
+  try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  if (!framed) return;
+  window.__TAV_FRAMED = true;
+  try { window.stop(); } catch (e) {}
+  try { document.documentElement.style.display = 'none'; } catch (e) {}
+  try { window.parent.postMessage({ type: 'aden:close-iframe', reason: 'tavernas' }, location.origin); } catch (e) {}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
  <meta name="robots" content="index, follow">
     <meta name="description" content="Aden RPG Online. Um RPG estratégico profundo com guerras de guildas, economia real, chefes mundiais e sem Pay-to-Win. Estilo old-school de navegador. Forje seu legado!">

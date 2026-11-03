@@ -79,6 +79,9 @@ const ERR = {
     not_enough_gold: 'Você não tem ouro suficiente.',
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
+    invalid_prompt: 'Escreva ou cole a sua aventura (pelo menos 10 caracteres).',
+    prompt_too_long: 'O texto da aventura passou do limite de 15.000 caracteres.',
+    custom_locked: 'Libere o modo Personalizado com a senha antes de começar.',
     invalid_type: 'Tipo de aventura inválido. Escolha novamente.',
     extra_limit: 'Você já usou todas as aventuras extras de hoje.',
     extra_pending: 'Você já tem uma aventura extra esperando por você.',
@@ -115,6 +118,7 @@ const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
     advType: null, vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
+    custom: { proof: null, text: '', slot: null },          // modo Personalizado: prova da senha (presa à vaga) e texto da aventura
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -508,7 +512,12 @@ function tickLobby() {
     if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
         const left = new Date(my.start_deadline).getTime() - now;
         $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
-        if (left <= 0) { closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); }
+        if (left <= 0) { closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('customPassModal'); }
+    }
+    if ($('customModal').classList.contains('open') && my?.status === 'reserved') {
+        const left = new Date(my.start_deadline).getTime() - now;
+        $('customTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
+        if (left <= 0) closeOv('customModal');
     }
 
     if (my && my.status === 'reserved') {
@@ -684,10 +693,18 @@ const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 
 const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; return o; }, {});
 
+// Fluxo: aviso → TIPO de aventura → (bolsa de 8 itens | texto do modo Personalizado) → começar.
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
     S.advType = null; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null;
+    const slot = S.state?.my_slot?.id || null;
+    if (S.custom.slot !== slot) S.custom = { proof: null, text: S.custom.text, slot };   // a senha vale só para esta vaga; o texto colado é mantido
+    openTypes();
+}
+
+function openItems() {                                         // depois do tipo: bolsa de itens
+    closeOv('typeModal');
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -753,12 +770,17 @@ const ADV_TYPES = [
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
 ];
+const ADV_CUSTOM = 'personalizado';                               // Personalizado (grátis, com senha): texto livre do jogador, sem dados/combate/bolsa; recompensa só pelo tempo
+const CUSTOM_FN = 'mission-token-custom';                           // Edge Function dedicada a este modo
+const CUSTOM_MAX = 15000, CUSTOM_MIN = 10;
+ADV_TYPES.splice(3, 0, { id: ADV_CUSTOM, vip: false, name: 'Personalizado', desc: 'Crie sua própria aventura',
+    svg: _svg('<rect x="8" y="5" width="26" height="36" rx="3" fill="#2a1d0a" stroke="#e6c27a" stroke-width="2"/><path d="M14 14h14M14 20h14M14 26h9" stroke="#cfe3f5" stroke-width="2"/><path d="M42 7L26 31l-3 7 7-2z" fill="#ffe27a" stroke="#a88235" stroke-width="1.5"/><path d="M23 38l-3 4" stroke="#e6c27a" stroke-width="2"/>') });
 const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
 const isSemPregacao = (t) => t === 'salao_amor' || t === 'fenda_temporal' || t === ADV_FE;   // sem pregação (modo_longo)
-const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
+const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));   // (inclui o Personalizado, inserido acima)
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
-function openTypes() {                                        // depois da bolsa: escolha do tipo de aventura
+function openTypes() {                                        // 1º passo: escolha do tipo de aventura
     closeOv('itemsModal');
     buildTypeGrid();
     openOv('typeModal');
@@ -782,6 +804,7 @@ function buildTypeGrid() {
 
 function onTypeClick(t) {
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
+    if (t.id === ADV_CUSTOM && !S.custom.proof) { openCustomPass(); return; }   // Personalizado: pede a senha antes de selecionar
     if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
     if (t.id === 'fenda_temporal') { openFenda(); return; }              // Fenda Temporal: personalizar o tema antes de selecionar
     S.advType = t.id;
@@ -859,6 +882,50 @@ async function confirmFenda() {
     }
     S.fenda = { ...fenda, ...keep }; S.advType = 'fenda_temporal';
     closeOv('fendaModal'); buildTypeGrid();
+}
+
+// ----- PERSONALIZADO: senha (a mesma do modo X; validada só no servidor) e texto da aventura -----
+function openCustomPass() {
+    $('customPassInput').value = ''; $('customPassErr').textContent = ''; $('customPassOk').disabled = false;
+    openOv('customPassModal');
+    setTimeout(() => $('customPassInput').focus(), 60);
+}
+async function confirmCustomPass() {
+    const my = S.state?.my_slot, pass = $('customPassInput').value;
+    if (!my || !pass) return;
+    const ok = $('customPassOk'), err = $('customPassErr');
+    ok.disabled = true; err.textContent = '';
+    try {
+        const r = await callFn(CUSTOM_FN, { slot_id: my.id, action: 'unlock', password: pass });
+        S.custom.proof = r.proof; S.custom.slot = my.id; S.advType = ADV_CUSTOM;
+        closeOv('customPassModal'); buildTypeGrid();
+        toast('Modo Personalizado liberado.');
+    } catch (e) {
+        err.textContent = ERR[e.message] || 'Não foi possível liberar o modo.';
+        ok.disabled = false; $('customPassInput').select();
+    }
+}
+function openCustom() {                                        // no lugar da bolsa
+    closeOv('typeModal');
+    $('customText').value = S.custom.text || ''; $('customErr').textContent = '';
+    updateCustomCount();
+    openOv('customModal');
+    setTimeout(() => $('customText').focus(), 60);
+}
+function updateCustomCount() {
+    const t = $('customText'), n = t.value.length;
+    S.custom.text = t.value;
+    $('customCount').textContent = `${nf(n)} / ${nf(CUSTOM_MAX)}`;
+    $('customCount').classList.toggle('full', n >= CUSTOM_MAX);
+    $('customGo').disabled = t.value.trim().length < CUSTOM_MIN;
+}
+function startCustom() {
+    const txt = $('customText').value;
+    if (txt.trim().length < CUSTOM_MIN) { $('customErr').textContent = ERR.invalid_prompt; return; }
+    if (txt.length > CUSTOM_MAX) { $('customErr').textContent = ERR.prompt_too_long; return; }
+    if (!S.custom.proof) { closeOv('customModal'); openTypes(); openCustomPass(); return; }
+    S.custom.text = txt;
+    startAdventure({}, ADV_CUSTOM);
 }
 
 function openVipConfirm(t) {
@@ -1037,7 +1104,7 @@ async function failStart(why, detail) {
     const slot = adv?.slotId;
     if (adv) { adv.finished = true; teardown(); S.adv = null; }
     closeOv('diceOverlay'); busy(false);
-    if (slot) { try { await callFn('mission-token', { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
+    if (slot) { try { await callFn(adv?.advType === ADV_CUSTOM ? CUSTOM_FN : 'mission-token', { slot_id: slot, action: 'revert' }); } catch (_) { /* ok */ } }
     showView('lobby');
     if (why === BUSY_MSG) toast(why, true); else showDebug(why, detail);
     await refreshState();
@@ -1071,18 +1138,21 @@ function clearDiariasDot() {
 
 async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal');
+    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal'); closeOv('customModal'); closeOv('customPassModal');
     busy(true, 'Preparando o microfone…');
 
+    const isCustom = advType === ADV_CUSTOM, tokenFn = isCustom ? CUSTOM_FN : 'mission-token';
     let A = null, ctx = null;
     try {
         A = await initAudio();                                   // 1º: microfone (se negar, a vaga não é gasta)
         A.headphones = $('chkPhones').checked;
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
-        const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
+        const body = isCustom
+            ? { slot_id: my.id, adventure_type: ADV_CUSTOM, custom_prompt: S.custom.text, custom_proof: S.custom.proof }   // sem bolsa; o servidor confere a prova da senha
+            : { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
-        ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        ctx = await callFn(tokenFn, body);           // o cronômetro só começa aqui, depois do tipo e da bolsa (ou do texto)
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
@@ -1092,7 +1162,7 @@ async function _startAdventure(loadout, advType) {
         console.error('[diarias] falha ao iniciar:', e);
         if (S.adv) teardown();
         else if (A) { try { A.stream.getTracks().forEach((t) => t.stop()); A.ctx.close(); } catch (_) { /* ok */ } }
-        if (ctx?.slot_id) { try { await callFn('mission-token', { slot_id: ctx.slot_id, action: 'revert' }); } catch (_) { /* ok */ } }
+        if (ctx?.slot_id) { try { await callFn(tokenFn, { slot_id: ctx.slot_id, action: 'revert' }); } catch (_) { /* ok */ } }
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -1114,6 +1184,7 @@ async function _startAdventure(loadout, advType) {
 }
 
 function newAdv(slotId, ctx, A, sdk) {
+    const isCustom = ctx.adventure_type === ADV_CUSTOM;        // sem objetivo nem chefe: o botão "Finalizar aventura" fica disponível desde o início
     const startMs = new Date(ctx.ends_at).getTime() - (ctx.session_minutes + 2) * 60000;
     return {
         slotId, A, sdk, token: ctx.token, model: ctx.model, voice: ctx.voice, degraded: !!ctx.degraded, scene: ctx.scene,
@@ -1125,7 +1196,7 @@ function newAdv(slotId, ctx, A, sdk) {
         advType: ctx.adventure_type || 'comum', noCombat: !!ctx.no_combat,
         sceneKw: parseSceneKeywords(ctx.scenes), kwScanned: 0,
         long: null, chainTimer: null,
-        epilogue: false, delivered: false, playerEnd: false, playerEndAt: 0, epilogueAt: 0, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
+        epilogue: isCustom, delivered: isCustom, playerEnd: false, playerEndAt: 0, epilogueAt: isCustom ? Date.now() : 0, turnDone: true, toolBusy: false, lastPlayerAt: 0, notes: [], reconnecting: false, connected: false, pendingAudio: [],
         rolls: 0, masterBuf: '', youBuf: '', newTurn: true,
         timer: null, raf: null, wake: null,
         // vida, combate e bolsa (a verdade fica aqui; o Mestre só aplica pelas ferramentas)
@@ -1156,7 +1227,7 @@ async function connectLive(isRetry) {
             onmessage: (m) => {
                 if (!adv.gotMsg) {
                     adv.gotMsg = true; adv.liveMs = Date.now();
-                    callFn('mission-token', { slot_id: adv.slotId, action: 'live' }).catch(() => {});
+                    callFn(adv.advType === ADV_CUSTOM ? CUSTOM_FN : 'mission-token', { slot_id: adv.slotId, action: 'live' }).catch(() => {});
                 }
                 adv.reconnects = 0;                                   // conexão saudável: zera as tentativas
                 onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
@@ -1175,7 +1246,8 @@ async function connectLive(isRetry) {
         if (speech) buf.forEach((c) => { try { adv.session.sendRealtimeInput({ audio: { data: c.b64, mimeType: 'audio/pcm;rate=16000' } }); } catch (_) { /* ok */ } });
         sendText(recapText(adv, speech));
     } else {
-        sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
+        if (adv.advType === ADV_CUSTOM) sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene com o cenário mais adequado ao roteiro do jogador, cumprimente o herói pelo nome real em uma frase e comece a aventura conforme o roteiro, passando a vez ao jogador. Não pergunte o nome.');
+        else sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
     }
 }
 
@@ -1187,6 +1259,12 @@ function recapText(adv, spoke = false) {
     const hist = adv.hist.slice(-14).map((h) => `${h.who}: ${h.text}`);
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
+    if (adv.advType === ADV_CUSTOM) {
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA aventura personalizada, sem recomeçar e sem repetir a abertura, seguindo o roteiro do jogador. Herói: ${adv.hero.name}. Não há dados, combate nem bolsa. `
+            + `Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+            + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
+            + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, e espere o jogador.');
+    }
     if (adv.advType === ADV_FE) {
         return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena da Fé Cristã, sem recomeçar e sem repetir a abertura, SEMPRE fiel aos relatos bíblicos e sem inventar nada. Herói: ${adv.hero.name}. Não há dados, combate nem chefe. `
             + (adv.epilogue ? 'O acontecimento JÁ terminou: vocês estão na conversa em particular com o(s) apóstolo(s); continue-a. ' : 'O acontecimento ainda está em andamento: continue-o do ponto em que parou. ')
@@ -1471,11 +1549,12 @@ function toolStatus(adv) {
 const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
 function checkSpecialCommand(adv) {
-    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE) return;
+    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE || adv.advType === ADV_CUSTOM) return;
     if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
 function openSpecialModal(adv) {
     if (!adv || adv.finished || adv.specialModal) return;
+    if (adv.advType === ADV_CUSTOM) return;
     if (adv.advType === ADV_FE) { toast('Códigos especiais não se aplicam à Fé Cristã.'); return; }
     adv.specialModal = true;
     const ov = document.createElement('div');
@@ -1556,7 +1635,9 @@ async function onToolCall(calls) {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
-                if (!adv.dead && !adv.delivered && !adv.playerEnd && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
+                if (adv.advType === ADV_CUSTOM && !adv.playerEnd && !adv.forced && left > EARLY_END_GUARD_S * 1000) {
+                    out = { ok: false, erro: 'Ainda não é hora de encerrar. Continue a aventura com o jogador. Só chame end_adventure depois de receber [SISTEMA] FINALIZAR ou [SISTEMA] ENCERRAR.' };
+                } else if (!adv.dead && !adv.delivered && !adv.playerEnd && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
                     out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe, entrega e celebração. Só dá para encerrar depois que o objetivo for entregue (objective_delivered) e o jogador pedir para finalizar, quando o sistema enviar [SISTEMA] FINALIZAR ou [SISTEMA] ENCERRAR, ou se o herói cair.' };
                 } else {
                     adv.endPayload = { ...a };
@@ -1719,6 +1800,7 @@ function enterStage() {
     showView('stage');
     $('capMaster').textContent = ''; $('capYou').textContent = '';
     $('hudRolls').textContent = '0';
+    $('viewStage').classList.toggle('custom-mode', adv.advType === ADV_CUSTOM);   // esconde bolsa, dados e código especial
     renderDuel(); updateBagBadge();
     setScene(adv.scene);                                       // começa a trocar do saguão para o cenário da aventura
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
@@ -1776,13 +1858,18 @@ function syncEpilogueUI() {
     const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
     $('duel').classList.toggle('finish-on', show);
     $('btnFinish').classList.toggle('show', show);
+    const fnm = $('btnFinish').querySelector('.duel-name'); if (fnm) fnm.textContent = a?.advType === ADV_CUSTOM ? 'Aventura livre' : 'Objetivo cumprido';
     $('btnFinish').style.pointerEvents = show ? 'auto' : '';   // o HUD do duelo pode ter pointer-events:none no CSS; o botão precisa receber o toque
     if (!show) closeOv('finishModal');
 }
 
 function openFinishConfirm() {
     const a = S.adv; if (!a || a.finished || a.playerEnd) return;
-    $('finishEarly').style.display = elapsedS(a) < BOSS_MIN_S ? 'block' : 'none';
+    const cu = a.advType === ADV_CUSTOM, fe = $('finishEarly');
+    $('finishSub').textContent = cu ? 'Aventura personalizada' : 'Objetivo cumprido';
+    $('finishText').textContent = cu ? 'Deseja encerrar a sua aventura agora?' : 'Você já concluiu o objetivo da aventura. Deseja finalizar?';
+    fe.textContent = cu ? 'A recompensa cresce com o tempo de aventura (o máximo é com 15 minutos). Continuar jogando pode render mais.' : fe.dataset.default;
+    fe.style.display = elapsedS(a) < BOSS_MIN_S ? 'block' : 'none';
     openOv('finishModal');
 }
 
@@ -1834,12 +1921,14 @@ function advTick() {
         for (const m of (adv.advType === ADV_FE ? MARKS_FE : adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            if (adv.advType === ADV_CUSTOM) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Comece a levar a cena a um bom momento de pausa ou fechamento. NÃO encerre e NÃO chame end_adventure ainda.', false);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
             else queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
+            if (adv.advType === ADV_CUSTOM) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça uma despedida curta (20 a 40 segundos): um último momento da cena, uma frase final e um agradecimento; depois chame end_adventure.', true);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
             else queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
@@ -1880,6 +1969,7 @@ async function finishAdventure(payload, fallback, reason) {
     teardown(); S.adv = null; closeOv('diceOverlay'); closeOv('bagViewModal');
 
     const p = payload || { courage: 12, creativity: 12, resolution: 12, roleplay: 12, outcome: adv.dead ? 'derrota' : 'vitoria_parcial', chronicle: '' };
+    if (adv.advType === ADV_CUSTOM) p.outcome = 'vitoria';       // Personalizado: sem avaliação do Mestre; o servidor calcula tudo pelo tempo jogado
     const pending = { slot_id: slotId, detail: { courage: p.courage, creativity: p.creativity, resolution: p.resolution, roleplay: p.roleplay }, outcome: p.outcome, chronicle: p.chronicle, title: p.title || '', scene: sceneId, client_seconds: clientSeconds, boss: bossDown, reason: reason || (fallback ? 'fallback' : 'master') };
     console.info('[diarias] encerrando aventura. motivo:', pending.reason);
     localStorage.setItem(pendKey(slotId), JSON.stringify(pending));   // garante o envio mesmo se a página fechar
@@ -1916,12 +2006,13 @@ function showResult(r, sceneId, reason) {
     if (sceneId) paintScene(sceneId);                          // sem id: mantém o skybox atual
     const d = r.detail || {};
     const names = { vitoria: 'Vitória', vitoria_parcial: 'Vitória parcial', fuga: 'Fuga', derrota: 'Derrota' };
-    const bad = r.outcome === 'derrota' || r.outcome === 'fuga';
+    const custom = r.adventure_type === ADV_CUSTOM;            // Personalizado: sem critérios do Mestre, só o tempo jogado
+    const bad = !custom && (r.outcome === 'derrota' || r.outcome === 'fuga');
     const crit = [['courage', 'Coragem'], ['creativity', 'Criatividade'], ['resolution', 'Resolução'], ['roleplay', 'Imersão']];
     const C = 2 * Math.PI * 56;
     $('resultPanel').innerHTML = `
         <div class="res-eyebrow">Crônica encerrada</div>
-        <h2 class="res-title ${bad ? 'bad' : ''}">${names[r.outcome] || 'Aventura concluída'}</h2>
+        <h2 class="res-title ${bad ? 'bad' : ''}">${custom ? 'Aventura concluída' : (names[r.outcome] || 'Aventura concluída')}</h2>
         ${r.title ? `<p class="res-adv">✧ ${esc(r.title)} ✧</p>` : ''}
         <div class="score-ring">
             <svg viewBox="0 0 130 130" width="130" height="130">
@@ -1931,14 +2022,14 @@ function showResult(r, sceneId, reason) {
             </svg>
             <div class="num"><span id="scoreNum">0</span><small>NOTA</small></div>
         </div>
-        <div class="bars">${crit.map(([k, n]) => `<div class="bar-row"><span>${n}</span><div class="bar"><i data-w="${clamp((d[k] || 0) / 25 * 100, 0, 100)}"></i></div><span>${d[k] ?? 0}</span></div>`).join('')}</div>
+        ${custom ? '' : `<div class="bars">${crit.map(([k, n]) => `<div class="bar-row"><span>${n}</span><div class="bar"><i data-w="${clamp((d[k] || 0) / 25 * 100, 0, 100)}"></i></div><span>${d[k] ?? 0}</span></div>`).join('')}</div>`}
         <div class="rewards">
             <div class="reward"><b id="rwXp">0</b><small>XP</small></div>
             <div class="reward"><b id="rwCr">0</b><small>Cristais</small></div>
         </div>
         ${r.leveled_up ? `<div class="levelup">▲ Subiu para o nível ${esc(r.new_level)}!</div>` : ''}
         ${r.chronicle ? `<div class="chronicle"><h4>Crônica do dia</h4>${esc(r.chronicle)}</div>` : ''}
-        <p class="res-note">Você jogou ${fmtPlayed(r.seconds_played)} · ${r.reward_pct ?? 0}% da recompensa máxima${r.concluded ? ' · história concluída' : ''}</p>
+        <p class="res-note">Você jogou ${fmtPlayed(r.seconds_played)} · ${r.reward_pct ?? 0}% da recompensa máxima${r.concluded ? ' · história concluída' : ''}${custom ? ' · avaliação pelo tempo jogado' : ''}</p>
         ${REASON_NOTE[reason] ? `<p class="res-note warn">${REASON_NOTE[reason]}</p>` : ''}
         <button class="btn-epic" id="btnBack">Voltar</button>`;
     $('btnBack').onclick = async () => { showView('lobby'); await refreshState(); };
@@ -1981,10 +2072,23 @@ function bindUI() {
     $('howClose').onclick = () => closeOv('howModal');
     $('briefCancel').onclick = () => closeOv('briefModal');
     $('briefGo').onclick = openLoadout;                        // 1º a bolsa; o Mestre e o cronômetro só começam depois
-    $('itemsCancel').onclick = () => closeOv('itemsModal');
-    $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar
-    $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
-    $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
+    $('itemsCancel').onclick = () => { closeOv('itemsModal'); openTypes(); };            // volta ao tipo de aventura
+    $('itemsGo').onclick = () => { if (S.advType && S.advType !== ADV_CUSTOM && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };   // tipo → bolsa → começar
+    $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('briefModal'); };
+    $('typeGo').onclick = () => { if (!S.advType) return; if (S.advType === ADV_CUSTOM) openCustom(); else openItems(); };   // Personalizado: texto no lugar da bolsa
+    // modo Personalizado
+    $('customPassCancel').onclick = () => closeOv('customPassModal');
+    $('customPassOk').onclick = confirmCustomPass;
+    $('customPassInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmCustomPass(); });
+    $('customText').addEventListener('input', () => { $('customErr').textContent = ''; updateCustomCount(); });
+    $('customText').addEventListener('paste', (e) => {                                    // avisa se o texto colado foi cortado no limite
+        const t = $('customText'), pasted = e.clipboardData?.getData('text') || '';
+        const room = CUSTOM_MAX - (t.value.length - (t.selectionEnd - t.selectionStart));
+        if (pasted.length > room) toast(`O texto colado passou de ${nf(CUSTOM_MAX)} caracteres e foi cortado.`, true);
+    });
+    $('customClear').onclick = () => { $('customText').value = ''; updateCustomCount(); $('customText').focus(); };
+    $('customCancel').onclick = () => { closeOv('customModal'); openTypes(); };
+    $('customGo').onclick = startCustom;
     $('fendaCancel').onclick = () => closeOv('fendaModal');
     $('fendaOk').onclick = confirmFenda;
     $('fendaOtherSys').onclick = () => { if (S.fendaDraft) { S.fendaDraft.other = 'sistema'; buildFendaList(); } };
@@ -2021,7 +2125,7 @@ function bindUI() {
     $('btnFinish').onclick = openFinishConfirm;
     $('finishCancel').onclick = () => closeOv('finishModal');
     $('finishConfirm').onclick = confirmFinish;
-    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal') closeOv(e.target.id); });
+    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal' && e.target.id !== 'customModal') closeOv(e.target.id); });
 }
 
 // --- AUTH OTIMISTA (ZERO EGRESS) — mesmo padrão da guilda ---

@@ -542,3 +542,16 @@ body.hud-hidden #frostOverlay { opacity: .6; }
 .fenda-input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; color: #fff; font: inherit; font-size: 1rem; }
 .fenda-input:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
 .fenda-err { min-height: 1.2em; margin: 6px 0 10px; color: #ff7b7b; font-size: .82em; text-align: center; }
+
+
+/* ── Modo Personalizado: texto da aventura no lugar da bolsa ── */
+.custom-box { max-width: 520px; max-height: 92vh; }
+.custom-text { flex: 1 1 auto; width: 100%; min-height: 170px; max-height: 46vh; box-sizing: border-box; padding: 10px; resize: none; border-radius: 6px;
+    border: 1px solid var(--gold-dark); background: #0b0906; color: #f3eefc; font: inherit; font-size: .95rem; line-height: 1.45; -webkit-overflow-scrolling: touch; }
+.custom-text:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
+.custom-foot { display: flex; justify-content: space-between; align-items: center; margin: 6px 2px 4px; font-size: .78em; letter-spacing: 1px; color: #9d957f; }
+.custom-foot #customCount.full { color: #ff9f7b; font-weight: bold; }
+.custom-clear { background: none; border: none; padding: 2px 4px; color: var(--gold-light); font: inherit; cursor: pointer; text-decoration: underline; }
+
+/* No modo Personalizado não existem dados, bolsa nem códigos especiais */
+#viewStage.custom-mode #btnBag, #viewStage.custom-mode #btnSpecial, #viewStage.custom-mode #hudDice { display: none; }

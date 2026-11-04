@@ -40,6 +40,22 @@ const MARKS_SOCIAL = [
     { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: o clima do salão esquenta; se o herói ainda não está conquistando ninguém, os convidados o procuram, puxam conversa e criam oportunidades de aproximação.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: a noite avança; se ninguém foi conquistado ainda, o convidado mais próximo do herói se declara interessado e dá a última chance de conquista; para o epílogo caber no tempo.' },
 ];
+// marcos do Romance & Conquista por modalidade (cada uma só recebe os SEUS avisos)
+const MARKS_VISITA = [
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado à casa e conhecido a anfitriã e as duas irmãs; comece as provocações tímidas e os pretextos delas.' },
+    { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: o clima na casa esquenta; as irmãs se aproximam mais do herói e a tensão cresce (sem salão, convidados nem competição).' },
+    { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: aproxime-se o desfecho dos três dias, para a noite de intimidade e o epílogo caberem no tempo.' },
+];
+const MARKS_SALAO = [
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: as apresentações já devem ter acontecido; a primeira rodada de jogos e a primeira eliminação devem acontecer em breve.' },
+    { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: a competição esquenta; a rodada final com as duas finalistas deve se aproximar.' },
+    { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: se as duas finalistas ainda não foram ao quarto, conduza a prova final AGORA, para a escolha e o epílogo caberem no tempo.' },
+];
+const marksFor = (adv) => adv.advType === ADV_FE ? MARKS_FE
+    : adv.advType === 'salao_amor' && S.romance === 'visita' ? MARKS_VISITA
+    : adv.advType === 'salao_amor' && S.romance === 'salao' ? MARKS_SALAO
+    : adv.noCombat ? MARKS_SOCIAL : MARKS;
+
 // marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico precisa caber antes da conversa com os apóstolos)
 const MARKS_FE = [
     { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio está em andamento, fiel aos relatos. Vivencie cada cena com calma (2 a 4 min cada) e use a pesquisa para enriquecer com contexto histórico confiável.' },
@@ -1894,7 +1910,7 @@ function advTick() {
     }
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
-        for (const m of (adv.advType === ADV_FE ? MARKS_FE : adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
+        for (const m of marksFor(adv)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
             if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);

@@ -221,7 +221,7 @@
             <p class="hint" id="itemsTimer"></p>
             <div class="dm-actions">
                 <button class="btn-ghost" id="itemsCancel">Voltar</button>
-                <button class="btn-epic sm" id="itemsGo" disabled>Começar</button>
+                <button class="btn-epic sm" id="itemsGo" disabled>Continuar</button>
             </div>
         </div>
     </div>
@@ -236,36 +236,6 @@
             <div class="dm-actions">
                 <button class="btn-ghost" id="typeCancel">Voltar</button>
                 <button class="btn-epic sm" id="typeGo" disabled>Escolher aventura</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ═════════ MODAL: SENHA DO MODO PERSONALIZADO ═════════ -->
-    <div id="customPassModal" class="overlay dm-modal" aria-hidden="true">
-        <div class="dm-box buy-box">
-            <h3 class="dm-title">Aventura personalizada</h3>
-            <p class="dm-sub">Modo restrito. Digite a senha para liberar.</p>
-            <input id="customPassInput" class="fenda-input" type="password" inputmode="numeric" autocomplete="off" placeholder="Senha">
-            <div id="customPassErr" class="fenda-err"></div>
-            <div class="dm-actions">
-                <button class="btn-ghost" id="customPassCancel">Cancelar</button>
-                <button class="btn-epic sm" id="customPassOk">Liberar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ═════════ MODAL: PERSONALIZADO — TEXTO DA AVENTURA (no lugar da bolsa) ═════════ -->
-    <div id="customModal" class="overlay dm-modal" aria-hidden="true">
-        <div class="dm-box items-box custom-box">
-            <h3 class="dm-title">Crie sua própria aventura</h3>
-            <p class="dm-sub">Escreva ou cole o roteiro que a Mestra vai conduzir: cenário, personagens, regras e o tom da história. É diálogo livre, sem dados e sem bolsa de itens. A recompensa depende do tempo que você jogar. Conteúdo adulto permitido (18+).</p>
-            <textarea id="customText" class="custom-text" maxlength="15000" spellcheck="false" autocomplete="off" placeholder="Cole aqui o prompt da sua aventura…"></textarea>
-            <div class="custom-foot"><span id="customCount">0 / 15.000</span><button type="button" class="custom-clear" id="customClear">Limpar</button></div>
-            <p class="hint" id="customTimer"></p>
-            <div id="customErr" class="fenda-err"></div>
-            <div class="dm-actions">
-                <button class="btn-ghost" id="customCancel">Voltar</button>
-                <button class="btn-epic sm" id="customGo" disabled>Começar</button>
             </div>
         </div>
     </div>
@@ -340,9 +310,9 @@
     <div id="finishModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box buy-box">
             <h3 class="dm-title">Finalizar aventura</h3>
-            <p class="dm-sub" id="finishSub">Objetivo cumprido</p>
-            <p class="buy-text" id="finishText">Você já concluiu o objetivo da aventura. Deseja finalizar?</p>
-            <p class="hint buy-bal" id="finishEarly" style="display:none" data-default="A recompensa máxima exige pelo menos 15 minutos de aventura. Continuar aproveitando a história pode render mais.">A recompensa máxima exige pelo menos 15 minutos de aventura. Continuar aproveitando a história pode render mais.</p>
+            <p class="dm-sub">Objetivo cumprido</p>
+            <p class="buy-text">Você já concluiu o objetivo da aventura. Deseja finalizar?</p>
+            <p class="hint buy-bal" id="finishEarly" style="display:none">A recompensa máxima exige pelo menos 15 minutos de aventura. Continuar aproveitando a história pode render mais.</p>
             <div class="dm-actions">
                 <button class="btn-ghost" id="finishCancel">Continuar na aventura</button>
                 <button class="btn-epic sm" id="finishConfirm">Finalizar</button>
@@ -362,7 +332,6 @@
                 <li><b>Sua Bolsa de Itens:</b> Antes da jornada, você escolhe 8 itens. <b>Atenção: você não clica neles para usar.</b> O botão da bolsa serve apenas para você consultar o seu inventário. Para usar uma poção, corda ou encantamento, <b>fale para o Mestre</b> o que deseja usar e ele aplicará o efeito na história.</li>
                 <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágica,realizar uma infiltração furtiva, participar do Salão do Amor e conquistar seu par, embarcar na Fenda Temporal e viver um momento da história ou de uma obra famosa, com o tema que você escolher (alguma obra), ou mergulhar na Fé Cristã para reviver um acontecimento bíblico ao lado dos apóstolos e conversar com eles. Mais tipos em breve. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
                 <li><b>Epílogo e Liberdade:</b> Cumpriu o objetivo ou derrotou o chefe e ainda sobrou tempo? A aventura não acaba! O jogo entra no <b>Epílogo</b>. Use esse tempo livre para comemorar na taverna, explorar o cenário, conversar com os personagens e descobrir segredos. A imersão é ilimitada até você decidir partir!</li>
-                <li><b>Aventura Personalizada:</b> Em "Crie sua própria aventura" você escreve ou cola o seu próprio roteiro (até 15 mil caracteres) e a Mestra o conduz em diálogo livre, sem dados, sem combate e sem bolsa. É um modo restrito, liberado por senha, e não custa ouro. A recompensa depende só do tempo que você joga.</li>
                 <li><b>Aventuras Extras:</b> Perdeu o horário ou quer jogar mais? Você pode comprar até <b>3 Aventuras Extras</b> por dia usando Ouro, jogando na hora que quiser, sem precisar disputar as vagas aleatórias.</li>
             </ul>
             <p class="tip">Dica de Ouro: Mergulhe no personagem! Decisões criativas, exploração e diálogos ricos rendem as melhores notas e as recompensas máximas no final da sessão.</p>

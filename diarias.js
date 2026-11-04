@@ -34,7 +34,7 @@ const MARKS = [
     { at: 900, text: '[SISTEMA] MARCO (15 min de 30), NÃO responda falando agora; aplique na sua próxima fala: a partir de agora o herói se aproxima do lugar do objetivo e o CHEFE pode finalmente aparecer. Gere tensão e prepare a luta, que deve ser longa e emocionante.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min de 30), NÃO responda falando agora; aplique na sua próxima fala: se o chefe ainda não apareceu, ele deve entrar em cena AGORA, para o confronto caber no tempo que resta.' },
 ];
-// marcos para aventuras SEM chefe/combate (Salão do Amor)
+// marcos para aventuras SEM chefe/combate (Romance & Conquista)
 const MARKS_SOCIAL = [
     { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: as apresentações já devem ter acontecido; faça o herói circular pelos cômodos e conhecer os convidados mais de perto.' },
     { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: o clima do salão esquenta; se o herói ainda não está conquistando ninguém, os convidados o procuram, puxam conversa e criam oportunidades de aproximação.' },
@@ -42,9 +42,10 @@ const MARKS_SOCIAL = [
 ];
 // marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico precisa caber antes da conversa com os apóstolos)
 const MARKS_FE = [
-    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; o acontecimento bíblico precisa estar em andamento, FIEL aos relatos e sem inventar nada.' },
-    { at: 840, text: '[SISTEMA] MARCO (14 min), NÃO responda falando agora; aplique na sua próxima fala: leve o acontecimento ao seu desfecho nos próximos minutos, exatamente como nos relatos; depois chame objective_complete e objective_delivered e passe à conversa em particular com o(s) apóstolo(s).' },
-    { at: 1140, text: '[SISTEMA] MARCO (19 min), NÃO responda falando agora; aplique na sua próxima fala: se o acontecimento ainda não terminou, conclua-o AGORA, fiel aos relatos, para sobrar tempo de conversar com o(s) apóstolo(s).' },
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio está em andamento, fiel aos relatos. Vivencie cada cena com calma (2 a 4 min cada) e use a pesquisa para enriquecer com contexto histórico confiável.' },
+    { at: 720, text: '[SISTEMA] MARCO (12 min), NÃO responda falando agora; aplique na sua próxima fala: o episódio deve estar na segunda ou terceira cena; conduza a travessia para a próxima cidade ou cena, com contexto histórico e sem inventar nada.' },
+    { at: 1200, text: '[SISTEMA] MARCO (20 min), NÃO responda falando agora; aplique na sua próxima fala: leve o episódio ao seu desfecho nos próximos minutos, exatamente como nos relatos; depois chame objective_complete e objective_delivered e passe à conversa em particular com o(s) apóstolo(s).' },
+    { at: 1380, text: '[SISTEMA] MARCO (23 min), NÃO responda falando agora; aplique na sua próxima fala: se o episódio ainda não terminou, conclua-o AGORA, fiel aos relatos, para sobrar tempo de conversar com o(s) apóstolo(s).' },
 ];
 const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
 const END_OK_S = 20 * 60;                                  // a partir daqui o Mestre pode encerrar quando o jogador escolher concluir
@@ -114,7 +115,7 @@ function showDebug(title, text) {
 const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
-    advType: null, vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
+    advType: null, romance: 'livre', vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -440,9 +441,11 @@ function renderLobby() {
         renderCard(`
             <span class="chip bad">Aventura interrompida</span>
             <h2>O Mestre aguardava você</h2>
-            <p>Esta aventura foi iniciada e não pode ser retomada. ${pend ? 'Há um resultado pendente de envio.' : 'Ela será encerrada automaticamente.'}</p>
-            ${pend ? '<button class="btn-epic" id="btnRetry">Enviar resultado</button>' : ''}`);
+            <p>Esta aventura foi iniciada e não pode ser retomada. ${pend ? 'Há um resultado pendente de envio.' : 'Estamos encerrando a sessão para você poder jogar de novo.'}</p>
+            ${pend ? '<button class="btn-epic" id="btnRetry">Enviar resultado</button><button class="btn-epic" id="btnRelease" style="margin-top:8px">Descartar e liberar</button>' : '<button class="btn-epic" id="btnRelease">Liberar agora</button>'}`);
         if (pend) $('btnRetry').onclick = () => maybeSendPending(true);
+        $('btnRelease').onclick = () => releaseStuck(my.id, true);
+        if (!pend && !S.adv) releaseStuck(my.id, false);               // sem resultado a enviar e sem sessão nesta página: libera sozinho
     } else if (my && (my.status === 'no_show' || my.status === 'abandoned')) {
         renderCard(`
             <div class="qc-icon">☾</div>
@@ -687,7 +690,7 @@ const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; retu
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
-    S.advType = null; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null;
+    S.advType = null; S.romance = 'livre'; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null;
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -748,7 +751,7 @@ const ADV_TYPES = [
       svg: _svg('<path d="M15.5 22v-6.5a8.5 8.5 0 0 1 17 0V22" stroke="#cfe3f5" stroke-width="3.6"/><rect x="9" y="21" width="30" height="21" rx="4.5" fill="#2a2f3a" stroke="#8fb4d9" stroke-width="2"/><circle cx="24" cy="29.5" r="3.8" fill="#0b1018" stroke="none"/><path d="M22.2 32h3.6l1.2 6.5h-6z" fill="#0b1018" stroke="none"/><path d="M13 25h4" stroke="#5a86b3" stroke-width="1.6"/>') },
     { id: 'maldicao', vip: true, name: 'Maldição e assombração', desc: 'Um lugar assombrado guarda uma verdade trágica. Descubra a origem e liberte o espírito.',
       svg: _svg('<path d="M9 43V22a15 15 0 0 1 30 0v21l-5.4-4.2-4.8 4.2-4.8-4.2-4.8 4.2-4.8-4.2z" fill="#e8e4f5" stroke="#9b87d9" stroke-width="2"/><ellipse cx="18.6" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="29.4" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="24" cy="30.5" rx="2.5" ry="3.2" fill="#1c1030" stroke="none"/><circle cx="7" cy="9" r="1.6" fill="#cbb8ff" stroke="none"/><circle cx="42" cy="12" r="1.2" fill="#cbb8ff" stroke="none"/><circle cx="40" cy="5" r="1" fill="#cbb8ff" stroke="none"/>') },
-    { id: 'salao_amor', vip: true, name: 'Salão do Amor', desc: 'Doze pessoas, um salão e uma noite para se conhecerem. Conquiste o coração de alguém e viva o romance.',
+    { id: 'salao_amor', vip: true, name: 'Romance & Conquista', desc: 'Aventura adulta (18+). Escolha entre o Salão do Amor, uma competição em que você é o prêmio, ou a Conquista livre numa festa de doze pessoas.',
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
@@ -784,6 +787,7 @@ function onTypeClick(t) {
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
     if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
     if (t.id === 'fenda_temporal') { openFenda(); return; }              // Fenda Temporal: personalizar o tema antes de selecionar
+    if (t.id === 'salao_amor') { pickRomance(t); return; }                // Romance & Conquista: escolhe a modalidade
     S.advType = t.id;
     buildTypeGrid();
 }
@@ -871,10 +875,31 @@ function openVipConfirm(t) {
     openOv('vipModal');
 }
 
+// ----- ROMANCE & CONQUISTA: escolha da modalidade (overlay criado aqui, sem mexer no HTML) -----
+const ROMANCE_OPTS = [
+    { id: 'salao', name: 'Salão do Amor', desc: 'Estilo reality: o Mestre narra os jogos entre os convidados e elimina um por rodada. Você é o prêmio: as duas finalistas tentam seduzi-lo em quartos separados e você escolhe a vencedora.' },
+    { id: 'visita', name: 'Visita Inesperada', desc: 'Três dias na casa de uma anfitriã com duas filhas adultas, tímidas e provocantes. As irmãs conversam entre si sobre você.' },
+    { id: 'livre', name: 'Conquista livre', desc: 'Uma festa com doze pessoas. Circule, converse, flerte e conquiste o coração de alguém.' },
+];
+function pickRomance(t) {
+    let ov = document.getElementById('romanceOv'); if (ov) ov.remove();
+    ov = document.createElement('div'); ov.id = 'romanceOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(5,3,10,.82);padding:16px';
+    ov.innerHTML = `<div style="max-width:420px;width:100%;background:#15101f;border:1px solid #a88235;border-radius:14px;padding:18px;color:#f3ead2">
+        <h3 style="margin:0 0 4px;color:#e6c27a">Romance &amp; Conquista</h3>
+        <p style="margin:0 0 12px;font-size:.85em;opacity:.8">Conteúdo adulto (18+). Escolha a modalidade:</p>
+        ${ROMANCE_OPTS.map((o) => `<button type="button" class="btn-epic" data-r="${o.id}" style="display:block;width:100%;margin-bottom:10px;text-align:left"><b>${o.name}</b><br><small style="opacity:.85">${o.desc}</small></button>`).join('')}
+        <button type="button" id="romanceCancel" style="background:none;border:0;color:#cbb8ff;width:100%;padding:6px">Cancelar</button></div>`;
+    document.body.appendChild(ov);
+    ov.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => { S.romance = b.dataset.r; S.advType = t.id; ov.remove(); buildTypeGrid(); }; });
+    $('romanceCancel').onclick = () => ov.remove();
+}
+
 function confirmVip() {
     const t = S.vipPending; closeOv('vipModal'); if (!t) return;
     S.vipOwned.add(t.id); S.vipPending = null;                           // "adquirida" (o ouro é cobrado ao começar)
     if (t.id === 'fenda_temporal') { buildTypeGrid(); openFenda(); return; }   // Fenda Temporal: personaliza o tema antes de selecionar
+    if (t.id === 'salao_amor') { buildTypeGrid(); pickRomance(t); return; }    // Romance & Conquista: escolhe a modalidade
     S.advType = t.id;
     buildTypeGrid();
 }
@@ -1081,6 +1106,7 @@ async function _startAdventure(loadout, advType) {
         busy(true, 'Invocando o Mestre…');
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
+        if (advType === 'salao_amor') body.romance = ['salao', 'visita'].includes(S.romance) ? S.romance : 'livre';
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
@@ -1626,6 +1652,13 @@ const cleanNpcs = (t) => String(t || '').replace(/[\u0000-\u001f\u007f"'`{}<>\\]
 
 function toolModoLongo(adv, a) {
     const tipo = String(a.tipo || '');
+    if (tipo === 'conversa_irmas') {
+        if (adv.advType !== 'salao_amor' || S.romance !== 'visita') return { ok: false, erro: 'Este tipo não existe nesta aventura.' };
+        if (adv.irmasDone) return { ok: false, erro: 'A conversa entre as irmãs já aconteceu nesta sessão.' };
+        if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
+        adv.irmasDone = true; startLong(adv, 'irmas');
+        return { ok: true, instrucao: 'Conversa entre as irmãs LIGADA. Fale agora como a PRIMEIRA irmã (diga o nome dela), conversando com a outra sobre o herói, sem esperar resposta dele. O jogo enviará CONTINUE 3 vezes para a outra irmã e vocês alternarem (4 falas no total).' };
+    }
     if (!adv.epilogue) return { ok: false, erro: 'Fala longa só existe no epílogo (depois de objective_complete).' };
     if (adv.long) return { ok: false, erro: 'Já há uma fala longa em andamento.' };
     if (tipo === 'sermao') {
@@ -1637,6 +1670,7 @@ function toolModoLongo(adv, a) {
 }
 
 function onPlayerSpeechLong(adv) {
+    if (adv.long?.kind === 'irmas') return;                              // a conversa das irmãs não é interrompida por ruído
     if (adv.long?.kind === 'sermao' && adv.youBuf.trim().length >= 8) stopLong(adv);   // o jogador interrompeu a pregação (ruído curto não conta)
 }
 
@@ -1659,6 +1693,15 @@ function tryChain(adv, waited) {
         return;
     }
     adv.chainSentAt = Date.now();
+    if (L.kind === 'irmas') {                                            // 4 falas: a 1ª já foi dada; CONTINUE 3x (B, A, B)
+        if (L.turns >= 3) { stopLong(adv); return; }
+        L.turns++;
+        const quem = L.turns % 2 === 1 ? 'a OUTRA irmã' : 'a PRIMEIRA irmã';
+        const ultima = L.turns === 3;
+        sendText(`[SISTEMA] CONTINUE a conversa entre as irmãs: agora fala ${quem}, respondendo à fala anterior, em 3 a 5 frases, sobre o herói e o que sentem, sem repetir e sem falar com o herói${ultima ? ', EXCETO no fim desta fala: termine com uma pergunta curta dirigida ao herói e então CALE-SE e espere a resposta dele' : ''}.`);
+        if (ultima) stopLong(adv);
+        return;
+    }
     L.turns++;
     if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
         stopLong(adv);
@@ -1820,6 +1863,21 @@ function checkDetour(adv) {
         false);
 }
 
+// Silêncio: se o jogador fica 30 s calado com o Mestre também calado, o Mestre conduz uma ação dos NPCs.
+const SILENCE_MS = 30000;
+function silenceCheck(adv, left) {
+    if (adv.finished || adv.ending || adv.forced || adv.dead || adv.long || adv.playerEnd || adv.reconnecting || !adv.session || !adv.connected) { adv.quietSince = 0; return; }
+    if (left < 100000) { adv.quietSince = 0; return; }                  // reta final: o Mestre cuida da despedida
+    const quiet = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && !adv.notes.length && !adv.A.micMuted;
+    if (!quiet) { adv.quietSince = 0; return; }
+    const now = Date.now();
+    if (!adv.quietSince) { adv.quietSince = Math.max(now, adv.lastPlayerAt || 0); return; }
+    if (adv.lastPlayerAt > adv.quietSince) adv.quietSince = adv.lastPlayerAt;
+    if (now - adv.quietSince < SILENCE_MS) return;
+    adv.quietSince = now;                                                // recomeça a contagem (nova nudge só depois de mais 30 s calado)
+    sendText('[SISTEMA] SILENCIO: o jogador está calado há 30 segundos. Conduza a cena SOZINHO com UMA ação ou fala curta de um NPC (3 a 5 frases): alguém se aproxima, puxa conversa, provoca ou faz algo que avance a história, sem repetir o que já disse e sem pressionar o jogador. Termine com uma pergunta ou convite e CALE-SE.');
+}
+
 function advTick() {
     const adv = S.adv; if (!adv || adv.finished) return;
     const left = adv.endMs - serverNow();
@@ -1829,6 +1887,11 @@ function advTick() {
     t.classList.toggle('warn', left <= WARN_AT_S * 1000 && left > END_AT_S * 1000);
     t.classList.toggle('crit', left <= END_AT_S * 1000);
 
+    silenceCheck(adv, left);
+    if (adv.advType === 'salao_amor' && S.romance === 'visita' && !adv.irmasDone && !adv.irmasNoted && (adv.totalMs - left) / 1000 >= 660 && left > WARN_AT_S * 1000) {
+        adv.irmasNoted = true;
+        queueNote(adv, '[SISTEMA] MARCO (11 min), NÃO responda falando agora; aplique na sua próxima fala: se a conversa entre as irmãs ainda não aconteceu, faça-a AGORA chamando modo_longo com tipo "conversa_irmas" antes de falar.', false);
+    }
     if (!adv.dead) {
         const elapsedS = (adv.totalMs - left) / 1000;
         for (const m of (adv.advType === ADV_FE ? MARKS_FE : adv.noCombat ? MARKS_SOCIAL : MARKS)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
@@ -1899,6 +1962,21 @@ async function submitFinish(pending) {
         showView('lobby');
         await refreshState();
     }
+}
+
+// Sessão 'in_progress' sem conexão com o Mestre (página fechada): o banco libera a vaga (mission_release_session, 16_*.sql).
+async function releaseStuck(slotId, manual) {
+    if (S.adv || S.releasing === slotId) return;
+    S.releasing = slotId;
+    try {
+        if (manual) { try { localStorage.removeItem(pendKey(slotId)); } catch (_) { /* ok */ } }
+        const { error } = await supabase.rpc('mission_release_session', { p_slot_id: slotId });
+        if (error) throw error;
+        await refreshState();
+    } catch (e) {
+        console.warn('[diarias] release falhou:', e);
+        if (manual) toast('Não foi possível liberar agora. Tente de novo.', true);
+    } finally { S.releasing = null; }
 }
 
 async function maybeSendPending(force) {

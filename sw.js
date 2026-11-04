@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v56'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v57'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -22,6 +22,17 @@ const CRITICAL_OFFLINE_ASSETS = [
     '/offline.html',
     '/assets/offline.webp',
 ];
+
+// Página de cifras (ferramenta do músico): funciona offline via cache.
+const CIFRAS_PAGE = '/cifras.html';
+const isCifrasPath = p => p === '/cifras' || p === '/cifras.html';
+// Reconstitui a Response (sem a marca "redirected") antes de cachear, igual ao offline.html.
+async function cachePageNormalized(cache, key, response) {
+    const body = await response.blob();
+    await cache.put(key, new Response(body, {
+        status: response.status, statusText: response.statusText, headers: response.headers
+    }));
+}
 
 // Demais arquivos essenciais de UI que continuam existindo no repositório (não são zipados).
 const ASSETS_TO_PRECACHE = [
@@ -129,6 +140,14 @@ self.addEventListener('install', event => {
                 )
             );
 
+            // 3) Página de cifras (não crítica: falha aqui não cancela a instalação).
+            try {
+                const r = await fetch(CIFRAS_PAGE, { cache: 'reload' });
+                if (r.ok) await cachePageNormalized(cache, CIFRAS_PAGE, r);
+            } catch (err) {
+                console.warn('⚠️ [SW] Falha ao precachear cifras.html:', err);
+            }
+
             console.log('🔥 [SW] Precache concluído.');
         })().catch(err => {
             console.error('🚨 [SW] Instalação CANCELADA — asset crítico não pôde ser cacheado:', err);
@@ -182,6 +201,22 @@ self.addEventListener('fetch', event => {
                     headers: { 'Content-Type': 'text/plain; charset=utf-8' }
                 });
             };
+
+            // Cifras: rede primeiro (sempre atualiza o cache); sem rede, abre a cópia salva.
+            if (isCifrasPath(url.pathname)) {
+                try {
+                    const response = await fetch(request);
+                    if (response.ok) {
+                        const c = await caches.open(CACHE_NAME);
+                        await cachePageNormalized(c, CIFRAS_PAGE, response.clone());
+                    }
+                    if (response.status < 500) return response;
+                } catch (err) {
+                    console.warn('📡 [SW] Cifras offline, usando cache.', err);
+                }
+                const c = await caches.open(CACHE_NAME);
+                return (await c.match(CIFRAS_PAGE)) || await showOfflinePage();
+            }
 
             try {
                 const response = await fetch(request);

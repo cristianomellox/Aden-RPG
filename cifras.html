@@ -89,6 +89,8 @@ textarea{min-height:260px;resize:vertical;line-height:1.5}
 <section class="screen" id="list">
   <div class="top"><button class="ib" data-go="home" aria-label="Início"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Playlist</h1></div>
   <input id="q" type="search" placeholder="Buscar pelo título…" autocomplete="off">
+  <div class="row-btns" style="margin:10px 0 0"><button class="btn sec" id="bx">Exportar backup</button><button class="btn sec" id="bi">Importar</button><button class="btn sec" id="br">Restaurar do repositório</button><input type="file" id="bf" accept=".json,application/json" hidden></div>
+  <div class="err" id="bmsg" style="color:var(--gold)"></div>
   <div id="items" style="margin-top:14px"></div>
 </section>
 
@@ -138,6 +140,7 @@ function show(n){
   stopScroll();
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
+  wake(n==='song');
   scrollTo(0,0);
   if(n==='list'){$('#q').value='';renderList()}
 }
@@ -264,6 +267,33 @@ $('#ed').onclick=()=>{
   draft=JSON.parse(JSON.stringify(s));fillForm();show('add1');
 };
 $('#ex').onclick=()=>show('home');
+
+/* backup, offline e tela ligada */
+const msg=t=>{$('#bmsg').textContent=t;setTimeout(()=>$('#bmsg').textContent='',5000)};
+function merge(arr){
+  if(!Array.isArray(arr))throw 0;let n=0;
+  arr.forEach(s=>{if(!s||!s.id||!s.title||!Array.isArray(s.lines))return;
+    const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);n++});
+  store(songs);renderList();return n;
+}
+$('#bx').onclick=()=>{
+  const a=el('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(songs,null,1)],{type:'application/json'}));
+  a.download='cifras-backup.json';document.body.append(a);a.click();a.remove();
+  msg('Backup baixado. Coloque cifras-backup.json na raiz do repositório.');
+};
+$('#bi').onclick=()=>$('#bf').click();
+$('#bf').onchange=async e=>{try{msg(merge(JSON.parse(await e.target.files[0].text()))+' música(s) importada(s).')}catch(x){msg('Arquivo inválido.')}e.target.value=''};
+async function fromRepo(silent){
+  try{const r=await fetch('/cifras-backup.json',{cache:'no-cache'});if(!r.ok)throw 0;const n=merge(await r.json());if(!silent)msg(n+' música(s) restaurada(s).')}
+  catch(x){if(!silent)msg('Backup do repositório não encontrado.')}
+}
+$('#br').onclick=()=>fromRepo(false);
+if(!songs.length)fromRepo(true);
+let wl=null;
+async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#song').classList.contains('active'))wake(true)});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script>
 </body>
 </html>

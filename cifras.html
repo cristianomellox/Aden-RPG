@@ -116,6 +116,10 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 .ct{color:var(--gold);font-size:1.5rem;font-weight:700}.cbox svg{display:block;margin:6px auto;stroke-width:1}
 .cbox .sub{color:var(--mut);font-size:.8rem}
 #secp .item{margin:0 0 6px;padding:10px 14px}
+.edit .row:not(.sec){-webkit-touch-callout:none}.edit .ly{user-select:none;-webkit-user-select:none}
+#pk{position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:60;padding:16px}
+.pkc{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:50vh;overflow:auto;margin:12px 0}
+.pkc .chord{position:static;background:#1a1500;border:1px solid var(--gold);border-radius:10px;padding:8px 14px;font-size:1.1rem;line-height:1.2;cursor:pointer}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -171,7 +175,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
   <div class="row-btns" style="margin:0 0 12px"><button class="btn" id="e1">Cifras</button><button class="btn sec" id="e2">Partitura</button></div>
   <div class="sheet edit" id="rows"></div><div class="sheet" id="staves" hidden></div>
   <div class="row-btns"><button class="btn sec" id="more">+ Linha</button><button class="btn sec" id="mst" hidden>+ Pauta</button><button class="btn" id="save">Salvar</button></div>
-  <div id="tray"><div class="hint">Segure e arraste a cifra para cima de uma linha. Arraste uma cifra posicionada para fora para removê-la.</div><div id="chips"></div></div>
+  <div id="tray"><div class="hint">Segure e arraste a cifra para cima de uma linha, ou segure um espaço vazio da linha e escolha a cifra no card. Arraste uma cifra posicionada para fora para removê-la.</div><div id="chips"></div></div>
   <div id="ptray" hidden><div class="hint">Segure e arraste para a pauta: a altura define a nota. Arraste uma nota para fora para removê-la. Escolha ♯ ♭ ♮ antes de soltar.</div><div id="pchips"></div></div>
 </section>
 
@@ -194,7 +198,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
   <details><summary>Adicionar música — passo 1</summary><div class="tx"><ul><li><b>Título</b> é obrigatório.</li><li><b>Letra</b> é opcional (até 10 mil caracteres).</li><li><b>Cifras:</b> escreva separadas por vírgula, por exemplo: <b>C, G, Am, F</b>.</li><li>Toque em <b>Próximo</b> para posicionar as cifras.</li></ul></div></details>
   <details><summary>Seções</summary><div class="tx">Escreva <b>[Refrão]</b> sozinho numa linha, ou use <b>Parte 1:</b>, <b>Verso:</b>, <b>Ponte:</b> etc., e a linha vira um título dourado de seção. Abaixo do campo da letra há botões de atalho (<b>Intro, Verso, Refrão, Ponte, Solo, Parte 1 a 4, Final</b>) que inserem a seção onde está o cursor. Na tela da música, o ícone de lista leva a cada seção.</div></details>
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
-  <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
+  <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
   <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Só clave de sol, sem armadura.</li></ul></div></details>
   <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Criar</b>: escreva o nome e toque em Criar (pede o código).</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet, tudo continua funcionando. Suas alterações ficam no aparelho e são enviadas depois que você informar o código com a conexão ativa.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
@@ -733,6 +737,33 @@ function unlock(){
   $('#stags').append(b)});
 
 let rzT;addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(refit,150)});
+/* segurar num espaço vazio da linha abre o card de cifras */
+(function(){
+  const box=$('#rows');let tm=0,sx=0,sy=0;
+  const stop=()=>{clearTimeout(tm);tm=0};
+  const close=()=>{const o=$('#pk');if(o)o.remove()};
+  function pick(row,x){
+    close();const o=el('div');o.id='pk';const b=el('div','cbox');b.style.maxWidth='340px';
+    const t=el('div','ct');t.textContent='Escolha a cifra';t.style.fontSize='1.25rem';b.append(t);
+    const w=el('div','pkc'),cl=chordList();
+    if(!cl.length){const d=el('div','sub');d.textContent='Nenhuma cifra informada.';w.append(d)}
+    cl.forEach(n=>{const c=el('span','chord');c.textContent=n;c.onclick=()=>{
+      draft.placed.push({n,l:+row.dataset.i,x});close();renderRows($('#rows'),draft,true)};w.append(c)});
+    const k=el('button','btn sec');k.textContent='Cancelar';k.onclick=close;b.append(w,k);o.append(b);
+    o.onclick=e=>{if(e.target===o)close()};document.body.append(o);
+  }
+  box.addEventListener('pointerdown',e=>{
+    if(e.button>0||e.target.closest('.chord'))return;
+    const row=e.target.closest('.row:not(.sec)');if(!row)return;
+    sx=e.clientX;sy=e.clientY;stop();
+    tm=setTimeout(()=>{tm=0;const r=row.getBoundingClientRect();
+      if(navigator.vibrate)navigator.vibrate(12);
+      pick(row,Math.max(0,Math.min(98,(sx-r.left-14)/r.width*100)))},450)});
+  box.addEventListener('pointermove',e=>{if(tm&&Math.hypot(e.clientX-sx,e.clientY-sy)>8)stop()});
+  ['pointerup','pointercancel','pointerleave'].forEach(v=>box.addEventListener(v,stop));
+  box.addEventListener('contextmenu',e=>e.preventDefault());
+  box.addEventListener('scroll',stop,true);
+})();
 /* tela ligada */
 let wl=null;
 async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen')}catch(e){}}

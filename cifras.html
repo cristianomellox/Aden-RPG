@@ -91,13 +91,20 @@ body:not(.onhome) #homeBg,body:not(.onhome) #vig,body:not(.onhome) #cifrasSkyLay
 #home .card:active{background:rgba(60,45,0,.7)}
 .card.wide{grid-column:1/-1;aspect-ratio:auto;flex-direction:row;gap:14px;padding:16px}.card.wide svg{width:42px;max-width:none}
 body{min-height:100vh;min-height:100dvh}
-#home{height:100vh;height:100dvh;min-height:0;justify-content:flex-start;padding-top:12px}
+#home{height:100vh;height:100dvh;min-height:0;justify-content:flex-start;padding-top:34px}
 #home .hm{flex:1;min-height:0;display:flex;flex-direction:column}
 #home .logo{flex:0 1 auto;min-height:0;align-self:center;max-height:24vh;max-height:24dvh;margin:0 auto 14px}
 #home .cards{flex:1;min-height:0;max-height:460px;grid-template-rows:minmax(0,1fr) auto}
 #home .card{aspect-ratio:auto;min-height:0}
 #home .card svg{width:auto;height:min(42%,120px);max-width:70%}
 #home .card.wide{padding:14px}#home .card.wide svg{height:40px;width:auto}
+#home .hm,#ft,#vig{transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .35s cubic-bezier(.4,0,.2,1),visibility 0s linear 0s}
+body.hud-hidden #home .hm,body.hud-hidden #ft,body.hud-hidden #vig{opacity:0;visibility:hidden;pointer-events:none!important;transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .35s cubic-bezier(.4,0,.2,1),visibility 0s linear .35s}
+body.hud-hidden #home .hm{transform:translateY(-30px)}
+.hud-toggle-btn{position:fixed;top:env(safe-area-inset-top,0px);left:50%;transform:translateX(-50%);z-index:1200;display:flex;align-items:center;justify-content:center;width:52px;height:26px;padding:0;border:4px solid #c9a94a;border-top:none;border-radius:0 0 12px 12px;color:#e8cf7a;background:#000;cursor:pointer}
+.hud-toggle-btn:hover{background:#241b08}
+.hud-toggle-btn svg{width:26px;height:26px;stroke-width:2.8}
+body:not(.onhome) .hud-toggle-btn{display:none}
 #ft{position:absolute;left:0;right:0;bottom:0;z-index:5;background:#555;color:#fff;text-align:center;font-size:14px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
 details{border:1px solid var(--ln);border-radius:12px;background:#0c0c0c;margin-bottom:10px}
 summary{padding:14px;color:var(--gold);font-weight:700;cursor:pointer}
@@ -170,7 +177,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 <section class="screen" id="tut">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Tutorial</h1></div>
   <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver e tocar as músicas e as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido sempre que você for criar ou alterar algo. Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
-  <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Playlist:</b> abre as músicas e as setlists.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li></ul></div></details>
+  <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Playlist:</b> abre as músicas e as setlists.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
   <details><summary>Playlist e busca</summary><div class="tx"><ul><li>A aba <b>Músicas</b> lista tudo em ordem alfabética. Toque numa música para abri-la.</li><li>O campo de <b>busca</b> entende título incompleto, sem acento e com pequenos erros de digitação. Sem resultado, aparece "Nenhum resultado".</li><li>A linha abaixo da busca mostra se está tudo sincronizado ou se há alterações aguardando envio.</li></ul></div></details>
   <details><summary>Tela da música: botões do rodapé</summary><div class="tx"><ul>
     <li><b>A − / A +:</b> diminui ou aumenta o tamanho da letra e das cifras.</li>
@@ -234,7 +241,7 @@ function show(n){
   stopScroll();
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
-  document.body.classList.toggle('onhome',n==='home');if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
+  document.body.classList.toggle('onhome',n==='home');if(n!=='home'&&window.CifrasHud)CifrasHud.show();if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
   wake(n==='song');
   scrollTo(0,0);
   if(n==='list'){$('#q').value='';renderList()}
@@ -629,6 +636,16 @@ function unlock(){
     b.append(no,ok);setTimeout(()=>$('#mc').focus(),60);
   });
 }
+
+/* botão que recolhe a interface da tela inicial (só aparece na home) */
+(function(){
+  const UP='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>',DOWN='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+  const btn=el('button','hud-toggle-btn');btn.type='button';document.body.append(btn);
+  const hid=()=>document.body.classList.contains('hud-hidden');
+  function rd(){const h=hid();btn.innerHTML=h?DOWN:UP;btn.title=h?'Mostrar interface':'Recolher interface';btn.setAttribute('aria-label',btn.title);btn.setAttribute('aria-expanded',String(!h))}
+  function set(h){document.body.classList.toggle('hud-hidden',h);rd()}
+  btn.onclick=()=>set(!hid());window.CifrasHud={show:()=>{if(hid())set(false)}};rd();
+})();
 
 /* inserir seções na letra */
 ['Intro','Verso','Refrão','Ponte','Solo','Parte 1','Parte 2','Parte 3','Parte 4','Final'].forEach(n=>{

@@ -29,7 +29,7 @@ const DEFAULT_COLORS = ['#2a1f12', '#050403'];  // [centro, bordas] do degradê 
 // ── Câmera (idêntica à guilda) ────────────────────────────────────────
 const CAM_FOV             = 100;
 const ROTATE_DEG_PER_SEC  = 360 / 150;          // 1 volta a cada 150 s
-const PITCH_LIMIT         = 45;
+const PITCH_LIMIT         = 0;           // só gira na horizontal (sem inclinar para cima/baixo)
 const CAM_INITIAL_YAW_MIN = 20;
 const CAM_INITIAL_YAW_MAX = 60;
 const DRAG_SENS           = 1.0;
@@ -398,6 +398,7 @@ function startSkybox() {
     window.addEventListener('resize', () => {
         if (!_sky || _flat) return;
         const w = cont.clientWidth, h = cont.clientHeight;
+        if (!w || !h) return;               // camada escondida (outra tela): não zera o renderer
         camera.aspect = w / Math.max(h, 1);
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
@@ -444,6 +445,7 @@ function pause() {
 function resume() {
     if (!_paused) return;
     _paused = false;
+    window.dispatchEvent(new Event('resize'));   // reajusta o tamanho depois de ficar escondido
     if (_sky && _sky.running) {
         _lastTs = performance.now();
         if (_sky.raf) cancelAnimationFrame(_sky.raf);

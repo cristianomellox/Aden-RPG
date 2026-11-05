@@ -174,10 +174,12 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 <section class="screen" id="add2">
   <div class="top"><button class="ib" id="back2" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Posicionar cifras</h1></div>
   <div class="row-btns" style="margin:0 0 12px"><button class="btn" id="e1">Cifras</button><button class="btn sec" id="e2">Partitura</button></div>
+  <div id="ksel" class="row-btns" style="margin:0 0 12px" hidden><select id="ks"></select><select id="tsel"></select></div>
+  <div id="pdfinfo" class="cnt" style="text-align:left;margin:0 0 10px" hidden></div>
   <div class="sheet edit" id="rows"></div><div class="sheet" id="staves" hidden></div>
-  <div class="row-btns"><button class="btn sec" id="more">+ Linha</button><button class="btn sec" id="mst" hidden>+ Pauta</button><button class="btn" id="save">Salvar</button></div>
+  <div class="row-btns"><button class="btn sec" id="more">+ Linha</button><button class="btn sec" id="mst" hidden>+ Pauta</button><button class="btn sec" id="imp" hidden>Importar MusicXML / PDF</button><input type="file" id="fi" hidden accept=".xml,.musicxml,.mxl,.pdf,application/pdf"><button class="btn" id="save">Salvar</button></div>
   <div id="tray"><div class="hint">Segure e arraste a cifra para cima de uma linha, ou segure um espaço vazio da linha e escolha a cifra no card. Arraste uma cifra posicionada para fora para removê-la.</div><div id="chips"></div></div>
-  <div id="ptray" hidden><div class="hint">Segure e arraste para a pauta: a altura define a nota. Arraste uma nota para fora para removê-la. Escolha ♯ ♭ ♮ antes de soltar.</div><div id="pchips"></div></div>
+  <div id="ptray" hidden><div class="hint">Segure e arraste para a pauta: a altura define a nota. Arraste uma nota para fora para removê-la. Escolha ♯ ♭ ♮ antes de soltar. Ligadura, Ponto e Fermata: ative e toque numa nota. Solte uma nota sobre outra para formar acorde.</div><div id="pchips"></div></div>
 </section>
 
 <section class="screen" id="tut">
@@ -200,7 +202,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
   <details><summary>Seções</summary><div class="tx">Escreva <b>[Refrão]</b> sozinho numa linha, ou use <b>Parte 1:</b>, <b>Verso:</b>, <b>Ponte:</b> etc., e a linha vira um título dourado de seção. Abaixo do campo da letra há botões de atalho (<b>Intro, Verso, Refrão, Ponte, Solo, Parte 1 a 4, Final</b>) que inserem a seção onde está o cursor. Na tela da música, o ícone de lista leva a cada seção.</div></details>
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
   <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
-  <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Só clave de sol, sem armadura.</li></ul></div></details>
+  <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Há semicolcheias, notas pontuadas, ligaduras, fermata, acordes, ritornelos, armadura e compasso (escolha nas listas acima da pauta). Notas curtas vizinhas são ligadas por barra automaticamente. <b>Importar MusicXML / PDF</b>: um arquivo MusicXML (.musicxml, .xml, .mxl) preenche a pauta; um PDF (até 1,2 MB) fica na aba <b>PDF</b> da música.</li></ul></div></details>
   <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Criar</b>: escreva o nome e toque em Criar (pede o código).</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
@@ -346,7 +348,7 @@ function startDrag(e,name,k,hold,drop,hover){
 }
 $('#save').onclick=async()=>{
   if(!await needOnline())return;
-  const s={id:draft.id||uid(),title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),tr:draft.tr||0,u:draft.u};
+  const s={id:draft.id||uid(),title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,tr:draft.tr||0,u:draft.u};
   const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);
   store(songs);enqueue('save',s.id);show('list');saveSync();
 };
@@ -360,14 +362,14 @@ $('#del').onclick=async()=>{
 function renderSong(){
   const s=cur,box=$('#sv');box.innerHTML='';box.style.setProperty('--fs',fs+'px');
   const h=el('h2');h.textContent=s.title;const rows=el('div');renderRows(rows,s,false);
-  const hs=(s.score||[]).some(x=>x.n.length);if(!hs)view='c';
-  if(hs){const sg=el('div','row-btns');sg.style.margin='0 0 14px';[['c','Cifra'],['s','Partitura']].forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});box.append(h,sg)}else box.append(h);
-  if(view==='s'){const w=el('div');renderStaves(w,s.score,false);box.append(w)}else box.append(rows);
+  const hs=(s.score||[]).some(x=>x.n.length),hp=!!(s.pdf&&s.pdf.d);if((view==='s'&&!hs)||(view==='p'&&!hp))view='c';const vs=[['c','Cifra'],...(hs?[['s','Partitura']]:[]),...(hp?[['p','PDF']]:[])];
+  if(vs.length>1){const sg=el('div','row-btns');sg.style.margin='0 0 14px';vs.forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});box.append(h,sg)}else box.append(h);
+  if(view==='s'){const w=el('div');renderStaves(w,s.score,false);box.append(w)}else if(view==='p'){const w=el('div');box.append(w);renderPdf(w,s.pdf)}else box.append(rows);
   const n=((s.tr||0)+12)%12,d=n>6?n-12:n;$('#tv').textContent='Tom '+(d>0?'+':'')+d;
   const p=$('#secp');p.innerHTML='';p.hidden=true;
   s.lines.forEach((t,i)=>{if(!isSec(t))return;const b=el('button','item');b.textContent=secName(t);
     b.onclick=()=>{rows.children[i].scrollIntoView({behavior:'smooth',block:'start'});p.hidden=true};p.append(b)});
-  $('#sx').hidden=!p.children.length||view==='s';refit();
+  $('#sx').hidden=!p.children.length||view!=='c';refit();
 }
 function openSong(id){
   cur=songs.find(x=>x.id===id);if(!cur)return;renderSong();
@@ -574,68 +576,175 @@ $('#cnx').onclick=()=>{ci=(ci+1)%cv.length;drawChord()};
 $('#cx').onclick=()=>$('#cp').hidden=true;
 $('#cp').onclick=e=>{if(e.target.id==='cp')$('#cp').hidden=true};
 /* partitura */
-let SW=240,X0=44;const stY=p=>80-5*p,stX=x=>X0+x/100*(SW-X0-10),AC={'#':'♯',b:'♭',n:'♮'};
-const NL={w:'Semibreve',h:'Mínima',q:'Semínima',e:'Colcheia',r:'Pausa',b:'Compasso'};
-function noteG(n,k){
-  const x=stX(n.x),y=(n.d==='b'||n.d==='r')?60:stY(n.p);let o='';
-  if(n.d==='b')o+=`<line x1="${x}" x2="${x}" y1="40" y2="80" stroke="#ccc" stroke-width="2"/>`;
-  else if(n.d==='r')o+=`<polyline points="${x+2},44 ${x-3},52 ${x+3},59 ${x-3},67 ${x+2},74" stroke="#fff" stroke-width="2.5"/>`;
+let SW=240;const X0=44,stY=p=>80-5*p,AC={'#':'♯',b:'♭',n:'♮'};
+const xo=st=>X0+(st&&st.k?Math.abs(st.k)*9:0)+(st&&st.ts?24:0),stX=(x,o)=>o+x/100*(SW-o-10);
+const NL={w:'Semibreve',h:'Mínima',q:'Semínima',e:'Colcheia',s:'Semicolcheia',r:'Pausa',b:'Compasso',bf:'Barra final',rs:'Ritornelo ‹',re:'Ritornelo ›'};
+const BARS=['b','bf','rs','re'],HEADS='whqes',SHP=[8,5,9,6,3,7,4],FLP=[4,7,3,6,2,5,1];
+function noteG(n,k,o){
+  const x=stX(n.x,o),B=BARS.includes(n.d),y=(B||n.d==='r')?60:stY(n.p);let s='';
+  if(B){const l=(d,w)=>`<line x1="${x+d}" x2="${x+d}" y1="40" y2="80" stroke="#ccc" stroke-width="${w}"/>`,t=d=>`<circle cx="${x+d}" cy="55" r="2" fill="#ccc" stroke="none"/><circle cx="${x+d}" cy="65" r="2" fill="#ccc" stroke="none"/>`;
+    s=n.d==='b'?l(0,2):n.d==='bf'?l(-3,1.5)+l(1.5,4):n.d==='rs'?l(-3,4)+l(2,1.5)+t(7):l(3,4)+l(-2,1.5)+t(-7)}
+  else if(n.d==='r')s=`<polyline points="${x+2},44 ${x-3},52 ${x+3},59 ${x-3},67 ${x+2},74" stroke="#fff" stroke-width="2.5"/>`;
   else{
     const L=q=>`<line x1="${x-13}" x2="${x+13}" y1="${stY(q)}" y2="${stY(q)}" stroke="#888" stroke-width="1.2"/>`;
-    for(let q=-2;q>=n.p;q-=2)o+=L(q);for(let q=10;q<=n.p;q+=2)o+=L(q);
-    const up=n.p<4;
-    o+=`<ellipse cx="${x}" cy="${y}" rx="7.5" ry="5.2" transform="rotate(-20 ${x} ${y})" fill="${n.d==='w'||n.d==='h'?'none':'#fff'}" stroke="#fff" stroke-width="2"/>`;
-    if(n.d!=='w'){const sx=up?x+7:x-7,ey=up?y-34:y+34;o+=`<line x1="${sx}" x2="${sx}" y1="${y}" y2="${ey}" stroke="#fff" stroke-width="2"/>`;
-      if(n.d==='e')o+=`<path d="M${sx} ${ey} q12 ${up?8:-8} 8 ${up?20:-20}" stroke="#fff" stroke-width="2.5"/>`}
-    if(n.a)o+=`<text x="${x-14}" y="${y+7}" text-anchor="end" font-size="22" fill="#fff" stroke="none">${AC[n.a]}</text>`;
-  }
-  return `<g class="nt" data-k="${k}">${o}<rect x="${x-14}" y="${y-22}" width="28" height="44" fill="transparent" stroke="none"/></g>`;
+    for(let q=-2;q>=n.p;q-=2)s+=L(q);for(let q=10;q<=n.p;q+=2)s+=L(q);
+    s+=`<ellipse cx="${x}" cy="${y}" rx="7.5" ry="5.2" transform="rotate(-20 ${x} ${y})" fill="${n.d==='w'||n.d==='h'?'none':'#fff'}" stroke="#fff" stroke-width="2"/>`;
+    if(n.a)s+=`<text x="${x-14}" y="${y+7}" text-anchor="end" font-size="22" fill="#fff" stroke="none">${AC[n.a]}</text>`;
+    if(n.o)s+=`<circle cx="${x+13}" cy="${y-(n.p%2===0?5:0)}" r="2.2" fill="#fff" stroke="none"/>`}
+  if(n.f)s+=`<path d="M${x-10} 31 Q${x} 15 ${x+10} 31" stroke="#fff" stroke-width="2"/><circle cx="${x}" cy="27" r="2" fill="#fff" stroke="none"/>`;
+  return `<g class="nt" data-k="${k}">${s}<rect x="${x-14}" y="${y-22}" width="28" height="44" fill="transparent" stroke="none"/></g>`;
 }
 function staffSvg(st){
-  let o='<g stroke="#888" stroke-width="1.2">';for(let i=0;i<5;i++)o+=`<line x1="4" x2="${SW-4}" y1="${40+i*10}" y2="${40+i*10}"/>`;
-  o+=`</g><text x="6" y="88" font-size="62" fill="#fff" stroke="none" font-family="'Noto Music','Segoe UI Symbol','Apple Symbols',serif">𝄞</text>`;
-  st.n.forEach((n,k)=>o+=noteG(n,k));
-  return `<svg class="stv" viewBox="0 8 ${SW} 112" width="100%">${o}</svg>`;
+  const o=xo(st),nk=Math.abs(st.k||0),N=st.n;let s='<g stroke="#888" stroke-width="1.2">';
+  for(let i=0;i<5;i++)s+=`<line x1="4" x2="${SW-4}" y1="${40+i*10}" y2="${40+i*10}"/>`;
+  s+=`</g><text x="6" y="88" font-size="62" fill="#fff" stroke="none" font-family="'Noto Music','Segoe UI Symbol','Apple Symbols',serif">𝄞</text>`;
+  if(nk){const P=st.k>0?SHP:FLP,sy=st.k>0?'♯':'♭';for(let i=0;i<nk;i++)s+=`<text x="${X0+i*9-2}" y="${stY(P[i])+7}" font-size="22" fill="#fff" stroke="none">${sy}</text>`}
+  if(st.ts){const [a,b]=st.ts.split('/'),tx=X0+nk*9+10,f=`font-size="24" font-weight="700" text-anchor="middle" fill="#fff" stroke="none"`;s+=`<text x="${tx}" y="61" ${f}>${a}</text><text x="${tx}" y="81" ${f}>${b}</text>`}
+  const ord=N.map((_,k)=>k).sort((a,b)=>N[a].x-N[b].x),gr=[];
+  ord.forEach(i=>{const n=N[i],l=gr[gr.length-1];if(HEADS.includes(n.d)){if(l&&l.h&&Math.abs(n.x-l.x)<1.8)l.k.push(i);else gr.push({h:1,k:[i],x:n.x})}else gr.push({h:0,k:[i],x:n.x})});
+  N.forEach((n,k)=>s+=noteG(n,k,o));
+  gr.forEach(g=>{if(!g.h)return;const ps=g.k.map(i=>N[i].p);g.d=N[g.k[0]].d;g.x=stX(g.x,o);g.top=stY(Math.max(...ps));g.bot=stY(Math.min(...ps));g.up=ps.reduce((a,b)=>a+b,0)/ps.length<4});
+  const ln=(x1,y1,x2,y2,w)=>`<line x1="${x1}" x2="${x2}" y1="${y1}" y2="${y2}" stroke="#fff" stroke-width="${w}"/>`;
+  const single=g=>{if(g.d==='w')return;const up=g.up,sx=g.x+(up?7:-7),ey=up?g.top-34:g.bot+34;s+=ln(sx,up?g.bot:g.top,sx,ey,2);
+    if(g.d==='e'||g.d==='s'){s+=`<path d="M${sx} ${ey} q12 ${up?8:-8} 8 ${up?20:-20}" stroke="#fff" stroke-width="2.5"/>`;if(g.d==='s')s+=`<path d="M${sx} ${ey+(up?9:-9)} q12 ${up?8:-8} 8 ${up?20:-20}" stroke="#fff" stroke-width="2.5"/>`}};
+  const beam=c=>{if(c.length<2)return single(c[0]);const up=c.filter(g=>g.up).length*2>=c.length,by=up?Math.min(...c.map(g=>g.top))-34:Math.max(...c.map(g=>g.bot))+34,dx=up?7:-7,dy=up?7:-7;
+    c.forEach(g=>s+=ln(g.x+dx,up?g.bot:g.top,g.x+dx,by,2));s+=ln(c[0].x+dx-1,by,c[c.length-1].x+dx+1,by,4);
+    c.forEach((g,i)=>{if(g.d!=='s')return;const nx=c[i+1],pv=c[i-1];
+      if(nx&&nx.d==='s')s+=ln(g.x+dx,by+dy,nx.x+dx,by+dy,3);else if(!(pv&&pv.d==='s'))s+=ln(g.x+dx,by+dy,g.x+dx+(nx?8:-8)*(nx?1:1),by+dy,3)})};
+  let run=[];const flush=()=>{for(let i=0;i<run.length;i+=4)beam(run.slice(i,i+4));run=[]};
+  gr.forEach(g=>{if(g.h&&(g.d==='e'||g.d==='s'))run.push(g);else{flush();if(g.h)single(g)}});flush();
+  const hs=gr.filter(g=>g.h);
+  hs.forEach((g,i)=>{const nx=hs[i+1];if(!nx)return;g.k.forEach(ki=>{const n=N[ki];if(!n.lg)return;
+    const y1=stY(n.p),q=nx.k.map(j=>N[j].p).reduce((a,b)=>Math.abs(a-n.p)<=Math.abs(b-n.p)?a:b),y2=stY(q),dy=g.up?9:-9,yc=g.up?Math.max(y1,y2)+dy+9:Math.min(y1,y2)+dy-9;
+    s+=`<path d="M${g.x+3} ${y1+dy} Q${(g.x+nx.x)/2} ${yc} ${nx.x-3} ${y2+dy}" stroke="#fff" stroke-width="1.8" fill="none"/>`})});
+  return `<svg class="stv" viewBox="0 8 ${SW} 112" width="100%">${s}</svg>`;
 }
 function renderStaves(box,score,edit){
   SW=Math.round((Math.min(innerWidth,760)-32)/1.5);box.innerHTML='';
   score.forEach((st,si)=>{const w=el('div','stw');w.innerHTML=staffSvg(st);
     if(edit){const x=el('button','ib');x.textContent='×';x.setAttribute('aria-label','Remover pauta');x.onclick=()=>{score.splice(si,1);renderStaves(box,score,true)};w.append(x);
-      w.querySelectorAll('.nt').forEach(g=>{const k=+g.dataset.k;g.onpointerdown=e=>startDrag(e,NL[st.n[k].d],k,false,(x,y)=>placeNote(null,x,y,{s:si,k}),hoverNote)})}
+      w.querySelectorAll('.nt').forEach(g=>{const k=+g.dataset.k;
+        if(tmode){g.style.cursor='pointer';g.onclick=()=>{const f={lg:'lg',dot:'o',fm:'f'}[tmode],n=st.n[k];n[f]=n[f]?0:1;renderStaves(box,score,true)};return}
+        g.onpointerdown=e=>startDrag(e,NL[st.n[k].d],k,false,(x,y)=>placeNote(null,x,y,{s:si,k}),hoverNote)})}
     box.append(w)});
 }
 function snap(x,y){
   const svg=document.elementFromPoint(x,y)?.closest('#staves .stv');if(!svg)return null;
-  const r=svg.getBoundingClientRect(),vx=(x-r.left)/r.width*SW,vy=(y-r.top)/r.height*112+8;
-  return {svg,si:[...document.querySelectorAll('#staves .stv')].indexOf(svg),
-    nx:Math.max(0,Math.min(100,(vx-X0)/(SW-X0-10)*100)),np:Math.max(-6,Math.min(13,Math.round((80-vy)/5)))};
+  const si=[...document.querySelectorAll('#staves .stv')].indexOf(svg),o=xo(draft.score[si]),r=svg.getBoundingClientRect(),vx=(x-r.left)/r.width*SW,vy=(y-r.top)/r.height*112+8;
+  return {svg,si,o,nx:Math.max(0,Math.min(100,(vx-o)/(SW-o-10)*100)),np:Math.max(-6,Math.min(13,Math.round((80-vy)/5)))};
 }
 function hoverNote(x,y){
   document.querySelectorAll('#staves .pv').forEach(e=>e.remove());if(x==null)return;
-  const t=snap(x,y);if(!t)return;const cx=stX(t.nx),cy=stY(t.np);
+  const t=snap(x,y);if(!t)return;const cx=stX(t.nx,t.o),cy=stY(t.np);
   t.svg.insertAdjacentHTML('beforeend',`<g class="pv" pointer-events="none"><line x1="${cx-24}" x2="${cx+24}" y1="${cy}" y2="${cy}" stroke="#d4af37" stroke-width="1.5"/><circle cx="${cx}" cy="${cy}" r="3.5" fill="#d4af37" stroke="none"/></g>`);
 }
 function placeNote(item,x,y,from){
   if(from)item=draft.score[from.s].n.splice(from.k,1)[0];
-  const t=snap(x,y);if(t)draft.score[t.si].n.push({...item,x:t.nx,p:t.np});
+  const t=snap(x,y);
+  if(t){let nx=t.nx;if(HEADS.includes(item.d)){const m=draft.score[t.si].n.find(q=>HEADS.includes(q.d)&&Math.abs(q.x-nx)<2.5);if(m)nx=m.x}
+    draft.score[t.si].n.push({...item,x:nx,p:t.np})}
   renderStaves($('#staves'),draft.score,true);
 }
-let acc='';
+let acc='',tmode='';
 function renderPal(){
   const b=$('#pchips');b.innerHTML='';
   Object.entries(NL).forEach(([d,t])=>{const c=el('span','chord');c.textContent=t;c.oncontextmenu=e=>e.preventDefault();
-    c.onpointerdown=e=>startDrag(e,t,null,true,(x,y)=>placeNote({d,a:'whqe'.includes(d)?acc:''},x,y),hoverNote);b.append(c)});
+    c.onpointerdown=e=>startDrag(e,t,null,true,(x,y)=>placeNote({d,a:HEADS.includes(d)?acc:''},x,y),hoverNote);b.append(c)});
   Object.entries(AC).forEach(([a,t])=>{const c=el('span','chord');c.textContent=t;if(acc===a){c.style.background='var(--gold)';c.style.color='#000'}
     c.onclick=()=>{acc=acc===a?'':a;renderPal()};b.append(c)});
+  [['lg','Ligadura'],['dot','Ponto'],['fm','Fermata']].forEach(([m,t])=>{const c=el('span','chord');c.textContent=t;if(tmode===m){c.style.background='var(--gold)';c.style.color='#000'}
+    c.onclick=()=>{tmode=tmode===m?'':m;renderPal();renderStaves($('#staves'),draft.score,true)};b.append(c)});
+}
+/* importação: MusicXML e PDF */
+async function mxlText(buf){
+  const v=new DataView(buf),u=new Uint8Array(buf);let e=u.length-22;while(e>=0&&v.getUint32(e,true)!==0x06054b50)e--;
+  const n=v.getUint16(e+10,true);let p=v.getUint32(e+16,true),c=null;
+  for(let i=0;i<n;i++){const nl=v.getUint16(p+28,true),xl=v.getUint16(p+30,true),cl=v.getUint16(p+32,true),nm=new TextDecoder().decode(u.subarray(p+46,p+46+nl));
+    if(!c&&!/^META-INF/.test(nm)&&/\.(xml|musicxml)$/i.test(nm))c={m:v.getUint16(p+10,true),cs:v.getUint32(p+20,true),lo:v.getUint32(p+42,true)};p+=46+nl+xl+cl}
+  if(!c)throw 0;const st=c.lo+30+v.getUint16(c.lo+26,true)+v.getUint16(c.lo+28,true),d=u.subarray(st,st+c.cs);
+  if(c.m===0)return new TextDecoder().decode(d);
+  return new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
+function parseMXL(txt){
+  const d=new DOMParser().parseFromString(txt,'application/xml'),part=d.getElementsByTagName('part')[0];if(d.querySelector('parsererror')||!part)throw 0;
+  const q=(e,t)=>e.getElementsByTagName(t)[0],tx=(e,t)=>{const x=q(e,t);return x?x.textContent.trim():''};
+  const els=[],TY={whole:'w',half:'h',quarter:'q',eighth:'e','16th':'s','32nd':'s','64th':'s'},ST='CDEFGAB',SH=['F','C','G','D','A','E','B'],FL=['B','E','A','D','G','C','F'];
+  let fifths=0,ts='';
+  const ka=x=>fifths>0&&SH.slice(0,fifths).includes(x)?1:fifths<0&&FL.slice(0,-fifths).includes(x)?-1:0;
+  const ms=[...part.children].filter(m=>m.tagName==='measure');
+  ms.forEach((m,mi)=>{let re=0;
+    [...m.children].forEach(c=>{
+      if(c.tagName==='attributes'){const f=q(c,'fifths');if(f)fifths=+f.textContent;const b=q(c,'beats'),t=q(c,'beat-type');if(b&&t&&!ts)ts=b.textContent.trim()+'/'+t.textContent.trim()}
+      else if(c.tagName==='barline'){const r=q(c,'repeat');if(r){if(r.getAttribute('direction')==='forward')els.push({d:'rs'});else re=1}}
+      else if(c.tagName==='note'){
+        if(q(c,'grace'))return;const v=tx(c,'voice'),sf=tx(c,'staff');if((v&&v!=='1')||(sf&&sf!=='1'))return;
+        const rest=!!q(c,'rest'),o={d:rest?'r':(TY[tx(c,'type')]||'q')};
+        if(q(c,'dot'))o.o=1;if(q(c,'fermata'))o.f=1;
+        if(!rest){const sp=tx(c,'step'),al=+(tx(c,'alter')||0);o.p=Math.max(-6,Math.min(13,+tx(c,'octave')*7+ST.indexOf(sp)-30));
+          if(al!==ka(sp))o.a=al>0?'#':al<0?'b':'n';if(q(c,'chord'))o.ch=1;
+          if([...c.getElementsByTagName('tie'),...c.getElementsByTagName('slur')].some(t=>t.getAttribute('type')==='start'))o.lg=1}
+        els.push(o)}});
+    els.push({d:re?'re':mi===ms.length-1?'bf':'b'})});
+  return {els,fifths:+(els.k||0)||0,ts,title:tx(d,'movement-title')||tx(d,'work-title'),key:fifths};
+}
+function layoutScore(els,k,ts){
+  const W={w:8,h:5.5,q:3.8,e:2.8,s:2.4,r:3.8,b:1.6,bf:2,rs:2,re:2},cap=(SW-xo({k,ts})-10)/6.5,out=[];
+  let cur={n:[],k,ts},cum=0;
+  els.forEach(e=>{const {ch,...n}=e;
+    if(ch&&cur.n.length){cur.n.push({...n,x:cur.n[cur.n.length-1].x});return}
+    if(n.d==='b'&&!cur.n.length)return;
+    const w=W[n.d]*(n.o?1.4:1);
+    if(cum+w>cap&&cur.n.length){out.push(cur);cur={n:[],k,ts};cum=0}
+    cur.n.push({...n,x:Math.min(100,(cum+w/2)/cap*100)});cum+=w});
+  if(cur.n.length)out.push(cur);return out;
+}
+function pdfInfo(){
+  const b=$('#pdfinfo');b.innerHTML='';b.hidden=!draft.pdf||$('#staves').hidden;if(b.hidden)return;
+  b.append('PDF anexado: '+draft.pdf.n+' ');const x=el('button','btn del');x.type='button';x.textContent='Remover PDF';x.style.cssText='padding:4px 10px;font-size:.8rem;margin-left:6px';
+  x.onclick=()=>{draft.pdf=null;pdfInfo()};b.append(x);
+}
+function syncKT(){const f=draft.score[0]||{};$('#ks').value=f.k||0;$('#tsel').value=f.ts||''}
+(function(){
+  const ks=$('#ks'),ts=$('#tsel');
+  for(let k=-6;k<=6;k++){const o=el('option');o.value=k;o.textContent=k?'Armadura: '+Math.abs(k)+(k>0?'♯':'♭'):'Sem armadura';ks.append(o)}
+  ['','2/4','3/4','4/4','6/8'].forEach(t=>{const o=el('option');o.value=t;o.textContent=t?'Compasso '+t:'Sem compasso';ts.append(o)});
+  const ap=()=>{draft.score.forEach(s=>{s.k=+ks.value;s.ts=ts.value});renderStaves($('#staves'),draft.score,true)};ks.onchange=ts.onchange=ap;
+  $('#imp').onclick=()=>$('#fi').click();
+  $('#fi').onchange=async()=>{
+    const f=$('#fi').files[0];$('#fi').value='';if(!f)return;const ex=(f.name.split('.').pop()||'').toLowerCase();
+    try{
+      if(ex==='pdf'){
+        if(f.size>1.2e6){await modal('PDF muito grande','O PDF precisa ter até 1,2 MB para ser guardado e sincronizado. Comprima o arquivo e tente de novo.',[['OK',1]],'err');return}
+        const d=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)});
+        draft.pdf={n:f.name,d};pdfInfo();await modal('PDF anexado','Depois de salvar, ele aparece na aba PDF da música.',[['OK',1]],'ok');return}
+      const R=parseMXL(ex==='mxl'?await mxlText(await f.arrayBuffer()):await f.text());
+      SW=Math.round((Math.min(innerWidth,760)-32)/1.5);const sv=layoutScore(R.els,R.key,R.ts);if(!sv.length)throw 0;
+      if(draft.score.some(x=>x.n.length)&&await modal('Substituir partitura?','A pauta atual será trocada pela do arquivo.',[['Cancelar',0,'sec'],['Substituir',1]])!==1)return;
+      draft.score=sv;if(!$('#t').value.trim()&&R.title){$('#t').value=R.title;draft.title=R.title}
+      setEm('s');await modal('Partitura importada','Confira as notas na pauta antes de salvar.',[['OK',1]],'ok');
+    }catch(e){modal('Não foi possível importar','Use um arquivo MusicXML (.musicxml, .xml, .mxl) ou PDF válido.',[['OK',1]],'err')}
+  };
+})();
+async function renderPdf(w,pdf){
+  w.innerHTML='<div class="empty">Carregando PDF…</div>';
+  try{
+    if(!window.pdfjsLib){await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';sc.onload=ok;sc.onerror=no;document.head.append(sc)});
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}
+    const bin=atob(pdf.d.split(',')[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    const doc=await pdfjsLib.getDocument({data:u}).promise;w.innerHTML='';
+    for(let i=1;i<=doc.numPages;i++){const pg=await doc.getPage(i),W=Math.min(innerWidth,760)-32,r=Math.min(devicePixelRatio||1,2),vp=pg.getViewport({scale:W/pg.getViewport({scale:1}).width*r}),c=document.createElement('canvas');
+      c.width=vp.width;c.height=vp.height;c.style.cssText='width:100%;display:block;margin-bottom:10px;background:#fff';w.append(c);await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise}
+  }catch(e){w.innerHTML='';const a=el('a');a.textContent='Abrir PDF';a.style.cssText='color:var(--gold);font-size:1.1rem';
+    try{const bin=atob(pdf.d.split(',')[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.target='_blank'}catch(x){}w.append(a)}
 }
 function setEm(m){
   draft.score=draft.score||[];
   $('#e1').className='btn'+(m==='c'?'':' sec');$('#e2').className='btn'+(m==='s'?'':' sec');
-  $('#rows').hidden=$('#tray').hidden=$('#more').hidden=m==='s';$('#staves').hidden=$('#ptray').hidden=$('#mst').hidden=m==='c';
-  if(m==='s'){if(!draft.score.length)draft.score.push({n:[]});renderStaves($('#staves'),draft.score,true);renderPal()}
+  $('#rows').hidden=$('#tray').hidden=$('#more').hidden=m==='s';$('#staves').hidden=$('#ptray').hidden=$('#mst').hidden=$('#imp').hidden=$('#ksel').hidden=m==='c';
+  if(m==='s'){if(!draft.score.length)draft.score.push({n:[]});renderStaves($('#staves'),draft.score,true);renderPal();syncKT()}pdfInfo();
 }
 $('#e1').onclick=()=>setEm('c');$('#e2').onclick=()=>setEm('s');
-$('#mst').onclick=()=>{draft.score.push({n:[]});renderStaves($('#staves'),draft.score,true)};
+$('#mst').onclick=()=>{const f=draft.score[0]||{};draft.score.push({n:[],k:f.k||0,ts:f.ts||''});renderStaves($('#staves'),draft.score,true)};
 
 /* sincronização com o Supabase (offline primeiro) */
 const SB='https://lqzlblvmkuwedcofmgfb.supabase.co',SBK='sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';

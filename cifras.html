@@ -144,8 +144,8 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
 <section class="screen" id="set">
   <div class="top"><button class="ib" id="bkset" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="sname"></h1></div>
   <div id="siv"></div>
-  <div class="row-btns" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
-  <div class="row-btns"><button class="btn" id="splay">Tocar</button><button class="btn del" id="sdel">Excluir setlist</button></div>
+  <div class="row-btns" id="srow" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
+  <div class="row-btns"><button class="btn" id="splay">Tocar</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button></div>
 </section>
 
 <section class="screen" id="song">
@@ -361,20 +361,23 @@ function renderSets(){
   sets.forEach(x=>{const i=el('button','item');i.textContent=x.name+' · '+x.ids.length;
     i.onclick=()=>{curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
-$('#sadd').onclick=()=>{const n=$('#sn2').value.trim();if(!n)return;sets.push({id:String(Date.now()),name:n,ids:[]});storeS();$('#sn2').value='';renderSets()};
+$('#sadd').onclick=async()=>{const n=$('#sn2').value.trim();if(!n)return;if(!await unlock())return;const x={id:uid(),name:n,ids:[]};sets.push(x);storeS();enqueue('sset',x.id);$('#sn2').value='';renderSets();saveSync()};
+let sdt;function setChanged(){enqueue('sset',curSet.id);clearTimeout(sdt);sdt=setTimeout(()=>sync(true),1200)}
+$('#sunl').onclick=async()=>{if(await unlock())renderSet()};
 function renderSet(){
+  const un=!!cfg().code;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;
   $('#sname').textContent=curSet.name;const b=$('#siv');b.innerHTML='';
   curSet.ids.forEach((id,i)=>{const s=songs.find(x=>x.id===id);if(!s)return;
     const d=el('div','item it'),n=el('span');n.textContent=(i+1)+'. '+s.title;n.onclick=()=>{play={i};openSong(id)};d.append(n);
-    [['↑',-1],['↓',1],['×',0]].forEach(([t,m])=>{const k=el('button','ib');k.textContent=t;k.onclick=()=>{
+    (un?[['↑',-1],['↓',1],['×',0]]:[]).forEach(([t,m])=>{const k=el('button','ib');k.textContent=t;k.onclick=()=>{
       if(!m)curSet.ids.splice(i,1);else{const j=i+m;if(j<0||j>=curSet.ids.length)return;[curSet.ids[i],curSet.ids[j]]=[curSet.ids[j],curSet.ids[i]]}
-      storeS();renderSet()};d.append(k)});b.append(d)});
+      storeS();setChanged();renderSet()};d.append(k)});b.append(d)});
   const sel=$('#ssel');sel.innerHTML='';
   songs.filter(s=>!curSet.ids.includes(s.id)).sort((a,b)=>a.title.localeCompare(b.title,'pt-BR')).forEach(s=>{const o=el('option');o.value=s.id;o.textContent=s.title;sel.append(o)});
 }
-$('#sins').onclick=()=>{const v=$('#ssel').value;if(!v)return;curSet.ids.push(v);storeS();renderSet()};
+$('#sins').onclick=()=>{const v=$('#ssel').value;if(!v)return;curSet.ids.push(v);storeS();setChanged();renderSet()};
 $('#splay').onclick=()=>{if(curSet.ids.length){play={i:0};openSong(curSet.ids[0])}};
-$('#sdel').onclick=async()=>{if(await modal('Excluir setlist?','Só esta setlist, neste aparelho, será removida. As músicas continuam salvas.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;sets=sets.filter(x=>x!==curSet);storeS();show('list');tab(true)};
+$('#sdel').onclick=async()=>{if(await modal('Excluir setlist?','A setlist será removida para toda a banda. As músicas continuam salvas.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;enqueue('sdelset',curSet.id);sets=sets.filter(x=>x!==curSet);storeS();show('list');tab(true);saveSync()};
 $('#bkset').onclick=()=>{show('list');tab(true)};
 function step(d){if(!play)return;const i=play.i+d;if(i<0||i>=curSet.ids.length)return;play.i=i;openSong(curSet.ids[i])}
 $('#pv').onclick=()=>step(-1);$('#nx').onclick=()=>step(1);
@@ -496,7 +499,7 @@ function loadQ(){try{return JSON.parse(localStorage.getItem('cifras.q'))||[]}cat
 function pqSave(){try{localStorage.setItem('cifras.q',JSON.stringify(pq))}catch(e){}}
 function cfg(){try{return {name:(JSON.parse(localStorage.getItem('cifras.cfg'))||{}).name||'',code:sessionStorage.getItem('cifras.code')||''}}catch(e){return {name:'',code:''}}}
 function enqueue(op,id){pq=pq.filter(x=>x.id!==id);pq.push({op,id});pqSave();setSt()}
-function migrate(){songs.forEach(s=>{if(UU.test(s.id))return;const o=s.id;s.id=uid();sets.forEach(x=>x.ids=x.ids.map(i=>i===o?s.id:i));pq.push({op:'save',id:s.id})})}
+function migrate(){sets.forEach(x=>{if(!UU.test(x.id)){x.id=uid();pq.push({op:'sset',id:x.id})}});songs.forEach(s=>{if(UU.test(s.id))return;const o=s.id;s.id=uid();sets.forEach(x=>x.ids=x.ids.map(i=>i===o?s.id:i));pq.push({op:'save',id:s.id})})}
 function setSt(m){const n=pq.length;$('#sst').textContent=m||(!navigator.onLine?'Offline — usando a cópia salva neste aparelho.':n?n+' alteração(ões) aguardando envio para a banda.':'')}
 async function rpc(fn,b){const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:SBH,body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json().catch(()=>null)}
 function modal(t,x,btns,icon){
@@ -517,6 +520,8 @@ async function sync(push){
       const s=songs.find(x=>x.id===it.id);
       if(it.op==='save'&&s){const {tr,u,...d}=s;const r=await rpc('cifras_save',{p_code:c.code,p_id:s.id,p_title:s.title,p_data:d,p_author:c.name||null});if(r&&r.updated_at)s.u=r.updated_at}
       else if(it.op==='del')await rpc('cifras_delete',{p_code:c.code,p_id:it.id});
+      else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){const r=await rpc('cifras_set_save',{p_code:c.code,p_id:t.id,p_name:t.name,p_ids:t.ids,p_author:c.name||null});if(r&&r.updated_at)t.u=r.updated_at}}
+      else if(it.op==='sdelset')await rpc('cifras_set_delete',{p_code:c.code,p_id:it.id});
       pq=pq.filter(x=>x!==it);pqSave();
     }
     const r=await fetch(SB+'/rest/v1/cifras_songs?select=id,title,data,updated_at,deleted',{headers:SBH});
@@ -529,6 +534,13 @@ async function sync(push){
       if(i>=0&&songs[i].u===w.updated_at)return;
       const n={...w.data,id:w.id,title:w.title,u:w.updated_at,tr:i>=0?songs[i].tr:0};if(i>=0)songs[i]=n;else songs.push(n)});
     const ids=new Set(rows.map(w=>w.id));songs=songs.filter(x=>!x.u||ids.has(x.id)||pq.some(p=>p.id===x.id));
+    try{
+      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,updated_at',{headers:SBH});
+      if(r2.ok){const sr=await r2.json();
+        sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
+          const n={id:w.id,name:w.name,ids:w.ids||[],u:w.updated_at};if(i>=0)sets[i]=n;else sets.push(n)});
+        const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id))}
+    }catch(e){}
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;
     if($('#list').classList.contains('active'))renderList();

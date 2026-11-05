@@ -30,6 +30,8 @@ const DEFAULT_COLORS = ['#2a1f12', '#050403'];  // [centro, bordas] do degradê 
 const CAM_FOV             = 100;
 const ROTATE_DEG_PER_SEC  = 360 / 150;          // 1 volta a cada 150 s
 const PITCH_LIMIT         = 0;           // só gira na horizontal (sem inclinar para cima/baixo)
+// Yaw inicial: 0° = 25% da largura da imagem; -90° = centro da imagem (50%); fórmula: yaw = 90 - 360 × (posição da frente, de 0 a 1, contada da esquerda)
+const START_YAW           = -90;
 const CAM_INITIAL_YAW_MIN = 20;
 const CAM_INITIAL_YAW_MAX = 60;
 const DRAG_SENS           = 1.0;
@@ -388,7 +390,9 @@ function startSkybox() {
     };
     const meshA = mk(), meshB = mk();
 
-    camYaw = (Math.random() < 0.5 ? 1 : -1) * randBetween(CAM_INITIAL_YAW_MIN, CAM_INITIAL_YAW_MAX);
+    // Ponto de partida: START_YAW (graus). Para testar outro ângulo sem editar o arquivo, abra /cifras?yaw=NN
+    const qy = parseFloat(new URLSearchParams(location.search).get('yaw'));
+    camYaw = isFinite(qy) ? qy : START_YAW + randBetween(-6, 6);
     camPitch = 0;
 
     _sky = { scene, camera, renderer, canvas, cont, layer, running: true, raf: 0, pfx: null, meshA, meshB };

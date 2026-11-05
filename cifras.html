@@ -34,7 +34,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--gold)}
 textarea{min-height:260px;resize:vertical;line-height:1.5}
 .cnt{color:var(--mut);font-size:.75rem;text-align:right;margin-top:4px}
 .btn{background:var(--gold);color:#000;border:0;border-radius:12px;padding:14px 22px;font-weight:700;font-size:1rem}
-.btn.sec{background:none;color:var(--gold);border:1px solid var(--gold)}
+.btn.sec{background:#141414;color:var(--gold);border:1px solid var(--gold)}
 .btn.del{background:none;color:#e57373;border:1px solid #5a2a2a}
 .row-btns{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
 .err{color:#e57373;font-size:.85rem;margin-top:6px;min-height:1em}
@@ -75,6 +75,12 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
 .row.sec .lane{display:none}
 #secp{position:fixed;left:12px;right:12px;bottom:150px;max-height:40vh;overflow:auto;background:#0a0a0a;border:1px solid var(--gold);border-radius:12px;padding:8px;z-index:30}
 .stw{position:relative;margin-bottom:10px}.stw .ib{position:absolute;right:0;top:0;width:30px;height:30px}.nt{touch-action:none;cursor:grab}
+.btn:disabled{filter:grayscale(1);opacity:.45;cursor:not-allowed}
+.btn.busy{pointer-events:none}.btn.busy::after{content:"";display:inline-block;width:14px;height:14px;margin-left:8px;border:2px solid #000;border-top-color:transparent;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+.spin{width:52px;height:52px;margin:6px auto 12px;border:4px solid #3a3200;border-top-color:var(--gold);border-radius:50%;animation:sp .9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#md{position:fixed;inset:0;background:rgba(0,0,0,.82);display:grid;place-items:center;z-index:90;padding:16px}
+#mdi svg{display:block;margin:0 auto 10px;stroke-width:1.6}
 .foot{margin-top:auto;padding-top:28px;text-align:center;color:var(--mut);font-size:.75rem}
 #cp{position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:60;padding:16px}
 .cbox{background:#0c0c0c;border:1px solid var(--gold);border-radius:16px;padding:16px;text-align:center;min-width:240px}
@@ -104,10 +110,9 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
   <div class="top"><button class="ib" data-go="home" aria-label="Início"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Playlist</h1></div>
   <div class="row-btns" style="margin:0 0 12px"><button class="btn" id="tbM">Músicas</button><button class="btn sec" id="tbS">Setlists</button></div>
   <div id="mus"><input id="q" type="search" placeholder="Buscar pelo título…" autocomplete="off">
-  <div class="row-btns" style="margin:10px 0 0"><button class="btn sec" id="bx">Exportar backup</button><button class="btn sec" id="bi">Importar</button><button class="btn sec" id="br">Restaurar do repositório</button><button class="btn sec" id="sk">Sincronização</button><input type="file" id="bf" accept=".json,application/json" hidden></div>
-  <div class="err" id="bmsg" style="color:var(--gold)"></div>
+  
   <div class="cnt" id="sst" style="text-align:left;margin:8px 0"></div>
-  <div id="skp" hidden><label for="skn">Seu nome</label><input id="skn" maxlength="60"><label for="skc">Código da banda</label><input id="skc" type="password" autocomplete="off"><div class="row-btns"><button class="btn" id="sks">Salvar e sincronizar</button></div></div>
+  
   <div id="items" style="margin-top:14px"></div></div>
   <div id="sets" hidden><div class="row-btns" style="margin:0"><input id="sn2" placeholder="Nome da nova setlist" style="flex:1" autocomplete="off"><button class="btn" id="sadd">Criar</button></div><div id="sitems" style="margin-top:14px"></div></div>
   <div class="foot">Desenvolvido por Cristiano Mello</div>
@@ -147,6 +152,7 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
   <div class="sheet" id="sv"></div>
 </section>
 
+<div id="md" hidden><div class="cbox" style="max-width:340px"><div id="mdi"></div><div class="ct" id="mdt" style="font-size:1.25rem"></div><div id="mdx" style="color:#ccc;margin:10px 0 16px;font-size:.95rem;line-height:1.4"></div><div id="mdf" style="margin:0 0 14px"></div><div class="row-btns" id="mdbt" style="justify-content:center;margin-top:0"></div></div></div>
 <div id="cp" hidden><div class="cbox"><div class="ct" id="ct"></div><div id="cs"></div><div class="grp" style="justify-content:center;margin:8px auto;width:max-content"><button class="bb" id="cpv" aria-label="Anterior">‹</button><span class="spd" id="cn" style="min-width:44px"></span><button class="bb" id="cnx" aria-label="Próxima">›</button></div><button class="btn sec" id="cx">Fechar</button></div></div>
 <div id="secp" hidden></div>
 <div id="bar">
@@ -179,7 +185,7 @@ function show(n){
   scrollTo(0,0);
   if(n==='list'){$('#q').value='';renderList()}
 }
-document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>b.dataset.go==='add'?newDraft():show(b.dataset.go));
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>b.dataset.go==='add'?unlock().then(ok=>ok&&newDraft()):show(b.dataset.go));
 
 /* busca inteligente */
 const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -208,7 +214,7 @@ $('#l').oninput=()=>$('#c').textContent=$('#l').value.length;
 $('#back1').onclick=()=>show(draft&&draft.id?'song':'home');
 $('#next').onclick=()=>{
   const t=$('#t').value.trim();
-  if(!t){$('#terr').textContent='O título é obrigatório.';$('#t').focus();return}
+  if(!t){modal('Título obrigatório','Informe o título da música para continuar.',[['OK',1]],'err').then(()=>$('#t').focus());return}
   draft.title=t;draft.lyrics=$('#l').value.slice(0,10000);draft.chordsText=$('#ch').value;
   if(draft.lyrics.trim()){const r=parsePaste(draft.lyrics);if(r){draft.lyrics=r.text;draft.placed=[];draft.pend=r.pend;
     draft.chordsText=[...new Set([...chordList(),...r.names])].join(', ');$('#l').value=r.text;$('#ch').value=draft.chordsText}}
@@ -238,21 +244,22 @@ function renderRows(box,s,edit){
     row.append(lane,ly);box.append(row);
   });
 }
-function startDrag(e,name,k,hold,drop){
+function startDrag(e,name,k,hold,drop,hover){
   e.preventDefault();
   const id=e.pointerId,touch=e.pointerType==='touch',sx=e.clientX,sy=e.clientY;
   let on=false,x=sx,y=sy,timer=0,tick=0;
   const g=el('div','ghost');g.textContent=name;
-  const pos=()=>{g.style.left=x+'px';g.style.top=y+'px'};
+  const L=drop?34:0;
+  const pos=()=>{g.style.left=x+'px';g.style.top=(y-L)+'px';if(hover)hover(x,y-L)};
   const begin=()=>{on=true;document.body.append(g);pos();if(navigator.vibrate)navigator.vibrate(12);
     tick=setInterval(()=>{if(y<90)scrollBy(0,-14);else if(y>innerHeight-190)scrollBy(0,14)},16)};
   const tm=ev=>{if(on)ev.preventDefault()};
-  const clean=()=>{clearTimeout(timer);clearInterval(tick);g.remove();
+  const clean=()=>{clearTimeout(timer);clearInterval(tick);g.remove();if(hover)hover(null);
     removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',cx);removeEventListener('touchmove',tm)};
   const mv=ev=>{if(ev.pointerId!==id)return;x=ev.clientX;y=ev.clientY;
     if(!on){if(Math.hypot(x-sx,y-sy)>(hold&&touch?8:4)){if(hold&&touch){clean();return}begin()}return}pos()};
   const up=ev=>{if(ev.pointerId!==id)return;const was=on;x=ev.clientX;y=ev.clientY;clean();if(!was)return;
-    g.style.display='none';if(drop){drop(x,y);return}
+    g.style.display='none';if(drop){drop(x,y-L);return}
     const row=document.elementFromPoint(x,y)?.closest('#rows .row:not(.sec)');
     if(row){const r=row.getBoundingClientRect();const px=Math.max(0,Math.min(92,(x-r.left-14)/r.width*100));
       if(k!=null){draft.placed[k].l=+row.dataset.i;draft.placed[k].x=px}else draft.placed.push({n:name,l:+row.dataset.i,x:px})}
@@ -266,11 +273,11 @@ function startDrag(e,name,k,hold,drop){
 $('#save').onclick=()=>{
   const s={id:draft.id||uid(),title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),tr:draft.tr||0,u:draft.u};
   const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);
-  store(songs);enqueue('save',s.id);show('list');
+  store(songs);enqueue('save',s.id);show('list');saveSync();
 };
-$('#del').onclick=()=>{
-  if(!confirm('Excluir esta música?'))return;
-  songs=songs.filter(s=>s.id!==draft.id);store(songs);sets.forEach(x=>x.ids=x.ids.filter(i=>i!==draft.id));storeS();enqueue('del',draft.id);show('list');
+$('#del').onclick=async()=>{
+  if(await modal('Excluir música?','A música será removida para toda a banda quando você sincronizar.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;
+  songs=songs.filter(s=>s.id!==draft.id);store(songs);sets.forEach(x=>x.ids=x.ids.filter(i=>i!==draft.id));storeS();enqueue('del',draft.id);show('list');saveSync();
 };
 
 /* tela da música */
@@ -309,8 +316,8 @@ $('#sc').onclick=()=>{
   };
   raf=requestAnimationFrame(step);
 };
-$('#ed').onclick=()=>{
-  const s=cur;if(!s)return;
+$('#ed').onclick=async()=>{
+  if(!await unlock())return;const s=cur;if(!s)return;
   draft=JSON.parse(JSON.stringify(s));fillForm();show('add1');
 };
 $('#ex').onclick=()=>{if(play){show('set');renderSet()}else show('home')};
@@ -367,7 +374,7 @@ function renderSet(){
 }
 $('#sins').onclick=()=>{const v=$('#ssel').value;if(!v)return;curSet.ids.push(v);storeS();renderSet()};
 $('#splay').onclick=()=>{if(curSet.ids.length){play={i:0};openSong(curSet.ids[0])}};
-$('#sdel').onclick=()=>{if(!confirm('Excluir esta setlist?'))return;sets=sets.filter(x=>x!==curSet);storeS();show('list');tab(true)};
+$('#sdel').onclick=async()=>{if(await modal('Excluir setlist?','Só esta setlist, neste aparelho, será removida. As músicas continuam salvas.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;sets=sets.filter(x=>x!==curSet);storeS();show('list');tab(true)};
 $('#bkset').onclick=()=>{show('list');tab(true)};
 function step(d){if(!play)return;const i=play.i+d;if(i<0||i>=curSet.ids.length)return;play.i=i;openSong(curSet.ids[i])}
 $('#pv').onclick=()=>step(-1);$('#nx').onclick=()=>step(1);
@@ -417,7 +424,7 @@ $('#cnx').onclick=()=>{ci=(ci+1)%cv.length;drawChord()};
 $('#cx').onclick=()=>$('#cp').hidden=true;
 $('#cp').onclick=e=>{if(e.target.id==='cp')$('#cp').hidden=true};
 /* partitura */
-const SW=1000,X0=70,stY=p=>80-5*p,stX=x=>X0+x/100*(SW-X0-20),AC={'#':'♯',b:'♭',n:'♮'};
+let SW=240,X0=44;const stY=p=>80-5*p,stX=x=>X0+x/100*(SW-X0-10),AC={'#':'♯',b:'♭',n:'♮'};
 const NL={w:'Semibreve',h:'Mínima',q:'Semínima',e:'Colcheia',r:'Pausa',b:'Compasso'};
 function noteG(n,k){
   const x=stX(n.x),y=(n.d==='b'||n.d==='r')?60:stY(n.p);let o='';
@@ -438,28 +445,36 @@ function staffSvg(st){
   let o='<g stroke="#888" stroke-width="1.2">';for(let i=0;i<5;i++)o+=`<line x1="4" x2="${SW-4}" y1="${40+i*10}" y2="${40+i*10}"/>`;
   o+=`</g><text x="6" y="88" font-size="62" fill="#fff" stroke="none" font-family="'Noto Music','Segoe UI Symbol','Apple Symbols',serif">𝄞</text>`;
   st.n.forEach((n,k)=>o+=noteG(n,k));
-  return `<svg class="stv" viewBox="0 0 ${SW} 140" width="100%">${o}</svg>`;
+  return `<svg class="stv" viewBox="0 8 ${SW} 112" width="100%">${o}</svg>`;
 }
 function renderStaves(box,score,edit){
-  box.innerHTML='';
+  SW=Math.round((Math.min(innerWidth,760)-32)/1.5);box.innerHTML='';
   score.forEach((st,si)=>{const w=el('div','stw');w.innerHTML=staffSvg(st);
     if(edit){const x=el('button','ib');x.textContent='×';x.setAttribute('aria-label','Remover pauta');x.onclick=()=>{score.splice(si,1);renderStaves(box,score,true)};w.append(x);
-      w.querySelectorAll('.nt').forEach(g=>{const k=+g.dataset.k;g.onpointerdown=e=>startDrag(e,NL[st.n[k].d],k,false,(x,y)=>placeNote(null,x,y,{s:si,k}))})}
+      w.querySelectorAll('.nt').forEach(g=>{const k=+g.dataset.k;g.onpointerdown=e=>startDrag(e,NL[st.n[k].d],k,false,(x,y)=>placeNote(null,x,y,{s:si,k}),hoverNote)})}
     box.append(w)});
+}
+function snap(x,y){
+  const svg=document.elementFromPoint(x,y)?.closest('#staves .stv');if(!svg)return null;
+  const r=svg.getBoundingClientRect(),vx=(x-r.left)/r.width*SW,vy=(y-r.top)/r.height*112+8;
+  return {svg,si:[...document.querySelectorAll('#staves .stv')].indexOf(svg),
+    nx:Math.max(0,Math.min(100,(vx-X0)/(SW-X0-10)*100)),np:Math.max(-6,Math.min(13,Math.round((80-vy)/5)))};
+}
+function hoverNote(x,y){
+  document.querySelectorAll('#staves .pv').forEach(e=>e.remove());if(x==null)return;
+  const t=snap(x,y);if(!t)return;const cx=stX(t.nx),cy=stY(t.np);
+  t.svg.insertAdjacentHTML('beforeend',`<g class="pv" pointer-events="none"><line x1="${cx-24}" x2="${cx+24}" y1="${cy}" y2="${cy}" stroke="#d4af37" stroke-width="1.5"/><circle cx="${cx}" cy="${cy}" r="3.5" fill="#d4af37" stroke="none"/></g>`);
 }
 function placeNote(item,x,y,from){
   if(from)item=draft.score[from.s].n.splice(from.k,1)[0];
-  const svg=document.elementFromPoint(x,y)?.closest('#staves .stv');
-  if(svg){const si=[...document.querySelectorAll('#staves .stv')].indexOf(svg),r=svg.getBoundingClientRect();
-    const nx=Math.max(0,Math.min(100,((x-r.left)/r.width*SW-X0)/(SW-X0-20)*100)),np=Math.max(-6,Math.min(13,Math.round((80-(y-r.top)/r.height*140)/5)));
-    draft.score[si].n.push({...item,x:nx,p:np})}
+  const t=snap(x,y);if(t)draft.score[t.si].n.push({...item,x:t.nx,p:t.np});
   renderStaves($('#staves'),draft.score,true);
 }
 let acc='';
 function renderPal(){
   const b=$('#pchips');b.innerHTML='';
   Object.entries(NL).forEach(([d,t])=>{const c=el('span','chord');c.textContent=t;c.oncontextmenu=e=>e.preventDefault();
-    c.onpointerdown=e=>startDrag(e,t,null,true,(x,y)=>placeNote({d,a:'whqe'.includes(d)?acc:''},x,y));b.append(c)});
+    c.onpointerdown=e=>startDrag(e,t,null,true,(x,y)=>placeNote({d,a:'whqe'.includes(d)?acc:''},x,y),hoverNote);b.append(c)});
   Object.entries(AC).forEach(([a,t])=>{const c=el('span','chord');c.textContent=t;if(acc===a){c.style.background='var(--gold)';c.style.color='#000'}
     c.onclick=()=>{acc=acc===a?'':a;renderPal()};b.append(c)});
 }
@@ -475,22 +490,30 @@ $('#mst').onclick=()=>{draft.score.push({n:[]});renderStaves($('#staves'),draft.
 /* sincronização com o Supabase (offline primeiro) */
 const SB='https://lqzlblvmkuwedcofmgfb.supabase.co',SBK='sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const SBH={apikey:SBK,Authorization:'Bearer '+SBK,'Content-Type':'application/json'};
-const UU=/^[0-9a-f]{8}-[0-9a-f]{4}-/i;let syncing=false;
+const UU=/^[0-9a-f]{8}-[0-9a-f]{4}-/i;let syncing=false,pushing=false;
 function uid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:r&3|8).toString(16)})}
 function loadQ(){try{return JSON.parse(localStorage.getItem('cifras.q'))||[]}catch(e){return []}}
 function pqSave(){try{localStorage.setItem('cifras.q',JSON.stringify(pq))}catch(e){}}
 function cfg(){try{return JSON.parse(localStorage.getItem('cifras.cfg'))||{}}catch(e){return {}}}
-function enqueue(op,id){pq=pq.filter(x=>x.id!==id);pq.push({op,id});pqSave();sync()}
+function enqueue(op,id){pq=pq.filter(x=>x.id!==id);pq.push({op,id});pqSave();setSt()}
 function migrate(){songs.forEach(s=>{if(UU.test(s.id))return;const o=s.id;s.id=uid();sets.forEach(x=>x.ids=x.ids.map(i=>i===o?s.id:i));pq.push({op:'save',id:s.id})})}
-function setSt(m){$('#sst').textContent=m||(!navigator.onLine?'Offline — usando a cópia salva neste aparelho.':pq.length?pq.length+' alteração(ões) aguardando envio.':'Sincronizado com a banda.')}
+function setSt(m){const n=pq.length;$('#sst').textContent=m||(!navigator.onLine?'Offline — usando a cópia salva neste aparelho.':n?n+' alteração(ões) aguardando envio para a banda.':'')}
 async function rpc(fn,b){const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:SBH,body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json().catch(()=>null)}
-async function sync(){
-  if(syncing||!navigator.onLine){setSt();return}
-  syncing=true;let msg='';
+function modal(t,x,btns,icon){
+  const sv=d=>`<svg viewBox="0 0 24 24" width="56" height="56" style="color:var(--gold)"><circle cx="12" cy="12" r="10"/><path d="${d}"/></svg>`;
+  $('#mdt').textContent=t;$('#mdx').textContent=x||'';$('#mdx').style.color='#ccc';$('#mdf').innerHTML='';
+  $('#mdi').innerHTML=icon==='spin'?'<div class="spin"></div>':icon==='ok'?sv('M7 12.5l3.2 3.2L17 9'):icon==='err'?sv('M12 7v6M12 16.5v.5'):'';
+  const b=$('#mdbt');b.innerHTML='';$('#md').hidden=false;
+  return new Promise(res=>{if(!btns||!btns.length)return res();
+    btns.forEach(([l,v,c])=>{const k=el('button','btn'+(c?' '+c:''));k.textContent=l;k.onclick=()=>{$('#md').hidden=true;res(v)};b.append(k)})});
+}
+async function sync(push){
+  if(syncing)return 'busy';
+  if(!navigator.onLine){setSt();return 'offline'}
+  syncing=true;pushing=!!push;setSt();let res='ok';
   try{
     const c=cfg();
-    if(pq.length&&!c.code)msg='Informe o código da banda em Sincronização para enviar suas alterações.';
-    else for(const it of [...pq]){
+    if(push&&c.code)for(const it of [...pq]){
       const s=songs.find(x=>x.id===it.id);
       if(it.op==='save'&&s){const {tr,u,...d}=s;const r=await rpc('cifras_save',{p_code:c.code,p_id:s.id,p_title:s.title,p_data:d,p_author:c.name||null});if(r&&r.updated_at)s.u=r.updated_at}
       else if(it.op==='del')await rpc('cifras_delete',{p_code:c.code,p_id:it.id});
@@ -507,11 +530,38 @@ async function sync(){
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;
     if($('#list').classList.contains('active'))renderList();
-  }catch(e){msg=/forbidden|42501/.test(e.message)?'Código da banda inválido.':'Sem conexão com o servidor — usando a cópia salva.'}
-  syncing=false;setSt(msg);
+  }catch(e){res=/forbidden|42501/.test(e.message)?'code':'net';if(res==='code'){const c=cfg();c.code='';try{localStorage.setItem('cifras.cfg',JSON.stringify(c))}catch(x){}}}
+  syncing=false;pushing=false;
+  setSt(res==='net'?'Sem conexão com o servidor — usando a cópia salva.':res==='code'?'Código da banda inválido.':'');return res;
 }
-$('#sk').onclick=()=>{const c=cfg();$('#skn').value=c.name||'';$('#skc').value=c.code||'';$('#skp').hidden=!$('#skp').hidden};
-$('#sks').onclick=()=>{try{localStorage.setItem('cifras.cfg',JSON.stringify({name:$('#skn').value.trim(),code:$('#skc').value.trim()}))}catch(e){}$('#skp').hidden=true;sync()};
+async function saveSync(){
+  if(!navigator.onLine){await modal('Salvo neste aparelho','Sem internet agora. A alteração será enviada para a banda automaticamente quando a conexão voltar.',[['OK',1]],'ok');return}
+  modal('Sincronizando…','Enviando para a banda.',[],'spin');
+  const t0=Date.now();let r;do{r=await sync(true);if(r==='busy')await new Promise(z=>setTimeout(z,400))}while(r==='busy');
+  const w=800-(Date.now()-t0);if(w>0)await new Promise(z=>setTimeout(z,w));
+  if(r==='ok')modal('Sincronizado!','Suas alterações já estão disponíveis para toda a banda.',[['OK',1]],'ok');
+  else if(r==='code')modal('Código inválido','A alteração ficou salva neste aparelho, mas não foi enviada. Informe o código correto ao tocar em Adicionar ou no lápis.',[['OK',1]],'err');
+  else modal('Salvo neste aparelho','Não foi possível falar com o servidor agora. A alteração será enviada automaticamente quando houver conexão.',[['OK',1]],'err');
+}
+function unlock(){
+  if(cfg().code)return Promise.resolve(true);
+  return new Promise(res=>{
+    modal('Acesso restrito','Para adicionar ou editar músicas, informe o código da banda.',[]);
+    $('#mdf').innerHTML='<input id="mc" type="password" placeholder="Código da banda" autocomplete="off"><input id="mn" placeholder="Seu nome (opcional)" maxlength="60" style="margin-top:8px">';
+    $('#mn').value=cfg().name||'';
+    const b=$('#mdbt'),no=el('button','btn sec'),ok=el('button','btn');b.innerHTML='';no.textContent='Cancelar';ok.textContent='Entrar';
+    no.onclick=()=>{$('#md').hidden=true;res(false)};
+    ok.onclick=async()=>{
+      const code=$('#mc').value.trim(),name=$('#mn').value.trim();if(!code){$('#mc').focus();return}
+      ok.classList.add('busy');let valid=true;
+      try{valid=(await rpc('cifras_verify',{p_code:code}))===true}catch(e){valid=true}
+      ok.classList.remove('busy');
+      if(!valid){$('#mdx').textContent='Código incorreto. Tente novamente.';$('#mdx').style.color='#e57373';$('#mc').select();return}
+      try{localStorage.setItem('cifras.cfg',JSON.stringify({code,name}))}catch(e){}
+      $('#md').hidden=true;res(true)};
+    b.append(no,ok);setTimeout(()=>$('#mc').focus(),60);
+  });
+}
 
 /* inserir seções na letra */
 ['Intro','Verso','Refrão','Ponte','Solo','Parte 1','Parte 2','Parte 3','Parte 4','Final'].forEach(n=>{
@@ -519,35 +569,15 @@ $('#sks').onclick=()=>{try{localStorage.setItem('cifras.cfg',JSON.stringify({nam
   b.onclick=()=>{const t=$('#l');t.setRangeText('['+n+']\n',t.selectionStart,t.selectionEnd,'end');$('#c').textContent=t.value.length;t.focus()};
   $('#stags').append(b)});
 
-/* backup, offline e tela ligada */
-const msg=t=>{$('#bmsg').textContent=t;setTimeout(()=>$('#bmsg').textContent='',5000)};
-function merge(d){
-  if(Array.isArray(d))d={songs:d};if(!d||!Array.isArray(d.songs))throw 0;let n=0;
-  (d.sets||[]).forEach(t=>{if(!t||!t.id||!t.name||!Array.isArray(t.ids))return;const i=sets.findIndex(x=>x.id===t.id);if(i>=0)sets[i]=t;else sets.push(t)});
-  d.songs.forEach(s=>{if(!s||!s.id||!s.title||!Array.isArray(s.lines))return;
-    const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);n++;if(!pq.some(x=>x.id===s.id))pq.push({op:'save',id:s.id})});
-  migrate();store(songs);storeS();pqSave();renderList();sync();return n;
-}
-$('#bx').onclick=()=>{
-  const a=el('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({songs,sets},null,1)],{type:'application/json'}));
-  a.download='cifras-backup.json';document.body.append(a);a.click();a.remove();
-  msg('Backup baixado. Coloque cifras-backup.json na raiz do repositório.');
-};
-$('#bi').onclick=()=>$('#bf').click();
-$('#bf').onchange=async e=>{try{msg(merge(JSON.parse(await e.target.files[0].text()))+' música(s) importada(s).')}catch(x){msg('Arquivo inválido.')}e.target.value=''};
-async function fromRepo(silent){
-  try{const r=await fetch('/cifras-backup.json',{cache:'no-cache'});if(!r.ok)throw 0;const n=merge(await r.json());if(!silent)msg(n+' música(s) restaurada(s).')}
-  catch(x){if(!silent)msg('Backup do repositório não encontrado.')}
-}
-$('#br').onclick=()=>fromRepo(false);
+/* tela ligada */
 let wl=null;
 async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#song').classList.contains('active'))wake(true)});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
-migrate();store(songs);storeS();pqSave();sync();setSt();
-addEventListener('online',()=>sync());addEventListener('offline',()=>setSt());setInterval(sync,90000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});
+migrate();store(songs);storeS();pqSave();sync(true);setSt();
+addEventListener('online',()=>sync(true));addEventListener('offline',()=>setSt());setInterval(()=>sync(true),90000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)});
 </script>
 </body>
 </html>

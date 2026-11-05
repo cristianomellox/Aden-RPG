@@ -494,7 +494,7 @@ const UU=/^[0-9a-f]{8}-[0-9a-f]{4}-/i;let syncing=false,pushing=false;
 function uid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:r&3|8).toString(16)})}
 function loadQ(){try{return JSON.parse(localStorage.getItem('cifras.q'))||[]}catch(e){return []}}
 function pqSave(){try{localStorage.setItem('cifras.q',JSON.stringify(pq))}catch(e){}}
-function cfg(){try{return JSON.parse(localStorage.getItem('cifras.cfg'))||{}}catch(e){return {}}}
+function cfg(){try{return {name:(JSON.parse(localStorage.getItem('cifras.cfg'))||{}).name||'',code:sessionStorage.getItem('cifras.code')||''}}catch(e){return {name:'',code:''}}}
 function enqueue(op,id){pq=pq.filter(x=>x.id!==id);pq.push({op,id});pqSave();setSt()}
 function migrate(){songs.forEach(s=>{if(UU.test(s.id))return;const o=s.id;s.id=uid();sets.forEach(x=>x.ids=x.ids.map(i=>i===o?s.id:i));pq.push({op:'save',id:s.id})})}
 function setSt(m){const n=pq.length;$('#sst').textContent=m||(!navigator.onLine?'Offline — usando a cópia salva neste aparelho.':n?n+' alteração(ões) aguardando envio para a banda.':'')}
@@ -530,7 +530,7 @@ async function sync(push){
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;
     if($('#list').classList.contains('active'))renderList();
-  }catch(e){res=/forbidden|42501/.test(e.message)?'code':'net';if(res==='code'){const c=cfg();c.code='';try{localStorage.setItem('cifras.cfg',JSON.stringify(c))}catch(x){}}}
+  }catch(e){res=/forbidden|42501/.test(e.message)?'code':'net';if(res==='code'){try{sessionStorage.removeItem('cifras.code')}catch(x){}}}
   syncing=false;pushing=false;
   setSt(res==='net'?'Sem conexão com o servidor — usando a cópia salva.':res==='code'?'Código da banda inválido.':'');return res;
 }
@@ -557,8 +557,8 @@ function unlock(){
       try{valid=(await rpc('cifras_verify',{p_code:code}))===true}catch(e){valid=true}
       ok.classList.remove('busy');
       if(!valid){$('#mdx').textContent='Código incorreto. Tente novamente.';$('#mdx').style.color='#e57373';$('#mc').select();return}
-      try{localStorage.setItem('cifras.cfg',JSON.stringify({code,name}))}catch(e){}
-      $('#md').hidden=true;res(true)};
+      try{sessionStorage.setItem('cifras.code',code);localStorage.setItem('cifras.cfg',JSON.stringify({name}))}catch(e){}
+      $('#md').hidden=true;res(true);sync(true)};
     b.append(no,ok);setTimeout(()=>$('#mc').focus(),60);
   });
 }
@@ -575,7 +575,9 @@ async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in nav
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#song').classList.contains('active'))wake(true)});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
-migrate();store(songs);storeS();pqSave();sync(true);setSt();
+migrate();store(songs);storeS();pqSave();
+try{const o=JSON.parse(localStorage.getItem('cifras.cfg'));if(o&&o.code)localStorage.setItem('cifras.cfg',JSON.stringify({name:o.name||''}))}catch(e){}
+sync(true);setSt();
 addEventListener('online',()=>sync(true));addEventListener('offline',()=>setSt());setInterval(()=>sync(true),90000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)});
 </script>

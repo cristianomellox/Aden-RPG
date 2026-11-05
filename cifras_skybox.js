@@ -31,7 +31,7 @@ const CAM_FOV             = 100;
 const ROTATE_DEG_PER_SEC  = 360 / 150;          // 1 volta a cada 150 s
 const PITCH_LIMIT         = 0;           // só gira na horizontal (sem inclinar para cima/baixo)
 // Yaw inicial: 0° = 25% da largura da imagem; -90° = centro da imagem (50%); fórmula: yaw = 90 - 360 × (posição da frente, de 0 a 1, contada da esquerda)
-const START_YAW           = -40;
+const START_YAW           = -10;
 const CAM_INITIAL_YAW_MIN = 20;
 const CAM_INITIAL_YAW_MAX = 60;
 const DRAG_SENS           = 1.0;

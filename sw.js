@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v57'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v58'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -36,6 +36,10 @@ async function cachePageNormalized(cache, key, response) {
 
 // Demais arquivos essenciais de UI que continuam existindo no repositório (não são zipados).
 const ASSETS_TO_PRECACHE = [
+    '/assets/pibm.png',
+    '/assets/pibmlogo.png',
+    '/cifras_skybox.js',
+    '/postfx.js',
     '/assets/goldcoin.webp',
     '/assets/cristais.webp',
     '/assets/botao.webp',
@@ -232,6 +236,22 @@ self.addEventListener('fetch', event => {
                 return await showOfflinePage();
             }
         })());
+        return;
+    }
+
+    // Skybox das cifras: JS próprio (rede primeiro, cache offline) e three.js do CDN (cache primeiro)
+    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/postfx.js')) {
+        event.respondWith(fetch(request).then(r => {
+            if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
+            return r;
+        }).catch(() => caches.match(request)));
+        return;
+    }
+    if (url.hostname === 'cdn.jsdelivr.net') {
+        event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(r => {
+            if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
+            return r;
+        })));
         return;
     }
 

@@ -779,8 +779,8 @@ const ADV_TYPES = [
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
-    { id: 'personalizado', vip: false, lock: true, name: 'Personalizado', desc: 'Só com senha. Você escreve como quer a aventura: diálogo livre e exploração, sem objetivos, dados nem bolsa. Conteúdo adulto (18+).',
-      svg: _svg('<path d="M10 8h24a4 4 0 0 1 4 4v26a4 4 0 0 0 4 4H14a4 4 0 0 1-4-4z" fill="#2a1d0a" stroke="#e6c27a" stroke-width="2"/><path d="M38 12v26a4 4 0 0 0 4 4" stroke="#e6c27a" stroke-width="2"/><path d="M16 16h16M16 22h16M16 28h10" stroke="#fff3cf" stroke-width="1.8"/><path d="M30 38l11-14 4 3-11 14-5 2z" fill="#d7dde3" stroke="#8793a0" stroke-width="1.4"/>') },
+    { id: 'personalizado', vip: false, lock: true, name: 'Personalizado', desc: 'Só com senha. Você escreve como quer a aventura: diálogo livre e exploração, sem objetivos nem dados. Conteúdo adulto (18+).',
+      svg: _svg('<path d="M8 4h22l10 10v30H8z" fill="#f3ead2" stroke="#a88235" stroke-width="2"/><path d="M30 4v10h10" fill="#d9c8a0" stroke="#a88235" stroke-width="2"/><path d="M13 20h14M13 26h10M13 32h8" stroke="#8a7a55" stroke-width="2"/><g transform="rotate(40 30 34)"><rect x="27" y="14" width="7" height="24" fill="#e6b23a" stroke="#8a5a12" stroke-width="1.5"/><rect x="27" y="10" width="7" height="4.5" rx="1.2" fill="#e57b8a" stroke="#8a3a48" stroke-width="1.3"/><path d="M27 38h7l-3.5 8z" fill="#f0cf9a" stroke="#8a5a12" stroke-width="1.3"/><path d="M29.7 43.4h1.6l-.8 2.6z" fill="#3a2a1a" stroke="none"/></g>') },
 ];
 const ADV_PERS = 'personalizado';                                // Personalizado (senha): prompt do próprio jogador, sem bolsa, dados, objetivos, Pantokrator nem sermão
 const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
@@ -2153,7 +2153,6 @@ function bindUI() {
     $('briefCancel').onclick = () => closeOv('briefModal');
     $('briefGo').onclick = openLoadout;                        // 1º a bolsa; o Mestre e o cronômetro só começam depois
     $('itemsCancel').onclick = () => closeOv('itemsModal');
-    $('itemsCustom').onclick = openCustomAuth;                  // atalho: Personalizado (senha) sem escolher a bolsa
     $('customPassCancel').onclick = () => closeOv('customPassModal');
     $('customPassOk').onclick = confirmCustomPass;
     $('customPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmCustomPass(); });

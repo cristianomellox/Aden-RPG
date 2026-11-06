@@ -5434,3 +5434,9 @@ button, .btn {
 #shopModal .shop-subcontent { margin-top: 6px; }
 #shopModal .shop-skin-img { width: 96px !important; height: 96px !important; border-radius: 8px; }
 #shopModal .shop-skin-video { object-fit: cover; background: rgba(0,0,0,0.4); }
+
+#socialBtn .footer-btn-img {
+    width: 60px;
+    height: 50px;
+    margin-bottom: 0;
+}

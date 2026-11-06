@@ -121,6 +121,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 #add2,#add2 .sheet,#staves,#staves *,#ptray,#ptray *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #add2 input,#add2 select,#add2 textarea{-webkit-user-select:text;user-select:text}
 #smus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:column;gap:8px 6px;margin:0 0 16px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c}
+#sitems .item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .mu{display:flex;align-items:center;gap:8px;min-width:0}.mi{flex:0 0 40px;height:40px;color:var(--gold)}.mi svg{display:block}.mn{font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 #pk{position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:60;padding:16px}
 .pkc{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:50vh;overflow:auto;margin:12px 0}
@@ -207,7 +208,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
   <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
   <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Há semicolcheias, notas pontuadas, ligaduras, fermata, acordes, ritornelos, armadura e compasso (escolha nas listas acima da pauta). Notas curtas vizinhas são ligadas por barra automaticamente. <b>Importar MusicXML / PDF</b>: um arquivo MusicXML (.musicxml, .xml, .mxl) preenche a pauta; um PDF (até 1,2 MB) fica na aba <b>PDF</b> da música.</li></ul></div></details>
-  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Editar</b>: permite mudar o título e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist.</li><li><b>Criar</b>: escreva o nome e toque em Criar (pede o código).</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
+  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> segure uma setlist na lista e mova para cima ou para baixo; ao soltar, o código é pedido.</li><li><b>Editar</b>: permite mudar o título e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist.</li><li><b>Criar</b>: escreva o nome e toque em Criar (pede o código).</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -513,13 +514,39 @@ function tab(m){$('#mus').hidden=m;$('#sets').hidden=!m;$('#tbM').className='btn
 $('#tbM').onclick=()=>tab(false);$('#tbS').onclick=()=>tab(true);
 function renderSets(){
   const b=$('#sitems');b.innerHTML='';if(!sets.length){const d=el('div','empty');d.textContent='Nenhuma setlist criada.';b.append(d)}
-  sets.forEach(x=>{const i=el('button','item');i.textContent=x.name+' · '+x.ids.length;
-    i.onclick=()=>{unl=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
+  sets.forEach((x,ix)=>{const i=el('button','item');i.dataset.i=ix;i.onpointerdown=e=>ordDrag(e,i);i.oncontextmenu=e=>e.preventDefault();i.textContent=x.name+' · '+x.ids.length;
+    i.onclick=()=>{if(ordSkip)return;unl=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
 $('#sadd').onclick=async()=>{const n=$('#sn2').value.trim();if(!n)return;if(!await unlock())return;const x={id:uid(),name:n,ids:[]};sets.push(x);storeS();enqueue('sset',x.id);$('#sn2').value='';renderSets();saveSync()};
+/* ordem das setlists: segurar e mover; o código é pedido ao soltar */
+let ordSkip=false;
+function ordDrag(e,btn){
+  if(e.button>0)return;
+  const box=$('#sitems'),id=e.pointerId,touch=e.pointerType==='touch',sx=e.clientX,sy=e.clientY;
+  let on=false,y=sy,timer=0,tick=0;
+  const items=()=>[...box.querySelectorAll('.item[data-i]')];
+  const place=()=>{const ls=items().filter(x=>x!==btn);let t=null;
+    for(const x of ls){const q=x.getBoundingClientRect();if(y<q.top+q.height/2){t=x;break}}
+    if(t){if(btn.nextSibling!==t)box.insertBefore(btn,t)}else{const l=ls[ls.length-1];if(l&&l.nextSibling!==btn)l.after(btn)}};
+  const begin=()=>{on=true;btn.style.borderColor='var(--gold)';btn.style.opacity='.85';if(navigator.vibrate)navigator.vibrate(12);
+    tick=setInterval(()=>{if(y<90)scrollBy(0,-12);else if(y>innerHeight-120)scrollBy(0,12);place()},16)};
+  const tm=ev=>{if(on)ev.preventDefault()};
+  const clean=()=>{clearTimeout(timer);clearInterval(tick);removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',cx);removeEventListener('touchmove',tm)};
+  const mv=ev=>{if(ev.pointerId!==id)return;y=ev.clientY;
+    if(!on){if(Math.hypot(ev.clientX-sx,y-sy)>(touch?8:5)){if(touch){clean();return}begin();place()}return}place()};
+  const up=async ev=>{if(ev.pointerId!==id)return;clean();if(!on)return;
+    ordSkip=true;setTimeout(()=>ordSkip=false,50);
+    const ord=items().map(x=>+x.dataset.i);
+    if(ord.every((v,i)=>v===i)){renderSets();return}
+    if(!await unlock()){renderSets();return}
+    sets=ord.map(i=>sets[i]);sets.forEach((x,i)=>x.pos=i+1);storeS();enqueue('sorder','sorder');renderSets();saveSync()};
+  const cx=ev=>{if(ev.pointerId===id){clean();if(on)renderSets()}};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',cx);addEventListener('touchmove',tm,{passive:false});
+  if(touch)timer=setTimeout(begin,350);
+}
 let sdt;function setChanged(){enqueue('sset',curSet.id);clearTimeout(sdt);sdt=setTimeout(()=>sync(true),1200)}
 $('#sunl').onclick=async()=>{if(await unlock()){unl=true;renderSet()}};
-function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,ids:w.ids||[],u:w.updated_at,mus:m}}
+function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,ids:w.ids||[],u:w.updated_at,mus:m,pos:w.position||0}}
 function renderSet(){
   const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;
   $('#sname').textContent=curSet.name;renderMus(un);const b=$('#siv');b.innerHTML='';
@@ -821,6 +848,7 @@ async function sync(push){
       if(it.op==='save'&&s){const {tr,u,...d}=s;const r=await rpc('cifras_save',{p_code:c.code,p_id:s.id,p_title:s.title,p_data:d,p_author:c.name||null});if(r&&r.updated_at)s.u=r.updated_at}
       else if(it.op==='del')await rpc('cifras_delete',{p_code:c.code,p_id:it.id});
       else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){const r=await rpc('cifras_set_save',{p_code:c.code,p_id:t.id,p_name:t.name,p_musicians:(t.mus||[]).filter(x=>x.n.trim()).slice(0,12).map(x=>({n:x.n.trim(),i:x.i})),p_ids:t.ids,p_author:c.name||null});if(r&&r.updated_at)t.u=r.updated_at}}
+      else if(it.op==='sorder')await rpc('cifras_set_order',{p_code:c.code,p_ids:sets.map(x=>x.id)});
       else if(it.op==='sdelset')await rpc('cifras_set_delete',{p_code:c.code,p_id:it.id});
       pq=pq.filter(x=>x!==it);pqSave();
     }
@@ -835,11 +863,12 @@ async function sync(push){
       const n={...w.data,id:w.id,title:w.title,u:w.updated_at,tr:i>=0?songs[i].tr:0};if(i>=0)songs[i]=n;else songs.push(n)});
     const ids=new Set(rows.map(w=>w.id));songs=songs.filter(x=>!x.u||ids.has(x.id)||pq.some(p=>p.id===x.id));
     try{
-      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,musicians,updated_at',{headers:SBH});
+      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,musicians,position,updated_at',{headers:SBH});
       if(r2.ok){const sr=await r2.json();
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(i>=0)sets[i]=n;else sets.push(n)});
-        const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id))}
+        const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id));
+        if(!pq.some(x=>x.op==='sorder'))sets.sort((a,b)=>(a.pos||1e9)-(b.pos||1e9))}
     }catch(e){}
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;

@@ -519,8 +519,7 @@ function renderSets(){
 $('#sadd').onclick=async()=>{const n=$('#sn2').value.trim();if(!n)return;if(!await unlock())return;const x={id:uid(),name:n,ids:[]};sets.push(x);storeS();enqueue('sset',x.id);$('#sn2').value='';renderSets();saveSync()};
 let sdt;function setChanged(){enqueue('sset',curSet.id);clearTimeout(sdt);sdt=setTimeout(()=>sync(true),1200)}
 $('#sunl').onclick=async()=>{if(await unlock()){unl=true;renderSet()}};
-function decSet(w){const[a,b]=String(w.name).split('\u241E');let m=[];try{if(b)m=JSON.parse(b)}catch(e){}return{id:w.id,name:a,ids:w.ids||[],u:w.updated_at,mus:m}}
-function encSet(t){const m=(t.mus||[]).filter(x=>x.n.trim());return t.name+(m.length?'\u241E'+JSON.stringify(m):'')}
+function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,ids:w.ids||[],u:w.updated_at,mus:m}}
 function renderSet(){
   const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;
   $('#sname').textContent=curSet.name;renderMus(un);const b=$('#siv');b.innerHTML='';
@@ -821,7 +820,7 @@ async function sync(push){
       const s=songs.find(x=>x.id===it.id);
       if(it.op==='save'&&s){const {tr,u,...d}=s;const r=await rpc('cifras_save',{p_code:c.code,p_id:s.id,p_title:s.title,p_data:d,p_author:c.name||null});if(r&&r.updated_at)s.u=r.updated_at}
       else if(it.op==='del')await rpc('cifras_delete',{p_code:c.code,p_id:it.id});
-      else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){const r=await rpc('cifras_set_save',{p_code:c.code,p_id:t.id,p_name:encSet(t),p_ids:t.ids,p_author:c.name||null});if(r&&r.updated_at)t.u=r.updated_at}}
+      else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){const r=await rpc('cifras_set_save',{p_code:c.code,p_id:t.id,p_name:t.name,p_musicians:(t.mus||[]).filter(x=>x.n.trim()).slice(0,12).map(x=>({n:x.n.trim(),i:x.i})),p_ids:t.ids,p_author:c.name||null});if(r&&r.updated_at)t.u=r.updated_at}}
       else if(it.op==='sdelset')await rpc('cifras_set_delete',{p_code:c.code,p_id:it.id});
       pq=pq.filter(x=>x!==it);pqSave();
     }
@@ -836,7 +835,7 @@ async function sync(push){
       const n={...w.data,id:w.id,title:w.title,u:w.updated_at,tr:i>=0?songs[i].tr:0};if(i>=0)songs[i]=n;else songs.push(n)});
     const ids=new Set(rows.map(w=>w.id));songs=songs.filter(x=>!x.u||ids.has(x.id)||pq.some(p=>p.id===x.id));
     try{
-      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,updated_at',{headers:SBH});
+      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,musicians,updated_at',{headers:SBH});
       if(r2.ok){const sr=await r2.json();
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(i>=0)sets[i]=n;else sets.push(n)});

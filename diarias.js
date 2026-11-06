@@ -51,14 +51,15 @@ const MARKS_SALAO = [
     { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: a competição esquenta; a rodada final com as duas finalistas deve se aproximar.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: se as duas finalistas ainda não foram ao quarto, conduza a prova final AGORA, para a escolha e o epílogo caberem no tempo.' },
 ];
-const marksFor = (adv) => adv.advType === ADV_FE ? MARKS_FE
+const marksFor = (adv) => adv.advType === ADV_PERS ? []
+    : adv.advType === ADV_FE ? MARKS_FE
     : adv.advType === 'salao_amor' && S.romance === 'visita' ? MARKS_VISITA
     : adv.advType === 'salao_amor' && S.romance === 'salao' ? MARKS_SALAO
     : adv.noCombat ? MARKS_SOCIAL : MARKS;
 
 // marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico precisa caber antes da conversa com os apóstolos)
 const MARKS_FE = [
-    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio está em andamento, fiel aos relatos. Vivencie cada cena com calma (2 a 4 min cada) e use a pesquisa para enriquecer com contexto histórico confiável.' },
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio está em andamento, fiel aos relatos. Vivencie cada cena com calma (2 a 4 min cada) e enriqueça com contexto histórico confiável.' },
     { at: 720, text: '[SISTEMA] MARCO (12 min), NÃO responda falando agora; aplique na sua próxima fala: o episódio deve estar na segunda ou terceira cena; conduza a travessia para a próxima cidade ou cena, com contexto histórico e sem inventar nada.' },
     { at: 1200, text: '[SISTEMA] MARCO (20 min), NÃO responda falando agora; aplique na sua próxima fala: leve o episódio ao seu desfecho nos próximos minutos, exatamente como nos relatos; depois chame objective_complete e objective_delivered e passe à conversa em particular com o(s) apóstolo(s).' },
     { at: 1380, text: '[SISTEMA] MARCO (23 min), NÃO responda falando agora; aplique na sua próxima fala: se o episódio ainda não terminou, conclua-o AGORA, fiel aos relatos, para sobrar tempo de conversar com o(s) apóstolo(s).' },
@@ -97,6 +98,7 @@ const ERR = {
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
     invalid_type: 'Tipo de aventura inválido. Escolha novamente.',
+    invalid_custom: 'Escreva um pouco mais sobre como você quer a aventura.',
     extra_limit: 'Você já usou todas as aventuras extras de hoje.',
     extra_pending: 'Você já tem uma aventura extra esperando por você.',
     master_busy: 'O Mestre está ocupado com outros aventureiros. Tente novamente em alguns minutos.',
@@ -132,6 +134,7 @@ const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
     advType: null, romance: 'livre', vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
+    customProof: null, customText: '',                         // Modo Personalizado: prova da senha (presa à vaga) e rascunho do prompt
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -524,6 +527,11 @@ function tickLobby() {
         $('itemsTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
         if (left <= 0) closeOv('itemsModal');
     }
+    if ($('customModal').classList.contains('open') && my?.status === 'reserved') {
+        const left = new Date(my.start_deadline).getTime() - now;
+        $('customTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
+        if (left <= 0) { closeOv('customModal'); closeOv('customPassModal'); }
+    }
     if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
         const left = new Date(my.start_deadline).getTime() - now;
         $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
@@ -771,9 +779,12 @@ const ADV_TYPES = [
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
+    { id: 'personalizado', vip: false, lock: true, name: 'Personalizado', desc: 'Só com senha. Você escreve como quer a aventura: diálogo livre e exploração, sem objetivos, dados nem bolsa. Conteúdo adulto (18+).',
+      svg: _svg('<path d="M10 8h24a4 4 0 0 1 4 4v26a4 4 0 0 0 4 4H14a4 4 0 0 1-4-4z" fill="#2a1d0a" stroke="#e6c27a" stroke-width="2"/><path d="M38 12v26a4 4 0 0 0 4 4" stroke="#e6c27a" stroke-width="2"/><path d="M16 16h16M16 22h16M16 28h10" stroke="#fff3cf" stroke-width="1.8"/><path d="M30 38l11-14 4 3-11 14-5 2z" fill="#d7dde3" stroke="#8793a0" stroke-width="1.4"/>') },
 ];
+const ADV_PERS = 'personalizado';                                // Personalizado (senha): prompt do próprio jogador, sem bolsa, dados, objetivos, Pantokrator nem sermão
 const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
-const isSemPregacao = (t) => t === 'salao_amor' || t === 'fenda_temporal' || t === ADV_FE;   // sem pregação (modo_longo)
+const isSemPregacao = (t) => t === 'salao_amor' || t === 'fenda_temporal' || t === ADV_FE || t === ADV_PERS;   // sem pregação (modo_longo)
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
@@ -789,7 +800,7 @@ function buildTypeGrid() {
         const owned = S.vipOwned.has(t.id);
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'type-card' + (S.advType === t.id ? ' sel' : ''); b.dataset.id = t.id;
-        const badge = !t.vip ? '' : owned
+        const badge = t.lock ? '<em class="vip-badge lock">🔒 Senha</em>' : !t.vip ? '' : owned
             ? '<em class="vip-badge owned">✓ VIP</em>'
             : `<em class="vip-badge"><img src="${COIN_IMG}" width="12" height="12" alt="">${vipCost()}</em>`;
         b.innerHTML = `${badge}<em class="tick">✓</em>${t.svg}<b>${esc(t.name)}</b><span class="desc">${esc(t.desc)}</span>`;
@@ -800,6 +811,7 @@ function buildTypeGrid() {
 }
 
 function onTypeClick(t) {
+    if (t.id === ADV_PERS) { openCustomAuth(); return; }                  // Personalizado: senha → tela de configuração (sem bolsa)
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
     if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
     if (t.id === 'fenda_temporal') { openFenda(); return; }              // Fenda Temporal: personalizar o tema antes de selecionar
@@ -909,6 +921,47 @@ function pickRomance(t) {
     document.body.appendChild(ov);
     ov.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => { S.romance = b.dataset.r; S.advType = t.id; ov.remove(); buildTypeGrid(); }; });
     $('romanceCancel').onclick = () => ov.remove();
+}
+
+// ---------------------------------------------------------------------
+// MODO PERSONALIZADO: senha (a do Modo X, conferida no servidor) → o jogador escreve o prompt (até 90 mil caracteres) → começa.
+// Sem bolsa, sem dados, sem objetivos. O servidor exige a prova assinada da senha ao iniciar.
+// ---------------------------------------------------------------------
+const CUSTOM_MAX = 90000, CUSTOM_MIN = 20;
+function openCustomAuth() {
+    const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
+    if (S.customProof && S.customProof.slot === my.id) { openCustomConfig(); return; }   // senha já confirmada para esta vaga
+    $('customPass').value = ''; $('customPassErr').textContent = ''; $('customPassOk').disabled = false;
+    openOv('customPassModal'); setTimeout(() => $('customPass').focus(), 60);
+}
+async function confirmCustomPass() {
+    const my = S.state?.my_slot; if (!my) return;
+    const pw = $('customPass').value, err = $('customPassErr'), ok = $('customPassOk');
+    if (!pw) { err.textContent = ERR.wrong_password; return; }
+    ok.disabled = true; err.textContent = '';
+    try {
+        const r = await callFn('mission-token', { slot_id: my.id, action: 'custom_auth', password: pw });
+        S.customProof = { slot: my.id, proof: r.proof };
+        closeOv('customPassModal'); openCustomConfig();
+    } catch (e) { err.textContent = friendly(e.message); }
+    finally { ok.disabled = false; $('customPass').value = ''; }
+}
+function openCustomConfig() {
+    closeOv('itemsModal'); closeOv('typeModal');
+    $('customText').value = S.customText || ''; $('customErr').textContent = '';
+    updateCustomCount(); openOv('customModal');
+}
+function updateCustomCount() { $('customCount').textContent = $('customText').value.length.toLocaleString('pt-BR'); }
+function cancelCustom() {
+    S.customText = $('customText').value; closeOv('customModal');
+    openOv(S.bag.length === BAG_SIZE ? 'typeModal' : 'itemsModal');       // volta para onde o jogador estava
+}
+function confirmCustom() {
+    const txt = $('customText').value.trim().slice(0, CUSTOM_MAX), my = S.state?.my_slot;
+    if (txt.length < CUSTOM_MIN) { $('customErr').textContent = `Escreva pelo menos ${CUSTOM_MIN} caracteres sobre como quer a aventura.`; return; }
+    if (!my || !S.customProof || S.customProof.slot !== my.id) { S.customText = txt; closeOv('customModal'); openCustomAuth(); return; }
+    S.customText = txt; S.advType = ADV_PERS;
+    startAdventure({}, ADV_PERS);                                        // sem bolsa
 }
 
 function confirmVip() {
@@ -1112,7 +1165,7 @@ function clearDiariasDot() {
 
 async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal');
+    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal'); closeOv('customModal'); closeOv('customPassModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -1123,12 +1176,14 @@ async function _startAdventure(loadout, advType) {
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
         if (advType === 'salao_amor') body.romance = ['salao', 'visita'].includes(S.romance) ? S.romance : 'livre';
+        if (advType === ADV_PERS) body.custom = { prompt: S.customText, proof: S.customProof?.proof };   // o servidor confere a prova da senha
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
+        if (S.adv.advType === ADV_PERS) { S.adv.epilogue = true; S.adv.delivered = true; S.adv.epilogueAt = Date.now(); }   // sem objetivo: o botão "Finalizar aventura" fica disponível desde o início
         await connectLive(false);
     } catch (e) {
         console.error('[diarias] falha ao iniciar:', e);
@@ -1217,7 +1272,9 @@ async function connectLive(isRetry) {
         if (speech) buf.forEach((c) => { try { adv.session.sendRealtimeInput({ audio: { data: c.b64, mimeType: 'audio/pcm;rate=16000' } }); } catch (_) { /* ok */ } });
         sendText(recapText(adv, speech));
     } else {
-        sendText('[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena. Não pergunte o nome.');
+        sendText(adv.advType === ADV_PERS
+            ? '[SISTEMA] INICIAR. Siga a configuração do jogador: set_scene, boas-vindas curtíssimas chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
+            : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.');
     }
 }
 
@@ -1229,6 +1286,11 @@ function recapText(adv, spoke = false) {
     const hist = adv.hist.slice(-14).map((h) => `${h.who}: ${h.text}`);
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
+    if (adv.advType === ADV_PERS) {
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA história personalizada, sem recomeçar e sem repetir a abertura, seguindo a configuração do jogador. Herói: ${adv.hero.name}. Não há dados, combate com HP, objetivo nem bolsa. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+            + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
+            + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, pergunte o que o herói faz (sem listar opções) e espere o jogador.');
+    }
     if (adv.advType === ADV_FE) {
         return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena da Fé Cristã, sem recomeçar e sem repetir a abertura, SEMPRE fiel aos relatos bíblicos e sem inventar nada. Herói: ${adv.hero.name}. Não há dados, combate nem chefe. `
             + (adv.epilogue ? 'O acontecimento JÁ terminou: vocês estão na conversa em particular com o(s) apóstolo(s); continue-a. ' : 'O acontecimento ainda está em andamento: continue-o do ponto em que parou. ')
@@ -1241,7 +1303,7 @@ function recapText(adv, spoke = false) {
         + (adv.modoX ? 'NÃO há mais rolagens de dados: não chame roll_check. ' : '') + (adv.epilogue ? 'ESTAMOS NO EPÍLOGO: o objetivo da missão JÁ FOI CUMPRIDO' + (adv.bossDown ? ' e o chefe JÁ FOI DERROTADO' : '') + '. É PROIBIDO iniciar combate, chefe, emboscada ou qualquer inimigo; apenas diálogo, banquetes, festas e passeios até o jogador pedir para finalizar. ' + (adv.delivered ? 'O objetivo JÁ foi entregue ao NPC inicial. ' : 'Se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ') + 'NÃO recomece a história. ' : '') + (adv.critArmed ? 'Encantamento de dano crítico ARMADO para o próximo ataque bem-sucedido. ' : '') + `Bolsa restante: ${bag || 'vazia'}. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
         + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
         + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue a história; NÃO repita a abertura nem as opções antigas.'
-            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta, voltando à conversa ou celebração de onde parou (sem listar opções); depois espere o jogador.' : 'Retome com UMA frase curta e diga novamente as 3 opções de ação em voz alta; depois espere o jogador.');
+            : adv.enemy ? 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções, estamos em combate); depois espere o jogador.' : adv.epilogue ? 'Retome com UMA frase curta, voltando à conversa ou celebração de onde parou (sem listar opções); depois espere o jogador.' : 'Retome com UMA frase curta e pergunte o que o herói faz (sem listar opções; só dê as 3 opções se ele pedir "Dica"); depois espere o jogador.');
 }
 
 function sendText(text) {
@@ -1375,10 +1437,10 @@ const hpState = (adv) => ({
     combate: adv.enemy ? { inimigo: adv.enemy.name, hp_inimigo_percent: adv.enemy.hp, chefe: adv.enemy.boss } : null,
 });
 
-// Fora de combate o Mestre dá 3 opções em voz; em combate, narra rápido e só pergunta o que o herói faz.
+// Fora e dentro de combate o Mestre só pergunta o que o herói faz; as 3 opções só saem com "Dica" ou depois de 10 s de silêncio.
 const nextStep = (adv) => adv.enemy
     ? 'Estamos em COMBATE: narre curto (2 a 3 frases), deixe o inimigo reagir e apenas pergunte o que o herói faz, SEM listar opções. Depois PARE e espere o jogador.'
-    : 'Termine dizendo 3 opções de ação em voz alta e então PARE e espere o jogador responder.';
+    : 'Termine com a fala de um personagem em primeira pessoa ou perguntando apenas o que o herói faz, SEM listar opções (só se ele disser "Dica" ou ficar 10 s calado). Depois PARE e espere o jogador.';
 
 function toolStartCombat(adv, args) {
     if (adv.modoX) return { ok: false, erro: 'Objetivo já cumprido (código especial): não há mais combate nem dados. Continue o epílogo.' };
@@ -1434,7 +1496,7 @@ function toolDamage(adv, args) {
                 return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, chefe_derrotado: nome, ...hpState(adv),
                     instrucao: `O chefe ${nome} foi derrotado! Narre a morte à altura do golpe (${intensidade}) e conduza o FINAL: retorno ao NPC inicial/ponto de partida (não deixe o herói parado onde lutou) e entrega do objetivo (chame objective_delivered quando entregar). Depois, se houver tempo, conduza momentos de descontração, comemoração e diálogo intenso com NPCs (banquete, taverna, festa, passeio ou uma conversa envolvente com ${adv.heroFem ? 'um homem adulto' : 'uma mulher adulta'}), com apenas UMA dica inicial de escolha e SEM listar 3 opções. NÃO chame end_adventure até o jogador pedir para finalizar (ou o sistema enviar FINALIZAR/ENCERRAR).` };
             }
-            return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história: diga 3 opções em voz alta e PARE para o jogador responder.` };
+            return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, inimigo_derrotado: nome, ...hpState(adv), instrucao: `${nome} foi derrotado(a). Narre a morte à altura do golpe (${intensidade}) e retome a história com um personagem falando em primeira pessoa, pergunte apenas o que o herói faz (sem listar opções) e PARE para o jogador responder.` };
         }
         return { ok: true, aplicado_percent: pct, intensidade, ...extraInfo, ...hpState(adv), instrucao: `Golpe ${intensidade}. Narre à altura, deixe o inimigo reagir (pode falar em primeira pessoa) e apenas pergunte o que o herói faz, SEM listar opções (estamos em combate). PARE e espere o jogador.` };
     }
@@ -1513,12 +1575,13 @@ function toolStatus(adv) {
 const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
 function checkSpecialCommand(adv) {
-    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE) return;
+    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE || adv.advType === ADV_PERS) return;
     if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
 function openSpecialModal(adv) {
     if (!adv || adv.finished || adv.specialModal) return;
     if (adv.advType === ADV_FE) { toast('Códigos especiais não se aplicam à Fé Cristã.'); return; }
+    if (adv.advType === ADV_PERS) { toast('Códigos especiais não se aplicam ao modo Personalizado.'); return; }
     adv.specialModal = true;
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
@@ -1778,6 +1841,8 @@ function enterStage() {
     showView('stage');
     $('capMaster').textContent = ''; $('capYou').textContent = '';
     $('hudRolls').textContent = '0';
+    $('hudDice').style.display = adv.advType === ADV_PERS ? 'none' : '';             // Personalizado: sem dados
+    $('btnSpecial').style.display = adv.advType === ADV_PERS ? 'none' : '';          // nem código especial
     renderDuel(); updateBagBadge();
     setScene(adv.scene);                                       // começa a trocar do saguão para o cenário da aventura
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
@@ -1879,19 +1944,29 @@ function checkDetour(adv) {
         false);
 }
 
-// Silêncio: se o jogador fica 30 s calado com o Mestre também calado, o Mestre conduz uma ação dos NPCs.
-const SILENCE_MS = 30000;
+// Silêncio: aos 10 s calado (com o Mestre também calado) o Mestre dá as 3 opções ("Dica"); se o jogador continuar calado,
+// aos 30 s o Mestre conduz uma ação dos NPCs. Quando o jogador fala, a contagem volta ao começo.
+const HINT_MS = 10000, SILENCE_MS = 30000;
 function silenceCheck(adv, left) {
     if (adv.finished || adv.ending || adv.forced || adv.dead || adv.long || adv.playerEnd || adv.reconnecting || !adv.session || !adv.connected) { adv.quietSince = 0; return; }
     if (left < 100000) { adv.quietSince = 0; return; }                  // reta final: o Mestre cuida da despedida
     const quiet = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && !adv.notes.length && !adv.A.micMuted;
     if (!quiet) { adv.quietSince = 0; return; }
     const now = Date.now();
-    if (!adv.quietSince) { adv.quietSince = Math.max(now, adv.lastPlayerAt || 0); return; }
-    if (adv.lastPlayerAt > adv.quietSince) adv.quietSince = adv.lastPlayerAt;
-    if (now - adv.quietSince < SILENCE_MS) return;
-    adv.quietSince = now;                                                // recomeça a contagem (nova nudge só depois de mais 30 s calado)
-    sendText('[SISTEMA] SILENCIO: o jogador está calado há 30 segundos. Conduza a cena SOZINHO com UMA ação ou fala curta de um NPC (3 a 5 frases): alguém se aproxima, puxa conversa, provoca ou faz algo que avance a história, sem repetir o que já disse e sem pressionar o jogador. Termine com uma pergunta ou convite e CALE-SE.');
+    if (!adv.quietSince) {
+        adv.quietSince = Math.max(now, adv.lastPlayerAt || 0);
+        if ((adv.lastPlayerAt || 0) > (adv.lastNudgeAt || 0)) adv.silenceStage = 0;   // o jogador falou desde o último aviso: recomeça pela Dica
+        return;
+    }
+    if (adv.lastPlayerAt > adv.quietSince) { adv.quietSince = adv.lastPlayerAt; adv.silenceStage = 0; }
+    if (now - adv.quietSince < ((adv.silenceStage || 0) === 0 ? HINT_MS : SILENCE_MS)) return;
+    adv.quietSince = now; adv.lastNudgeAt = now;
+    if (!adv.silenceStage) {
+        adv.silenceStage = 1;
+        sendText('[SISTEMA] DICA: o jogador está calado há mais de 10 segundos. Dê AGORA, em voz, três opções curtas e numeradas do que ele pode fazer ou dizer ("Você pode: primeiro, ...; segundo, ...; ou terceiro, ...") e CALE-SE. Em combate, lembre em UMA frase: atacar, usar um item ou defender. Depois da Dica, volte a só perguntar o que ele decide.');
+        return;
+    }
+    sendText('[SISTEMA] SILENCIO: o jogador continua calado. Conduza a cena SOZINHO com UMA ação ou fala curta de um NPC em primeira pessoa (3 a 5 frases): alguém se aproxima, puxa conversa, provoca ou faz algo que avance a história, sem repetir o que já disse e sem pressionar o jogador. Termine com uma pergunta ou convite e CALE-SE.');
 }
 
 function advTick() {
@@ -1913,12 +1988,14 @@ function advTick() {
         for (const m of marksFor(adv)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            if (adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Comece a levar a cena a um bom ponto de pausa, sem abrir novos assuntos. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
             else queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
+            if (adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça uma despedida de 30 a 45 segundos, fechando a cena do ponto em que está, e chame end_adventure (title e chronicle sem conteúdo sexual explícito).', true);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
             else queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
@@ -2076,6 +2153,13 @@ function bindUI() {
     $('briefCancel').onclick = () => closeOv('briefModal');
     $('briefGo').onclick = openLoadout;                        // 1º a bolsa; o Mestre e o cronômetro só começam depois
     $('itemsCancel').onclick = () => closeOv('itemsModal');
+    $('itemsCustom').onclick = openCustomAuth;                  // atalho: Personalizado (senha) sem escolher a bolsa
+    $('customPassCancel').onclick = () => closeOv('customPassModal');
+    $('customPassOk').onclick = confirmCustomPass;
+    $('customPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmCustomPass(); });
+    $('customText').addEventListener('input', updateCustomCount);
+    $('customCancel').onclick = cancelCustom;
+    $('customGo').onclick = confirmCustom;
     $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar
     $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
     $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
@@ -2115,7 +2199,7 @@ function bindUI() {
     $('btnFinish').onclick = openFinishConfirm;
     $('finishCancel').onclick = () => closeOv('finishModal');
     $('finishConfirm').onclick = confirmFinish;
-    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal') closeOv(e.target.id); });
+    document.addEventListener('click', (e) => { if (e.target.classList?.contains('overlay') && e.target.id !== 'busyOverlay' && e.target.id !== 'diceOverlay' && e.target.id !== 'errModal' && e.target.id !== 'itemsModal' && e.target.id !== 'customModal') closeOv(e.target.id); });
 }
 
 // --- AUTH OTIMISTA (ZERO EGRESS) — mesmo padrão da guilda ---

@@ -542,3 +542,11 @@ body.hud-hidden #frostOverlay { opacity: .6; }
 .fenda-input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; color: #fff; font: inherit; font-size: 1rem; }
 .fenda-input:focus { outline: none; border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
 .fenda-err { min-height: 1.2em; margin: 6px 0 10px; color: #ff7b7b; font-size: .82em; text-align: center; }
+
+
+/* ===== Modo Personalizado ===== */
+.custom-box { max-width: 560px; width: 100%; }
+.custom-area { min-height: 220px; max-height: 46vh; resize: vertical; line-height: 1.5; font-size: .95rem; }
+.custom-count { text-align: right; margin: 4px 0 0; font-size: .74em; color: #9d957f; font-variant-numeric: tabular-nums; }
+.dm-box p.tip.custom-warn { margin: 0 0 10px; color: #ffd9a8; border-left-color: var(--ember); background: rgba(255,122,26,.1); }
+.type-card .vip-badge.lock { padding: 3px 7px; letter-spacing: .5px; }

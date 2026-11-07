@@ -1273,7 +1273,7 @@ async function connectLive(isRetry) {
         sendText(recapText(adv, speech));
     } else {
         sendText(adv.advType === ADV_PERS
-            ? '[SISTEMA] INICIAR. Siga a configuração do jogador: set_scene, boas-vindas curtíssimas chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
+            ? '[SISTEMA] INICIAR. Siga a configuração do jogador: set_scene, boas-vindas calorosas (3 a 4 frases) chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
             : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.');
     }
 }
@@ -1439,7 +1439,7 @@ const hpState = (adv) => ({
 
 // Fora e dentro de combate o Mestre só pergunta o que o herói faz; as 3 opções só saem com "Dica" ou depois de 10 s de silêncio.
 const nextStep = (adv) => adv.enemy
-    ? 'Estamos em COMBATE: narre curto (2 a 3 frases), deixe o inimigo reagir e apenas pergunte o que o herói faz, SEM listar opções. Depois PARE e espere o jogador.'
+    ? 'Estamos em COMBATE: narre com ritmo de ação, em resposta longa (4 a 6 frases), deixe o inimigo reagir e apenas pergunte o que o herói faz, SEM listar opções. Depois PARE e espere o jogador.'
     : 'Termine com a fala de um personagem em primeira pessoa ou perguntando apenas o que o herói faz, SEM listar opções (só se ele disser "Dica" ou ficar 10 s calado). Depois PARE e espere o jogador.';
 
 function toolStartCombat(adv, args) {
@@ -1719,10 +1719,10 @@ async function doRoll(args) {
 
 // ---------------------------------------------------------------------
 // FALAS LONGAS (o Gemini Live responde curto): o JS envia "[SISTEMA] CONTINUE" a cada fim de turno para parecer UMA fala só.
-//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator), mínimo 3 min (não existe no Salão do Amor, na Fenda Temporal nem na Fé Cristã)
+//   sermao : pregação aceita pelo jogador no epílogo (Pantokrator), 3 rodadas de resposta (não existe no Salão do Amor, na Fenda Temporal nem na Fé Cristã)
 // Passado o mínimo, o JS manda o fecho. Nos outros momentos NÃO há continuação forçada.
 // ---------------------------------------------------------------------
-const LONG_MIN_MS = { sermao: 3 * 60 * 1000 }, LONG_MAX_TURNS = 14;
+const SERMAO_RODADAS = 3;   // sermão = 3 respostas: 1ª (abertura, dada ao ligar o modo), 2ª (CONTINUE) e 3ª (fecho)
 
 function startLong(adv, kind, extra) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = { kind, startedAt: Date.now(), turns: 0, ...(extra || {}) }; }
 function stopLong(adv) { clearTimeout(adv.chainTimer); adv.chainTimer = null; adv.long = null; }
@@ -1743,7 +1743,7 @@ function toolModoLongo(adv, a) {
     if (tipo === 'sermao') {
         if (isSemPregacao(adv.advType)) return { ok: false, erro: 'Neste tipo de aventura não existe pregação.' };
         startLong(adv, 'sermao');
-        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" várias vezes (mínimo 3 minutos) e mandará o fecho no final.' };
+        return { ok: true, instrucao: 'Pregação LIGADA. Escolha o tema, comece a pregação cristã adaptada a Aden (Pantokrator no papel de Jesus) e NÃO conclua nem pergunte nada: o jogo enviará "[SISTEMA] CONTINUE" para a 2ª rodada e o fecho na 3ª (3 rodadas no total, cada uma LONGA, de 6 a 10 frases).' };
     }
     return { ok: false, erro: 'tipo inválido (use sermao).' };
 }
@@ -1777,17 +1777,17 @@ function tryChain(adv, waited) {
         L.turns++;
         const quem = L.turns % 2 === 1 ? 'a OUTRA irmã' : 'a PRIMEIRA irmã';
         const ultima = L.turns === 3;
-        sendText(`[SISTEMA] CONTINUE a conversa entre as irmãs: agora fala ${quem}, respondendo à fala anterior, em 3 a 5 frases, sobre o herói e o que sentem, sem repetir e sem falar com o herói${ultima ? ', EXCETO no fim desta fala: termine com uma pergunta curta dirigida ao herói e então CALE-SE e espere a resposta dele' : ''}.`);
+        sendText(`[SISTEMA] CONTINUE a conversa entre as irmãs: agora fala ${quem}, respondendo à fala anterior, em 5 a 8 frases, sobre o herói e o que sentem, sem repetir e sem falar com o herói${ultima ? ', EXCETO no fim desta fala: termine com uma pergunta curta dirigida ao herói e então CALE-SE e espere a resposta dele' : ''}.`);
         if (ultima) stopLong(adv);
         return;
     }
     L.turns++;
-    if (Date.now() - L.startedAt >= LONG_MIN_MS[L.kind] || L.turns > LONG_MAX_TURNS) {
+    if (L.turns >= SERMAO_RODADAS - 1) {                                  // 3ª rodada = fecho
         stopLong(adv);
-        sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO). Conclua agora a pregação com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
+        sendText('[SISTEMA] CONTINUE (FECHO DA PREGAÇÃO, 3ª e última rodada). Conclua agora a pregação, em resposta longa (6 a 10 frases), com uma mensagem final comovente (graça, amor, perdão, fé, esperança), aplicada ao herói. Em seguida PERGUNTE se ele quer continuar ouvindo ou ouvir uma nova pregação, e então CALE-SE e espere a resposta dele.');
         return;
     }
-    sendText('[SISTEMA] CONTINUE a pregação. Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 5 a 8 frases.');
+    sendText('[SISTEMA] CONTINUE a pregação (2ª de 3 rodadas). Siga EXATAMENTE de onde parou, sem repetir, sem resumir, sem perguntar nada e SEM concluir: aprofunde com ensinamentos, parábolas e exemplos de Aden, aplicando a lição à vida do herói, em tom caloroso e solene. 6 a 10 frases.');
 }
 
 // ----- cenário por palavra-chave (mission_scenes.keywords, separadas por vírgula ou ponto e vírgula) -----
@@ -1966,7 +1966,7 @@ function silenceCheck(adv, left) {
         sendText('[SISTEMA] DICA: o jogador está calado há mais de 10 segundos. Dê AGORA, em voz, três opções curtas e numeradas do que ele pode fazer ou dizer ("Você pode: primeiro, ...; segundo, ...; ou terceiro, ...") e CALE-SE. Em combate, lembre em UMA frase: atacar, usar um item ou defender. Depois da Dica, volte a só perguntar o que ele decide.');
         return;
     }
-    sendText('[SISTEMA] SILENCIO: o jogador continua calado. Conduza a cena SOZINHO com UMA ação ou fala curta de um NPC em primeira pessoa (3 a 5 frases): alguém se aproxima, puxa conversa, provoca ou faz algo que avance a história, sem repetir o que já disse e sem pressionar o jogador. Termine com uma pergunta ou convite e CALE-SE.');
+    sendText('[SISTEMA] SILENCIO: o jogador continua calado. Conduza a cena SOZINHO com UMA ação ou fala de um NPC em primeira pessoa, longa (5 a 8 frases): alguém se aproxima, puxa conversa, provoca ou faz algo que avance a história, sem repetir o que já disse e sem pressionar o jogador. Termine com uma pergunta ou convite e CALE-SE.');
 }
 
 function advTick() {

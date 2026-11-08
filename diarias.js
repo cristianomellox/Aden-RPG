@@ -17,6 +17,11 @@ const VAD_CFG = { automaticActivityDetection: { startOfSpeechSensitivity: 'START
 const EXTRA_COST_FALLBACK = 25;
 const VIP_COST_FALLBACK = 5;                               // custo (ouro) das aventuras VIP; o servidor é quem cobra (mission_config.vip_cost_gold)
 const COIN_IMG = '/assets/goldcoin.webp';
+const MOEDA_RUNICA_IMG = 'https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp';   // mesma imagem do Mercador
+const MOEDA_ID = 55;                                       // item "Moeda Rúnica" na bolsa (inventory_items.item_id)
+const FENDA_COIN_COST = 50;                                // preço da Fenda Temporal em Moedas Rúnicas (o servidor cobra: mission_prepare_start)
+const MAX_CHARS = 8, CHAR_MAX_LEN = 60;                    // etiquetas de personagens (Fenda Temporal e FanFiction)
+const CUSTOM_EXTRAS_MAX = 1000;                            // "Detalhes extras" dos tipos-base do Modo Personalizado
 const BAG_SIZE = 8;
 const HEAL_POTION = 20;                                    // % de HP da poção de cura
 const BOSS_MAX_HIT = 25;                                   // dano máximo (%) por golpe em chefe (luta longa)
@@ -95,6 +100,8 @@ const ERR = {
     free_not_used: 'Use primeiro a sua aventura gratuita de hoje.',
     extra_already_today: 'Você já usou a aventura extra de hoje.',
     not_enough_gold: 'Você não tem ouro suficiente.',
+    not_enough_coins: 'Você não tem Moedas Rúnicas suficientes (a Fenda Temporal custa 50).',
+    coin_debit_failed: 'Não foi possível cobrar as Moedas Rúnicas. Tente novamente.',
     no_theme: 'O Mestre ainda não tem aventuras preparadas.',
     invalid_loadout: 'Escolha exatamente 8 itens para a bolsa.',
     invalid_type: 'Tipo de aventura inválido. Escolha novamente.',
@@ -134,9 +141,100 @@ const S = {
     uid: null, offset: 0, state: null, scenes: {}, poll: null, tick: null,
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
     advType: null, romance: 'livre', vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
-    customProof: null, customText: '',                         // Modo Personalizado: prova da senha (presa à vaga) e rascunho do prompt
+    customProof: null, customText: '',                         // Modo Personalizado: prova da senha (presa à vaga) e rascunho do prompt (livre/FanFiction)
+    customExtras: '', customTipo: '', customRomance: 'livre', customMode: 'long', customSend: null,   // rascunho dos "Detalhes extras", tipo escolhido e o que será enviado
 };
 const serverNow = () => Date.now() + S.offset;
+
+// ---------------------------------------------------------------------
+// BOLSA (IndexedDB 'aden_inventory_db'): mesma estratégia do mercador.js / inventory.js.
+// O servidor desconta (ou devolve) as Moedas Rúnicas e roda recalc_player_inventory; aqui o cache local é
+// SINCRONIZADO com as linhas que o servidor devolveu (inventory_updates / removed_item_ids), sem egress extra.
+// ---------------------------------------------------------------------
+const INV_DB = 'aden_inventory_db', INV_STORE = 'inventory_store';
+function openInvDb() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(INV_DB);
+        req.onerror = () => rej(req.error);
+        req.onsuccess = (e) => { const d = e.target.result; d.onversionchange = () => d.close(); res(d); };
+        req.onupgradeneeded = () => {};                          // não mexe no schema (é do inventory.js)
+    });
+}
+async function invQtyFromCache(itemId) {                       // soma das linhas não equipadas do item (0 = vazio OU cache ainda não carregado)
+    try {
+        const db = await openInvDb();
+        if (!db.objectStoreNames.contains(INV_STORE)) return 0;
+        const all = await new Promise((res, rej) => { const r = db.transaction(INV_STORE, 'readonly').objectStore(INV_STORE).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+        return all.filter((i) => !i.equipped_slot && (i.item_id ?? i.items?.item_id) === itemId).reduce((n, i) => n + (i.quantity || 0), 0);
+    } catch (_) { return 0; }
+}
+async function syncInvCache(updates, removedIds, affectedItemIds) {
+    try {
+        const db = await openInvDb();
+        if (!db.objectStoreNames.contains(INV_STORE)) return;
+        const tx = db.transaction(INV_STORE, 'readwrite'), store = tx.objectStore(INV_STORE);
+        const all = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+        const affected = new Set(affectedItemIds), removed = new Set(removedIds || []);
+        for (const row of all) {
+            const id = row.item_id ?? row.items?.item_id;
+            if (removed.has(row.id) || (!row.equipped_slot && affected.has(id))) store.delete(row.id);
+        }
+        for (const row of updates || []) {
+            if (!row || row.id == null) continue;
+            const { items: _ignored, ...raw } = row;               // nunca grava definição embutida
+            store.put(raw);
+        }
+        await new Promise((res) => { tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
+    } catch (e) { console.warn('[diarias] cache da bolsa:', e); }
+}
+const applyCoinSync = (r) => syncInvCache(r?.inventory_updates, r?.removed_item_ids, [MOEDA_ID]);
+
+// ---------------------------------------------------------------------
+// ETIQUETAS DE PERSONAGENS (campo "Personagens", opcional): ao digitar vírgula (ou Enter / sair do campo) a palavra vira uma
+// etiqueta com um × para remover. Usado na Fenda Temporal (key 'fenda') e no Modo Personalizado (key 'custom').
+// ---------------------------------------------------------------------
+const tagState = { fenda: [], custom: [] };
+const cleanTag = (t) => stripEmoji(String(t || '')).replace(/["'`<>{}\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CHAR_MAX_LEN);
+function renderTags(key) {
+    const box = $(key + 'Tags'), input = $(key + 'TagInput'); if (!box || !input) return;
+    box.querySelectorAll('.tag-chip').forEach((n) => n.remove());
+    tagState[key].forEach((name, i) => {
+        const chip = document.createElement('span'); chip.className = 'tag-chip';
+        const t = document.createElement('span'); t.textContent = name;
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'tag-x'; x.textContent = '×'; x.setAttribute('aria-label', 'Remover ' + name);
+        x.onclick = (e) => { e.stopPropagation(); tagState[key].splice(i, 1); renderTags(key); };
+        chip.append(t, x); box.insertBefore(chip, input);
+    });
+    input.placeholder = tagState[key].length ? '' : 'Ex.: Harry Potter, Hermione…';
+}
+function commitTags(key, raw) {                                // "a, b, c" → etiquetas (sem repetir, até MAX_CHARS)
+    const arr = tagState[key];
+    for (const part of String(raw || '').split(',')) {
+        const n = cleanTag(part); if (n.length < 2) continue;
+        if (arr.some((a) => a.toLowerCase() === n.toLowerCase())) continue;
+        if (arr.length >= MAX_CHARS) { toast(`No máximo ${MAX_CHARS} personagens.`, true); break; }
+        arr.push(n);
+    }
+}
+function flushTags(key) {                                      // o que ficou digitado e ainda não virou etiqueta
+    const input = $(key + 'TagInput'); if (!input) return;
+    if (input.value.trim()) commitTags(key, input.value);
+    input.value = ''; renderTags(key);
+}
+function bindTagField(key) {
+    const box = $(key + 'Tags'), input = $(key + 'TagInput'); if (!box || !input) return;
+    box.onclick = () => input.focus();
+    input.addEventListener('input', () => {
+        if (!input.value.includes(',')) return;
+        const parts = input.value.split(','), rest = parts.pop();   // o que vem depois da última vírgula segue sendo digitado
+        commitTags(key, parts.join(',')); input.value = rest; renderTags(key);
+    });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); flushTags(key); }
+        else if (e.key === 'Backspace' && !input.value && tagState[key].length) { tagState[key].pop(); renderTags(key); }
+    });
+    input.addEventListener('blur', () => flushTags(key));
+}
 
 // ---------------------------------------------------------------------
 // Utilidades de UI
@@ -714,7 +812,7 @@ const bagCounts = () => S.bag.reduce((o, id) => { o[id] = (o[id] || 0) + 1; retu
 function openLoadout() {
     closeOv('briefModal');
     S.bag = [];
-    S.advType = null; S.romance = 'livre'; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null;
+    S.advType = null; S.romance = 'livre'; S.vipOwned = new Set(); S.vipPending = null; S.fenda = null; S.fendaDraft = null; tagState.fenda = [];
     buildItemGrid();
     renderBag();
     openOv('itemsModal');
@@ -767,6 +865,8 @@ const ADV_TYPES = [
       svg: _svg('<path d="M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 8l5 4 5-4M19 40l5-4 5 4M8 19.5l6 .5-1.5-5.8M40 28.5l-6-.5 1.5 5.8M8 28.5l6-.5-1.5 5.8M40 19.5l-6 .5 1.5-5.8" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4.2" fill="#d8f6ff" stroke="#6fb8d9" stroke-width="1.4"/>') },
     { id: 'fe_crista', vip: false, name: 'Fé Cristã', desc: 'Você é transportado para a época dos apóstolos para reviver momentos bíblicos e ter uma conversa com eles.',
       svg: _svg('<circle cx="24" cy="24" r="20" fill="#2a1d0a" stroke="#e6c27a" stroke-width="1.6" opacity=".9"/><path d="M24 7v34M14 18h20" stroke="#ffe27a" stroke-width="5.2"/><path d="M24 7v34M14 18h20" stroke="#a88235" stroke-width="1.4"/><path d="M8 40c5-3 11-3 16 0 5-3 11-3 16 0" stroke="#fff3cf" stroke-width="1.6"/><path d="M24 2v3M10 8l2 2M38 8l-2 2" stroke="#fff3cf" stroke-width="1.6"/>') },
+    { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', coin: FENDA_COIN_COST, desc: 'Uma fenda no tempo leva você a um grande evento da história ou ao mundo de uma obra (FanFiction de games, novelas, séries, TV, filmes...), sempre fiel ao original.',
+      svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
     { id: 'assassino', vip: true, name: 'Quem é o assassino?', desc: 'Um crime abalou o lugar. Interrogue suspeitos, siga pistas e desmascare o culpado.',
       svg: _svg('<circle cx="20" cy="20" r="13" fill="#1c2330" stroke="#e6c27a" stroke-width="3"/><path d="M29.5 29.5L42 42" stroke="#6b4a1c" stroke-width="5.5"/><path d="M29.5 29.5L42 42" stroke="#c9a45c" stroke-width="2" stroke-dasharray="2 4"/><path d="M20 10c3.2 5 6.6 8.2 6.6 11.6a6.6 6.6 0 0 1-13.2 0C13.4 18.2 16.8 15 20 10z" fill="#c0262f" stroke="#ffb3b8" stroke-width="1.4"/><circle cx="17.6" cy="22.4" r="1.8" fill="#ff8c96" stroke="none"/>') },
     { id: 'intriga', vip: true, name: 'Intriga social', desc: 'Banquetes, segredos e alianças. Use lábia e astúcia num jogo de aparências.',
@@ -777,9 +877,7 @@ const ADV_TYPES = [
       svg: _svg('<path d="M9 43V22a15 15 0 0 1 30 0v21l-5.4-4.2-4.8 4.2-4.8-4.2-4.8 4.2-4.8-4.2z" fill="#e8e4f5" stroke="#9b87d9" stroke-width="2"/><ellipse cx="18.6" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="29.4" cy="22" rx="2.7" ry="3.8" fill="#1c1030" stroke="none"/><ellipse cx="24" cy="30.5" rx="2.5" ry="3.2" fill="#1c1030" stroke="none"/><circle cx="7" cy="9" r="1.6" fill="#cbb8ff" stroke="none"/><circle cx="42" cy="12" r="1.2" fill="#cbb8ff" stroke="none"/><circle cx="40" cy="5" r="1" fill="#cbb8ff" stroke="none"/>') },
     { id: 'salao_amor', vip: true, name: 'Romance & Conquista', desc: 'Aventura adulta (18+). Escolha entre o Salão do Amor, uma competição em que você é o prêmio, ou a Conquista livre numa festa de doze pessoas.',
       svg: _svg(`<path d="M24 42C7 30 4.5 18.5 10.5 12 16 6.3 22.3 9 24 14.5 25.7 9 32 6.3 37.5 12 43.5 18.5 41 30 24 42z" fill="#e5334f" stroke="#ffb3c1" stroke-width="2"/><path d="M12.5 16c1.2-3 4.2-4 6.5-3" stroke="#fff" stroke-width="2" opacity=".75"/><polygon points="${_star(38, 9, 4, 4.5, 1.4)}" fill="#ffe27a" stroke="none"/><polygon points="${_star(8, 36, 4, 3.4, 1.1)}" fill="#ffe27a" stroke="none"/>`) },
-    { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', desc: 'Uma fenda no tempo leva você a um grande evento da história. Aliado ou inimigo, a escolha é sua.',
-      svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
-    { id: 'personalizado', vip: false, lock: true, name: 'Personalizado', desc: 'Só com senha. Você escreve como quer a aventura: diálogo livre e exploração, sem objetivos nem dados. Conteúdo adulto (18+).',
+    { id: 'personalizado', vip: false, lock: true, name: 'Personalizado', desc: 'Só com senha. Escolha um tipo (ou FanFiction), escreva detalhes e personagens. Conteúdo adulto liberado (18+).',
       svg: _svg('<path d="M8 4h22l10 10v30H8z" fill="#f3ead2" stroke="#a88235" stroke-width="2"/><path d="M30 4v10h10" fill="#d9c8a0" stroke="#a88235" stroke-width="2"/><path d="M13 20h14M13 26h10M13 32h8" stroke="#8a7a55" stroke-width="2"/><g transform="rotate(40 30 34)"><rect x="27" y="14" width="7" height="24" fill="#e6b23a" stroke="#8a5a12" stroke-width="1.5"/><rect x="27" y="10" width="7" height="4.5" rx="1.2" fill="#e57b8a" stroke="#8a3a48" stroke-width="1.3"/><path d="M27 38h7l-3.5 8z" fill="#f0cf9a" stroke="#8a5a12" stroke-width="1.3"/><path d="M29.7 43.4h1.6l-.8 2.6z" fill="#3a2a1a" stroke="none"/></g>') },
 ];
 const ADV_PERS = 'personalizado';                                // Personalizado (senha): prompt do próprio jogador, sem bolsa, dados, objetivos, Pantokrator nem sermão
@@ -802,6 +900,7 @@ function buildTypeGrid() {
         b.type = 'button'; b.className = 'type-card' + (S.advType === t.id ? ' sel' : ''); b.dataset.id = t.id;
         const badge = t.lock ? '<em class="vip-badge lock">🔒 Senha</em>' : !t.vip ? '' : owned
             ? '<em class="vip-badge owned">✓ VIP</em>'
+            : t.coin ? `<em class="vip-badge"><img src="${MOEDA_RUNICA_IMG}" width="12" height="12" alt="">${t.coin}</em>`
             : `<em class="vip-badge"><img src="${COIN_IMG}" width="12" height="12" alt="">${vipCost()}</em>`;
         b.innerHTML = `${badge}<em class="tick">✓</em>${t.svg}<b>${esc(t.name)}</b><span class="desc">${esc(t.desc)}</span>`;
         b.onclick = () => onTypeClick(t);
@@ -837,6 +936,7 @@ function openFenda() {
     const f = S.fenda || {};
     S.fendaDraft = { choice: f.uiChoice || null, other: f.uiOther || 'sistema', text: f.uiText || '' };
     $('fendaText').value = S.fendaDraft.text; $('fendaErr').textContent = ''; $('fendaOk').disabled = false;
+    $('fendaTagInput').value = ''; renderTags('fenda');
     buildFendaList();
     openOv('fendaModal');
 }
@@ -854,14 +954,15 @@ function buildFendaList() {
     $('fendaOtherSys').classList.toggle('sel', d.other === 'sistema');
     $('fendaOtherDef').classList.toggle('sel', d.other === 'definir');
     $('fendaCustom').style.display = outro && d.other === 'definir' ? '' : 'none';
-    $('fendaHint').textContent = !d.choice ? 'Sem escolha, o Mestre decide o tema livremente.'
+    $('fendaHint').textContent = !d.choice ? 'Sem escolha, o Mestre decide o tema livremente (ou parte dos personagens que você pedir).'
         : d.choice !== 'outro' ? ''
         : d.other === 'sistema' ? 'O Mestre escolherá um tema que não está na lista.'
-        : 'Digite uma pessoa, evento ou obra. O Mestre confere se existe antes de você começar.';
+        : 'Digite uma pessoa, evento ou obra (game, novela, série, TV, filme, livro...). O Mestre confere se existe antes de você começar.';
 }
 async function confirmFenda() {
     const d = S.fendaDraft, my = S.state?.my_slot; if (!d) return;
     const ok = $('fendaOk'), err = $('fendaErr'); err.textContent = '';
+    flushTags('fenda');
     const keep = { uiChoice: d.choice, uiOther: d.other, uiText: $('fendaText').value };
     let fenda;
     if (!d.choice) fenda = { choice: 'livre' };
@@ -889,15 +990,34 @@ async function confirmFenda() {
             ok.disabled = false;
         }
     }
+    fenda.characters = [...tagState.fenda];                              // personagens pedidos (opcional; vazio = o Mestre decide)
     S.fenda = { ...fenda, ...keep }; S.advType = 'fenda_temporal';
     closeOv('fendaModal'); buildTypeGrid();
 }
 
 function openVipConfirm(t) {
     S.vipPending = t;
-    const cost = vipCost(), gold = S.state?.extra?.gold;
+    const coin = !!t.coin;
     $('vipName').textContent = t.name;
-    $('vipCost').textContent = cost; $('vipCostTxt').textContent = cost;
+    $('vipCoinImg').src = coin ? MOEDA_RUNICA_IMG : COIN_IMG;
+    $('vipUnit').textContent = coin ? 'Moedas Rúnicas' : 'de ouro';
+    if (coin) {                                                          // Fenda Temporal: Moedas Rúnicas (item 55 da bolsa)
+        $('vipCost').textContent = t.coin;
+        $('vipText').innerHTML = `Esta aventura custa <b>${t.coin} Moedas Rúnicas</b>. As moedas só são cobradas quando você entrar na aventura, e são devolvidas se a conexão com o Mestre falhar antes de ele começar a falar.`;
+        $('vipBalLabel').textContent = 'Suas Moedas Rúnicas:';
+        $('vipGold').textContent = '…'; $('vipGold').parentElement.style.display = '';
+        $('vipConfirm').disabled = false;
+        invQtyFromCache(MOEDA_ID).then((q) => {                          // cache 0 pode ser "ainda não carregou": o servidor confere de novo ao começar
+            if (S.vipPending !== t) return;
+            $('vipGold').textContent = nf(q);
+            $('vipConfirm').disabled = q > 0 && q < t.coin;
+        });
+        openOv('vipModal'); return;
+    }
+    const cost = vipCost(), gold = S.state?.extra?.gold;
+    $('vipCost').textContent = cost;
+    $('vipText').innerHTML = `Esta é uma aventura VIP e custa <b>${cost}</b> de ouro. O ouro só é cobrado quando você entrar na aventura, e é devolvido se a conexão com o Mestre falhar antes de ele começar a falar.`;
+    $('vipBalLabel').textContent = 'Seu ouro:';
     $('vipGold').textContent = nf(gold); $('vipGold').parentElement.style.display = gold == null ? 'none' : '';   // sem saldo no estado: esconde a linha
     $('vipConfirm').disabled = gold != null && Number(gold) < cost;      // o servidor confere de novo ao começar
     openOv('vipModal');
@@ -946,22 +1066,74 @@ async function confirmCustomPass() {
     } catch (e) { err.textContent = friendly(e.message); }
     finally { ok.disabled = false; $('customPass').value = ''; }
 }
+const isBaseTipo = (t) => !!t && t !== 'fanfic';                // tipo-base: regras originais + conteúdo adulto liberado; '' e 'fanfic': só diálogo
+function buildCustomTipo() {
+    const sel = $('customTipo'); if (sel.options.length) return;
+    const add = (v, label) => { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); };
+    add('', 'Nenhum (diálogo livre)');
+    ADV_TYPES.filter((t) => t.id !== ADV_PERS).forEach((t) => add(t.id, t.name));   // mesma ordem do seletor de aventuras (Fenda depois de Fé Cristã)
+    add('fanfic', 'FanFiction (apenas diálogo)');                // sempre a última
+}
+function customCurrentMax() { return isBaseTipo($('customTipo').value) ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX; }
+function saveCustomDraft() {                                    // cada modo tem o seu rascunho (90 mil x 1000 caracteres)
+    const v = $('customText').value;
+    if (S.customMode === 'short') S.customExtras = v; else S.customText = v;
+}
+function updateCustomUI() {                                     // campos e textos conforme o Tipo escolhido
+    const tipo = $('customTipo').value, base = isBaseTipo(tipo), mode = base ? 'short' : 'long';
+    if (mode !== S.customMode) { saveCustomDraft(); S.customMode = mode; $('customText').value = mode === 'short' ? S.customExtras : S.customText; }
+    $('customText').maxLength = base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX;
+    $('customMax').textContent = (base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX).toLocaleString('pt-BR');
+    $('customCharsWrap').style.display = tipo === 'fenda_temporal' || tipo === 'fanfic' ? '' : 'none';   // personagens: só Fenda Temporal e FanFiction
+    $('customRomanceWrap').style.display = tipo === 'salao_amor' ? '' : 'none';
+    $('customTextLabel').innerHTML = base ? 'Detalhes extras <em>(opcional)</em>' : 'Prompt';
+    $('customText').placeholder = base
+        ? 'Ex.: Quero que a história tenha mais mistério e um rival do meu passado…'
+        : tipo === 'fanfic'
+            ? 'Ex.: Quero viver uma história em Hogwarts, no sexto ano, com muita conversa, segredos e romance entre adultos…'
+            : 'Ex.: Sou um mercenário que chega a uma cidade portuária governada por uma rainha misteriosa. Quero muita conversa com os nobres, intrigas e romance, num tom sombrio e sensual…';
+    $('customIntro').textContent = tipo === 'fanfic'
+        ? 'FanFiction: você entra no universo de uma obra (game, novela, série, TV, filme, anime, livro, HQ...) e o Mestre a conduz 100% fiel ao original: ambiente, atmosfera e personagens. Só diálogo, sem objetivos nem dados (os itens da bolsa não são usados). Diga qual é a obra e o que quer viver.'
+        : base
+            ? `Esta aventura segue as regras ORIGINAIS do tipo escolhido (objetivo, dados, bolsa e combate quando houver). Use os detalhes extras (até ${nf(CUSTOM_EXTRAS_MAX)} caracteres) para dizer como quer o rumo da história.${tipo === 'fenda_temporal' ? ' Dica: cite a obra ou o evento nos detalhes ou nos personagens; em branco, o Mestre escolhe.' : ''}${tipo === 'fe_crista' ? ' A Fé Cristã mantém as regras originais, sem conteúdo adulto.' : ''}`
+            : 'Escreva como você quer a aventura: o mundo, quem é você, os personagens, o tom e o que quer viver. Não há objetivos nem dados (os itens da bolsa não são usados): só diálogo livre e exploração.';
+    $('customWarn').textContent = tipo === 'fe_crista'
+        ? 'Conteúdo adulto não se aplica à Fé Cristã: este tipo mantém as regras originais.'
+        : 'Conteúdo adulto (18+): o modo Personalizado permite cenas sexuais explícitas entre adultos fictícios. Todos os personagens são sempre maiores de idade (nunca de aparência infantil), o consentimento é obrigatório e pessoas reais não entram em cenas explícitas.';
+    updateCustomCount();
+}
 function openCustomConfig() {
     closeOv('itemsModal'); closeOv('typeModal');
-    $('customText').value = S.customText || ''; $('customErr').textContent = '';
-    updateCustomCount(); openOv('customModal');
+    buildCustomTipo();
+    $('customTipo').value = S.customTipo || '';
+    $('customRomance').value = S.customRomance || 'livre';
+    S.customMode = isBaseTipo($('customTipo').value) ? 'short' : 'long';
+    $('customText').value = S.customMode === 'short' ? S.customExtras : S.customText;
+    $('customTagInput').value = ''; renderTags('custom');
+    $('customErr').textContent = '';
+    updateCustomUI(); openOv('customModal');
 }
-function updateCustomCount() { $('customCount').textContent = $('customText').value.length.toLocaleString('pt-BR'); }
+function updateCustomCount() {
+    const max = customCurrentMax(), n = $('customText').value.length;
+    $('customCount').textContent = n.toLocaleString('pt-BR');
+    $('customCount').parentElement.classList.toggle('over', n >= max);
+}
 function cancelCustom() {
-    S.customText = $('customText').value; closeOv('customModal');
+    flushTags('custom'); saveCustomDraft(); S.customTipo = $('customTipo').value; S.customRomance = $('customRomance').value;
+    closeOv('customModal');
     openOv(S.bag.length === BAG_SIZE ? 'typeModal' : 'itemsModal');       // volta para onde o jogador estava
 }
 function confirmCustom() {
-    const txt = $('customText').value.trim().slice(0, CUSTOM_MAX), my = S.state?.my_slot;
-    if (txt.length < CUSTOM_MIN) { $('customErr').textContent = `Escreva pelo menos ${CUSTOM_MIN} caracteres sobre como quer a aventura.`; return; }
-    if (!my || !S.customProof || S.customProof.slot !== my.id) { S.customText = txt; closeOv('customModal'); openCustomAuth(); return; }
-    S.customText = txt; S.advType = ADV_PERS;
-    startAdventure({}, ADV_PERS);                                        // sem bolsa
+    flushTags('custom');
+    const tipo = $('customTipo').value, base = isBaseTipo(tipo), my = S.state?.my_slot;
+    const txt = $('customText').value.trim().slice(0, base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX);
+    saveCustomDraft(); S.customTipo = tipo; S.customRomance = $('customRomance').value;
+    if (!base && txt.length < CUSTOM_MIN) { $('customErr').textContent = `Escreva pelo menos ${CUSTOM_MIN} caracteres sobre como quer a aventura.`; return; }
+    if (base && S.bag.length !== BAG_SIZE) { $('customErr').textContent = 'Escolha primeiro os 8 itens da bolsa.'; return; }
+    if (!my || !S.customProof || S.customProof.slot !== my.id) { closeOv('customModal'); openCustomAuth(); return; }
+    S.customSend = { tipo, text: txt, chars: (tipo === 'fenda_temporal' || tipo === 'fanfic') ? [...tagState.custom] : [], romance: tipo === 'salao_amor' ? S.customRomance : 'livre' };
+    S.advType = ADV_PERS;
+    startAdventure(base ? bagCounts() : {}, ADV_PERS);                   // tipo-base usa a bolsa; livre e FanFiction não
 }
 
 function confirmVip() {
@@ -1176,9 +1348,13 @@ async function _startAdventure(loadout, advType) {
         await syncLanguage();                                    // garante players.language = idioma escolhido (o Mestre fala nele)
         const body = { slot_id: my.id, loadout, adventure_type: advType || 'comum' };
         if (advType === 'salao_amor') body.romance = ['salao', 'visita'].includes(S.romance) ? S.romance : 'livre';
-        if (advType === ADV_PERS) body.custom = { prompt: S.customText, proof: S.customProof?.proof };   // o servidor confere a prova da senha
-        if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
+        if (advType === ADV_PERS) {                              // o servidor confere a prova da senha
+            const c = S.customSend || { tipo: '', text: S.customText, chars: [], romance: 'livre' };
+            body.custom = { prompt: c.text, proof: S.customProof?.proof, tipo: c.tipo, characters: c.chars, romance: c.romance };
+        }
+        if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo, characters: S.fenda.characters || [] } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        if (ctx.coins_spent > 0) await applyCoinSync(ctx);       // Fenda Temporal: as Moedas Rúnicas já saíram da bolsa no servidor; atualiza o IndexedDB
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
@@ -1189,7 +1365,7 @@ async function _startAdventure(loadout, advType) {
         console.error('[diarias] falha ao iniciar:', e);
         if (S.adv) teardown();
         else if (A) { try { A.stream.getTracks().forEach((t) => t.stop()); A.ctx.close(); } catch (_) { /* ok */ } }
-        if (ctx?.slot_id) { try { await callFn('mission-token', { slot_id: ctx.slot_id, action: 'revert' }); } catch (_) { /* ok */ } }
+        if (ctx?.slot_id) { try { const rv = await callFn('mission-token', { slot_id: ctx.slot_id, action: 'revert' }); if (rv?.refunded_coins > 0) await applyCoinSync(rv); } catch (_) { /* ok */ } }   // devolveu as moedas? atualiza o IndexedDB
         S.adv = null;
         busy(false);
         const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -1273,7 +1449,7 @@ async function connectLive(isRetry) {
         sendText(recapText(adv, speech));
     } else {
         sendText(adv.advType === ADV_PERS
-            ? '[SISTEMA] INICIAR. Siga a configuração do jogador: set_scene, boas-vindas calorosas (3 a 4 frases) chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
+            ? '[SISTEMA] INICIAR. Siga a configuração do jogador (se for FanFiction, tudo 100% fiel à obra original): set_scene, boas-vindas calorosas (3 a 4 frases) chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
             : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.');
     }
 }
@@ -1287,7 +1463,7 @@ function recapText(adv, spoke = false) {
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     if (adv.advType === ADV_PERS) {
-        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA história personalizada, sem recomeçar e sem repetir a abertura, seguindo a configuração do jogador. Herói: ${adv.hero.name}. Não há dados, combate com HP, objetivo nem bolsa. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA história personalizada, sem recomeçar e sem repetir a abertura, seguindo a configuração do jogador. ${S.customSend?.tipo === 'fanfic' ? 'É uma FANFICTION: mantenha o ambiente, a atmosfera e os personagens 100% fiéis à obra original. ' : ''}Herói: ${adv.hero.name}. Não há dados, combate com HP, objetivo nem bolsa. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
             + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
             + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, pergunte o que o herói faz (sem listar opções) e espere o jogador.');
     }
@@ -2157,6 +2333,8 @@ function bindUI() {
     $('customPassOk').onclick = confirmCustomPass;
     $('customPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmCustomPass(); });
     $('customText').addEventListener('input', updateCustomCount);
+    $('customTipo').addEventListener('change', updateCustomUI);
+    bindTagField('fenda'); bindTagField('custom');
     $('customCancel').onclick = cancelCustom;
     $('customGo').onclick = confirmCustom;
     $('itemsGo').onclick = () => { if (S.bag.length === BAG_SIZE) openTypes(); };       // bolsa → tipo de aventura → começar

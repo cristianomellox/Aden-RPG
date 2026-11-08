@@ -550,3 +550,25 @@ body.hud-hidden #frostOverlay { opacity: .6; }
 .custom-count { text-align: right; margin: 4px 0 0; font-size: .74em; color: #9d957f; font-variant-numeric: tabular-nums; }
 .dm-box p.tip.custom-warn { margin: 0 0 10px; color: #ffd9a8; border-left-color: var(--ember); background: rgba(255,122,26,.1); }
 .type-card .vip-badge.lock { padding: 3px 7px; letter-spacing: .5px; }
+
+/* ===== Campos do Modo Personalizado e da Fenda Temporal (v10) ===== */
+.custom-field { margin: 0 0 12px; text-align: left; }
+.custom-label { display: block; margin: 0 0 5px; font-size: .84rem; color: var(--gold-light); letter-spacing: .3px; }
+.custom-label em { font-style: normal; color: #9d957f; font-size: .9em; }
+.custom-field .hint { margin: 5px 0 0; }
+.custom-select { appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1l6 6 6-6' fill='none' stroke='%23e6c27a' stroke-width='2'/></svg>");
+  background-repeat: no-repeat; background-position: right 12px center; }
+.custom-select option { background: #111; color: #fff; }
+.custom-count.over { color: #ff9d7b; }
+.fenda-chars { margin-top: 4px; }
+.tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 44px; padding: 6px 8px; box-sizing: border-box; cursor: text;
+  border-radius: 6px; border: 1px solid var(--gold-dark); background: #0b0906; }
+.tag-field:focus-within { border-color: var(--gold-light); box-shadow: 0 0 10px rgba(230,194,122,.3); }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 3px 4px 3px 11px; border-radius: 15px; font-size: .84rem;
+  color: var(--gold-light); background: rgba(168,130,53,.28); border: 1px solid var(--gold-base); }
+.tag-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-x { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; font-size: 15px; line-height: 20px;
+  color: #ffd9a8; background: rgba(0,0,0,.45); }
+.tag-x:active { transform: scale(.9); }
+.tag-input { flex: 1 1 120px; min-width: 110px; padding: 4px 2px; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 1rem; }

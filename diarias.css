@@ -572,3 +572,10 @@ body.hud-hidden #frostOverlay { opacity: .6; }
   color: #ffd9a8; background: rgba(0,0,0,.45); }
 .tag-x:active { transform: scale(.9); }
 .tag-input { flex: 1 1 120px; min-width: 110px; padding: 4px 2px; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 1rem; }
+
+/* v10.1: o modal do Personalizado precisa rolar (herdava overflow:hidden do .items-box) e o botão fica sempre visível */
+.dm-box.custom-box { display: block; overflow-y: auto; overflow-x: hidden; max-height: 92vh; max-height: 92dvh; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.custom-box .custom-area { min-height: 140px; }
+.custom-box .dm-actions { position: sticky; bottom: -22px; z-index: 2; margin: 8px -20px -22px; padding: 12px 20px 22px; background: #111; border-top: 1px solid rgba(168,130,53,.35); }
+/* o campo de etiquetas não pode herdar a borda/largura de um estilo global de input */
+.tag-field .tag-input { flex: 1 1 120px; width: auto !important; min-width: 110px; height: auto !important; margin: 0 !important; padding: 4px 2px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; outline: 0 !important; }

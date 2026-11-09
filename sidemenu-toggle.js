@@ -209,7 +209,7 @@
     });
 
     function onMenuStyleChange() {
-      const visible = menu.style.display && menu.style.display !== 'none';
+      const visible = getComputedStyle(menu).display !== 'none';
       btn.style.display = visible ? 'flex' : 'none';
 
       if (visible && !collapsed) {
@@ -229,6 +229,11 @@
 
     const observer = new MutationObserver(onMenuStyleChange);
     observer.observe(menu, { attributes: true, attributeFilter: ['style'] });
+
+    // Estado inicial: o script.js pode já ter exibido o footer (login restaurado)
+    // ANTES deste arquivo rodar; nesse caso o observer nunca dispara.
+    // Por isso sincronizamos o botão com o estado atual do menu.
+    onMenuStyleChange();
 
     // O #mapContainer é recriado dinamicamente (script.js reconstrói o
     // welcomeContainer a cada refresh dos dados do jogador). Reaplica o

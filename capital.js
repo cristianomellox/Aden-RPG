@@ -35,6 +35,75 @@ let camYaw = 0, camPitch = -6, camFov = 120;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
 const FOV_MIN = 120, FOV_MAX = 120;   // limites de zoom normal (arrastar/pinch)
 const PITCH_LIMIT = 89;
+
+// ── Rotação automática (mesma lógica do skybox da guilda) ───────────────
+// A câmera fica parada no centro da esfera e gira só no eixo horizontal
+// (yaw). Quando o jogador interage (arrasta / pinça / roda o scroll) a
+// rotação para; depois de IDLE_MS_TO_RESUME sem interação o pitch volta
+// suavemente pro horizonte (REST_PITCH) e a rotação retoma a partir do
+// yaw atual — nunca reseta a posição horizontal.
+const ROTATE_DEG_PER_SEC = 360 / 150;   // 1 volta a cada 150s (igual à guilda)
+const IDLE_MS_TO_RESUME  = 2000;        // tempo parado até voltar a girar
+const PITCH_REALIGN_MS   = 1100;        // duração do retorno do pitch
+const REST_PITCH         = INITIAL_PITCH;
+
+let autoRotating = true;
+let userInteracting = false;   // dedo/mouse embaixo (arrastando ou pinçando)
+let lastInteractionTs = 0;
+let pitchAnim = null;          // { from, t0 } enquanto o pitch volta pro horizonte
+let _spinLastTs = 0;
+
+// Jogador começou a interagir: para a rotação e cancela o realinhamento.
+function spinUserHold() {
+    userInteracting = true;
+    autoRotating = false;
+    pitchAnim = null;
+    lastInteractionTs = performance.now();
+}
+// Jogador soltou: começa a contar o tempo ocioso.
+function spinUserRelease() {
+    userInteracting = false;
+    lastInteractionTs = performance.now();
+}
+// Interação pontual (scroll) ou inércia ainda em andamento.
+function spinUserPoke() {
+    autoRotating = false;
+    pitchAnim = null;
+    lastInteractionTs = performance.now();
+}
+// Volta ao modo automático (usado ao entrar/sair das lojas).
+function spinResetToAuto() {
+    userInteracting = false;
+    pitchAnim = null;
+    autoRotating = true;
+}
+
+// Chamado a cada frame pelo loop de render.
+function updateAutoSpin(now) {
+    const dt = Math.min(now - _spinLastTs, 100);
+    _spinLastTs = now;
+    if (!_sky || transitioning || userInteracting) return;
+
+    if (autoRotating) {
+        camYaw += ROTATE_DEG_PER_SEC * (dt / 1000);
+        updateCameraLook();
+        return;
+    }
+
+    if (pitchAnim) {
+        const t = Math.min(1, (now - pitchAnim.t0) / PITCH_REALIGN_MS);
+        const e = 1 - (1 - t) * (1 - t); // ease-out quad
+        camPitch = pitchAnim.from + (REST_PITCH - pitchAnim.from) * e;
+        updateCameraLook();
+        if (t >= 1) { pitchAnim = null; autoRotating = true; }
+        return;
+    }
+
+    if (now - lastInteractionTs >= IDLE_MS_TO_RESUME) {
+        if (Math.abs(camPitch - REST_PITCH) < 0.01) autoRotating = true;
+        else pitchAnim = { from: camPitch, t0: now };
+    }
+}
 const SPOT_SPHERE_RADIUS = 400;
 
 // yaw/pitch estimados a partir da posição de cada prédio na imagem —
@@ -218,6 +287,7 @@ function initSkybox() {
     window.addEventListener('resize', onResize);
 
     (function loop(ts) {
+        updateAutoSpin(performance.now());
         material.uniforms.time.value = ts * 0.001; // anima o flow map da água (rio/fosso da capital)
         if (_sky.pfx) {
             try {
@@ -362,6 +432,7 @@ function enableMapInteraction() {
     function inertia() {
         cancelAnimationFrame(aId);
         if (drag) return;
+        spinUserPoke(); // inércia ainda em andamento conta como interação
         vx *= FRICTION; vy *= FRICTION;
         applyDelta(vx, vy);
         if (Math.abs(vx) > 0.02 || Math.abs(vy) > 0.02)
@@ -375,6 +446,7 @@ function enableMapInteraction() {
     }
 
     function startDrag(e) {
+        spinUserHold();
         drag = true;
         canvas.classList.add('dragging');
         sx = e.clientX ?? e.touches[0].clientX;
@@ -398,6 +470,7 @@ function enableMapInteraction() {
     }
 
     function endDrag() {
+        spinUserRelease();
         drag = false;
         canvas.classList.remove('dragging');
         if (Math.abs(vx) > 0.05 || Math.abs(vy) > 0.05) inertia();
@@ -405,6 +478,7 @@ function enableMapInteraction() {
 
     function onTouchStart(e) {
         if (e.touches.length >= 2) {
+            spinUserHold();
             isPinching = true;
             drag = false;
             cancelAnimationFrame(aId);
@@ -436,6 +510,7 @@ function enableMapInteraction() {
 
     function onWheel(e) {
         e.preventDefault();
+        spinUserPoke();
         camFov += e.deltaY * 0.05;
         updateCameraLook();
     }
@@ -487,6 +562,7 @@ function playApproachTransition(el) {
     if (!spot || !fade) { el.click(); return; }
 
     transitioning = true;
+    spinUserHold(); // congela o giro durante a aproximação
     const DURATION = 620; // ms — tempo total da aproximação
     const startYaw = camYaw, startPitch = camPitch, startFov = camFov;
     const dYaw = shortestAngleDelta(startYaw, spot.yaw);
@@ -524,6 +600,7 @@ function playApproachTransition(el) {
                 updateCameraLook();
                 fade.classList.remove('active');
                 transitioning = false;
+                spinResetToAuto();
             }, 180);
         }
     }
@@ -537,6 +614,7 @@ function instantFadeThenReveal() {
     fade.classList.add('active');
     camYaw = INITIAL_YAW; camPitch = INITIAL_PITCH; camFov = INITIAL_FOV;
     updateCameraLook();
+    spinResetToAuto();
     requestAnimationFrame(() => {
         fade.style.transition = 'opacity .45s ease';
         requestAnimationFrame(() => fade.classList.remove('active'));

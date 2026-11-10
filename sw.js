@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v66'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v67'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -49,6 +49,11 @@ const ASSETS_TO_PRECACHE = [
     '/assets/icon-512.png',
     '/assets/notification-icon-192.png',
     '/assets/badge-icon.png',
+    '/cifras.webmanifest',
+    '/assets/cifras-icon-192.png',
+    '/assets/cifras-icon-512.png',
+    '/assets/cifras-notification-icon-192.png',
+    '/assets/cifras-badge-icon.png',
 ];
 
 // =========================================================
@@ -331,8 +336,8 @@ self.addEventListener('push', event => {
 
     const options = {
         body: payload.body,
-        icon: payload.icon || '/assets/notification-icon-192.png',
-        badge: '/assets/badge-icon.png',
+        icon: payload.icon || (payload.app === 'cifras' ? '/assets/cifras-notification-icon-192.png' : '/assets/notification-icon-192.png'),
+        badge: payload.app === 'cifras' ? '/assets/cifras-badge-icon.png' : '/assets/badge-icon.png',
         data: { url: payload.url || '/index.html' },
         vibrate: [200, 100, 200],
         silent: false,
@@ -352,8 +357,15 @@ self.addEventListener('notificationclick', event => {
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+            // Destino com #hash (cifras): reaproveita a janela aberta e manda a rota por mensagem.
+            const norm = (u) => u.split('#')[0].split('?')[0].replace(/\.html$/, '');
+            const targetPath = norm(targetUrl);
             for (const client of clientList) {
                 if (client.url.includes(targetUrl) && 'focus' in client) {
+                    return client.focus();
+                }
+                if (targetPath.length > 1 && norm(client.url).endsWith(targetPath) && 'focus' in client) {
+                    if (targetUrl.includes('#')) client.postMessage({ type: 'cifras-nav', url: targetUrl });
                     return client.focus();
                 }
             }

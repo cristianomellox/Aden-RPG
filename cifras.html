@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="/cifras.webmanifest">
+<script>window.__dp=null;addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__dp=e});addEventListener("appinstalled",function(){window.__dp=null})</script>
 <link rel="icon" href="/assets/cifras-favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/cifras-favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/cifras-apple-touch-icon-180.png">
@@ -1173,18 +1174,30 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)
   const ios=/iPhone|iPad|iPod/i.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const iosSafari=ios&&/Safari/.test(UA)&&!/CriOS|FxiOS|EdgiOS|OPiOS|Instagram|FBAN|FBAV/.test(UA);
   document.body.classList.toggle('needinstall',!isApp);
-  async function tut(t,steps,intro){const p=modal(t,'',[['Entendi',1]]);$('#mdx').innerHTML=(intro?'<p style="margin:0 0 10px">'+intro+'</p>':'')+'<ol style="text-align:left;padding-left:20px;margin:0;line-height:1.6">'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';await p}
+  async function tut(t,steps,intro,extra){const p=modal(t,'',[['Entendi',1]]);$('#mdx').innerHTML=(intro?'<p style="margin:0 0 10px">'+intro+'</p>':'')+'<ol style="text-align:left;padding-left:20px;margin:0;line-height:1.6">'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>'+(extra||'');await p}
   /* ---- instalar ---- */
-  let dp=null;
-  addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e});
-  addEventListener('appinstalled',()=>{dp=null;$('#gate').innerHTML='<p>Aplicativo instalado! 🎉<br>Abra pelo ícone <b>Cifras PIBM</b> na tela inicial do seu aparelho.</p>'});
+  addEventListener('appinstalled',()=>{$('#gate').innerHTML='<p>Aplicativo instalado! 🎉<br>Abra pelo ícone <b>Cifras PIBM</b> na tela inicial do seu aparelho.</p>'});
+  async function diag(){
+    const L=[],ok=(c,t)=>L.push((c?'✅ ':'❌ ')+t);
+    ok(isSecureContext,'Conexão segura (HTTPS)');
+    const mf=document.querySelector('link[rel=manifest]');ok(!!mf,'Manifest ligado à página');
+    if(mf){try{
+      const r=await fetch(mf.href,{cache:'no-store'});ok(r.ok,'Manifest carregou (HTTP '+r.status+')');
+      const j=await r.json();ok(true,'Manifest é um JSON válido');
+      const sc=new URL(j.scope||'/',mf.href);ok(location.pathname.startsWith(sc.pathname),'Página dentro do escopo ('+location.pathname+' em '+sc.pathname+')');
+      for(const ic of(j.icons||[]).filter(i=>i.purpose==='any')){const x=await fetch(new URL(ic.src,mf.href),{cache:'no-store'});ok(x.ok&&/image/.test(x.headers.get('content-type')||''),'Ícone '+ic.sizes+' (HTTP '+x.status+')')}
+    }catch(e){ok(false,'Não consegui ler o manifest')}}
+    let reg=null;try{reg=await navigator.serviceWorker.getRegistration()}catch(e){}ok(!!reg,'Service worker registrado');
+    return '<div style="margin-top:14px;text-align:left;font-size:.8rem;line-height:1.6;color:#aaa;border-top:1px solid #333;padding-top:10px"><b>Diagnóstico</b><br>'+L.join('<br>')+'</div>';
+  }
   async function install(){
-    if(dp){dp.prompt();try{await dp.userChoice}catch(e){}dp=null;return}
+    const dp=window.__dp;if(dp){window.__dp=null;dp.prompt();try{await dp.userChoice}catch(e){}return}
     if(ios){
       if(iosSafari)return tut('Instalar na Tela de Início',['Toque em <b>Compartilhar</b> (o quadrado com a seta para cima) na barra do Safari.','Role para baixo e toque em <b>“Adicionar à Tela de Início”</b>.','Toque em <b>“Adicionar”</b> no canto superior direito.','Abra o app <b>Cifras PIBM</b> pelo novo ícone.'],'No iPhone/iPad a instalação é manual, pelo Safari:');
       return tut('Abra no Safari',['Copie o link desta página e abra no <b>Safari</b>.','Toque em Compartilhar → <b>“Adicionar à Tela de Início”</b>.'],'Para instalar no iPhone/iPad é preciso usar o Safari.');
     }
-    return tut('Instalar o app',['Abra o menu do navegador (⋮).','Toque em <b>“Instalar app”</b> ou <b>“Adicionar à tela inicial”</b>.','Se já instalou, abra pelo ícone <b>Cifras PIBM</b>.'],'Seu navegador não ofereceu a instalação automática. Use o <b>Chrome</b> ou o <b>Edge</b>:');
+    const fx=/Firefox/i.test(UA),an=/Android/i.test(UA),d=await diag();
+    return tut('Instalar o app',fx&&!an?['O Firefox para computador não instala aplicativos web.','Abra esta página no <b>Chrome</b> ou no <b>Edge</b> e instale por lá.']:fx?['Abra o menu do Firefox (⋮).','Toque em <b>“Instalar”</b> (ou “Adicionar à tela de início”).']:['Abra o menu do navegador (⋮).','Toque em <b>“Instalar app”</b> ou <b>“Adicionar à tela inicial”</b>.','Se já instalou, abra pelo ícone <b>Cifras PIBM</b>.'],'O navegador não ofereceu a instalação automática.',d);
   }
   $('#gateBtn').onclick=install;
   /* ---- notificações ---- */

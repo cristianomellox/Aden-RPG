@@ -4,7 +4,7 @@
   "short_name": "Cifras PIBM",
   "description": "Ferramenta exclusiva para os músicos do Ministério de Louvor da PIB de Mesquita: cifras, partituras, setlists, afinador e avisos.",
   "start_url": "/cifras.html?source=pwa",
-  "scope": "/cifras.html",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#fbfbfb",

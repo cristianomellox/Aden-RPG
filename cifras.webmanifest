@@ -1,0 +1,42 @@
+{
+  "id": "/cifras.html",
+  "name": "Cifras & Partitura PIBM",
+  "short_name": "Cifras PIBM",
+  "description": "Ferramenta exclusiva para os músicos do Ministério de Louvor da PIB de Mesquita: cifras, partituras, setlists, afinador e avisos.",
+  "start_url": "/cifras.html?source=pwa",
+  "scope": "/cifras.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfbfb",
+  "theme_color": "#000000",
+  "lang": "pt-BR",
+  "categories": [
+    "music"
+  ],
+  "icons": [
+    {
+      "src": "/assets/cifras-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/cifras-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/cifras-icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/cifras-icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

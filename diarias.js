@@ -1359,6 +1359,7 @@ async function _startAdventure(loadout, advType) {
             const c = S.customSend || { tipo: '', text: S.customText, chars: [], romance: 'livre' };
             body.custom = { prompt: c.text, proof: S.customProof?.proof, tipo: c.tipo, theme: c.theme || '', characters: c.chars, romance: c.romance };
         }
+        if ($('chkScript')?.checked) body.script = true;         // "Atuar com roteiro": o Mestre conduz a história (Modo Espectador desde o início)
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo, characters: S.fenda.characters || [] } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
         if (ctx.coins_spent > 0) await applyCoinSync(ctx);       // Fenda Temporal: as Moedas Rúnicas já saíram da bolsa no servidor; atualiza o IndexedDB
@@ -1366,6 +1367,7 @@ async function _startAdventure(loadout, advType) {
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
+        if (ctx.script_note) { S.adv.spectator = true; S.adv.scriptNote = ctx.script_note; S.adv.specNudgeAt = Date.now(); }   // roteiro ligado: a nota autenticada segue junto do INICIAR
         if (S.adv.advType === ADV_PERS) { S.adv.epilogue = true; S.adv.delivered = true; S.adv.epilogueAt = Date.now(); }   // sem objetivo: o botão "Finalizar aventura" fica disponível desde o início
         await connectLive(false);
     } catch (e) {
@@ -1455,9 +1457,10 @@ async function connectLive(isRetry) {
         if (speech) buf.forEach((c) => { try { adv.session.sendRealtimeInput({ audio: { data: c.b64, mimeType: 'audio/pcm;rate=16000' } }); } catch (_) { /* ok */ } });
         sendText(recapText(adv, speech));
     } else {
-        sendText(adv.advType === ADV_PERS
+        const roteiro = adv.scriptNote ? ' ' + adv.scriptNote + ' [SISTEMA] ATUAR COM ROTEIRO: depois da abertura NÃO pergunte o que o herói faz; mostre o herói agindo e falando e continue a história com cenas dialogadas.' : '';
+        sendText((adv.advType === ADV_PERS
             ? '[SISTEMA] INICIAR. Siga a configuração do jogador (se for FanFiction, tudo 100% fiel à obra original): set_scene, boas-vindas calorosas (3 a 4 frases) chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
-            : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.');
+            : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.') + roteiro);
     }
 }
 
@@ -1812,12 +1815,18 @@ function applySpecialCode(adv, r) {
     }
     if (r.codigo === 'espectador') {
         if (adv.dead) { toast('O herói já caiu.'); return; }
-        if (adv.spectator) { setSpectator(adv, false); toast('Modo Espectador desligado: você volta a jogar.'); return; }   // digitar o código de novo desliga
+        if (adv.spectator) {                                   // digitar o código de novo desliga: o jogador assume o herói
+            setSpectator(adv, false);
+            queueNote(adv, '[SISTEMA] ESPECTADOR DESLIGADO. O jogador voltou a controlar o herói: pare de decidir e falar por ele, termine a fala atual e volte ao fluxo normal (fale e depois CALE-SE e espere a resposta; pergunte o que o herói faz). DICA e SILENCIO voltam a valer.', true);
+            flushNotes(adv);
+            toast('Roteiro desligado: você assumiu o herói.');
+            return;
+        }
         setSpectator(adv, true);
         adv.specNudgeAt = Date.now();                         // a própria nota de ativação já faz o Mestre responder
         queueNote(adv, r.instrucao, true);
         flushNotes(adv);
-        toast('Modo Espectador ativado: o Mestre joga por você.');
+        toast('Modo roteiro ativado: o Mestre conduz a história.');
         return;
     }
     toast('Código especial ativado.');
@@ -1832,7 +1841,7 @@ function setSpectator(adv, on) {
 }
 function syncSpectatorUI(adv) {
     const on = !!adv?.spectator;
-    const sm = $('btnSpecial')?.querySelector('small'); if (sm) sm.textContent = on ? 'Espectador' : 'Especial';
+    const sm = $('btnSpecial')?.querySelector('small'); if (sm) sm.textContent = on ? 'Roteiro' : 'Especial';
     $('btnSpecial')?.classList.toggle('on', on);
     const off = on || !!adv?.A?.micMuted;                   // no Espectador o microfone fica desligado (só assiste)
     $('btnMic').setAttribute('aria-pressed', String(off));
@@ -2109,7 +2118,7 @@ function setScene(id) {
 function setMasterState(state, label) {
     const m = $('master'); m.dataset.state = state;
     const names = { idle: 'O Mestre desperta…', speaking: 'O Mestre fala', listening: 'O Mestre ouve você', thinking: 'O Mestre pondera…', muted: 'Microfone silenciado' };
-    $('masterState').textContent = label || (S.adv?.spectator && state === 'listening' ? 'Modo Espectador' : names[state]) || '';
+    $('masterState').textContent = label || (S.adv?.spectator && state === 'listening' ? 'Modo Roteiro' : names[state]) || '';
 }
 
 function enterStage() {
@@ -2458,7 +2467,7 @@ function bindUI() {
 
     $('btnMic').onclick = () => {
         const A = S.adv?.A; if (!A) return;
-        if (S.adv?.spectator) { toast('Modo Espectador: o microfone fica desligado.'); return; }
+        if (S.adv?.spectator) { toast('Modo roteiro: o microfone fica desligado. Para assumir o herói, toque em Especial e digite 444.'); return; }
         A.micMuted = !A.micMuted;
         $('btnMic').setAttribute('aria-pressed', String(A.micMuted));
         $('btnMic').classList.toggle('live', !A.micMuted);

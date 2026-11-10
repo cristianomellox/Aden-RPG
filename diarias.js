@@ -1456,6 +1456,10 @@ async function connectLive(isRetry) {
 
 // Texto de retomada após reconexão: estado do jogo + últimas falas (o handle nem sempre restaura o contexto)
 function recapText(adv, spoke = false) {
+    const t = recapTextBase(adv, spoke && !adv.spectator);
+    return adv.spectator ? t + ' MODO ESPECTADOR ATIVO: o jogador só assiste e não vai responder. Em vez de esperar o jogador, decida e narre agora o que o herói faz ou diz e continue (cada "[SISTEMA] ESPECTADOR" pede isso a cada turno).' : t;
+}
+function recapTextBase(adv, spoke = false) {
     const left = Math.max(0, adv.endMs - serverNow());
     const elapsedMin = Math.floor((adv.totalMs - left) / 60000);
     const bag = Object.entries(adv.inv).map(([id, q]) => `${ITEM_BY_ID[id]?.name || id} x${q}`).join(', ');
@@ -1565,6 +1569,7 @@ async function onLiveMessage(msg) {
     if (msg.goAway) softReconnect(adv, msg.goAway.timeLeft);   // espera o Mestre terminar a frase antes de trocar a conexão
 
     const sc = msg.serverContent;
+    if (sc || msg.toolCall) adv.lastMsgAt = Date.now();
     if (sc) {
         if (sc.interrupted) { if (!adv.ending && !adv.forced) flushPlayback(adv.A); adv.newTurn = true; adv.turnDone = true; }
         for (const p of sc.modelTurn?.parts || []) {
@@ -1748,16 +1753,14 @@ function toolStatus(adv) {
 
 // ===== CÓDIGOS ESPECIAIS: o botão "Especial" (ou o comando de voz) abre o modal; a senha é validada só no servidor (mission-token) =====
 // Cada código desbloqueia algo diferente. Por enquanto: "modo_x" = pula direto para o epílogo, com o objetivo cumprido, em qualquer aventura.
-const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks)\b/;
+const SPECIAL_CMD_RE = /ativ[ea]\s+(o\s+)?modo\s+(x|xis|ks|espectador)\b/;
 const normPt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ');
 function checkSpecialCommand(adv) {
-    if (!adv || adv.specialModal || adv.finished || adv.advType === ADV_FE || adv.advType === ADV_PERS) return;
+    if (!adv || adv.specialModal || adv.finished || adv.spectator) return;
     if (SPECIAL_CMD_RE.test(normPt(adv.youBuf))) openSpecialModal(adv);
 }
 function openSpecialModal(adv) {
     if (!adv || adv.finished || adv.specialModal) return;
-    if (adv.advType === ADV_FE) { toast('Códigos especiais não se aplicam à Fé Cristã.'); return; }
-    if (adv.advType === ADV_PERS) { toast('Códigos especiais não se aplicam ao modo Personalizado.'); return; }
     adv.specialModal = true;
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:16px;';
@@ -1800,7 +1803,97 @@ function applySpecialCode(adv, r) {
         toast('Código ativado: o epílogo começou.');
         return;
     }
+    if (r.codigo === 'espectador') {
+        if (adv.dead) { toast('O herói já caiu.'); return; }
+        if (adv.spectator) { setSpectator(adv, false); toast('Modo Espectador desligado: você volta a jogar.'); return; }   // digitar o código de novo desliga
+        setSpectator(adv, true);
+        adv.specNudgeAt = Date.now();                         // a própria nota de ativação já faz o Mestre responder
+        queueNote(adv, r.instrucao, true);
+        flushNotes(adv);
+        toast('Modo Espectador ativado: o Mestre joga por você.');
+        return;
+    }
     toast('Código especial ativado.');
+}
+
+// ===== MODO ESPECTADOR: o próprio Mestre decide as ações do herói. O JS manda "[SISTEMA] ESPECTADOR" a cada fim de turno do Mestre. =====
+const SPEC_PAUSE_MS = 1800;                                 // pausa natural entre o fim da fala do Mestre e a próxima decisão
+function setSpectator(adv, on) {
+    adv.spectator = !!on;
+    adv.specQuietSince = 0; adv.quietSince = 0;
+    syncSpectatorUI(adv);
+}
+function syncSpectatorUI(adv) {
+    const on = !!adv?.spectator;
+    const sm = $('btnSpecial')?.querySelector('small'); if (sm) sm.textContent = on ? 'Espectador' : 'Especial';
+    $('btnSpecial')?.classList.toggle('on', on);
+    const off = on || !!adv?.A?.micMuted;                   // no Espectador o microfone fica desligado (só assiste)
+    $('btnMic').setAttribute('aria-pressed', String(off));
+    $('btnMic').classList.toggle('live', !off);
+    setMasterState($('master').dataset.state || 'listening');
+}
+
+// Conselhos de bolsa/HP calculados com os números reais do jogo (o Mestre usa a verdade do cliente)
+function spectatorItemAdvice(adv) {
+    const has = (id) => (adv.inv[id] || 0) > 0, nome = adv.hero.name, e = adv.enemy, out = [];
+    if (has('pocao')) {
+        if (adv.hp >= 100) out.push('HP cheio: NÃO use a poção.');
+        else if (adv.hp <= 40) out.push(`URGENTE: o HP de ${nome} está em ${adv.hp}%. Chame use_item pocao AGORA, antes de qualquer outra ação.`);
+        else if (e && adv.hp <= (e.boss ? 55 : 45)) out.push(`HP em ${adv.hp}% em pleno combate${e.boss ? ' contra o chefe' : ''}: use a poção (use_item pocao) antes do próximo golpe.`);
+        else out.push(`HP em ${adv.hp}%: ainda não precisa de poção; guarde-a para quando o HP baixar.`);
+    } else if (adv.hp <= 40) out.push(`HP em ${adv.hp}% e SEM poções: aja com cautela (defenda-se, use o terreno, busque ajuda de NPCs) e evite riscos desnecessários.`);
+    if (e) {
+        const tips = [];
+        if (has('enc_critico') && !adv.critArmed && (e.boss || e.hp > 60)) tips.push('use enc_critico antes de um golpe importante');
+        if (has('enc_fogo') || has('enc_gelo')) tips.push('fogo/gelo valem só para o PRÓXIMO ataque: use logo antes de atacar');
+        if (has('enc_atordoamento') && (e.boss || e.hp > 50)) tips.push('enc_atordoamento ajuda contra inimigo forte (depois roll_check)');
+        if (has('enc_explosao') && /s$/i.test(e.name)) tips.push('enc_explosao rende mais contra grupos');
+        if (adv.critArmed) tips.push('o crítico JÁ está armado: ataque agora');
+        if (tips.length) out.push('Combate: ' + tips.join('; ') + '.');
+    } else if (!adv.epilogue) {
+        out.push('Fora de combate use itens utilitários (corda, mapa, faca, iluminação, sombras, furtividade, verdade, controle) só quando a cena realmente pedir.');
+    }
+    out.push('Não gaste vários itens de uma vez e não desperdice: cada item tem propósito.');
+    return out.join(' ');
+}
+
+function spectatorPrompt(adv, left, notes) {
+    const t = adv.advType, nome = adv.hero.name;
+    const elapsedMin = Math.floor((adv.totalMs - left) / 60000), total = Math.round(adv.totalMs / 60000);
+    const head = `[SISTEMA] ESPECTADOR. O jogador só assiste: ${nome} é conduzido por VOCÊ e ninguém vai responder. Fale AGORA, sem esperar: em 1 a 3 frases mostre o que ${nome} decide fazer ou dizer (discurso direto, coerente com a história, o gênero e a personalidade do herói), depois siga como Mestre mostrando as consequências, com NPCs falando em primeira pessoa. NÃO pergunte "o que você faz" e NÃO liste opções; deixe a cena em aberto e CALE-SE. Tempo: ${elapsedMin} min de ${total}. `;
+    let body;
+    if (t === ADV_PERS) body = 'Modo Personalizado: sem dados, HP nem bolsa. Decida as falas e ações do herói seguindo a configuração do jogador, com iniciativa e variedade, e mantenha a história andando.';
+    else if (t === ADV_FE) body = 'Fé Cristã: sem dados nem combate. O herói é testemunha: ' + (adv.epilogue ? 'está na conversa em particular com o(s) apóstolo(s); faça perguntas sinceras e respeitosas, uma de cada vez, e escute.' : 'acompanha o acontecimento, pergunta com respeito e ajuda em coisas pequenas, SEM alterar nada dos relatos.');
+    else {
+        const estado = `Estado real: HP de ${nome} ${adv.hp}%; ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; só termina com a morte dele); ` : 'sem combate; ')
+            + `bolsa: ${Object.entries(adv.inv).filter(([, q]) => q > 0).map(([id, q]) => `${ITEM_BY_ID[id]?.name || id} x${q}`).join(', ') || 'vazia'}. `;
+        body = estado + spectatorItemAdvice(adv) + ' ';
+        if (adv.epilogue) {
+            body += 'EPÍLOGO (sem combate, sem dados): ' + (adv.delivered ? '' : 'se o objetivo ainda não foi entregue ao NPC inicial, conduza a entrega e chame objective_delivered. ')
+                + `${nome} participa de verdade: responde, pergunta, aceita convites (banquete, passeio, conversa) e, se oferecerem ouvir um ensinamento de Pantokrator, aceita com interesse (se o tipo permitir).`;
+        } else if (adv.noCombat) {
+            body += 'Sem combate neste tipo: tome iniciativa social e narrativa, use roll_check nas tentativas arriscadas e avance o objetivo do tipo no ritmo certo.';
+        } else if (adv.enemy) {
+            body += `Em combate o herói age a cada turno: ataca (roll_check e depois damage), usa um item com propósito ou se defende. Seja decisivo.`;
+        } else {
+            body += 'Foque na missão principal (sem desvios longos), use roll_check nas ações arriscadas, decida com inteligência e prudência e avance a história; o chefe só aparece depois do minuto 15.';
+        }
+    }
+    const extra = notes.length ? ' Avisos do jogo (aplique agora): ' + notes.join(' ') : '';
+    return head + body + extra;
+}
+
+function spectatorTick(adv, left) {
+    if (!adv.spectator || adv.finished || adv.ending || adv.forced || adv.dead || adv.playerEnd || adv.endPayload || adv.reconnecting || !adv.session || !adv.connected || adv.long || adv.specialModal) { adv.specQuietSince = 0; return; }
+    if (left <= END_AT_S * 1000) { adv.specQuietSince = 0; return; }   // reta final: o Mestre cuida da despedida (ENCERRAR)
+    const now = Date.now();
+    const quiet = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && now - (adv.lastMsgAt || 0) > 2500 && now - (adv.specNudgeAt || 0) > 5000;
+    if (!quiet || adv.notes.some((n) => n.urgent)) { adv.specQuietSince = 0; return; }   // avisos urgentes saem pelo flushNotes
+    if (!adv.specQuietSince) { adv.specQuietSince = now; return; }
+    if (now - adv.specQuietSince < SPEC_PAUSE_MS) return;
+    adv.specQuietSince = 0; adv.specNudgeAt = now;
+    const soft = adv.notes.splice(0).map((n) => n.text.replace('[SISTEMA] ', ''));   // avisos suaves pegam carona na decisão
+    sendText(spectatorPrompt(adv, left, soft));
 }
 
 async function onToolCall(calls) {
@@ -2009,7 +2102,7 @@ function setScene(id) {
 function setMasterState(state, label) {
     const m = $('master'); m.dataset.state = state;
     const names = { idle: 'O Mestre desperta…', speaking: 'O Mestre fala', listening: 'O Mestre ouve você', thinking: 'O Mestre pondera…', muted: 'Microfone silenciado' };
-    $('masterState').textContent = label || names[state] || '';
+    $('masterState').textContent = label || (S.adv?.spectator && state === 'listening' ? 'Modo Espectador' : names[state]) || '';
 }
 
 function enterStage() {
@@ -2018,7 +2111,7 @@ function enterStage() {
     $('capMaster').textContent = ''; $('capYou').textContent = '';
     $('hudRolls').textContent = '0';
     $('hudDice').style.display = adv.advType === ADV_PERS ? 'none' : '';             // Personalizado: sem dados
-    $('btnSpecial').style.display = adv.advType === ADV_PERS ? 'none' : '';          // nem código especial
+    syncSpectatorUI(adv);
     renderDuel(); updateBagBadge();
     setScene(adv.scene);                                       // começa a trocar do saguão para o cenário da aventura
     $('btnPhones').setAttribute('aria-pressed', String(adv.A.headphones));
@@ -2029,7 +2122,7 @@ function enterStage() {
     // microfone → servidor (reduz 48/44,1 kHz para 16 kHz e envia blocos de 80 ms)
     const A = adv.A, ratio = A.ctx.sampleRate / 16000;
     A.node.port.onmessage = (e) => {
-        if (A.micMuted || A.endMute || (!A.headphones && masterSpeaking(A))) return;       // sem eco: não ouve enquanto o mestre fala
+        if (adv.spectator || A.micMuted || A.endMute || (!A.headphones && masterSpeaking(A))) return;       // sem eco: não ouve enquanto o mestre fala
         const f = e.data, outLen = Math.floor(f.length / ratio);
         for (let i = 0; i < outLen; i++) {
             const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio));
@@ -2109,7 +2202,7 @@ const DETOUR_STEPS = [
 ];
 function markProgress(adv) { adv.progressAt = Date.now(); adv.detourTurns = 0; adv.detourNudges = 0; }
 function checkDetour(adv) {
-    if (adv.noCombat || adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;   // no Salão do Amor, conversar com os convidados É a missão
+    if (adv.spectator || adv.noCombat || adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;   // no Salão do Amor, conversar com os convidados É a missão
     const step = DETOUR_STEPS[adv.detourNudges || 0];
     if (!step) return;
     if ((Date.now() - (adv.progressAt || Date.now())) / 1000 < step.s || (adv.detourTurns || 0) < step.turns) return;
@@ -2124,7 +2217,7 @@ function checkDetour(adv) {
 // aos 30 s o Mestre conduz uma ação dos NPCs. Quando o jogador fala, a contagem volta ao começo.
 const HINT_MS = 10000, SILENCE_MS = 30000;
 function silenceCheck(adv, left) {
-    if (adv.finished || adv.ending || adv.forced || adv.dead || adv.long || adv.playerEnd || adv.reconnecting || !adv.session || !adv.connected) { adv.quietSince = 0; return; }
+    if (adv.spectator || adv.finished || adv.ending || adv.forced || adv.dead || adv.long || adv.playerEnd || adv.reconnecting || !adv.session || !adv.connected) { adv.quietSince = 0; return; }
     if (left < 100000) { adv.quietSince = 0; return; }                  // reta final: o Mestre cuida da despedida
     const quiet = adv.turnDone && !masterSpeaking(adv.A) && !adv.toolBusy && !adv.notes.length && !adv.A.micMuted;
     if (!quiet) { adv.quietSince = 0; return; }
@@ -2155,6 +2248,7 @@ function advTick() {
     t.classList.toggle('crit', left <= END_AT_S * 1000);
 
     silenceCheck(adv, left);
+    spectatorTick(adv, left);
     if (adv.advType === 'salao_amor' && S.romance === 'visita' && !adv.irmasDone && !adv.irmasNoted && (adv.totalMs - left) / 1000 >= 660 && left > WARN_AT_S * 1000) {
         adv.irmasNoted = true;
         queueNote(adv, '[SISTEMA] MARCO (11 min), NÃO responda falando agora; aplique na sua próxima fala: se a conversa entre as irmãs ainda não aconteceu, faça-a AGORA chamando modo_longo com tipo "conversa_irmas" antes de falar.', false);
@@ -2357,6 +2451,7 @@ function bindUI() {
 
     $('btnMic').onclick = () => {
         const A = S.adv?.A; if (!A) return;
+        if (S.adv?.spectator) { toast('Modo Espectador: o microfone fica desligado.'); return; }
         A.micMuted = !A.micMuted;
         $('btnMic').setAttribute('aria-pressed', String(A.micMuted));
         $('btnMic').classList.toggle('live', !A.micMuted);

@@ -142,7 +142,7 @@ const S = {
     view: 'lobby', busy: false, adv: null, hero: null, bag: [],
     advType: null, romance: 'livre', vipOwned: new Set(), vipPending: null, fenda: null, fendaDraft: null,
     customProof: null, customText: '',                         // Modo Personalizado: prova da senha (presa à vaga) e rascunho do prompt (livre/FanFiction)
-    customExtras: '', customTipo: '', customRomance: 'livre', customMode: 'long', customSend: null,   // rascunho dos "Detalhes extras", tipo escolhido e o que será enviado
+    customExtras: '', customTheme: '', customTipo: '', customRomance: 'livre', customMode: 'long', customSend: null,   // rascunho dos "Detalhes extras", tipo escolhido e o que será enviado
 };
 const serverNow = () => Date.now() + S.offset;
 
@@ -1085,6 +1085,8 @@ function updateCustomUI() {                                     // campos e text
     $('customText').maxLength = base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX;
     $('customMax').textContent = (base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX).toLocaleString('pt-BR');
     $('customCharsWrap').style.display = tipo === 'fenda_temporal' || tipo === 'fanfic' ? '' : 'none';   // personagens: só Fenda Temporal e FanFiction
+    $('customThemeWrap').style.display = tipo === 'fenda_temporal' || tipo === 'fanfic' ? '' : 'none';   // tema (obra/universo): antes dos personagens
+    $('customThemeLabel').innerHTML = tipo === 'fanfic' ? 'Tema <em>(obrigatório: a obra)</em>' : 'Tema <em>(opcional: obra, série, jogo, filme...)</em>';
     $('customRomanceWrap').style.display = tipo === 'salao_amor' ? '' : 'none';
     $('customTextLabel').innerHTML = base ? 'Detalhes extras <em>(opcional)</em>' : 'Prompt';
     $('customText').placeholder = base
@@ -1093,9 +1095,9 @@ function updateCustomUI() {                                     // campos e text
             ? 'Ex.: Quero viver uma história em Hogwarts, no sexto ano, com muita conversa, segredos e romance entre adultos…'
             : 'Ex.: Sou um mercenário que chega a uma cidade portuária governada por uma rainha misteriosa. Quero muita conversa com os nobres, intrigas e romance, num tom sombrio e sensual…';
     $('customIntro').textContent = tipo === 'fanfic'
-        ? 'FanFiction: você entra no universo de uma obra (game, novela, série, TV, filme, anime, livro, HQ...) e o Mestre a conduz 100% fiel ao original: ambiente, atmosfera e personagens. Só diálogo, sem objetivos nem dados (os itens da bolsa não são usados). Diga qual é a obra e o que quer viver.'
+        ? 'FanFiction: você entra no universo de uma obra (game, novela, série, TV, filme, anime, livro, HQ...) e o Mestre a conduz 100% fiel ao original: ambiente, atmosfera e personagens. Só diálogo, sem objetivos nem dados (os itens da bolsa não são usados). Informe a obra no campo Tema, depois os personagens e o que quer viver.'
         : base
-            ? `Esta aventura segue as regras ORIGINAIS do tipo escolhido (objetivo, dados, bolsa e combate quando houver). Use os detalhes extras (até ${nf(CUSTOM_EXTRAS_MAX)} caracteres) para dizer como quer o rumo da história.${tipo === 'fenda_temporal' ? ' Dica: cite a obra ou o evento nos detalhes ou nos personagens; em branco, o Mestre escolhe.' : ''}${tipo === 'fe_crista' ? ' A Fé Cristã mantém as regras originais, sem conteúdo adulto.' : ''}`
+            ? `Esta aventura segue as regras ORIGINAIS do tipo escolhido (objetivo, dados, bolsa e combate quando houver). Use os detalhes extras (até ${nf(CUSTOM_EXTRAS_MAX)} caracteres) para dizer como quer o rumo da história.${tipo === 'fenda_temporal' ? ' Dica: informe o Tema (obra ou evento) e depois os personagens; em branco, o Mestre escolhe.' : ''}${tipo === 'fe_crista' ? ' A Fé Cristã mantém as regras originais, sem conteúdo adulto.' : ''}`
             : 'Escreva como você quer a aventura: o mundo, quem é você, os personagens, o tom e o que quer viver. Não há objetivos nem dados (os itens da bolsa não são usados): só diálogo livre e exploração.';
     $('customWarn').textContent = tipo === 'fe_crista'
         ? 'Conteúdo adulto não se aplica à Fé Cristã: este tipo mantém as regras originais.'
@@ -1110,6 +1112,7 @@ function openCustomConfig() {
     S.customMode = isBaseTipo($('customTipo').value) ? 'short' : 'long';
     $('customText').value = S.customMode === 'short' ? S.customExtras : S.customText;
     $('customTagInput').value = ''; renderTags('custom');
+    $('customTheme').value = S.customTheme || '';
     $('customErr').textContent = '';
     updateCustomUI(); openOv('customModal');
 }
@@ -1119,7 +1122,7 @@ function updateCustomCount() {
     $('customCount').parentElement.classList.toggle('over', n >= max);
 }
 function cancelCustom() {
-    flushTags('custom'); saveCustomDraft(); S.customTipo = $('customTipo').value; S.customRomance = $('customRomance').value;
+    flushTags('custom'); saveCustomDraft(); S.customTipo = $('customTipo').value; S.customRomance = $('customRomance').value; S.customTheme = $('customTheme').value.trim();
     closeOv('customModal');
     openOv(S.bag.length === BAG_SIZE ? 'typeModal' : 'itemsModal');       // volta para onde o jogador estava
 }
@@ -1128,10 +1131,14 @@ function confirmCustom() {
     const tipo = $('customTipo').value, base = isBaseTipo(tipo), my = S.state?.my_slot;
     const txt = $('customText').value.trim().slice(0, base ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX);
     saveCustomDraft(); S.customTipo = tipo; S.customRomance = $('customRomance').value;
+    const usaTema = tipo === 'fenda_temporal' || tipo === 'fanfic';
+    const theme = usaTema ? $('customTheme').value.trim().replace(/\s+/g, ' ').slice(0, 80) : '';
+    S.customTheme = $('customTheme').value.trim();
+    if (tipo === 'fanfic' && theme.length < 2) { $('customErr').textContent = 'Informe o Tema (a obra ou o universo) antes dos personagens.'; return; }
     if (!base && txt.length < CUSTOM_MIN) { $('customErr').textContent = `Escreva pelo menos ${CUSTOM_MIN} caracteres sobre como quer a aventura.`; return; }
     if (base && S.bag.length !== BAG_SIZE) { $('customErr').textContent = 'Escolha primeiro os 8 itens da bolsa.'; return; }
     if (!my || !S.customProof || S.customProof.slot !== my.id) { closeOv('customModal'); openCustomAuth(); return; }
-    S.customSend = { tipo, text: txt, chars: (tipo === 'fenda_temporal' || tipo === 'fanfic') ? [...tagState.custom] : [], romance: tipo === 'salao_amor' ? S.customRomance : 'livre' };
+    S.customSend = { tipo, text: txt, theme, chars: (tipo === 'fenda_temporal' || tipo === 'fanfic') ? [...tagState.custom] : [], romance: tipo === 'salao_amor' ? S.customRomance : 'livre' };
     S.advType = ADV_PERS;
     startAdventure(base ? bagCounts() : {}, ADV_PERS);                   // tipo-base usa a bolsa; livre e FanFiction não
 }
@@ -1350,7 +1357,7 @@ async function _startAdventure(loadout, advType) {
         if (advType === 'salao_amor') body.romance = ['salao', 'visita'].includes(S.romance) ? S.romance : 'livre';
         if (advType === ADV_PERS) {                              // o servidor confere a prova da senha
             const c = S.customSend || { tipo: '', text: S.customText, chars: [], romance: 'livre' };
-            body.custom = { prompt: c.text, proof: S.customProof?.proof, tipo: c.tipo, characters: c.chars, romance: c.romance };
+            body.custom = { prompt: c.text, proof: S.customProof?.proof, tipo: c.tipo, theme: c.theme || '', characters: c.chars, romance: c.romance };
         }
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo, characters: S.fenda.characters || [] } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
@@ -1467,7 +1474,7 @@ function recapTextBase(adv, spoke = false) {
     if (adv.masterBuf) hist.push(`Mestre: ${adv.masterBuf.slice(-300)}`);
     if (adv.youBuf) hist.push(`Jogador: ${adv.youBuf.slice(-200)}`);
     if (adv.advType === ADV_PERS) {
-        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA história personalizada, sem recomeçar e sem repetir a abertura, seguindo a configuração do jogador. ${S.customSend?.tipo === 'fanfic' ? 'É uma FANFICTION: mantenha o ambiente, a atmosfera e os personagens 100% fiéis à obra original. ' : ''}Herói: ${adv.hero.name}. Não há dados, combate com HP, objetivo nem bolsa. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
+        return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA história personalizada, sem recomeçar e sem repetir a abertura, seguindo a configuração do jogador. ${S.customSend?.tipo === 'fanfic' ? `É uma FANFICTION${S.customSend.theme ? ' de "' + S.customSend.theme + '"' : ''}: mantenha o ambiente, a atmosfera e os personagens (aparência, cor de pele, porte, cabelo, roupas) 100% fiéis à obra original. ` : ''}Herói: ${adv.hero.name}. Não há dados, combate com HP, objetivo nem bolsa. Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
             + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
             + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, pergunte o que o herói faz (sem listar opções) e espere o jogador.');
     }

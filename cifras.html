@@ -132,6 +132,7 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 #smus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:column;gap:8px 6px;margin:0 0 16px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c}
 #sitems .item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .mu{display:flex;align-items:center;gap:8px;min-width:0}.mi{flex:0 0 40px;height:40px;color:var(--gold)}.mi svg{display:block}.mn{font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mu{cursor:pointer}.pi{display:inline-flex;vertical-align:middle;margin-left:8px;color:var(--gold)}.pi svg{display:block}#sname{cursor:pointer}
 #pk{position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:60;padding:16px}
 .pkc{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:50vh;overflow:auto;margin:12px 0}
 .pkc .chord{position:static;background:#1a1500;border:1px solid var(--gold);border-radius:10px;padding:8px 14px;font-size:1.1rem;line-height:1.2;cursor:pointer}
@@ -228,7 +229,7 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
   <div class="cnt" id="sst" style="text-align:left;margin:8px 0"></div>
   
   <div id="items" style="margin-top:14px"></div></div>
-  <div id="sets" hidden><div class="row-btns" style="margin:0"><input id="sn2" placeholder="Nome da nova setlist" style="flex:1" autocomplete="off"><button class="btn" id="sadd">Criar</button></div><div id="sitems" style="margin-top:14px"></div></div>
+  <div id="sets" hidden><div class="row-btns" style="margin:0"><input id="sn2" type="date" style="flex:1 1 150px;min-width:0"><select id="sp2" style="flex:0 0 100px"><option value="dia">Dia</option><option value="noite">Noite</option></select><button class="btn" id="sadd">Criar</button></div><div class="sub" id="sh2" hidden style="margin-top:8px"></div><div id="sitems" style="margin-top:14px"></div></div>
 </section>
 
 <section class="screen" id="add1">
@@ -297,7 +298,7 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
   <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
   <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Há semicolcheias, notas pontuadas, ligaduras, fermata, acordes, ritornelos, armadura e compasso (escolha nas listas acima da pauta). Notas curtas vizinhas são ligadas por barra automaticamente. <b>Importar MusicXML / PDF</b>: um arquivo MusicXML (.musicxml, .xml, .mxl) preenche a pauta; um PDF (até 1,2 MB) fica na aba <b>PDF</b> da música.</li></ul></div></details>
-  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> segure uma setlist na lista e mova para cima ou para baixo; ao soltar, o código é pedido.</li><li><b>Editar</b>: permite mudar o título e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist.</li><li><b>Criar</b>: escreva o nome e toque em Criar (pede o código).</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
+  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> segure uma setlist na lista e mova para cima ou para baixo; ao soltar, o código é pedido.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -305,10 +306,10 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 <section class="screen" id="set">
   <div class="top"><button class="ib" id="bkset" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="sname"></h1><div class="hb"><button class="ib" type="button" data-h="s" data-a="u" aria-label="Desfazer" title="Desfazer" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg></button><button class="ib" type="button" data-h="s" data-a="r" aria-label="Refazer" title="Refazer" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></svg></button></div></div>
   <div id="smus" hidden></div>
-  <div id="sedit" hidden><input id="stit" placeholder="Título da setlist" autocomplete="off" maxlength="60" style="margin:6px 0 14px"><div class="sub" style="margin:0 0 8px">Músicos (nome e instrumento)</div><div id="smed"></div><button class="btn sec" id="smadd" type="button">+ Músico</button><div style="height:14px"></div></div>
+  <div id="sedit" hidden><div class="row-btns" style="margin:6px 0 8px;flex-wrap:nowrap"><input id="stit" type="date" style="flex:1;min-width:0"><select id="sper" style="flex:0 0 110px"><option value="" hidden>Dia/Noite</option><option value="dia">Dia</option><option value="noite">Noite</option></select></div><div class="sub" id="sph" hidden style="margin:0 0 8px"></div><div style="height:6px"></div><div class="sub" style="margin:0 0 8px">Músicos (nome e instrumento)</div><div id="smed"></div><button class="btn sec" id="smadd" type="button">+ Músico</button><div style="height:14px"></div></div>
   <div id="siv"></div>
   <div class="row-btns" id="srow" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
-  <div class="row-btns"><button class="btn" id="splay">Tocar</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button></div>
+  <div class="row-btns"><button class="btn" id="splay">Tocar</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button><button class="btn" id="ssave" hidden disabled>Salvar</button></div>
 </section>
 
 <section class="screen" id="song">
@@ -356,8 +357,8 @@ function happlyD(x){
   if($('#add2').classList.contains('active')){
     if(!$('#staves').hidden){if(!draft.score.length)draft.score.push({n:[]});renderStaves($('#staves'),draft.score,true);syncKT()}else renderEditor()}
 }
-const hsnapS=()=>JSON.stringify({name:curSet.name,ids:curSet.ids,mus:curSet.mus||[]});
-function happlyS(x){curSet.name=x.name;curSet.ids=x.ids;curSet.mus=x.mus;storeS();setChanged();renderSet()}
+const hsnapS=()=>JSON.stringify({name:curSet.name,per:curSet.per||null,ids:curSet.ids,mus:curSet.mus||[]});
+function happlyS(x){curSet.name=x.name;curSet.per=x.per;curSet.ids=x.ids;curSet.mus=x.mus;setChanged();renderSet()}
 document.querySelectorAll('[data-h]').forEach(b=>b.onclick=()=>hmove(b.dataset.h==='d'?HD:HS,b.dataset.a==='u'?-1:1));
 const edsNew=o=>{const n=cfg().name||'Anônimo';return [n,...(o||[]).filter(x=>x!==n)].slice(0,10)};
 function metaEl(s){
@@ -520,7 +521,7 @@ $('#ed').onclick=async()=>{
   if(!await unlock())return;const s=cur;if(!s)return;
   draft=JSON.parse(JSON.stringify(s));fillForm();show('add1');
 };
-$('#ex').onclick=()=>{if(play){unl=false;show('set');renderSet()}else show('home')};
+$('#ex').onclick=()=>{if(play){if(!setOrig)unl=false;show('set');renderSet()}else show('home')};
 
 /* transposição, seções, colar cifra, setlists */
 const SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
@@ -629,10 +630,60 @@ function tab(m){$('#mus').hidden=m;$('#sets').hidden=!m;$('#tbM').className='btn
 $('#tbM').onclick=()=>tab(false);$('#tbS').onclick=()=>tab(true);
 function renderSets(){
   const b=$('#sitems');b.innerHTML='';if(!sets.length){const d=el('div','empty');d.textContent='Nenhuma setlist criada.';b.append(d)}
-  sets.forEach((x,ix)=>{const i=el('button','item');i.dataset.i=ix;i.onpointerdown=e=>ordDrag(e,i);i.oncontextmenu=e=>e.preventDefault();i.textContent=x.name+' · '+x.ids.length;
-    i.onclick=()=>{if(ordSkip)return;unl=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
+  sets.forEach((x,ix)=>{const i=el('button','item');i.dataset.i=ix;i.onpointerdown=e=>ordDrag(e,i);i.oncontextmenu=e=>e.preventDefault();const t1=el('span');t1.textContent=x.name;i.append(t1);if(x.per){const p=el('span','pi');p.innerHTML=perIcon(x.per,16);i.append(p)}const c1=el('span');c1.textContent=' · '+x.ids.length;i.append(c1);
+    i.onclick=()=>{if(ordSkip)return;unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
-$('#sadd').onclick=async()=>{const n=$('#sn2').value.trim();if(!n)return;if(!await unlock())return;const x={id:uid(),name:n,ids:[]};sets.push(x);storeS();enqueue('sset',x.id);$('#sn2').value='';renderSets();saveSync()};
+/* data (dd/mm/aaaa) + período (dia/noite): o mesmo par não pode se repetir */
+const DRE=/^(\d{2})\/(\d{2})\/(\d{4})$/;
+const d2i=n=>{const m=DRE.exec(n||'');return m?m[3]+'-'+m[2]+'-'+m[1]:''};
+const i2d=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');return m?m[3]+'/'+m[2]+'/'+m[1]:''};
+const takenP=(n,id)=>['dia','noite'].filter(p=>sets.some(x=>x.id!==id&&x.name===n&&x.per===p));
+function perUI(sel,hint,iso,id,want){
+  const n=i2d(iso),tk=n?takenP(n,id):[];
+  [...sel.options].forEach(o=>o.disabled=!!o.value&&tk.includes(o.value));
+  sel.value=want&&!tk.includes(want)?want:(['dia','noite'].find(p=>!tk.includes(p))||'');
+  hint.hidden=!tk.length;
+  if(tk.length)hint.textContent=tk.length===2?'Já existem setlists de dia e de noite nesta data.':'Já existe uma setlist de '+tk[0]+' nesta data; só resta '+(tk[0]==='dia'?'noite':'dia')+'.';
+  return tk.length<2;
+}
+const ds2=()=>perUI($('#sp2'),$('#sh2'),$('#sn2').value,null,$('#sp2').value);
+$('#sn2').oninput=$('#sn2').onchange=ds2;
+$('#sadd').onclick=async()=>{
+  const n=i2d($('#sn2').value),p=$('#sp2').value;if(!n||!p)return;
+  if(takenP(n).includes(p)){ds2();return}
+  if(!await unlock())return;
+  if(takenP(n).includes(p)){ds2();return}
+  const x={id:uid(),name:n,per:p,ids:[]};sets.push(x);storeS();enqueue('sset',x.id);$('#sn2').value='';ds2();renderSets();saveSync()};
+/* sol / lua e cards informativos */
+const PER={
+ dia:['dia','<circle cx="12" cy="12" r="4.200"/><path d="M12 2.500v2.600M12 18.900v2.600M2.500 12h2.600M18.900 12h2.600M5.300 5.300l1.800 1.800M16.900 16.900l1.800 1.800M5.300 18.700l1.800-1.800M16.900 7.100l1.800-1.800"/>'],
+ noite:['noite','<path d="M20 14.500A8.500 8.500 0 1 1 9.500 4a6.800 6.800 0 0 0 10.500 10.500z"/>']};
+const perIcon=(p,s)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(PER[p]||PER.dia)[1]}</svg>`;
+function setTitle(){
+  const h=$('#sname');h.innerHTML='';const t=el('span');t.textContent=curSet.name;h.append(t);
+  if(curSet.per){const i=el('span','pi');i.innerHTML=perIcon(curSet.per,24);h.append(i);h.onclick=perCard}else h.onclick=null;
+}
+function infoCard(build){
+  document.getElementById('pk')?.remove();
+  const o=el('div'),b=el('div','cbox'),c=el('button','btn sec');
+  o.id='pk';b.style.maxWidth='340px';build(b);c.textContent='Fechar';c.style.marginTop='14px';c.onclick=()=>o.remove();
+  o.onclick=e=>{if(e.target===o)o.remove()};b.append(c);o.append(b);document.body.append(o);
+}
+function perCard(){
+  if(!curSet||!curSet.per)return;const d=curSet.per==='dia';
+  infoCard(b=>{const i=el('div'),h=el('div','ct'),s=el('div','sub');i.style.color='var(--gold)';i.innerHTML=perIcon(curSet.per,56);
+    h.textContent=d?'Esta setlist será de dia':'Esta setlist será de noite';h.style.fontSize='1.25rem';s.textContent=curSet.name+' · '+(d?'Dia':'Noite');b.append(i,h,s)});
+}
+function musCard(x){
+  const k=INST[x.i]?x.i:'microfone';
+  infoCard(b=>{
+    const r=el('div'),i=el('span'),t=el('div','ct'),n=el('div');
+    r.style.cssText='display:flex;align-items:center;justify-content:center;gap:16px';
+    i.style.cssText='flex:0 0 100px;height:100px;color:var(--gold)';i.innerHTML=icon(k,100);
+    t.textContent=INST[k][0];t.style.textAlign='left';r.append(i,t);
+    n.textContent=x.n;n.style.cssText='margin-top:12px;font-size:1.25rem;font-weight:600;word-break:break-word';
+    b.append(r,n)});
+}
 /* ordem das setlists: segurar e mover; o código é pedido ao soltar */
 let ordSkip=false;
 function ordDrag(e,btn){
@@ -659,17 +710,30 @@ function ordDrag(e,btn){
   addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',cx);addEventListener('touchmove',tm,{passive:false});
   if(touch)timer=setTimeout(begin,350);
 }
-let sdt;function setChanged(){enqueue('sset',curSet.id);clearTimeout(sdt);sdt=setTimeout(()=>sync(true),1200)}
-$('#sunl').onclick=async()=>{if(await unlock()){unl=true;renderSet()}};
-function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,ids:w.ids||[],u:w.updated_at,mus:m,pos:w.position||0}}
+/* Edição da setlist em rascunho: curSet vira uma CÓPIA enquanto edita (setOrig guarda a original).
+   Nada vai para o banco até tocar em Salvar -> uma única gravação e um único aviso. */
+let setOrig=null,dirty=false,titleBad=false;
+const cloneSet=s=>({...s,ids:[...s.ids],mus:(s.mus||[]).map(m=>({...m}))});
+function updSave(){const b=$('#ssave');if(b)b.disabled=!dirty||titleBad}
+function setChanged(){dirty=true;updSave()}
+function endEdit(){if(setOrig){curSet=setOrig;setOrig=null}unl=false;dirty=false;titleBad=false;HS=null;hbtn()}
+function saveSet(){
+  if(!setOrig||!dirty||titleBad)return;
+  const mus=(curSet.mus||[]).filter(x=>x.n.trim()).slice(0,12).map(x=>({n:x.n.trim(),i:x.i}));
+  Object.assign(setOrig,{name:curSet.name,per:curSet.per||null,ids:[...curSet.ids],mus});
+  endEdit();storeS();enqueue('sset',curSet.id);renderSet();saveSync();
+}
+$('#sunl').onclick=async()=>{if(!await unlock())return;setOrig=curSet;curSet=cloneSet(setOrig);dirty=false;titleBad=false;unl=true;renderSet();updSave()};
+$('#ssave').onclick=saveSet;
+function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,per:w.period||null,ids:w.ids||[],u:w.updated_at,mus:m,pos:w.position||0}}
 function renderSet(){
-  const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;
-  $('#sname').textContent=curSet.name;renderMus(un);const b=$('#siv');b.innerHTML='';
+  const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;$('#ssave').hidden=!un;
+  setTitle();renderMus(un);const b=$('#siv');b.innerHTML='';
   curSet.ids.forEach((id,i)=>{const s=songs.find(x=>x.id===id);if(!s)return;
     const d=el('div','item it'),n=el('span');n.textContent=(i+1)+'. '+s.title;n.onclick=()=>{play={i};openSong(id)};d.append(n);
     (un?[['↑',-1],['↓',1],['×',0]]:[]).forEach(([t,m])=>{const k=el('button','ib');k.textContent=t;k.onclick=()=>{
       if(!m)curSet.ids.splice(i,1);else{const j=i+m;if(j<0||j>=curSet.ids.length)return;[curSet.ids[i],curSet.ids[j]]=[curSet.ids[j],curSet.ids[i]]}
-      storeS();setChanged();renderSet()};d.append(k)});b.append(d)});
+      setChanged();renderSet()};d.append(k)});b.append(d)});
   const sel=$('#ssel');sel.innerHTML='';
   songs.filter(s=>!curSet.ids.includes(s.id)).sort((a,b)=>a.title.localeCompare(b.title,'pt-BR')).forEach(s=>{const o=el('option');o.value=s.id;o.textContent=s.title;sel.append(o)});
   document.querySelectorAll('#set [data-h]').forEach(b=>b.hidden=!un);
@@ -694,14 +758,14 @@ const INST={
  flauta:['Flauta','<g transform="rotate(-25 20 20)"><rect x="2" y="17" width="36" height="6" rx="3"/><ellipse cx="9" cy="20" rx="1.600" ry="1"/><circle cx="16" cy="20" r="1.200" fill="currentColor" stroke="none"/><circle cx="21" cy="20" r="1.200" fill="currentColor" stroke="none"/><circle cx="26" cy="20" r="1.200" fill="currentColor" stroke="none"/><circle cx="31" cy="20" r="1.200" fill="currentColor" stroke="none"/></g>'],
  microfone:['Microfone','<rect x="14.500" y="4" width="11" height="18" rx="5.500"/><path d="M14.500 10h11M14.500 14h11M9.500 19a10.500 10.500 0 0 0 21 0M20 29.500V35M14 35.500h12"/>']
 };
-const icon=k=>`<svg viewBox="0 0 40 40" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(INST[k]||INST.microfone)[1]}</svg>`;
-function musSave(){storeS();setChanged();hdeb(HS)}
+const icon=(k,s=40)=>`<svg viewBox="0 0 40 40" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(INST[k]||INST.microfone)[1]}</svg>`;
+function musSave(){setChanged();hdeb(HS)}
 function renderMus(un){
   const g=$('#smus'),ed=$('#sedit'),all=curSet.mus||[],m=all.filter(x=>x.n.trim()).slice(0,12);
   ed.hidden=!un;g.hidden=un||!m.length;g.innerHTML='';g.style.gridTemplateRows='repeat('+Math.min(4,m.length||1)+',auto)';
-  m.forEach(x=>{const d=el('div','mu'),i=el('span','mi'),n=el('span','mn');i.innerHTML=icon(x.i);n.textContent=x.n;n.title=x.n+' · '+(INST[x.i]||INST.microfone)[0];d.append(i,n);g.append(d)});
+  m.forEach(x=>{const d=el('div','mu'),i=el('span','mi'),n=el('span','mn');i.innerHTML=icon(x.i);n.textContent=x.n;n.title=x.n+' · '+(INST[x.i]||INST.microfone)[0];d.append(i,n);d.onclick=()=>musCard(x);g.append(d)});
   if(!un)return;
-  $('#stit').value=curSet.name;const e=$('#smed');e.innerHTML='';
+  $('#stit').value=d2i(curSet.name);perUI($('#sper'),$('#sph'),d2i(curSet.name),curSet.id);$('#sper').value=curSet.per||'';const e=$('#smed');e.innerHTML='';
   all.forEach((x,i)=>{
     const r=el('div','row-btns'),s=el('select'),n=el('input'),d=el('button','ib');r.style.cssText='margin:0 0 8px;flex-wrap:nowrap';
     s.style.flex='0 0 118px';Object.entries(INST).forEach(([k,v])=>{const o=el('option');o.value=k;o.textContent=v[0];s.append(o)});s.value=x.i;s.onchange=()=>{x.i=s.value;musSave()};
@@ -710,12 +774,25 @@ function renderMus(un){
     r.append(s,n,d);e.append(r)});
   $('#smadd').hidden=all.length>=12;
 }
-$('#smadd').onclick=()=>{(curSet.mus=curSet.mus||[]).push({n:'',i:'microfone'});storeS();renderMus(true);hcommit(HS)};
-$('#stit').oninput=()=>{const v=$('#stit').value.trim();if(!v)return;curSet.name=v;$('#sname').textContent=v;storeS();setChanged();hdeb(HS)};
-$('#sins').onclick=()=>{const v=$('#ssel').value;if(!v)return;curSet.ids.push(v);storeS();setChanged();renderSet()};
+$('#smadd').onclick=()=>{(curSet.mus=curSet.mus||[]).push({n:'',i:'microfone'});setChanged();renderMus(true);hcommit(HS)};
+$('#stit').oninput=$('#stit').onchange=()=>{
+  const iso=$('#stit').value,n=i2d(iso);
+  if(!n){titleBad=true;updSave();return}
+  const ok=perUI($('#sper'),$('#sph'),iso,curSet.id,curSet.per);
+  titleBad=!ok;
+  if(ok){curSet.name=n;curSet.per=$('#sper').value;setTitle()}
+  setChanged();hdeb(HS)};
+$('#sper').onchange=()=>{const v=$('#sper').value;if(!v)return;curSet.per=v;setTitle();setChanged();hdeb(HS)};
+$('#sins').onclick=()=>{const v=$('#ssel').value;if(!v)return;curSet.ids.push(v);setChanged();renderSet()};
 $('#splay').onclick=()=>{if(curSet.ids.length){play={i:0};openSong(curSet.ids[0])}};
-$('#sdel').onclick=async()=>{if(await modal('Excluir setlist?','A setlist será removida para toda a banda. As músicas continuam salvas.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;enqueue('sdelset',curSet.id);sets=sets.filter(x=>x!==curSet);storeS();show('list');tab(true);saveSync()};
-$('#bkset').onclick=()=>{unl=false;show('list');tab(true)};
+$('#sdel').onclick=async()=>{if(await modal('Excluir setlist?','A setlist será removida para toda a banda. As músicas continuam salvas.',[['Cancelar',0,'sec'],['Excluir',1,'del']])!==1)return;const did=curSet.id;endEdit();enqueue('sdelset',did);sets=sets.filter(x=>x.id!==did);storeS();show('list');tab(true);saveSync()};
+$('#bkset').onclick=async()=>{
+  if(unl&&dirty){
+    const r=await modal('Alterações não salvas','Você mexeu nesta setlist e ainda não salvou.',[['Continuar editando',0,'sec'],['Descartar',1,'del'],...(titleBad?[]:[['Salvar',2]])]);
+    if(r===2){saveSet();return}
+    if(r!==1)return;
+  }
+  endEdit();show('list');tab(true)};
 function step(d){if(!play)return;const i=play.i+d;if(i<0||i>=curSet.ids.length)return;play.i=i;openSong(curSet.ids[i])}
 $('#pv').onclick=()=>step(-1);$('#nx').onclick=()=>step(1);
 
@@ -1044,18 +1121,19 @@ function modal(t,x,btns,icon){
 async function sync(push){
   if(syncing)return 'busy';
   if(!navigator.onLine){setSt();return 'offline'}
-  syncing=true;pushing=!!push;setSt();let res='ok';
+  syncing=true;pushing=!!push;setSt();let res='ok',dup=false;
   try{
     const c=cfg();
     if(push&&c.code)for(const it of [...pq]){
       const s=songs.find(x=>x.id===it.id);
       if(it.op==='save'&&s){const {tr,u,...d}=s;const r=await rpc('cifras_save',{p_code:c.code,p_id:s.id,p_title:s.title,p_data:d,p_author:c.name||null});if(r&&r.updated_at)s.u=r.updated_at}
       else if(it.op==='del')await rpc('cifras_delete',{p_code:c.code,p_id:it.id});
-      else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){const r=await rpc('cifras_set_save',{p_code:c.code,p_id:t.id,p_name:t.name,p_musicians:(t.mus||[]).filter(x=>x.n.trim()).slice(0,12).map(x=>({n:x.n.trim(),i:x.i})),p_ids:t.ids,p_author:c.name||null});if(r&&r.updated_at)t.u=r.updated_at}}
+      else if(it.op==='sset'){const t=sets.find(x=>x.id===it.id);if(t){let r=null;try{r=await rpc('cifras_set_save',{p_code:c.code,p_period:t.per||null,p_id:t.id,p_name:t.name,p_musicians:(t.mus||[]).filter(x=>x.n.trim()).slice(0,12).map(x=>({n:x.n.trim(),i:x.i})),p_ids:t.ids,p_author:c.name||null})}catch(e){if(/duplicate/.test(e.message)){dup=true;if(!t.u)sets=sets.filter(y=>y!==t);else t.u=''}else throw e}if(r&&r.updated_at)t.u=r.updated_at}}
       else if(it.op==='sorder')await rpc('cifras_set_order',{p_code:c.code,p_ids:sets.map(x=>x.id)});
       else if(it.op==='sdelset')await rpc('cifras_set_delete',{p_code:c.code,p_id:it.id});
       pq=pq.filter(x=>x!==it);pqSave();
     }
+    if(dup)res='dup';
     const r=await fetch(SB+'/rest/v1/cifras_songs?select=id,title,data,updated_at,deleted',{headers:SBH});
     if(!r.ok)throw new Error('pull');
     const rows=await r.json();if(!Array.isArray(rows))throw new Error('pull');
@@ -1067,7 +1145,7 @@ async function sync(push){
       const n={...w.data,id:w.id,title:w.title,u:w.updated_at,tr:i>=0?songs[i].tr:0};if(i>=0)songs[i]=n;else songs.push(n)});
     const ids=new Set(rows.map(w=>w.id));songs=songs.filter(x=>!x.u||ids.has(x.id)||pq.some(p=>p.id===x.id));
     try{
-      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,ids,musicians,position,updated_at',{headers:SBH});
+      const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,period,ids,musicians,position,updated_at',{headers:SBH});
       if(r2.ok){const sr=await r2.json();
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(i>=0)sets[i]=n;else sets.push(n)});
@@ -1086,7 +1164,8 @@ async function saveSync(){
   modal('Sincronizando…','Enviando para a banda.',[],'spin');
   const t0=Date.now();let r;do{r=await sync(true);if(r==='busy')await new Promise(z=>setTimeout(z,400))}while(r==='busy');
   const w=800-(Date.now()-t0);if(w>0)await new Promise(z=>setTimeout(z,w));
-  if(r==='ok')modal('Sincronizado!','Suas alterações já estão disponíveis para toda a banda.',[['OK',1]],'ok');
+  if(r==='dup')modal('Data já usada','Já existe uma setlist nesse dia e período, então esta alteração não foi salva. Escolha outra data ou o outro período.',[['OK',1]],'err');
+  else if(r==='ok')modal('Sincronizado!','Suas alterações já estão disponíveis para toda a banda.',[['OK',1]],'ok');
   else if(r==='code')modal('Código inválido','A alteração ficou salva neste aparelho, mas não foi enviada. Informe o código correto ao tocar em Adicionar ou no lápis.',[['OK',1]],'err');
   else modal('Salvo neste aparelho','Não foi possível falar com o servidor agora. A alteração será enviada automaticamente quando houver conexão.',[['OK',1]],'err');
 }

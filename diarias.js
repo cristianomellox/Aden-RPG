@@ -6,7 +6,7 @@
 import { supabase } from './supabaseClient.js';
 
 const ASSETS = 'https://aden-rpg.pages.dev/assets/';
-const GENAI_URL = 'https://cdn.jsdelivr.net/npm/@google/genai/+esm';
+const GENAI_URL = 'https://cdn.jsdelivr.net/npm/@google/genai@2.31.0/+esm';   // versão FIXA (sem @latest): a 3.x saiu em 06/11 e 3.1.0 em 10/11/2026
 const POLL_MS = 20000;
 const SEND_CHUNK = 1280;                                   // 80 ms de áudio a 16 kHz
 const WARN_AT_S = 120;                                     // aviso: restam 2 min → cenas finais

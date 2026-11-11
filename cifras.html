@@ -132,7 +132,13 @@ details ul{margin:6px 0 0;padding-left:20px}details li{margin-bottom:5px}details
 #smus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:column;gap:8px 6px;margin:0 0 16px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c}
 #sitems .item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .mu{display:flex;align-items:center;gap:8px;min-width:0}.mi{flex:0 0 40px;height:40px;color:var(--gold)}.mi svg{display:block}.mn{font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.mu{cursor:pointer}.pi{display:inline-flex;vertical-align:middle;margin-left:8px;color:var(--gold)}.pi svg{display:block}#sname{cursor:pointer}
+.mu{cursor:pointer}.pi{display:inline-flex;vertical-align:middle;margin-left:8px;color:var(--gold)}.pi svg{display:block}.pi canvas{width:100%;height:100%;display:block}#sname{cursor:pointer}
+.sc{position:relative;overflow:hidden;isolation:isolate;display:flex;align-items:center;min-height:112px;padding:0 18px;border-color:rgba(212,175,55,.55)}
+.sc.d{background:linear-gradient(120deg,#2b78dc,#8fd0ff 62%,#ffd58a)}.sc.n{background:linear-gradient(120deg,#04061a,#1a1650 62%,#3b2768)}
+.sc canvas.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
+.sc::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(0,0,0,.66),rgba(0,0,0,.30) 55%,rgba(0,0,0,.06))}
+.sc .st{font-size:1.4rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.95),0 0 2px #000}
+.sc .st:last-child{margin-left:.35em}.sc .pi{margin:0 6px 0 12px}.sc .pi canvas,.sc .pi svg{filter:drop-shadow(0 2px 6px rgba(0,0,0,.75))}
 #pk{position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:60;padding:16px}
 .pkc{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:50vh;overflow:auto;margin:12px 0}
 .pkc .chord{position:static;background:#1a1500;border:1px solid var(--gold);border-radius:10px;padding:8px 14px;font-size:1.1rem;line-height:1.2;cursor:pointer}
@@ -189,6 +195,198 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
+<script type="module">
+/* Cifras FX — fundos e ícones (sol/lua) das setlists em three.js.
+   Um único renderer para todos os fundos e outro para todos os ícones: cada cartão só recebe uma cópia
+   (drawImage) num <canvas> 2D, então não estoura o limite de contextos WebGL do celular. */
+(function(){
+const items=new Set(),pre=window.__fxq||[];window.__fxq=null;
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let TH=null,RB=null,RI=null,S={},camO=null,camP=null,io=null;
+const BW=512,BH=160,IS=160;
+
+const VERT_FS='varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
+const H21='float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}';
+const N2=H21+`float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(h21(i),h21(i+vec2(1.,0.)),f.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n2(p);p=p*2.03+17.;a*=.5;}return v;}`;
+
+/* ---------- fundo: DIA (céu, nuvens, sol com raios) ---------- */
+const BG_DAY=`varying vec2 vUv;uniform float uTime,uSeed;uniform vec2 uRes;${N2}
+void main(){
+ float asp=uRes.x/uRes.y;vec2 uv=vUv;vec2 p=vec2(uv.x*asp,uv.y);float t=uTime;
+ vec3 top=vec3(.10,.42,.92),mid=vec3(.40,.72,1.),hor=vec3(1.,.84,.58);
+ vec3 col=mix(hor,mid,smoothstep(0.,.45,uv.y));col=mix(col,top,smoothstep(.4,1.,uv.y));
+ vec2 sp=vec2(asp*.84,.70);float d=length(p-sp);
+ col+=vec3(1.,.80,.38)*exp(-d*2.6)*.6;
+ float ang=atan(p.y-sp.y,p.x-sp.x);
+ float rays=pow(abs(sin(ang*8.+t*.30)),22.)*exp(-d*2.2)*.40+pow(abs(sin(ang*13.-t*.22)),30.)*exp(-d*3.)*.25;
+ col+=vec3(1.,.92,.62)*rays;
+ col=mix(col,vec3(1.,.97,.82),smoothstep(.115,.095,d));
+ for(int k=0;k<3;k++){
+  float fk=float(k);float sp2=.035+fk*.022;
+  vec2 q=vec2(p.x*(1.1+fk*.5)+t*sp2+uSeed*7.+fk*3.7,p.y*(2.6+fk*.8)+fk*1.9);
+  float c=fbm(q);c=smoothstep(.52,.86,c);
+  float band=smoothstep(.10,.42,uv.y)*(1.-smoothstep(.78,1.,uv.y));
+  float lit=.78+.22*smoothstep(.0,1.,fbm(q+vec2(.0,.35)));
+  vec3 cc=mix(vec3(.80,.86,.96),vec3(1.),lit);
+  cc=mix(cc,vec3(1.,.92,.78),exp(-d*1.8)*.35);
+  col=mix(col,cc,c*band*(.88-fk*.2));
+ }
+ gl_FragColor=vec4(col,1.);
+}`;
+
+/* ---------- fundo: NOITE (estrelas, lua, estrela cadente) ---------- */
+const BG_NIGHT=`varying vec2 vUv;uniform float uTime,uSeed;uniform vec2 uRes;${N2}
+float stars(vec2 p,float sc,float t,float dens){
+ vec2 g=p*sc,id=floor(g),f=fract(g)-.5;float r=h21(id);
+ vec2 o=(vec2(h21(id+3.1),h21(id+7.7))-.5)*.62;float d=length(f-o);
+ float tw=.45+.55*sin(t*(1.2+r*3.5)+r*60.);
+ return step(dens,r)*smoothstep(.085+.06*r,0.,d)*tw;}
+void main(){
+ float asp=uRes.x/uRes.y;vec2 uv=vUv;vec2 p=vec2(uv.x*asp,uv.y);float t=uTime;
+ vec3 top=vec3(.015,.02,.09),mid=vec3(.07,.06,.24),hor=vec3(.28,.17,.42);
+ vec3 col=mix(hor,mid,smoothstep(0.,.5,uv.y));col=mix(col,top,smoothstep(.4,1.,uv.y));
+ vec2 mp=vec2(asp*.84,.66);float d=length(p-mp);
+ col+=vec3(.50,.58,1.)*exp(-d*3.0)*.50;
+ float s=stars(p,26.,t,.72)+stars(p+9.,48.,t*1.3,.78)*.8+stars(p+3.,14.,t*.8,.82)*1.3;
+ col+=vec3(.85,.9,1.)*s*(1.-exp(-d*2.));
+ float cl=fbm(vec2(p.x*1.4+t*.02+uSeed*5.,p.y*3.))*smoothstep(.15,.5,uv.y);
+ col+=vec3(.20,.22,.45)*smoothstep(.55,.85,cl)*.35*(.4+exp(-d*1.5));
+ /* lua: disco com sombra deslocada = crescente */
+ float disc=smoothstep(.088,.080,d);
+ float cut=smoothstep(.088,.080,length(p-mp-vec2(.035,.018)));
+ col=mix(col,vec3(.96,.94,.86),clamp(disc-cut*.94,0.,1.));
+ float ph=fract(t/7.+uSeed*3.7);
+ if(ph<.10){float k=ph/.10;vec2 a=vec2(asp*.15+uSeed*asp*.3,.93),dir=normalize(vec2(1.,-.55));
+  vec2 q=p-a-dir*k*asp*.55;float al=dot(q,dir),pd=length(q-dir*al);
+  float tr=smoothstep(.006,.0,pd)*smoothstep(-.20,0.,al)*step(al,0.)*(1.-k);
+  col+=vec3(.9,.95,1.)*tr;}
+ gl_FragColor=vec4(col,1.);
+}`;
+
+/* ---------- ícone: esfera 3D (sol / lua) + brilho ---------- */
+const VERT_SPH='varying vec3 vO,vV;void main(){vO=normal;vV=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
+const N3=`float h3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float n3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(mix(h3(i),h3(i+vec3(1.,0.,0.)),f.x),mix(h3(i+vec3(0.,1.,0.)),h3(i+vec3(1.,1.,0.)),f.x),f.y),
+            mix(mix(h3(i+vec3(0.,0.,1.)),h3(i+vec3(1.,0.,1.)),f.x),mix(h3(i+vec3(0.,1.,1.)),h3(i+vec3(1.,1.,1.)),f.x),f.y),f.z);}
+float fbm3(vec3 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*n3(p);p=p*2.1+3.;a*=.5;}return v;}`;
+
+const SUN_SPH=`varying vec3 vO,vV;uniform float uTime;${N3}
+void main(){
+ vec3 o=normalize(vO);
+ float f=fbm3(o*3.2+vec3(0.,uTime*.30,uTime*.12)),f2=fbm3(o*7.5+vec3(uTime*.35,0.,0.));
+ vec3 c=mix(vec3(1.,.40,.03),vec3(1.,.94,.38),smoothstep(.22,.78,f*.75+f2*.35));
+ float mu=clamp(vV.z,0.,1.);
+ c*=.72+.50*pow(mu,.6);
+ c+=vec3(1.,.55,.12)*pow(1.-mu,3.)*.55;
+ gl_FragColor=vec4(c,1.);
+}`;
+const SUN_GLOW=`varying vec2 vUv;uniform float uTime,uSeed;
+void main(){
+ vec2 p=vUv-.5;float r=length(p)*2.,a=atan(p.y,p.x);
+ float pulse=.88+.12*sin(uTime*2.2+uSeed*6.);
+ float g=exp(-r*3.4)*pulse;
+ float edge=smoothstep(1.,.80,r),outr=smoothstep(.50,.62,r);
+ float rays=(pow(abs(sin(a*7.+uTime*.8)),12.)*.9+pow(abs(sin(a*14.-uTime*.5)),24.)*.5)*outr*smoothstep(1.,.5,r)*pulse;
+ float I=(g*.85+rays)*edge;
+ gl_FragColor=vec4(vec3(1.,.70,.18)*I,I);
+}`;
+const MOON_SPH=`varying vec3 vO,vV;uniform float uTime,uSeed;${N3}
+void main(){
+ vec3 o=normalize(vO),n=normalize(vV);
+ float m=fbm3(o*2.2+1.7);
+ float cr=n3(o*11.)*.6+n3(o*23.)*.4;
+ vec3 base=vec3(.93,.91,.82);
+ base*=.70+.42*smoothstep(.28,.72,m);
+ base*=1.-.20*smoothstep(.60,.80,cr);
+ float lz=-.12-.22*(.5+.5*sin(uTime*.45+uSeed*6.));
+ vec3 L=normalize(vec3(-.95,.26,lz));
+ float df=smoothstep(-.03,.30,dot(n,L));
+ vec3 col=base*df*1.12+vec3(.020,.028,.075)*(1.-df)+vec3(.45,.55,1.)*pow(1.-clamp(n.z,0.,1.),3.)*.12*df;
+ gl_FragColor=vec4(col,1.);
+}`;
+const MOON_GLOW=`varying vec2 vUv;uniform float uTime,uSeed;${H21}
+void main(){
+ vec2 p=vUv-.5;float r=length(p)*2.;
+ float pulse=.9+.1*sin(uTime*1.4+uSeed*6.);
+ float g=exp(-r*3.6)*pulse;float edge=smoothstep(1.,.78,r);
+ vec2 q=vUv*9.;vec2 id=floor(q),f=fract(q)-.5;float hh=h21(id+uSeed);
+ vec2 off=(vec2(h21(id+1.7),h21(id+4.3))-.5)*.5;float d=length(f-off);
+ float tw=.5+.5*sin(uTime*(1.5+hh*3.)+hh*30.);
+ float st=step(.80,hh)*smoothstep(.14,0.,d)*tw*smoothstep(.52,.68,r)*edge;
+ float I=g*.7*edge+st;
+ gl_FragColor=vec4(vec3(.66,.76,1.)*I,I);
+}`;
+
+function mkBg(frag){
+ const m=new TH.ShaderMaterial({vertexShader:VERT_FS,fragmentShader:frag,depthTest:false,depthWrite:false,
+  uniforms:{uTime:{value:0},uSeed:{value:0},uRes:{value:new TH.Vector2(BW,BH)}}});
+ const s=new TH.Scene();s.add(new TH.Mesh(new TH.PlaneGeometry(2,2),m));
+ return{s,set:(t,seed)=>{m.uniforms.uTime.value=t;m.uniforms.uSeed.value=seed}};
+}
+function mkIc(sphFrag,glowFrag){
+ const u=()=>({uTime:{value:0},uSeed:{value:0}});
+ const sm=new TH.ShaderMaterial({vertexShader:VERT_SPH,fragmentShader:sphFrag,uniforms:u()});
+ const gm=new TH.ShaderMaterial({vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:glowFrag,uniforms:u(),transparent:true,premultipliedAlpha:true,depthWrite:false});
+ const s=new TH.Scene(),g=new TH.Group(),sph=new TH.Mesh(new TH.SphereGeometry(.62,48,32),sm),gl=new TH.Mesh(new TH.PlaneGeometry(2.3,2.3),gm);
+ gl.position.z=-.25;g.add(sph);s.add(g,gl);
+ return{s,set:(t,seed,pop)=>{[sm,gm].forEach(x=>{x.uniforms.uTime.value=t;x.uniforms.uSeed.value=seed});
+  sph.rotation.y=t*.28;sph.rotation.x=.18;g.scale.setScalar(pop);gl.scale.setScalar(.35+.65*pop);}};
+}
+
+async function init(){
+ try{
+  TH=await import('three');
+  RB=new TH.WebGLRenderer({antialias:false,alpha:false,powerPreference:'low-power'});RB.setPixelRatio(1);RB.setSize(BW,BH,false);
+  RI=new TH.WebGLRenderer({antialias:true,alpha:true,premultipliedAlpha:true,powerPreference:'low-power'});RI.setPixelRatio(1);RI.setSize(IS,IS,false);RI.setClearColor(0x000000,0);
+  camO=new TH.OrthographicCamera(-1,1,1,-1,0,1);
+  camP=new TH.PerspectiveCamera(28,1,.1,20);camP.position.set(0,0,4);
+  S.bgdia=mkBg(BG_DAY);S.bgnoite=mkBg(BG_NIGHT);
+  S.icdia=mkIc(SUN_SPH,SUN_GLOW);S.icnoite=mkIc(MOON_SPH,MOON_GLOW);
+  io=new IntersectionObserver(es=>es.forEach(e=>{const it=e.target.__fx;if(it){it.vis=e.isIntersecting;if(it.vis&&REDUCED)draw(it,performance.now())}}),{rootMargin:'80px'});
+  requestAnimationFrame(tick);
+  return true;
+ }catch(e){console.warn('Cifras FX indisponível',e);return false}
+}
+const ready=init();
+
+function draw(it,now){
+ const t=now/1000+it.seed*17;
+ if(it.k==='bg'){const sc=S['bg'+it.p];if(!sc)return;sc.set(t,it.seed);RB.render(sc.s,camO);it.x.drawImage(RB.domElement,0,0,it.cv.width,it.cv.height)}
+ else{const sc=S['ic'+it.p];if(!sc)return;
+  const k=REDUCED?1:Math.min(1,(now-it.born)/650),pop=.5+.5*(1-Math.pow(1-k,3));
+  sc.set(t,it.seed,Math.max(.5,pop));RI.render(sc.s,camP);it.x.clearRect(0,0,IS,IS);it.x.drawImage(RI.domElement,0,0,it.cv.width,it.cv.height)}
+}
+let last=0;
+function tick(now){
+ requestAnimationFrame(tick);
+ if(document.hidden||REDUCED||!items.size||now-last<33)return;last=now;
+ for(const it of items){
+  if(!it.cv.isConnected){items.delete(it);io.unobserve(it.cv);continue}
+  if(it.vis)draw(it,now);
+ }
+}
+
+function mount(node,k,p,s,seed){
+ ready.then(ok=>{
+  if(!ok||!(p==='dia'||p==='noite'))return;
+  const cv=document.createElement('canvas'),bg=k==='bg';
+  cv.width=bg?BW:IS;cv.height=bg?BH:IS;cv.setAttribute('aria-hidden','true');
+  if(bg)cv.className='bg';
+  const it={cv,x:cv.getContext('2d'),k,p,seed:+seed||0,vis:true,born:performance.now()};
+  cv.__fx=it;
+  if(bg)node.prepend(cv);else node.replaceChildren(cv);
+  draw(it,performance.now());
+  items.add(it);io.observe(cv);
+ });
+}
+window.CifrasFX={mount,ready};
+pre.forEach(a=>mount(...a));
+})();
+</script>
 </head>
 <body class="onhome">
 <button class="bell" id="bell" aria-label="Avisos"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="nb" id="nb" hidden></span></button>
@@ -298,7 +496,7 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
   <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
   <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Há semicolcheias, notas pontuadas, ligaduras, fermata, acordes, ritornelos, armadura e compasso (escolha nas listas acima da pauta). Notas curtas vizinhas são ligadas por barra automaticamente. <b>Importar MusicXML / PDF</b>: um arquivo MusicXML (.musicxml, .xml, .mxl) preenche a pauta; um PDF (até 1,2 MB) fica na aba <b>PDF</b> da música.</li></ul></div></details>
-  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> segure uma setlist na lista e mova para cima ou para baixo; ao soltar, o código é pedido.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
+  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -630,13 +828,26 @@ function tab(m){$('#mus').hidden=m;$('#sets').hidden=!m;$('#tbM').className='btn
 $('#tbM').onclick=()=>tab(false);$('#tbS').onclick=()=>tab(true);
 function renderSets(){
   const b=$('#sitems');b.innerHTML='';if(!sets.length){const d=el('div','empty');d.textContent='Nenhuma setlist criada.';b.append(d)}
-  sets.forEach((x,ix)=>{const i=el('button','item');i.dataset.i=ix;i.onpointerdown=e=>ordDrag(e,i);i.oncontextmenu=e=>e.preventDefault();const t1=el('span');t1.textContent=x.name;i.append(t1);if(x.per){const p=el('span','pi');p.innerHTML=perIcon(x.per,16);i.append(p)}const c1=el('span');c1.textContent=' · '+x.ids.length;i.append(c1);
-    i.onclick=()=>{if(ordSkip)return;unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
+  [...sets].sort(cmpSet).forEach(x=>{
+    const sd=fxSeed(x.id),i=el('button','item sc'+(x.per==='noite'?' n':x.per?' d':''));
+    if(x.per)fxMount(i,'bg',x.per,0,sd);
+    const t1=el('span','st');t1.textContent=x.name;i.append(t1);
+    if(x.per)i.append(fxIcon(x.per,48,sd));
+    const c1=el('span','st');c1.textContent='· '+x.ids.length;i.append(c1);
+    i.onclick=()=>{unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
 /* data (dd/mm/aaaa) + período (dia/noite): o mesmo par não pode se repetir */
 const DRE=/^(\d{2})\/(\d{2})\/(\d{4})$/;
 const d2i=n=>{const m=DRE.exec(n||'');return m?m[3]+'-'+m[2]+'-'+m[1]:''};
 const i2d=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');return m?m[3]+'/'+m[2]+'/'+m[1]:''};
+/* ordem automática: data crescente; na mesma data, dia antes de noite; sem data (antigas) no fim */
+const dkey=n=>{const m=DRE.exec(n||'');return m?+(m[3]+m[2]+m[1]):99999999};
+const pkey=p=>p==='dia'?0:p==='noite'?1:2;
+const cmpSet=(a,b)=>dkey(a.name)-dkey(b.name)||pkey(a.per)-pkey(b.per)||a.name.localeCompare(b.name,'pt-BR');
+/* efeitos 3D (three.js, módulo no fim da página); sem internet fica o SVG e o degradê */
+function fxMount(node,k,p,s,seed){const a=[node,k,p,s,seed];if(window.CifrasFX)window.CifrasFX.mount(...a);else(window.__fxq=window.__fxq||[]).push(a)}
+function fxSeed(id){let h=0;for(const c of String(id))h=(h*31+c.charCodeAt(0))>>>0;return (h%1000)/1000}
+function fxIcon(p,s,seed){const w=el('span','pi');w.style.width=w.style.height=s+'px';w.innerHTML=perIcon(p,s);fxMount(w,'ic',p,s,seed||0);return w}
 const takenP=(n,id)=>['dia','noite'].filter(p=>sets.some(x=>x.id!==id&&x.name===n&&x.per===p));
 function perUI(sel,hint,iso,id,want){
   const n=i2d(iso),tk=n?takenP(n,id):[];
@@ -661,7 +872,7 @@ const PER={
 const perIcon=(p,s)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(PER[p]||PER.dia)[1]}</svg>`;
 function setTitle(){
   const h=$('#sname');h.innerHTML='';const t=el('span');t.textContent=curSet.name;h.append(t);
-  if(curSet.per){const i=el('span','pi');i.innerHTML=perIcon(curSet.per,24);h.append(i);h.onclick=perCard}else h.onclick=null;
+  if(curSet.per){h.append(fxIcon(curSet.per,40,fxSeed(curSet.id)));h.onclick=perCard}else h.onclick=null;
 }
 function infoCard(build){
   document.getElementById('pk')?.remove();
@@ -671,7 +882,7 @@ function infoCard(build){
 }
 function perCard(){
   if(!curSet||!curSet.per)return;const d=curSet.per==='dia';
-  infoCard(b=>{const i=el('div'),h=el('div','ct'),s=el('div','sub');i.style.color='var(--gold)';i.innerHTML=perIcon(curSet.per,56);
+  infoCard(b=>{const i=el('div'),h=el('div','ct'),s=el('div','sub');i.style.cssText='display:flex;justify-content:center;margin:4px 0';const ic=fxIcon(curSet.per,96,fxSeed(curSet.id));ic.style.marginLeft='0';i.append(ic);
     h.textContent=d?'Esta setlist será de dia':'Esta setlist será de noite';h.style.fontSize='1.25rem';s.textContent=curSet.name+' · '+(d?'Dia':'Noite');b.append(i,h,s)});
 }
 function musCard(x){
@@ -683,32 +894,6 @@ function musCard(x){
     t.textContent=INST[k][0];t.style.textAlign='left';r.append(i,t);
     n.textContent=x.n;n.style.cssText='margin-top:12px;font-size:1.25rem;font-weight:600;word-break:break-word';
     b.append(r,n)});
-}
-/* ordem das setlists: segurar e mover; o código é pedido ao soltar */
-let ordSkip=false;
-function ordDrag(e,btn){
-  if(e.button>0)return;
-  const box=$('#sitems'),id=e.pointerId,touch=e.pointerType==='touch',sx=e.clientX,sy=e.clientY;
-  let on=false,y=sy,timer=0,tick=0;
-  const items=()=>[...box.querySelectorAll('.item[data-i]')];
-  const place=()=>{const ls=items().filter(x=>x!==btn);let t=null;
-    for(const x of ls){const q=x.getBoundingClientRect();if(y<q.top+q.height/2){t=x;break}}
-    if(t){if(btn.nextSibling!==t)box.insertBefore(btn,t)}else{const l=ls[ls.length-1];if(l&&l.nextSibling!==btn)l.after(btn)}};
-  const begin=()=>{on=true;btn.style.borderColor='var(--gold)';btn.style.opacity='.85';if(navigator.vibrate)navigator.vibrate(12);
-    tick=setInterval(()=>{if(y<90)scrollBy(0,-12);else if(y>innerHeight-120)scrollBy(0,12);place()},16)};
-  const tm=ev=>{if(on)ev.preventDefault()};
-  const clean=()=>{clearTimeout(timer);clearInterval(tick);removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',cx);removeEventListener('touchmove',tm)};
-  const mv=ev=>{if(ev.pointerId!==id)return;y=ev.clientY;
-    if(!on){if(Math.hypot(ev.clientX-sx,y-sy)>(touch?8:5)){if(touch){clean();return}begin();place()}return}place()};
-  const up=async ev=>{if(ev.pointerId!==id)return;clean();if(!on)return;
-    ordSkip=true;setTimeout(()=>ordSkip=false,50);
-    const ord=items().map(x=>+x.dataset.i);
-    if(ord.every((v,i)=>v===i)){renderSets();return}
-    if(!await unlock()){renderSets();return}
-    sets=ord.map(i=>sets[i]);sets.forEach((x,i)=>x.pos=i+1);storeS();enqueue('sorder','sorder');renderSets();saveSync()};
-  const cx=ev=>{if(ev.pointerId===id){clean();if(on)renderSets()}};
-  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',cx);addEventListener('touchmove',tm,{passive:false});
-  if(touch)timer=setTimeout(begin,350);
 }
 /* Edição da setlist em rascunho: curSet vira uma CÓPIA enquanto edita (setOrig guarda a original).
    Nada vai para o banco até tocar em Salvar -> uma única gravação e um único aviso. */
@@ -1150,7 +1335,7 @@ async function sync(push){
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(i>=0)sets[i]=n;else sets.push(n)});
         const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id));
-        if(!pq.some(x=>x.op==='sorder'))sets.sort((a,b)=>(a.pos||1e9)-(b.pos||1e9))}
+        sets.sort(cmpSet)}
     }catch(e){}
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;

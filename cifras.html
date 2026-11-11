@@ -173,7 +173,11 @@ body.needinstall #home .cards,body.needinstall .bell,body.needinstall #ft,body.n
 @keyframes bring{0%,32%,100%{transform:rotate(0)}4%{transform:rotate(18deg)}8%{transform:rotate(-16deg)}12%{transform:rotate(13deg)}16%{transform:rotate(-10deg)}20%{transform:rotate(6deg)}24%{transform:rotate(-3deg)}28%{transform:rotate(1deg)}}
 body:not(.onhome) .bell{display:none}
 body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
-.nt{border:1px solid var(--ln);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0c0c0c}
+.nt{position:relative;border:1px solid var(--ln);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0c0c0c}
+.nt .h{padding-right:34px}
+.nt .del{position:absolute;top:6px;right:6px;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#8a8a8a;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.nt .del:hover,.nt .del:active{color:#e57373;background:rgba(229,115,115,.12)}
+.nt .del svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .nt.new{border-color:var(--gold);box-shadow:0 0 12px rgba(212,175,55,.25)}
 .nt .h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .nt .t{font-weight:700;color:var(--gold);min-width:0;overflow-wrap:anywhere}
@@ -1237,8 +1241,26 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)
     const L=$('#nlist');L.textContent='';
     if(!nts.length){const p=el('p');p.style.cssText='color:var(--mut);text-align:center;margin-top:30px';p.textContent='Nenhum aviso por enquanto.';L.append(p)}
     nts.forEach(n=>{const d=el('div','nt'+(n.created_at>prev?' new':'')),h=el('div','h'),t=el('div','t'),a=el('div','a'),x=el('div','x'),dt=el('div','d');
-      t.textContent=n.title;a.textContent=n.author;x.textContent=n.body;dt.textContent=fmt(n.created_at);h.append(t,a);d.append(h,x,dt);L.append(d)});
+      t.textContent=n.title;a.textContent=n.author;x.textContent=n.body;dt.textContent=fmt(n.created_at);h.append(t,a);
+      const rm=el('button','del');rm.type='button';rm.setAttribute('aria-label','Excluir aviso');rm.title='Excluir aviso';rm.innerHTML=TRASH;rm.onclick=()=>del(n);
+      d.append(h,x,dt,rm);L.append(d)});
     if(nts[0]&&nts[0].created_at>(gs()||'')){ss(nts[0].created_at);bell()}
+  }
+  const TRASH='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+  async function del(n){
+    if(!navigator.onLine){modal('Sem internet','Conecte-se para excluir um aviso.',[['OK',1]]);return}
+    if(!memCode){const ok=await unlock('Para excluir um aviso, informe o código da banda.');if(!ok)return}
+    const go=await modal('Excluir aviso?','"'+n.title+'" será apagado para todos e não poderá ser recuperado.',[['Cancelar',0,'sec'],['Excluir',1]]);
+    if(!go)return;
+    modal('Excluindo...','',[],'spin');
+    try{
+      await rpc('cifras_notice_delete',{p_code:memCode,p_id:n.id});
+      nts=nts.filter(x=>x.id!==n.id);try{localStorage.setItem(NK,JSON.stringify(nts))}catch(e){}
+      $('#md').hidden=true;bell();openN(false);load();
+    }catch(e){
+      if(/forbidden|42501/.test(e.message))memCode='';
+      modal('Erro','Não foi possível excluir o aviso. Verifique a conexão e o código da banda.',[['OK',1]],'err');
+    }
   }
   async function load(){
     try{

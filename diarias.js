@@ -95,6 +95,7 @@ const ERR = {
     slot_not_reserved: 'Esta vaga não está mais disponível.',
     slot_not_active: 'A aventura já terminou.',
     not_allowed: 'Sua conta não pode participar.',
+    gemini_rejected: 'O Mestre recusou a configuração desta aventura (prompt grande demais ou inválido). Tente com um texto menor.',
     gemini_token_failed: 'O Mestre não respondeu. Tente novamente em instantes.',
     unauthorized: 'Sessão expirada. Entre novamente no jogo.',
     free_not_used: 'Use primeiro a sua aventura gratuita de hoje.',
@@ -121,6 +122,7 @@ const BUSY_MSG = ERR.master_busy;
 function geminiKind(text) {
     const t = String(text || '');
     if (/failed to send|failed to fetch|networkerror|network request failed|load failed/i.test(t)) return 'no_connection';
+    if (/\b100[79]\b|invalid argument|token count|too long|too large|input.*exceed|exceed.*(input|context|token)|model.*(not found|not supported|unsupported)/i.test(t)) return 'gemini_rejected';
     if (/\b429\b|quota|resource[_ ]?exhaust|rate.?limit|too many|overload|exceed/i.test(t)) return 'master_busy';
     if (/\b40[13]\b|unauthenticated|permission[_ ]denied|api key|token.*(expired|invalid)|expired/i.test(t)) return 'gemini_auth';
     if (/\b50[0-4]\b|internal|unavailable|deadline|time-?out|\b101[13]\b/i.test(t)) return 'gemini_unavailable';
@@ -131,9 +133,41 @@ const friendly = (m) => {
     return ERR[k] || ERR[geminiKind(k)] || 'Algo deu errado. Tente novamente.';
 };
 
+// ---- DIAGNÓSTICO: tudo que o modal de erro mostra (para colar no suporte) ----
+const TRAIL = [], T0 = Date.now();
+function trail(msg) { TRAIL.push(`${((Date.now() - T0) / 1000).toFixed(1)}s ${String(msg).replace(/\s+/g, ' ').slice(0, 220)}`); if (TRAIL.length > 50) TRAIL.shift(); }
+window.addEventListener('error', (ev) => trail(`window.error: ${ev.message} @${String(ev.filename || '').split('/').pop()}:${ev.lineno}`));
+window.addEventListener('unhandledrejection', (ev) => trail(`promise rejeitada: ${ev.reason?.message || ev.reason}`));
+const WS_CODES = {
+    1000: 'fechamento normal', 1001: 'servidor/aba saindo', 1005: 'sem código', 1006: 'queda anormal (rede, bloqueio ou recusa antes do handshake)',
+    1007: 'dados inválidos (config/prompt rejeitado)', 1008: 'política violada (modelo inexistente, token inválido/expirado, prompt grande demais ou cota)',
+    1009: 'mensagem grande demais', 1011: 'erro interno do Gemini', 1012: 'serviço reiniciando', 1013: 'Gemini sobrecarregado', 1015: 'falha TLS',
+};
+const closeInfo = (e) => {                                      // CloseEvent -> texto completo
+    const c = e?.code; return `código ${c ?? '?'}${WS_CODES[c] ? ' (' + WS_CODES[c] + ')' : ''} · razão: "${e?.reason || ''}" · limpo: ${e?.wasClean ?? '?'}`;
+};
+function diagFooter() {
+    const d = S.diag || {}, w = d.ws || {};
+    const L = ['', '──────── DIAGNÓSTICO ────────'];
+    L.push(`hora: ${new Date().toISOString()} · online: ${navigator.onLine} · tela: ${S.view}`);
+    L.push(`tipo: ${S.advType || '-'}${S.advType === ADV_PERS ? ` · sub: ${S.customSend?.tipo || '(livre)'} · texto enviado: ${(S.customSend?.text ?? S.customText ?? '').length} car.` : ''}${S.advType === 'fenda_temporal' ? ` · fenda: ${S.fenda?.choice || 'livre'}` : ''}`);
+    if (d.slot) L.push(`vaga: ${d.slot}`);
+    if (d.server) L.push(`servidor(diag): ${JSON.stringify(d.server)}`);
+    if (d.model) L.push(`modelo: ${d.model} · voz: ${d.voice || '-'} · degradado: ${d.degraded ? 'sim' : 'não'} · token: ${d.tokenLen || '?'} car.`);
+    if (w.when) L.push(`ws: aberto=${w.opened} · 1ª msg do Gemini=${w.gotMsg} · reconexões=${w.reconnects}`);
+    if (w.close) L.push(`ws fechou: ${w.close}`);
+    if (w.err) L.push(`ws erro: ${w.err}`);
+    L.push(`aparelho: ${navigator.userAgent}`);
+    if (TRAIL.length) { L.push('passos:'); TRAIL.slice(-25).forEach((x) => L.push('  ' + x)); }
+    return L.join('\n');
+}
+function wsSnapshot(adv) {
+    return adv ? { when: Date.now(), opened: !!adv.opened, gotMsg: !!adv.gotMsg, reconnects: adv.reconnects, close: adv.lastCloseFull || adv.lastClose || '', err: adv.lastErr || '' } : null;
+}
 function showDebug(title, text) {
+    if (S.adv && S.diag) S.diag.ws = wsSnapshot(S.adv);
     $('errTitle').textContent = title || 'Algo deu errado';
-    $('errText').textContent = String(text || '(sem detalhes)');
+    $('errText').textContent = String(text || '(sem detalhes)') + '\n' + diagFooter();
     openOv('errModal');
 }
 
@@ -1361,7 +1395,10 @@ async function _startAdventure(loadout, advType) {
         }
         if ($('chkScript')?.checked) body.script = true;         // "Atuar com roteiro": o Mestre conduz a história (Modo Espectador desde o início)
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo, characters: S.fenda.characters || [] } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
+        trail(`mission-token: pedindo (tipo ${advType || 'comum'})`);
         ctx = await callFn('mission-token', body);   // o cronômetro só começa aqui, depois da bolsa e do tipo
+        S.diag = { slot: ctx.slot_id, server: ctx.diag || null, model: ctx.model, voice: ctx.voice, degraded: !!ctx.degraded, tokenLen: String(ctx.token || '').length, ws: null };
+        trail(`mission-token ok · prompt ${ctx.diag?.sys_chars ?? '?'} car. · setup ${ctx.diag?.setup_bytes ?? '?'} bytes`);
         if (ctx.coins_spent > 0) await applyCoinSync(ctx);       // Fenda Temporal: as Moedas Rúnicas já saíram da bolsa no servidor; atualiza o IndexedDB
         clearDiariasDot();                                       // o Mestre atendeu: agora sim a bolinha do menu some
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
@@ -1369,9 +1406,13 @@ async function _startAdventure(loadout, advType) {
         S.adv = newAdv(my.id, ctx, A, sdk);
         if (ctx.script_note) { S.adv.spectator = true; S.adv.scriptNote = ctx.script_note; S.adv.specNudgeAt = Date.now(); }   // roteiro ligado: a nota autenticada segue junto do INICIAR
         if (S.adv.advType === ADV_PERS) { S.adv.epilogue = true; S.adv.delivered = true; S.adv.epilogueAt = Date.now(); }   // sem objetivo: o botão "Finalizar aventura" fica disponível desde o início
+        trail('conectando ao Gemini Live…');
         await connectLive(false);
     } catch (e) {
         console.error('[diarias] falha ao iniciar:', e);
+        trail(`falha ao iniciar: ${e?.name || ''} ${e?.message || e}`);
+        if (S.adv && !S.adv.lastClose) await sleep(800);     // o código de fechamento do WebSocket chega um instante depois do erro
+        if (S.adv) { S.diag = S.diag || {}; S.diag.ws = wsSnapshot(S.adv); }
         if (S.adv) teardown();
         else if (A) { try { A.stream.getTracks().forEach((t) => t.stop()); A.ctx.close(); } catch (_) { /* ok */ } }
         if (ctx?.slot_id) { try { const rv = await callFn('mission-token', { slot_id: ctx.slot_id, action: 'revert' }); if (rv?.refunded_coins > 0) await applyCoinSync(rv); } catch (_) { /* ok */ } }   // devolveu as moedas? atualiza o IndexedDB
@@ -1386,7 +1427,12 @@ async function _startAdventure(loadout, advType) {
             toast('Todas as vagas do Mestre estão ocupadas. Sua vaga continua garantida.', true);
         }
         else if (friendly(e.message) === BUSY_MSG) toast(BUSY_MSG, true);   // lotado (cota do Gemini): aviso simples, a vaga continua sua
-        else showDebug(friendly(e.message), `${e.message}\n${e.detail || ''}\n${e.stack ? String(e.stack).split('\n')[0] : ''}`.trim());
+        else {
+            const wsT = S.diag?.ws ? `${S.diag.ws.close || ''} ${S.diag.ws.err || ''}` : '';
+            const k = geminiKind(`${e.message} ${wsT}`);
+            showDebug(friendly(e.message) !== 'Algo deu errado. Tente novamente.' ? friendly(e.message) : (ERR[k] || 'Não foi possível conectar ao Mestre'),
+                `${e.name ? e.name + ': ' : ''}${e.message}\n${e.detail ? 'servidor: ' + e.detail + '\n' : ''}${e.stack ? String(e.stack).split('\n').slice(0, 3).join('\n') : ''}`.trim());
+        }
         await refreshState();
         return;
     }
@@ -1434,7 +1480,7 @@ async function connectLive(isRetry) {
         model: adv.model,
         config,
         callbacks: {
-            onopen: () => { adv.opened = true; },
+            onopen: () => { adv.opened = true; trail('ws aberto (aguardando setup)'); },
             onmessage: (m) => {
                 if (!adv.gotMsg) {
                     adv.gotMsg = true; adv.liveMs = Date.now();
@@ -1443,8 +1489,8 @@ async function connectLive(isRetry) {
                 adv.reconnects = 0;                                   // conexão saudável: zera as tentativas
                 onLiveMessage(m).catch((e) => console.error('[diarias] msg:', e));
             },
-            onerror: (e) => { adv.lastErr = String(e?.message || e?.error?.message || 'erro de conexão'); console.warn('[diarias] ws erro:', adv.lastErr); },
-            onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); adv.connected = false; onLiveClosed(); },
+            onerror: (e) => { adv.lastErr = `${e?.type || 'error'}: ${String(e?.message || e?.error?.message || 'erro de conexão')}`; trail('ws erro: ' + adv.lastErr); console.warn('[diarias] ws erro:', adv.lastErr); },
+            onclose: (e) => { adv.lastClose = `código ${e?.code ?? '?'} ${e?.reason || ''}`.trim(); adv.lastCloseFull = closeInfo(e); trail('ws fechou: ' + adv.lastCloseFull); adv.connected = false; onLiveClosed(); },
         },
     });
 
@@ -1524,7 +1570,7 @@ function sendAudio(b64) {
 function onLiveClosed() {
     const adv = S.adv; if (!adv || adv.finished || adv.closing) return;
     if (!adv.gotMsg) {                                           // recusada logo na abertura (token/config/modelo)
-        failStart(ERR[geminiKind(`${adv.lastClose || ''} ${adv.lastErr || ''}`)] || 'O Mestre recusou a conexão', `${adv.lastClose || ''}\n${adv.lastErr || ''}\nmodelo: ${adv.model}${adv.degraded ? ' (config enxuta)' : ''}`.trim());
+        failStart(ERR[geminiKind(`${adv.lastClose || ''} ${adv.lastErr || ''}`)] || 'O Mestre recusou a conexão', `Conexão com o Gemini Live recusada na abertura.\n${adv.lastCloseFull || adv.lastClose || '(sem código de fechamento)'}\n${adv.lastErr || ''}\nmodelo: ${adv.model}${adv.degraded ? ' (config enxuta)' : ''}`.trim());
         return;
     }
     const left = adv.endMs + GIVEUP_AFTER_S * 1000 - serverNow();
@@ -1536,7 +1582,9 @@ function onLiveClosed() {
         console.warn('[diarias] conexão perdida:', adv.lastClose, adv.lastErr);
         const k = geminiKind(`${adv.lastClose || ''} ${adv.lastErr || ''}`);
         toast(k === 'master_busy' ? 'O Mestre ficou ocupado e a conexão caiu.' : k === 'gemini_unavailable' ? 'O Mestre ficou indisponível e a conexão caiu.' : 'Conexão perdida com o Mestre.', true);
+        trail('conexão perdida no meio da aventura: ' + (adv.lastCloseFull || adv.lastClose || '?') + ' ' + (adv.lastErr || ''));
         finishAdventure(null, true, 'connection_lost');
+        showDebug('Conexão perdida com o Mestre', `${adv.lastCloseFull || adv.lastClose || '(sem código)'}\n${adv.lastErr || ''}\nreconexões tentadas: ${adv.reconnects}`);
     }
 }
 

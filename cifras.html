@@ -36,6 +36,12 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 .card{background:#0c0c0c;border:1px solid var(--gold);border-radius:18px;aspect-ratio:3/4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:var(--tx);font-size:1.15rem;font-weight:600}
 .card svg{width:64%;max-width:130px;color:var(--gold);stroke-width:1.5}
 .card:active{background:#1a1500}
+.card,#tbS{position:relative}
+.nbd{position:absolute;top:-8px;right:-8px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:#e53935;color:#fff;font:700 .8rem/24px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #000,0 0 12px rgba(229,57,53,.7);z-index:3;pointer-events:none}
+#home .card .nbd{top:10px;right:10px;min-width:28px;height:28px;border-radius:14px;font-size:.95rem;line-height:28px}
+.nbd.pop{animation:nbpop .55s cubic-bezier(.3,1.7,.5,1)}
+@keyframes nbpop{0%{transform:scale(.2)}100%{transform:scale(1)}}
+.sc .nwt{position:absolute;top:8px;right:10px;z-index:1;background:#e53935;color:#fff;font:700 .65rem/1 system-ui,sans-serif;letter-spacing:.06em;padding:4px 7px;border-radius:10px;box-shadow:0 0 10px rgba(229,57,53,.7)}
 /* forms */
 label{display:block;color:var(--gold);font-size:.85rem;margin:16px 0 6px}
 input,textarea{width:100%;background:#0c0c0c;color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:12px;font:inherit;font-size:1rem}
@@ -562,9 +568,12 @@ function chordScene(E,sv){
 
 /* ---------- laço de desenho ---------- */
 function draw(it,now){
+  if(it.fx){const n=it.node,P=it.pad,W=n.offsetWidth+P*2,H=n.offsetHeight+P*2,d=Math.min(devicePixelRatio||1,2),cw=Math.round(W*d),ch=Math.round(H*d);
+    if(!n.offsetWidth)return;if(it.cv.width!==cw||it.cv.height!==ch){it.cv.width=cw;it.cv.height=ch}
+    const u=it.S.u;u.uRes.value.set(W,H);u.uTime.value=now/1000+it.seed*5}
   const w=it.cv.width,h=it.cv.height;if(RS.domElement.width!==w||RS.domElement.height!==h)RS.setSize(w,h,false);
   const t=REDUCED&&!it.chord?1.2:now/1000+it.seed*20;let S;
-  if(it.chord){S=it.S||(it.S=chordScene(it.E));S.yaw=it.yaw;S.tick(now/1000);if(!it.auto){it.auto=1;if(!REDUCED)S.strum(now/1000+.5)}}
+  if(it.fx)S=it.S;else if(it.chord){S=it.S||(it.S=chordScene(it.E));S.yaw=it.yaw;S.tick(now/1000);if(!it.auto){it.auto=1;if(!REDUCED)S.strum(now/1000+.5)}}
   else{S=inst(it.kind);S.update(t,it.yaw)}
   if(S.cam.aspect!==w/h){S.cam.aspect=w/h;S.cam.updateProjectionMatrix()}
   RS.render(S.sc,S.cam);it.x.clearRect(0,0,w,h);it.x.drawImage(RS.domElement,0,0,w,h)}
@@ -600,7 +609,36 @@ function mount(node,kind,size,big){ready.then(ok=>{if(!ok||!BUILD[kind])return;
 function chord(sv,E){ready.then(ok=>{if(!ok||!sv.isConnected)return;
   const cv=document.createElement('canvas');cv.width=460;cv.height=540;cv.style.cssText='width:230px;height:270px;margin:0 auto';
   const it={cv,big:true,chord:true,E,seed:0};add(it,null,sv)})}
-window.CifrasI3D={mount,chord,ready};
+/* ---------- efeito de atenção (borda luminosa + cometa) e balanço com tween.js ---------- */
+const ATTN=`varying vec2 vUv;uniform float uTime,uPad,uStr;uniform vec2 uRes;uniform vec3 uCol;
+float sd(vec2 p,vec2 b,float r){vec2 q=abs(p)-b+r;return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}
+void main(){vec2 p=(vUv-.5)*uRes;float d=sd(p,uRes*.5-uPad,16.),o=max(d,0.);
+ float g=exp(-o/(5.+4.*uStr))*(.45+.35*sin(uTime*3.));
+ float ring=0.;for(int i=0;i<2;i++){float ph=fract(uTime*.55+float(i)*.5);ring+=smoothstep(2.2,0.,abs(o-ph*uPad))*(1.-ph)*uStr;}
+ float a=atan(p.y,p.x),cm=pow(max(0.,cos(a-uTime*2.4)),26.)*smoothstep(5.,0.,abs(d))*1.7;
+ float I=(g+ring+cm)*step(-1.5,d);I=clamp(I,0.,1.);gl_FragColor=vec4(uCol*I,I);}`;
+function attn(node,strong){
+  const h={on:true,stop(){h.on=false;if(h.it){h.it.cv.remove();items.delete(h.it)}if(h.tw)h.tw.stop();node.style.transform=''}};
+  ready.then(ok=>{if(!ok||!h.on)return;
+    const pad=strong?18:10,cv=document.createElement('canvas');cv.className='afx';cv.style.cssText='position:absolute;pointer-events:none;z-index:2;left:'+-pad+'px;top:'+-pad+'px;width:calc(100% + '+pad*2+'px);height:calc(100% + '+pad*2+'px)';cv.setAttribute('aria-hidden','true');
+    const u={uTime:{value:0},uRes:{value:new T.Vector2(1,1)},uPad:{value:pad},uStr:{value:strong?1:0},uCol:{value:new T.Color(strong?0xffc94a:0xe8cf7a)}};
+    const sc=new T.Scene();sc.add(new T.Mesh(new T.PlaneGeometry(2,2),new T.ShaderMaterial({uniforms:u,transparent:true,premultipliedAlpha:true,depthTest:false,depthWrite:false,vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',fragmentShader:ATTN})));
+    const it={cv,fx:true,node,pad,S:{sc,cam:new T.OrthographicCamera(-1,1,1,-1,0,1),u},seed:Math.random(),x:cv.getContext('2d'),vis:true,yaw:0};
+    h.it=it;if(getComputedStyle(node).position==='static')node.style.position='relative';node.append(cv);items.add(it);io.observe(cv);cv.__i=it;draw(it,performance.now());
+    if(REDUCED)return;
+    /* balanço periódico (tween.js): forte = sacode e dá um pulo; leve = só respira */
+    const o={r:0,s:1},ap=()=>{node.style.transform='rotate('+o.r+'deg) scale('+o.s+')'};
+    const E=TW.Easing,loop=()=>{if(!h.on)return;
+      const a=strong?new TW.Tween(o,TG).to({r:-6,s:1.05},110).easing(E.Quadratic.Out):new TW.Tween(o,TG).to({s:1.05},700).easing(E.Sinusoidal.InOut),
+        b=strong?new TW.Tween(o,TG).to({r:6},120).easing(E.Quadratic.InOut):null,
+        c=strong?new TW.Tween(o,TG).to({r:-4},110).easing(E.Quadratic.InOut):null,
+        d=strong?new TW.Tween(o,TG).to({r:3},100).easing(E.Quadratic.InOut):null,
+        z=new TW.Tween(o,TG).to({r:0,s:1},strong?520:700).easing(strong?E.Elastic.Out:E.Sinusoidal.InOut).delay(0).onComplete(()=>{h.t=setTimeout(loop,strong?2200:1200)});
+      let ch=a;if(strong){a.chain(b);b.chain(c);c.chain(d);d.chain(z)}else a.chain(z);
+      [a,b,c,d,z].forEach(t=>t&&t.onUpdate(ap));h.tw=a;a.start()};
+    loop();const stop0=h.stop;h.stop=()=>{clearTimeout(h.t);stop0()}});
+  return h}
+window.CifrasI3D={mount,chord,attn,ready};
 pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 })();
 </script>
@@ -1051,8 +1089,23 @@ function renderSets(){
     const t1=el('span','st');t1.textContent=x.name;i.append(t1);
     if(x.per)i.append(fxIcon(x.per,48,sd));
     const c1=el('span','st');c1.textContent='· '+x.ids.length;i.append(c1);
-    i.onclick=()=>{unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
+    if(unseen&&unseen[x.id]){const p=el('span','nwt');p.textContent=unseen[x.id]==='n'?'NOVA':'ATUALIZADA';i.append(p)}
+    i.onclick=()=>{if(unseen&&unseen[x.id]){delete unseen[x.id];saveUn();updSets()}unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
+/* setlists novas/atualizadas por outra pessoa: id -> 'n' (nova) | 'u' (atualizada). Fica salvo até a setlist ser aberta. */
+const USK='cifras.sunseen',ah={};
+let unseen=(()=>{try{const v=JSON.parse(localStorage.getItem(USK));return v&&typeof v==='object'&&!Array.isArray(v)?v:null}catch(e){return null}})();
+function saveUn(){try{localStorage.setItem(USK,JSON.stringify(unseen||{}))}catch(e){}}
+function setBadge(node,n){let b=node.querySelector(':scope>.nbd');if(!n){b&&b.remove();return}
+  if(!b){b=el('span','nbd');node.append(b)}
+  if(b.textContent!==String(n)){b.textContent=n;b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop')}}
+function attn(key,node,strong,n){
+  if(!node)return;setBadge(node,n);
+  if(!n){const h=ah[key];ah[key]=null;h&&h.stop&&h.stop();return}
+  if(ah[key])return;ah[key]=1;
+  const go=t=>{if(ah[key]!==1)return;if(window.CifrasI3D)ah[key]=window.CifrasI3D.attn(node,strong);else if(t<60)setTimeout(()=>go(t+1),500)};go(0)}
+function updSets(){const n=unseen?Object.keys(unseen).length:0;
+  attn('home',document.querySelector('.card[data-go="list"]'),true,n);attn('tab',$('#tbS'),false,n)}
 /* data (dd/mm/aaaa) + período (dia/noite): o mesmo par não pode se repetir */
 const DRE=/^(\d{2})\/(\d{2})\/(\d{4})$/;
 const d2i=n=>{const m=DRE.exec(n||'');return m?m[3]+'-'+m[2]+'-'+m[1]:''};
@@ -1561,11 +1614,12 @@ async function sync(push){
     const ids=new Set(rows.map(w=>w.id));songs=songs.filter(x=>!x.u||ids.has(x.id)||pq.some(p=>p.id===x.id));
     try{
       const r2=await fetch(SB+'/rest/v1/cifras_setlists?select=id,name,period,ids,musicians,position,updated_at',{headers:SBH});
-      if(r2.ok){const sr=await r2.json();
+      if(r2.ok){const sr=await r2.json();const first=unseen===null;if(first)unseen={};/* 1ª sincronização do aparelho: nada é "novidade" */
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
-          const n=decSet(w);if(i>=0)sets[i]=n;else sets.push(n)});
+          const n=decSet(w);if(!first)unseen[w.id]=i<0||unseen[w.id]==='n'?'n':'u';if(i>=0)sets[i]=n;else sets.push(n)});
         const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id));
-        sets.sort(cmpSet)}
+        Object.keys(unseen).forEach(id=>{if(!sets.some(x=>x.id===id))delete unseen[id]});saveUn();updSets();
+        sets.sort(cmpSet);if($('#sets')&&!$('#sets').hidden)renderSets()}
     }catch(e){}
     sets.forEach(x=>x.ids=x.ids.filter(id=>songs.some(s=>s.id===id)));storeS();
     store(songs);if(cur)cur=songs.find(x=>x.id===cur.id)||cur;
@@ -1658,7 +1712,7 @@ async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in nav
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#song').classList.contains('active'))wake(true)});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
-migrate();store(songs);storeS();pqSave();
+migrate();store(songs);storeS();pqSave();updSets();
 try{const o=JSON.parse(localStorage.getItem('cifras.cfg'));if(o&&o.code)localStorage.setItem('cifras.cfg',JSON.stringify({name:o.name||''}))}catch(e){}
 sync(true);setSt();
 addEventListener('online',()=>sync(true));addEventListener('offline',()=>setSt());setInterval(()=>sync(true),90000);

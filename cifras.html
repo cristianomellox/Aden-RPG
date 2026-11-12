@@ -387,6 +387,223 @@ window.CifrasFX={mount,ready};
 pre.forEach(a=>mount(...a));
 })();
 </script>
+<script type="module">
+/* Cifras 3D — instrumentos da setlist e diagrama de acordes em three.js + tween.js.
+   UM renderer WebGL para tudo; cada item recebe uma cópia (drawImage) num <canvas> 2D. */
+(function(){
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches,pre=window.__i3q||[];window.__i3q=null;
+let T,TW,TG,RS,env;const items=new Set(),INS={};
+const GOLD=0xd4af37;
+const MAXT=2.9;const mat=(c,m=.3,r=.5,x)=>new T.MeshStandardMaterial({color:c,metalness:m,roughness:r,...x});
+const phys=(c,m,r,x)=>new T.MeshPhysicalMaterial({color:c,metalness:m,roughness:r,clearcoat:1,clearcoatRoughness:.12,...x});
+const me=(g,m,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{const o=new T.Mesh(g,m);o.position.set(x,y,z);o.rotation.set(rx,ry,rz);return o};
+const cy=(a,b,h,s=28)=>new T.CylinderGeometry(a,b,h,s),bx=(w,h,d)=>new T.BoxGeometry(w,h,d);
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const pulse=(t,P,o=0,k=5)=>{const u=(((t-o)%P)+P)%P;return Math.exp(-u*k)};
+let M={};
+function mats(){M={gold:mat(GOLD,1,.26),steel:mat(0xd5d9de,1,.22),dark:mat(0x16130f,.4,.45),chrome:mat(0xe8eaee,1,.12),pearl:mat(0xf3ecdc,.1,.3),ivory:mat(0xf4efe4,.05,.35),
+  glow:new T.MeshBasicMaterial({color:0xffe08a,transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false})}}
+
+/* sprites ♪ e brilho de fundo */
+function glyphTex(ch){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.font='bold 52px serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#f3cf55';x.shadowColor='#d4af37';x.shadowBlur=10;x.fillText(ch,32,34);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t}
+function notes(fx,x,y,z,dx,dy){const L=[glyphTex('♪'),glyphTex('♫'),glyphTex('♪')].map(t=>{const s=new T.Sprite(new T.SpriteMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false}));s.scale.setScalar(.34);fx.add(s);return s});
+  return t=>L.forEach((s,i)=>{const u=((t*.35+i/3)%1);s.position.set(x+dx*u+Math.sin(u*7+i)*.08,y+dy*u,z);s.material.opacity=Math.sin(Math.PI*u)*.95;s.scale.setScalar(.22+.2*Math.sin(Math.PI*u))})}
+function glowSprite(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(255,214,110,.55)');g.addColorStop(.5,'rgba(212,175,55,.16)');g.addColorStop(1,'rgba(212,175,55,0)');x.fillStyle=g;x.fillRect(0,0,128,128);
+  const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;const s=new T.Sprite(new T.SpriteMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false,blending:T.AdditiveBlending}));s.scale.setScalar(6);s.position.z=-2.2;return s}
+
+/* cordas com "borrão" de vibração (dedilhado em sequência) */
+function strs(g,n,sp,y0,y1,z,rt,rn,col,P,keep){
+  const L=y1-y0,a=[];for(let i=0;i<n;i++){const x=(i-(n-1)/2)*sp,r=rn+(rt-rn)*(1-i/Math.max(1,n-1));
+    const co=me(cy(r,r,L,8),mat(col,1,.3),x,(y0+y1)/2,z),gh=me(cy(r*2.6,r*2.6,L,8),M.glow.clone(),x,(y0+y1)/2,z);g.add(co,gh);a.push({co,gh,x})}
+  return t=>a.forEach((s,i)=>{const e=pulse(t,P,i*.09,3.2);s.gh.material.opacity=e*.75;s.gh.scale.x=1+e*2.2;s.co.position.z=z+Math.sin(t*95)*e*.01})}
+
+/* ---------- violão / guitarra / baixo ---------- */
+function bodyShape(w,wa,lo){const p=new T.Path();p.moveTo(0,.66);p.bezierCurveTo(w*.7,.66,w,.5,w,.3);p.bezierCurveTo(w,.12,wa,.08,wa,-.06);p.bezierCurveTo(wa,-.2,lo,-.25,lo,-.46);p.bezierCurveTo(lo,-.72,lo*.5,-.78,0,-.78);
+  const q=p.getPoints(18);return new T.Shape([...q,...q.slice(1,-1).reverse().map(v=>new T.Vector2(-v.x,v.y))])}
+function guitar(k){
+  const g=new T.Group(),ac=k==='violao',bs=k==='baixo',n=bs?4:6,L=bs?1.9:1.45,dep=ac?.3:.15,zf=dep/2+.03;
+  const sh=ac?bodyShape(.36,.26,.5):bodyShape(.3,.24,.42);
+  const geo=new T.ExtrudeGeometry(sh,{depth:dep,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:3,curveSegments:1});geo.translate(0,0,-dep/2);
+  g.add(me(geo,ac?mat(0xc98a4b,.1,.38):phys(bs?0x1d3f73:0xa3181b,.35,.28)));
+  const yT=.5+L;
+  g.add(me(bx(.15,L,.08),mat(0x8a5a32,.1,.5),0,.5+L/2,zf-.06));
+  g.add(me(bx(.14,L,.02),mat(0x1c120c,.2,.55),0,.5+L/2,zf-.005));
+  const Sc=L*.95/(1-Math.pow(2,-14/12));
+  for(let f=1;f<=14;f++)g.add(me(bx(.145,.012,.016),M.steel,0,yT-Sc*(1-Math.pow(2,-f/12)),zf+.005));
+  [3,5,7,9,12].forEach(f=>{const y=yT-Sc*(1-Math.pow(2,-(f-.5)/12));g.add(me(new T.CircleGeometry(.014,12),M.pearl,0,y,zf+.0065))});
+  g.add(me(bx(.16,.025,.03),M.pearl,0,yT,zf+.005));
+  const hs=me(bx(.2,.44,.06),ac?mat(0x3a2414,.1,.5):phys(bs?0x1d3f73:0x16130f,.3,.3),0,yT+.23,zf-.07,-.16);g.add(hs);
+  for(let s=-1;s<=1;s+=2)for(let j=0;j<n/2;j++)g.add(me(cy(.03,.03,.05,14),M.gold,s*.13,yT+.1+j*(bs?.18:.12),zf-.07,0,0,Math.PI/2));
+  const by=ac?-.5:-.62;
+  if(ac){g.add(me(new T.CircleGeometry(.14,32),M.dark,0,-.08,zf+.003));g.add(me(new T.RingGeometry(.14,.17,32),M.gold,0,-.08,zf+.004));g.add(me(bx(.36,.06,.05),mat(0x2a170c,.1,.5),0,by,zf+.025));g.add(me(bx(.3,.012,.02),M.pearl,0,by+.035,zf+.045))}
+  else{const pk=bs?[-.18,-.4]:[-.12,-.32];pk.forEach(y=>{g.add(me(bx(bs?.3:.28,.09,.045),M.chrome,0,y,zf+.02));g.add(me(bx(.22,.025,.012),M.dark,0,y,zf+.046))});
+    g.add(me(bx(.3,.07,.05),M.chrome,0,by,zf+.025));[[.24,-.5],[.2,-.62],[.26,-.72]].forEach(([x,y])=>g.add(me(cy(.035,.035,.05,16),M.gold,x*(bs?.9:1),y*.95,zf+.025,Math.PI/2)))}
+  const upd=strs(g,n,.115/(n-1),by,yT,zf+.035,bs?.014:.008,bs?.009:.0045,ac?0xd6d0c0:0xdadde2,3.4);
+  g.rotation.z=-.6;return{g,tick:upd,sway:.45}}
+
+/* ---------- teclado ---------- */
+function keyboard(){
+  const g=new T.Group(),kw=[],kb=[];
+  g.add(me(bx(2.5,.3,1.05),mat(0x16140f,.5,.4),0,0,0));g.add(me(bx(2.5,.12,.42),mat(0x1d1a14,.5,.4),0,.19,-.36));
+  g.add(me(bx(.55,.07,.02),new T.MeshBasicMaterial({color:0x6b4f10}),-.7,.26,-.16,-.5));
+  for(let i=0;i<6;i++)g.add(me(cy(.045,.045,.05,16),M.gold,-.1+i*.14,.25,-.2));
+  g.add(me(bx(.1,.04,.02),new T.MeshBasicMaterial({color:0xffd45a}),1.0,.26,-.16));
+  for(let i=0;i<15;i++){const m=M.ivory.clone();const k=me(bx(.14,.08,.62),m,(i-7)*.153,.19,.2);g.add(k);kw.push({k,m,y:.19,i})}
+  for(let i=0;i<14;i++)if([0,1,3,4,5].includes(i%7)){const m=mat(0x0c0b09,.3,.25);const k=me(bx(.085,.1,.38),m,(i-7)*.153+.0765,.245,.1);g.add(k);kb.push({k,m,y:.245,i})}
+  const seq=[0,4,7,9,7,4,2,5],D=.3,P=seq.length*D;
+  g.rotation.x=.5;
+  return{g,sway:.4,tick:t=>{kw.forEach(o=>{let a=0;seq.forEach((v,s)=>{if(v===o.i||v+7===o.i&&s%2)a=Math.max(a,pulse(t,P,s*D,6))});o.k.position.y=o.y-.035*a;o.m.emissive.setHex(GOLD);o.m.emissiveIntensity=a*.7});
+    kb.forEach(o=>{const a=pulse(t,P,(o.i%seq.length)*D,6)*(o.i%3===0?1:0);o.k.position.y=o.y-.03*a;o.m.emissive.setHex(GOLD);o.m.emissiveIntensity=a*.8})}}}
+
+/* ---------- bateria ---------- */
+function drums(){
+  const g=new T.Group(),red=phys(0x8e1b1b,.3,.3),white=mat(0xf1ede4,0,.55);
+  const drum=(r,h,col,x,y,z,rx=0,rz=0,kick)=>{const d=new T.Group();d.add(me(cy(r,r,h,40),col));d.add(me(cy(r*.97,r*.97,.014,40),white,0,h/2+.004));
+    [h/2,-h/2].forEach(y=>d.add(me(new T.TorusGeometry(r,.015,8,40),M.steel,0,y,0,Math.PI/2)));
+    if(kick)d.add(me(new T.RingGeometry(.13,.22,40),M.gold,0,h/2+.012,0,-Math.PI/2));
+    d.position.set(x,y,z);d.rotation.set(rx,0,rz);g.add(d);return d};
+  const kick=drum(.58,.6,red,0,-.45,0,Math.PI/2,0,1),t1=drum(.26,.24,red,-.3,.3,-.05,.35,.12),t2=drum(.26,.24,red,.3,.3,-.05,.35,-.12),
+    sn=drum(.3,.18,M.chrome,-.95,-.05,.25),ft=drum(.38,.46,red,.95,-.1,.15);
+  const rod=(x,y,z,h)=>g.add(me(cy(.018,.018,h,10),M.steel,x,y,z));
+  rod(0,.15,-.05,.4);rod(-.95,-.45,.25,.7);rod(-1.45,.0,.1,1.0);rod(-.7,.35,-.2,1.3);rod(1.05,.3,-.2,1.3);rod(.7,-.45,.15,.5);rod(1.2,-.45,.15,.5);
+  const cym=(r,x,y,z,rz)=>{const c=new T.Group();c.add(me(cy(r,r*1.02,.014,48),M.gold));c.add(me(new T.SphereGeometry(r*.17,16,10,0,Math.PI*2,0,Math.PI/2),M.gold,0,.005));c.position.set(x,y,z);c.rotation.z=rz;g.add(c);return c};
+  const hh=cym(.3,-1.45,.5,.1,0),hh2=cym(.3,-1.45,.46,.1,0),crash=cym(.42,-.7,1.0,-.2,.15),ride=cym(.5,1.05,.95,-.2,-.15);
+  const stick=(px,py,pz)=>{const p=new T.Group();p.position.set(px,py,pz);p.add(me(cy(.022,.016,.95,10),mat(0xd9b07a,0,.6),0,-.47,0));p.add(me(new T.SphereGeometry(.03,10,8),mat(0xd9b07a,0,.6),0,-.95,0));g.add(p);return p};
+  const sA=stick(-.5,.8,.3),sB=stick(-.8,1.15,.35);
+  return{g,sway:.4,tick:t=>{
+    const eK=Math.max(pulse(t,2,0,9),pulse(t,2,.75,9),pulse(t,2,1,9)),eS=Math.max(pulse(t,2,.5,9),pulse(t,2,1.5,9)),eH=pulse(t,.25,0,14),
+      eT=Math.max(pulse(t,2,1.75,9),pulse(t,2,1.875,9));
+    kick.scale.set(1-.025*eK,1,1-.025*eK);sn.position.y=-.05-.012*eS;hh.position.y=.5-.015*eH;t1.position.y=.3-.012*eT;t2.position.y=.3-.012*pulse(t,2,1.875,9);ft.position.y=-.1-.012*pulse(t,2,1.95,9);
+    crash.rotation.x=Math.sin(t*26)*pulse(t,4,0,1.6)*.1;ride.rotation.x=Math.sin(t*30)*pulse(t,.5,0,4)*.03;
+    sA.rotation.z=-.55-.6*(1-eS);sB.rotation.z=-.785-.5*(1-eH)}}}
+
+/* ---------- sax (tubo cônico com pavilhão) ---------- */
+function taper(pts,rf,mt,seg=70,rad=18){
+  const cu=new T.CatmullRomCurve3(pts),pos=[],idx=[],nb=new T.Vector3(0,0,1);
+  for(let i=0;i<=seg;i++){const u=i/seg,p=cu.getPointAt(u),tg=cu.getTangentAt(u),bn=new T.Vector3().crossVectors(tg,nb).normalize(),r=rf(u);
+    for(let j=0;j<=rad;j++){const a=j/rad*Math.PI*2,c=Math.cos(a)*r,s=Math.sin(a)*r;pos.push(p.x+bn.x*c,p.y+bn.y*c,p.z+s)}}
+  for(let i=0;i<seg;i++)for(let j=0;j<rad;j++){const a=i*(rad+1)+j,b=a+rad+1;idx.push(a,b,a+1,b,b+1,a+1)}
+  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();mt.side=T.DoubleSide;return{mesh:new T.Mesh(geo,mt),cu}}
+function sax(){
+  const g=new T.Group(),fx=new T.Group();
+  const pts=[[-.78,1.5],[-.55,1.35],[-.28,1.1],[-.12,.8],[-.08,.2],[-.05,-.5],[0,-1],[.18,-1.3],[.5,-1.38],[.82,-1.2],[.98,-.85],[1.02,-.55]].map(p=>new T.Vector3(p[0],p[1],0));
+  const rf=u=>u<.12?.04+u*.35:u<.8?.082+(u-.12)*.1:.15+Math.pow((u-.8)/.2,2.2)*.3;
+  const{mesh,cu}=taper(pts,rf,phys(0xe0b040,1,.22,{clearcoat:.5}));g.add(mesh);
+  const keys=[];for(let i=0;i<8;i++){const u=.3+i*.06,p=cu.getPointAt(u),m=M.pearl.clone(),k=me(cy(.05,.05,.03,16),m,p.x,p.y,p.z+rf(u)+.012,Math.PI/2);g.add(k);g.add(me(new T.TorusGeometry(.055,.01,6,18),M.gold,p.x,p.y,p.z+rf(u)+.01));keys.push({k,m,z:k.position.z})}
+  const e=cu.getPointAt(1),te=cu.getTangentAt(1);const disc=me(new T.CircleGeometry(.44,32),new T.MeshBasicMaterial({color:0x120d05,side:T.DoubleSide}));disc.position.copy(e).addScaledVector(te,-.03);disc.lookAt(e.clone().add(te));g.add(disc);
+  const t0=cu.getTangentAt(0),mp=me(cy(.06,.026,.4,16),M.dark);mp.position.copy(pts[0]).addScaledVector(t0,-.12);mp.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),t0);g.add(mp);
+  g.add(me(new T.TorusGeometry(.065,.012,6,16),M.gold,mp.position.x+t0.x*.06,mp.position.y+t0.y*.06,0,Math.PI/2));
+  g.rotation.z=.12;
+  return{g,fx,sway:.4,post:()=>notes(fx,e.x,e.y+.3,.1,.5,1.1),tick:t=>keys.forEach((o,i)=>{const a=pulse(t,2.4,i*.18,7);o.k.position.z=o.z-.02*a;o.m.emissive.setHex(GOLD);o.m.emissiveIntensity=a*.8})}}
+
+/* ---------- flauta ---------- */
+function flute(){
+  const g=new T.Group(),fx=new T.Group(),sm=mat(0xe3e6ea,1,.16);
+  g.add(me(cy(.075,.075,3.2,28),sm,0,0,0,0,0,Math.PI/2));
+  [-1.1,.1,1.3].forEach(x=>g.add(me(new T.TorusGeometry(.082,.014,8,24),M.gold,x,0,0,0,Math.PI/2)));
+  const em=me(new T.CircleGeometry(.04,20),M.dark,-1.2,0,.077);em.scale.set(1.6,1,1);g.add(em);
+  g.add(me(cy(.012,.012,2.3,8),M.steel,.2,0,.08,0,0,Math.PI/2));
+  const keys=[];for(let i=0;i<8;i++){const x=-.7+i*.27+(i>5?.12:0),m=M.pearl.clone(),k=me(cy(.062,.062,.04,18),m,x,i>5?-.03:0,.095,Math.PI/2);g.add(k);g.add(me(new T.TorusGeometry(.066,.009,6,18),M.gold,x,i>5?-.03:0,.092));keys.push({k,m,z:k.position.z})}
+  g.rotation.z=.42;
+  return{g,fx,sway:.45,post:()=>notes(fx,1.7,.2,.1,.5,.9),tick:t=>keys.forEach((o,i)=>{const a=pulse(t,2.2,i*.17,7);o.k.position.z=o.z-.02*a;o.m.emissive.setHex(GOLD);o.m.emissiveIntensity=a*.8})}}
+
+/* ---------- microfone ---------- */
+function mic(){
+  const g=new T.Group(),fx=new T.Group();
+  const core=me(new T.SphereGeometry(.41,32,24),mat(0x1a1712,.6,.4));g.add(core);
+  g.add(me(new T.IcosahedronGeometry(.45,2),new T.MeshBasicMaterial({color:0xe4e8ec,wireframe:true,transparent:true,opacity:.85}),0,0,0));
+  g.position.y=0;core.position.y=.75;g.children[1].position.y=.75;
+  g.add(me(new T.TorusGeometry(.43,.035,10,40),M.gold,0,.38,0,Math.PI/2));
+  g.add(me(cy(.2,.13,1.3,32),mat(0x23201b,.85,.3),0,-.3,0));
+  [-.05,-.55].forEach(y=>g.add(me(new T.TorusGeometry(.17,.02,8,32),M.gold,0,y,0,Math.PI/2)));
+  g.add(me(bx(.06,.14,.02),new T.MeshBasicMaterial({color:0x58e07a}),0,-.3,.2));
+  g.rotation.z=-.35;
+  const rings=[0,1,2].map(()=>{const r=me(new T.TorusGeometry(.5,.012,8,48),new T.MeshBasicMaterial({color:0xffd45a,transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false}),0,.75,0);fx.add(r);return r});
+  return{g,fx,sway:.5,tick:t=>{rings.forEach((r,i)=>{const u=((t*.5+i/3)%1);r.scale.setScalar(.9+u*1.1);r.material.opacity=(1-u)*.7});
+    core.material.emissive.setHex(GOLD);core.material.emissiveIntensity=.12+.1*Math.sin(t*5)}}}
+
+const BUILD={bateria:drums,baixo:()=>guitar('baixo'),guitarra:()=>guitar('guitarra'),violao:()=>guitar('violao'),teclado:keyboard,sax,flauta:flute,microfone:mic};
+
+function lights(sc){const a=new T.DirectionalLight(0xfff1d6,2.4);a.position.set(3,4,5);const b=new T.DirectionalLight(0x8fb0ff,1.4);b.position.set(-4,2,-3);sc.add(a,b,new T.AmbientLight(0xffffff,.3));sc.environment=env}
+function inst(k){
+  if(INS[k])return INS[k];
+  const m=BUILD[k](),sc=new T.Scene(),cam=new T.PerspectiveCamera(30,1,.1,50),pv=new T.Group(),spin=new T.Group();
+  cam.position.set(0,.1,7.4);lights(sc);sc.add(glowSprite(),spin);spin.add(pv);pv.add(m.g);
+  const box=new T.Box3().setFromObject(pv),c=box.getCenter(new T.Vector3()),s=box.getSize(new T.Vector3());
+  m.g.position.sub(c);pv.scale.setScalar(3.3/Math.max(s.x,s.y));
+  if(m.fx){m.g.add(m.fx);if(m.post)m.nt=m.post()}
+  return INS[k]={sc,cam,spin,m,update(t,yaw){spin.rotation.y=yaw+(REDUCED?0:Math.sin(t*.7)*m.sway);spin.position.y=REDUCED?0:Math.sin(t*1.3)*.04;m.tick(t);m.nt&&m.nt(t)}}}
+
+/* ---------- diagrama de acorde 3D ---------- */
+function chordScene(E,sv){
+  const sc=new T.Scene(),pv=new T.Group(),cam=new T.PerspectiveCamera(28,1,.1,30),fr=E.fr,st=E.st||1,B=E.b,X=E.x||[];
+  lights(sc);sc.add(pv);cam.position.set(0,-.55,5.8);cam.lookAt(0,-.55,0);
+  const XI=i=>(i-2.5)*.2,add=o=>{pv.add(o);return o};
+  add(me(bx(1.3,1.5,.12),mat(0x2a1a12,.2,.6),0,-.65,-.06));
+  if(st===1)add(me(bx(1.32,.07,.14),M.pearl,0,.02,.0));else add(me(bx(1.3,.02,.03),M.steel,0,0,.02));
+  for(let r=1;r<=5;r++)add(me(bx(1.3,.018,.03),M.steel,0,-r*.26,.02));
+  for(let q=0;q<5;q++){const n=st+q,y=-(q+.5)*.26;if([3,5,7,9,15,17,19,21].includes(n))add(me(new T.CircleGeometry(.04,20),mat(0xd8cfb8,0,.7),0,y,.003));if(n%12===0)[-.2,.2].forEach(x=>add(me(new T.CircleGeometry(.04,20),mat(0xd8cfb8,0,.7),x,y,.003)))}
+  if(st>1){const c=document.createElement('canvas');c.width=128;c.height=64;const x=c.getContext('2d');x.font='bold 44px sans-serif';x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';x.fillText(st+'fr',64,34);
+    const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;const s=new T.Sprite(new T.SpriteMaterial({map:t,transparent:true,toneMapped:false}));s.scale.set(.5,.25,1);s.position.set(-.9,-.13,.1);add(s)}
+  const sg=[];for(let i=0;i<6;i++){const r=.022-.0025*i,x=XI(i),on=fr[i]>=0,col=i<3?0xb98b4e:0xdfe2e6,
+    co=me(cy(r,r,1.6,8),mat(col,1,.3),x,-.6,.05),gh=me(cy(r*2.6,r*2.6,1.6,8),M.glow.clone(),x,-.6,.05);add(co);add(gh);sg.push({co,gh,on});
+    if(fr[i]<0){[Math.PI/4,-Math.PI/4].forEach(a=>add(me(bx(.17,.028,.02),mat(0xff6a5a,0,.5,{emissive:0x551008}),x,.24,.06,0,0,a)))}
+    else if(fr[i]===0)add(me(new T.TorusGeometry(.065,.014,8,24),mat(0xffffff,.3,.4,{emissive:0x333333}),x,.24,.06))}
+  const gm=mat(GOLD,.7,.25,{emissive:0x3a2a00});let k=0;
+  const dot=(i,f)=>{const d=me(new T.SphereGeometry(.085,24,16),gm,XI(i),-(f-st+.5)*.26,.1);pv.add(d);d.scale.set(1,1,.5);if(!REDUCED){d.scale.set(0,0,0);new TW.Tween(d.scale,TG).to({x:1,y:1,z:.5},420).delay(160+k++*55).easing(TW.Easing.Back.Out).start()}};
+  if(B){const len=(B.z-B.a)*.2,c=me(new T.CapsuleGeometry(.075,len,6,16),gm,(XI(B.a)+XI(B.z))/2,-(B.f-st+.5)*.26,.1,0,0,Math.PI/2);c.scale.set(1,1,.5);add(c);
+    if(!REDUCED){c.scale.set(.01,.01,.01);new TW.Tween(c.scale,TG).to({x:1,y:1,z:.5},500).delay(100).easing(TW.Easing.Back.Out).start()}}
+  fr.forEach((f,i)=>{if(f>0&&f-st>=0&&f-st<5&&!(B&&f===B.f&&i>=B.a&&i<=B.z))dot(i,f)});
+  X.forEach(([i,f])=>{if(f-st>=0&&f-st<5&&!(B&&f===B.f&&i>=B.a&&i<=B.z))dot(i,f)});
+  const S={sc,cam,pv,t0:-9,yaw:0,strum(t){S.t0=t},
+    tick(t){S.pv.rotation.y=S.yaw+(REDUCED?0:Math.sin(t*.8)*.28);S.pv.rotation.x=-.2+(REDUCED?0:Math.sin(t*.6)*.04);
+      sg.forEach((s,i)=>{const u=t-S.t0-i*.06,e=s.on&&u>0?Math.exp(-u*3.5):0;s.gh.material.opacity=e*.8;s.gh.scale.x=1+e*2.4;s.co.position.z=.05+Math.sin(t*95)*e*.012})}};
+  return S}
+
+/* ---------- laço de desenho ---------- */
+function draw(it,now){
+  const w=it.cv.width,h=it.cv.height;if(RS.domElement.width!==w||RS.domElement.height!==h)RS.setSize(w,h,false);
+  const t=REDUCED&&!it.chord?1.2:now/1000+it.seed*20;let S;
+  if(it.chord){S=it.S||(it.S=chordScene(it.E));S.yaw=it.yaw;S.tick(now/1000);if(!it.auto){it.auto=1;if(!REDUCED)S.strum(now/1000+.5)}}
+  else{S=inst(it.kind);S.update(t,it.yaw)}
+  if(S.cam.aspect!==w/h){S.cam.aspect=w/h;S.cam.updateProjectionMatrix()}
+  RS.render(S.sc,S.cam);it.x.clearRect(0,0,w,h);it.x.drawImage(RS.domElement,0,0,w,h)}
+let last=0;
+function tick(now){
+  requestAnimationFrame(tick);TG&&TG.update(now);if(document.hidden||!items.size)return;
+  let big=false;
+  for(const it of items){if(!it.cv.isConnected){items.delete(it);io.unobserve(it.cv);it.S&&it.S.sc.traverse(o=>o.geometry&&o.geometry.dispose());continue}
+    if(it.big&&it.cv.getClientRects().length)big=true;
+    if(it.big)it.yaw*=it.drag?1:.94}
+  for(const it of items){
+    if(it.big){if(it.cv.getClientRects().length)draw(it,now);continue}
+    if(big||REDUCED||!it.vis||now-last<40)continue;draw(it,now)}
+  if(!big&&now-last>=40)last=now}
+let io;
+function wire(it){const c=it.cv;c.style.touchAction='none';let x0=0,mv=0;
+  c.onpointerdown=e=>{it.drag=1;x0=e.clientX;mv=0;c.setPointerCapture(e.pointerId)};
+  c.onpointermove=e=>{if(!it.drag)return;const d=e.clientX-x0;x0=e.clientX;mv+=Math.abs(d);it.yaw+=d*.012};
+  c.onpointerup=c.onpointercancel=()=>{it.drag=0;if(mv<5&&it.chord&&it.S)it.S.strum(performance.now()/1000)}}
+function add(it,node,replace){
+  it.cv.style.cssText+='display:block;width:100%;height:100%;max-width:100%';it.cv.setAttribute('aria-hidden','true');it.x=it.cv.getContext('2d');it.yaw=0;it.vis=true;
+  replace?replace.replaceWith(it.cv):node.replaceChildren(it.cv);cv_(it);items.add(it);io.observe(it.cv);if(it.big)wire(it)}
+const cv_=it=>{it.cv.__i=it};
+const ready=(async()=>{try{
+  T=await import('three');TW=await import('@tweenjs/tween.js');TG=new TW.Group();
+  RS=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});RS.setPixelRatio(1);RS.setClearColor(0,0);RS.toneMapping=T.ACESFilmicToneMapping;RS.toneMappingExposure=1.05;
+  try{const{RoomEnvironment}=await import('three/addons/environments/RoomEnvironment.js');const pm=new T.PMREMGenerator(RS);env=pm.fromScene(new RoomEnvironment(),.04).texture;pm.dispose()}catch(e){console.warn('Cifras 3D: sem ambiente',e)}
+  mats();io=new IntersectionObserver(es=>es.forEach(e=>{const it=e.target.__i;if(it)it.vis=e.isIntersecting}),{rootMargin:'80px'});
+  requestAnimationFrame(tick);return true}catch(e){console.warn('Cifras 3D indisponível',e);return false}})();
+function mount(node,kind,size,big){ready.then(ok=>{if(!ok||!BUILD[kind])return;
+  const cv=document.createElement('canvas'),w=big?420:128,h=big?364:128;cv.width=w;cv.height=h;
+  const it={cv,kind,big:!!big,seed:Math.random(),chord:false};add(it,node);if(!big)draw(it,performance.now())})}
+function chord(sv,E){ready.then(ok=>{if(!ok||!sv.isConnected)return;
+  const cv=document.createElement('canvas');cv.width=460;cv.height=540;cv.style.cssText='width:230px;height:270px;margin:0 auto';
+  const it={cv,big:true,chord:true,E,seed:0};add(it,null,sv)})}
+window.CifrasI3D={mount,chord,ready};
+pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
+})();
+</script>
 </head>
 <body class="onhome">
 <button class="bell" id="bell" aria-label="Avisos"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="nb" id="nb" hidden></span></button>
@@ -845,6 +1062,8 @@ const dkey=n=>{const m=DRE.exec(n||'');return m?+(m[3]+m[2]+m[1]):99999999};
 const pkey=p=>p==='dia'?0:p==='noite'?1:2;
 const cmpSet=(a,b)=>dkey(a.name)-dkey(b.name)||pkey(a.per)-pkey(b.per)||a.name.localeCompare(b.name,'pt-BR');
 /* efeitos 3D (three.js, módulo no fim da página); sem internet fica o SVG e o degradê */
+function i3(node,k,s,big){const a=[node,INST[k]?k:'microfone',s,big];if(window.CifrasI3D)window.CifrasI3D.mount(...a);else(window.__i3q=window.__i3q||[]).push(['m',...a])}
+function chord3(sv,E){if(window.CifrasI3D)window.CifrasI3D.chord(sv,E);else(window.__i3q=window.__i3q||[]).push(['c',sv,E])}
 function fxMount(node,k,p,s,seed){const a=[node,k,p,s,seed];if(window.CifrasFX)window.CifrasFX.mount(...a);else(window.__fxq=window.__fxq||[]).push(a)}
 function fxSeed(id){let h=0;for(const c of String(id))h=(h*31+c.charCodeAt(0))>>>0;return (h%1000)/1000}
 function fxIcon(p,s,seed){const w=el('span','pi');w.style.width=w.style.height=s+'px';w.innerHTML=perIcon(p,s);fxMount(w,'ic',p,s,seed||0);return w}
@@ -890,9 +1109,10 @@ function musCard(x){
   infoCard(b=>{
     const r=el('div'),i=el('span'),t=el('div','ct'),n=el('div');
     r.style.cssText='display:flex;align-items:center;justify-content:center;gap:16px';
-    i.style.cssText='flex:0 0 100px;height:100px;color:var(--gold)';i.innerHTML=icon(k,100);
-    t.textContent=INST[k][0];t.style.textAlign='left';r.append(i,t);
-    n.textContent=x.n;n.style.cssText='margin-top:12px;font-size:1.25rem;font-weight:600;word-break:break-word';
+    r.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px';
+    i.style.cssText='width:min(100%,300px);aspect-ratio:300/260;color:var(--gold);display:flex;align-items:center;justify-content:center';i.innerHTML=icon(k,100);i3(i,k,100,true);
+    t.textContent=INST[k][0];r.append(i,t);
+    n.textContent=x.n;n.style.cssText='margin-top:6px;font-size:1.25rem;font-weight:600;word-break:break-word';
     b.append(r,n)});
 }
 /* Edição da setlist em rascunho: curSet vira uma CÓPIA enquanto edita (setOrig guarda a original).
@@ -948,7 +1168,7 @@ function musSave(){setChanged();hdeb(HS)}
 function renderMus(un){
   const g=$('#smus'),ed=$('#sedit'),all=curSet.mus||[],m=all.filter(x=>x.n.trim()).slice(0,12);
   ed.hidden=!un;g.hidden=un||!m.length;g.innerHTML='';g.style.gridTemplateRows='repeat('+Math.min(4,m.length||1)+',auto)';
-  m.forEach(x=>{const d=el('div','mu'),i=el('span','mi'),n=el('span','mn');i.innerHTML=icon(x.i);n.textContent=x.n;n.title=x.n+' · '+(INST[x.i]||INST.microfone)[0];d.append(i,n);d.onclick=()=>musCard(x);g.append(d)});
+  m.forEach(x=>{const d=el('div','mu'),i=el('span','mi'),n=el('span','mn');i.innerHTML=icon(x.i);i3(i,x.i,40);n.textContent=x.n;n.title=x.n+' · '+(INST[x.i]||INST.microfone)[0];d.append(i,n);d.onclick=()=>musCard(x);g.append(d)});
   if(!un)return;
   $('#stit').value=d2i(curSet.name);perUI($('#sper'),$('#sph'),d2i(curSet.name),curSet.id);$('#sper').value=curSet.per||'';const e=$('#smed');e.innerHTML='';
   all.forEach((x,i)=>{
@@ -996,11 +1216,12 @@ function shapes(root,suf){
   return out;
 }
 function toEd(sh){
-  if(!sh)return{fr:[-1,-1,-1,-1,-1,-1],b:null,st:1};
-  if(sh.b!==undefined)return{fr:[...sh.fr],b:sh.b?{...sh.b}:null,st:sh.st||1};
+  if(!sh)return{fr:[-1,-1,-1,-1,-1,-1],b:null,st:1,x:[]};
+  const X=(sh.x||[]).map(a=>[a[0],a[1]]);/* x = dedos extras: mais de um dedo na mesma corda; fr[i] segue sendo o mais agudo (o que soa) */
+  if(sh.b!==undefined)return{fr:[...sh.fr],b:sh.b?{...sh.b}:null,st:sh.st||1,x:X};
   const fr=sh.fr,pos=fr.filter(x=>x>0),mn=pos.length?Math.min(...pos):1,mx=Math.max(...fr),st=(sh.barre||mx>5)?mn:1;
   const ix=fr.map((x,i)=>sh.barre&&x===mn?i:-1).filter(i=>i>=0);
-  return{fr:[...fr],b:ix.length>1?{f:mn,a:ix[0],z:ix[ix.length-1]}:null,st};
+  return{fr:[...fr],b:ix.length>1?{f:mn,a:ix[0],z:ix[ix.length-1]}:null,st,x:X};
 }
 function chordSvg(sh,ed){
   const e=toEd(sh),fr=e.fr,st=e.st,bar=ed&&ed.tmp?ed.tmp:e.b;let o='<g stroke-width="1">';
@@ -1014,11 +1235,13 @@ function chordSvg(sh,ed){
     if(x<0)o+=`<text x="${cx}" y="30" text-anchor="middle" fill="#fff" stroke="none" font-size="15">×</text>`;
     else if(x===0)o+=`<circle cx="${cx}" cy="25" r="5" stroke="#fff" stroke-width="1.5"/>`;
     else if(x-st>=0&&x-st<5&&!(bar&&x===bar.f&&i>=bar.a&&i<=bar.z))o+=`<circle cx="${cx}" cy="${53+(x-st)*26}" r="8" fill="#d4af37" stroke="none"/>`});
+  (e.x||[]).forEach(([i,x])=>{if(x-st>=0&&x-st<5&&!(bar&&x===bar.f&&i>=bar.a&&i<=bar.z))o+=`<circle cx="${30+i*20}" cy="${53+(x-st)*26}" r="8" fill="#d4af37" stroke="none"/>`});
   return `<svg viewBox="0 0 160 185" width="${ed?250:190}" role="img">${o}</svg>`;
 }
 let cv=[],ci=0,cb='',ccn='',cdn='',ctr=0;
 function drawChord(){
   $('#cs').innerHTML=cv.length?chordSvg(cv[ci])+(cv[ci].c?'<div class="sub">Diagrama editado pela banda</div>':''):'<div class="sub" style="padding:30px 0">Diagrama indisponível para este acorde.</div>';
+  const sv=$('#cs svg');if(sv)chord3(sv,toEd(cv[ci]));/* 3D (three.js); se falhar, fica o SVG */
   $('#cn').textContent=cv.length?(ci+1)+'/'+cv.length:'';
   $('#cpv').hidden=$('#cnx').hidden=cv.length<2;
 }
@@ -1034,9 +1257,9 @@ $('#cx').onclick=()=>$('#cp').hidden=true;
 /* mover o desenho editado pelo braço quando a música é transposta */
 const dOf=t=>(((t||0)%12)+12)%12;
 function moveShape(sh,d){
-  const e=toEd(sh),fr=e.fr;if(!d)return e;let nf,b=e.b?{...e.b}:null;
+  const e=toEd(sh),fr=e.fr;if(!d)return e;let nf,b=e.b?{...e.b}:null;const nx=e.x.map(a=>[a[0],a[1]+d]);
   if(d<0){
-    if(fr.some(x=>x===0)||fr.some(x=>x>0&&x+d<0))return null;
+    if(fr.some(x=>x===0)||fr.some(x=>x>0&&x+d<0)||nx.some(a=>a[1]<1))return null;
     nf=fr.map(x=>x>0?x+d:x);
     if(b){b.f+=d;if(b.f<1){if(b.f<0)return null;b=null}}
   }else{
@@ -1044,10 +1267,10 @@ function moveShape(sh,d){
     nf=fr.map(x=>x>0?x+d:x===0?d:x);
     if(b)b.f+=d;else if(op.length>1)b={f:d,a:op[0],z:op[op.length-1]};
   }
-  const pos=nf.filter(x=>x>0);if(!pos.length)return{fr:nf,b:null,st:1};
+  const pos=[...nf.filter(x=>x>0),...nx.map(a=>a[1])];if(!pos.length)return{fr:nf,b:null,st:1,x:nx};
   const st=nf.includes(0)?1:Math.max(1,Math.min(e.st+d,Math.min(...pos)));
   if(Math.max(...pos)-st>4)return null;
-  return{fr:nf,b,st};
+  return{fr:nf,b,st,x:nx};
 }
 function shiftKey(sh,D){
   if(!D)return toEd(sh);
@@ -1058,7 +1281,7 @@ function unshiftKey(E,D){
   if(!D)return toEd(E);
   const o=D>6?[12-D,-D]:[-D,12-D];
   for(const d of o){const B=moveShape(E,d),R=B&&shiftKey(B,D);
-    if(B&&R&&JSON.stringify([R.fr,R.b])===JSON.stringify([E.fr,E.b]))return B}
+    if(B&&R&&JSON.stringify([R.fr,R.b,R.x||[]])===JSON.stringify([E.fr,E.b,E.x||[]]))return B}
   return null;
 }
 /* editor de diagrama de acorde (modal) */
@@ -1074,10 +1297,10 @@ function editChord(name,disp,tr,sh){
   g.querySelectorAll('.btn').forEach(k=>k.style.cssText='background:none;border:0;padding:6px 12px;font-size:1.1rem');
   const sg=el('div','seg'),sc=el('div','seg');sg.append(bd,bb);sc.append(el('span','sub'),g);sc.firstChild.textContent='Casa no traste';
   const hint=el('div','sub');hint.style.cssText='margin:6px 0 10px;line-height:1.4';
-  const draw=()=>{box.innerHTML=chordSvg({fr:E.fr,b:E.b,st:E.st},{tmp:E.tmp});
+  const draw=()=>{box.innerHTML=chordSvg({fr:E.fr,b:E.b,st:E.st,x:E.x},{tmp:E.tmp});
     bd.className='btn'+(mode==='d'?'':' sec');bb.className='btn'+(mode==='b'?'':' sec');cn.textContent='Casa '+E.st;
     hint.textContent=mode==='d'?'Toque na bolinha acima da corda para alternar × / ○. Toque no traste para pôr ou tirar o dedo.':'Arraste sobre as cordas que a pestana cobre (pode ser só de algumas). Toque nela para remover.'};
-  const setSt=n=>{n=Math.max(1,Math.min(20,n));const d=n-E.st;if(!d)return;E.fr=E.fr.map(x=>x>0?Math.max(1,x+d):x);if(E.b)E.b.f=Math.max(1,E.b.f+d);E.st=n;draw()};
+  const setSt=n=>{n=Math.max(1,Math.min(20,n));const d=n-E.st;if(!d)return;E.fr=E.fr.map(x=>x>0?Math.max(1,x+d):x);E.x=E.x.map(a=>[a[0],Math.max(1,a[1]+d)]);if(E.b)E.b.f=Math.max(1,E.b.f+d);E.st=n;draw()};
   const rc=()=>box.firstChild.getBoundingClientRect();
   const hx=ev=>{const r=rc();return Math.max(0,Math.min(5,Math.round(((ev.clientX-r.left)/r.width*160-30)/20)))};
   const hit=ev=>{const r=rc(),vx=(ev.clientX-r.left)/r.width*160,vy=(ev.clientY-r.top)/r.height*185,i=Math.round((vx-30)/20);
@@ -1085,10 +1308,17 @@ function editChord(name,disp,tr,sh){
     if(vy<38)return vy>8?{i,top:1}:null;if(vy<40||vy>170)return null;const q=Math.floor((vy-40)/26);return q<5?{i,r:q}:null};
   const tap=(i,f)=>{const B=E.b;
     if(B&&f===B.f&&i>=B.a&&i<=B.z){if(i===B.a){B.a++;E.fr[i]=0}else if(i===B.z){B.z--;E.fr[i]=0}if(B.z-B.a<1)E.b=null;return}
-    E.fr[i]=E.fr[i]===f?0:f};
+    /* várias bolinhas por corda: tocar numa casa livre ADICIONA um dedo; tocar num dedo existente o remove.
+       fr[i] continua sendo a casa mais aguda da corda (a que soa); as demais ficam em E.x. */
+    const cov=B&&i>=B.a&&i<=B.z,s=new Set(E.x.filter(a=>a[0]===i).map(a=>a[1]));
+    if(E.fr[i]>0&&!(cov&&E.fr[i]===B.f))s.add(E.fr[i]);
+    s.has(f)?s.delete(f):s.add(f);
+    E.x=E.x.filter(a=>a[0]!==i);
+    const d=[...s].sort((p,q)=>q-p);E.fr[i]=d.length?d[0]:cov?B.f:0;
+    d.slice(1).forEach(v=>E.x.push([i,v]))};
   const fin=tt=>{const f=tt.f,a=tt.a,z=tt.z;
     if(a===z){const B=E.b;if(B&&B.f===f&&a>=B.a&&a<=B.z){for(let i=B.a;i<=B.z;i++)if(E.fr[i]===f)E.fr[i]=0;E.b=null}else tap(a,f);return}
-    E.b={f,a,z};for(let i=a;i<=z;i++)if(E.fr[i]<f)E.fr[i]=f};
+    E.b={f,a,z};E.x=E.x.filter(p=>!(p[0]>=a&&p[0]<=z&&p[1]===f));for(let i=a;i<=z;i++)if(E.fr[i]<f)E.fr[i]=f};
   box.onpointerdown=ev=>{ev.preventDefault();const p=hit(ev);if(!p)return;
     if(p.top){E.fr[p.i]=E.fr[p.i]===-1?0:-1;draw();return}
     const f=E.st+p.r;if(mode==='d'){tap(p.i,f);draw();return}
@@ -1099,15 +1329,15 @@ function editChord(name,disp,tr,sh){
   const close=()=>o.remove(),r=el('div','seg');r.style.marginTop='14px';
   const had=!!(cur.cd&&cur.cd[name]);
   const done=async()=>{close();showChord(disp,name,tr);await saveSync()};
-  r.append(mk('Limpar',()=>{E.fr=[-1,-1,-1,-1,-1,-1];E.b=null;E.st=1;draw()},'sec'));
+  r.append(mk('Limpar',()=>{E.fr=[-1,-1,-1,-1,-1,-1];E.b=null;E.st=1;E.x=[];draw()},'sec'));
   if(had)r.append(mk('Padrão',async()=>{
     if(await modal('Voltar ao desenho padrão?','O diagrama editado será removido e o desenho automático volta para toda a banda.',[['Cancelar',0,'sec'],['Restaurar',1]])!==1)return;
     delete cur.cd[name];if(!Object.keys(cur.cd).length)delete cur.cd;cur.eds=edsNew(cur.eds);store(songs);enqueue('save',cur.id);done()},'sec'));
   r.append(mk('Cancelar',close,'sec'),mk('Salvar',async()=>{
     if(E.fr.every(x=>x<0)){await modal('Diagrama vazio','Deixe ao menos uma corda tocando.',[['OK',1]],'err');return}
-    const B=unshiftKey({fr:[...E.fr],b:E.b?{...E.b}:null,st:E.st},dOf(tr));
+    const B=unshiftKey({fr:[...E.fr],b:E.b?{...E.b}:null,st:E.st,x:E.x.map(a=>[...a])},dOf(tr));
     if(!B){await modal('Volte ao tom original','Este desenho usa casas que não existem no tom original da música. Volte ao Tom 0 para editar esse acorde.',[['OK',1]],'err');return}
-    cur.cd=cur.cd||{};cur.cd[name]={fr:B.fr,b:B.b,st:B.st};cur.eds=edsNew(cur.eds);store(songs);enqueue('save',cur.id);done()}));
+    cur.cd=cur.cd||{};cur.cd[name]={fr:B.fr,b:B.b,st:B.st,...(B.x&&B.x.length?{x:B.x}:{})};cur.eds=edsNew(cur.eds);store(songs);enqueue('save',cur.id);done()}));
   bx.append(t,sg,box,sc,hint,r);o.append(bx);document.body.append(o);draw();
 }
 

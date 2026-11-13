@@ -37,6 +37,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 .card svg{width:64%;max-width:130px;color:var(--gold);stroke-width:1.5}
 .card:active{background:#1a1500}
 .card,#tbS{position:relative}
+.ic3{display:flex;flex:none;height:min(42%,120px);aspect-ratio:1/1}#home .card .ic3 svg{width:100%;height:100%;max-width:none}.ic3 canvas{filter:drop-shadow(0 4px 10px rgba(0,0,0,.7))}
 .nbd{position:absolute;top:-8px;right:-8px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:#e53935;color:#fff;font:700 .8rem/24px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #000,0 0 12px rgba(229,57,53,.7);z-index:3;pointer-events:none}
 #home .card .nbd{top:10px;right:10px;min-width:28px;height:28px;border-radius:14px;font-size:.95rem;line-height:28px}
 .nbd.pop{animation:nbpop .55s cubic-bezier(.3,1.7,.5,1)}
@@ -528,7 +529,29 @@ function mic(){
   return{g,fx,sway:.5,tick:t=>{rings.forEach((r,i)=>{const u=((t*.5+i/3)%1);r.scale.setScalar(.9+u*1.1);r.material.opacity=(1-u)*.7});
     core.material.emissive.setHex(GOLD);core.material.emissiveIntensity=.12+.1*Math.sin(t*5)}}}
 
-const BUILD={bateria:drums,baixo:()=>guitar('baixo'),guitarra:()=>guitar('guitarra'),violao:()=>guitar('violao'),teclado:keyboard,sax,flauta:flute,microfone:mic};
+/* ---------- ícones da tela inicial ---------- */
+function rr(w,h,r,d){const s=new T.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);
+  const g=new T.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelSize:.02,bevelThickness:.02,bevelSegments:2,curveSegments:6});g.translate(0,0,-d/2);return g}
+/* setlist & playlist: três faixas empilhadas (a que "toca" acende e avança) + colcheias douradas */
+function playlist(){
+  const g=new T.Group(),rows=[],G=phys(0xe2b93b,.75,.3,{emissive:0x3a2a00});
+  for(let i=0;i<3;i++){const r=new T.Group(),m=phys(0x1b1710,.6,.3);r.add(me(rr(1.7,.5,.12,.12),m));
+    r.add(me(cy(.09,.09,.03,24),M.gold,-.62,0,.09,Math.PI/2));r.add(me(bx(.8,.07,.02),M.gold,.1,.07,.075));r.add(me(bx(.55,.05,.02),M.steel,-.02,-.09,.075));
+    r.position.set(-.25,.62-i*.62,0);g.add(r);rows.push({r,m,x:-.25})}
+  const n=new T.Group(),head=(x,y)=>me(new T.SphereGeometry(.15,24,16),G,x,y,0,0,0,.4).translateX(0);
+  [[-.25,-.5],[.35,-.62]].forEach(([x,y])=>{const h=head(x,y);h.scale.set(1.3,.9,.8);n.add(h);n.add(me(cy(.028,.028,1.1,12),G,x+.17,y+.55))});
+  n.add(me(bx(.7,.14,.05),G,.2,.1,0,0,0,-.16));n.position.set(1.0,-.2,.35);g.add(n);
+  return{g,sway:.35,tick:t=>{rows.forEach((o,i)=>{const a=pulse(t,3.6,i*1.2,2.2);o.m.emissive.setHex(GOLD);o.m.emissiveIntensity=.4*a;o.r.position.x=o.x+.1*a});
+    n.rotation.y=Math.sin(t*1.3)*.6;n.position.y=-.2+Math.sin(t*2)*.07}}}
+/* adicionar: "+" dourado em moeda com satélites em órbita */
+function addIcon(){
+  const g=new T.Group(),G=phys(0xe2b93b,.75,.3,{emissive:0x3a2a00}),c=new T.Group();
+  c.add(me(cy(1.05,1.05,.12,64),phys(0x1a1608,.6,.35),0,0,-.02,Math.PI/2));c.add(me(new T.TorusGeometry(1.05,.08,24,72),G));
+  c.add(me(rr(1.3,.34,.12,.26),G));c.add(me(rr(.34,1.3,.12,.26),G));g.add(c);
+  const orb=[0,1,2].map(i=>{const s=me(new T.SphereGeometry(.09,16,12),G,Math.cos(i*2.094)*1.25,Math.sin(i*2.094)*1.25,.05);g.add(s);return s});
+  return{g,sway:0,tick:t=>{c.rotation.y=t*.9;c.children[2].material.emissive.setHex(GOLD);c.children[2].material.emissiveIntensity=.5+.25*Math.sin(t*3);
+    orb.forEach((s,i)=>{const a=t*1.4+i*2.094;s.position.set(Math.cos(a)*1.25,Math.sin(a)*1.25,.05)})}}}
+const BUILD={playlist,add:addIcon,bateria:drums,baixo:()=>guitar('baixo'),guitarra:()=>guitar('guitarra'),violao:()=>guitar('violao'),teclado:keyboard,sax,flauta:flute,microfone:mic};
 
 function lights(sc){const a=new T.DirectionalLight(0xfff1d6,2.4);a.position.set(3,4,5);const b=new T.DirectionalLight(0x8fb0ff,1.4);b.position.set(-4,2,-3);sc.add(a,b,new T.AmbientLight(0xffffff,.3));sc.environment=env}
 function inst(k){
@@ -603,8 +626,8 @@ const ready=(async()=>{try{
   try{const{RoomEnvironment}=await import('three/addons/environments/RoomEnvironment.js');const pm=new T.PMREMGenerator(RS);env=pm.fromScene(new RoomEnvironment(),.04).texture;pm.dispose()}catch(e){console.warn('Cifras 3D: sem ambiente',e)}
   mats();io=new IntersectionObserver(es=>es.forEach(e=>{const it=e.target.__i;if(it)it.vis=e.isIntersecting}),{rootMargin:'80px'});
   requestAnimationFrame(tick);return true}catch(e){console.warn('Cifras 3D indisponível',e);return false}})();
-function mount(node,kind,size,big){ready.then(ok=>{if(!ok||!BUILD[kind])return;
-  const cv=document.createElement('canvas'),w=big?420:128,h=big?364:128;cv.width=w;cv.height=h;
+function mount(node,kind,size,big,px){ready.then(ok=>{if(!ok||!BUILD[kind])return;
+  const cv=document.createElement('canvas'),w=big?420:(px||128),h=big?364:(px||128);cv.width=w;cv.height=h;
   const it={cv,kind,big:!!big,seed:Math.random(),chord:false};add(it,node);if(!big)draw(it,performance.now())})}
 function chord(sv,E){ready.then(ok=>{if(!ok||!sv.isConnected)return;
   const cv=document.createElement('canvas');cv.width=460;cv.height=540;cv.style.cssText='width:230px;height:270px;margin:0 auto';
@@ -652,11 +675,11 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div id="gate"><p>Bem-vindo(a) à ferramenta exclusiva para os músicos do Ministério de Louvor da PIB de Mesquita! Clique no botão abaixo para instalar o aplicativo e permita notificações para receber avisos de músicas, setlists e etc.</p><button class="btn" id="gateBtn">Instalar aplicativo</button></div>
   <div class="cards">
     <button class="card" data-go="list">
-      <svg viewBox="0 0 64 64"><path d="M8 14h34M8 26h34M8 38h22M8 50h16"/><path d="M52 40V14l-12 4v22"/><circle cx="46" cy="42" r="6"/><circle cx="34" cy="42" r="0"/></svg>
-      Playlist
+      <span class="ic3" data-i3="playlist"><svg viewBox="0 0 64 64"><path d="M8 14h34M8 26h34M8 38h22M8 50h16"/><path d="M52 40V14l-12 4v22"/><circle cx="46" cy="42" r="6"/><circle cx="34" cy="42" r="0"/></svg></span>
+      Setlist &amp; Playlist
     </button>
     <button class="card" data-go="add">
-      <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="24"/><path d="M32 20v24M20 32h24"/></svg>
+      <span class="ic3" data-i3="add"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="24"/><path d="M32 20v24M20 32h24"/></svg></span>
       Adicionar
     </button>
     <button class="card wide" id="ntBtn" hidden>
@@ -675,7 +698,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 </section>
 
 <section class="screen" id="list">
-  <div class="top"><button class="ib" data-go="home" aria-label="Início"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Playlist</h1></div>
+  <div class="top"><button class="ib" data-go="home" aria-label="Início"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Setlist &amp; Playlist</h1></div>
   <div class="row-btns" style="margin:0 0 12px"><button class="btn" id="tbM">Músicas</button><button class="btn sec" id="tbS">Setlists</button></div>
   <div id="mus"><input id="q" type="search" placeholder="Buscar pelo título…" autocomplete="off">
   
@@ -729,7 +752,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 <section class="screen" id="tut">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Tutorial</h1></div>
   <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver e tocar as músicas e as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido sempre que você for criar ou alterar algo. Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
-  <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Playlist:</b> abre as músicas e as setlists.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Afinador:</b> afina violão, guitarra e baixo pelo microfone.</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
+  <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Setlist &amp; Playlist:</b> abre as setlists (aba padrão) e as músicas.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Afinador:</b> afina violão, guitarra e baixo pelo microfone.</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
   <details><summary>Avisos e notificações</summary><div class="tx"><ul><li>Instale o app e toque em <b>Ativar notificações</b> na tela inicial para receber avisos de músicas, setlists e outros recados.</li><li>O <b>sino</b> (canto superior direito) mostra os avisos; o número vermelho indica os que você ainda não viu.</li><li>Para publicar um aviso, abra o sino e toque em <b>Criar aviso</b> (pede o código da banda).</li></ul></div></details>
   <details><summary>Afinador</summary><div class="tx"><ul><li>Toque em <b>Ativar microfone</b> e permita o acesso. Escolha <b>Violão / Guitarra</b>, <b>Baixo 4</b>, <b>Baixo 5</b> ou <b>Cromático</b>.</li><li>Toque uma corda: o app detecta a nota sozinho (<b>Auto</b>) e o <b>ponteiro deve ficar no meio</b>. Azul = grave (aperte), vermelho = agudo (afrouxe), verde = afinado.</li><li>Toque numa corda (E, A, D…) para fixá-la; toque de novo ou em <b>Auto</b> para soltar.</li><li><b>Dica:</b> uma corda por vez, solta, microfone perto e sem barulho ao redor. No baixo, aguarde 1–2 s.</li></ul></div></details>
   <details><summary>Playlist e busca</summary><div class="tx"><ul><li>A aba <b>Músicas</b> lista tudo em ordem alfabética. Toque numa música para abri-la.</li><li>O campo de <b>busca</b> entende título incompleto, sem acento e com pequenos erros de digitação. Sem resultado, aparece "Nenhum resultado".</li><li>A linha abaixo da busca mostra se está tudo sincronizado ou se há alterações aguardando envio.</li></ul></div></details>
@@ -830,7 +853,7 @@ function show(n){
   if(n==='list'){$('#q').value='';renderList()}
   if(n==='notices'&&window.CifrasNt)CifrasNt.open();
 }
-document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>b.dataset.go==='add'?unlock().then(ok=>ok&&newDraft()):show(b.dataset.go));
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>b.dataset.go==='add'?unlock().then(ok=>ok&&newDraft()):b.dataset.go==='list'&&b.closest('#home')?(show('list'),tab(true)):show(b.dataset.go));
 
 /* busca inteligente */
 const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -1115,6 +1138,7 @@ const dkey=n=>{const m=DRE.exec(n||'');return m?+(m[3]+m[2]+m[1]):99999999};
 const pkey=p=>p==='dia'?0:p==='noite'?1:2;
 const cmpSet=(a,b)=>dkey(a.name)-dkey(b.name)||pkey(a.per)-pkey(b.per)||a.name.localeCompare(b.name,'pt-BR');
 /* efeitos 3D (three.js, módulo no fim da página); sem internet fica o SVG e o degradê */
+document.querySelectorAll('.ic3[data-i3]').forEach(n=>{const a=[n,n.dataset.i3,100,false,256];if(window.CifrasI3D)window.CifrasI3D.mount(...a);else(window.__i3q=window.__i3q||[]).push(['m',...a])});
 function i3(node,k,s,big){const a=[node,INST[k]?k:'microfone',s,big];if(window.CifrasI3D)window.CifrasI3D.mount(...a);else(window.__i3q=window.__i3q||[]).push(['m',...a])}
 function chord3(sv,E){if(window.CifrasI3D)window.CifrasI3D.chord(sv,E);else(window.__i3q=window.__i3q||[]).push(['c',sv,E])}
 function fxMount(node,k,p,s,seed){const a=[node,k,p,s,seed];if(window.CifrasFX)window.CifrasFX.mount(...a);else(window.__fxq=window.__fxq||[]).push(a)}

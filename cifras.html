@@ -1365,6 +1365,26 @@ function unshiftKey(E,D){
 }
 /* editor de diagrama de acorde (modal) */
 $('#cedit').onclick=async()=>{if(!cur||!await unlock())return;editChord(ccn,cdn,ctr,cv[ci])};
+/* Busca online da formação do acorde (base aberta chords-db, MIT, via jsDelivr/unpkg) */
+let chordDB=null;
+const CDB=['https://cdn.jsdelivr.net/npm/@tombatossals/chords-db@0.5.1/lib/guitar.json','https://unpkg.com/@tombatossals/chords-db@0.5.1/lib/guitar.json'];
+async function loadChordDB(){if(chordDB)return chordDB;let err;for(const u of CDB){try{const r=await fetch(u);if(r.ok)return chordDB=await r.json()}catch(e){err=e}}throw err||new Error('falha')}
+const CENH={Db:'C#','D#':'Eb',Gb:'F#','G#':'Ab','A#':'Bb',Cb:'B','B#':'C','E#':'F',Fb:'E'},CBASS={Db:'C#',Eb:'D#',Gb:'F#',Ab:'G#','A#':'Bb',Cb:'B','B#':'C','E#':'F',Fb:'E'};
+const CSUF={'':'major',maj:'major',M:'major',m:'minor',min:'minor','-':'minor',dim:'dim','°':'dim',o:'dim',dim7:'dim7','°7':'dim7',o7:'dim7',aug:'aug','+':'aug',aug7:'aug7','+7':'aug7','7#5':'aug7',sus:'sus4',sus4:'sus4',sus2:'sus2','7sus':'7sus4','7sus4':'7sus4',6:'6',m6:'m6',69:'69','6/9':'69',7:'7',m7:'m7',min7:'m7','-7':'m7',M7:'maj7','7M':'maj7',maj7:'maj7','Δ':'maj7','Δ7':'maj7',m7b5:'m7b5','m7-5':'m7b5','ø':'m7b5','ø7':'m7b5','7b5':'7b5',9:'9',m9:'m9',maj9:'maj9',M9:'maj9',add9:'add9',madd9:'madd9',11:'11',m11:'m11',13:'13','7b9':'7b9','7#9':'7#9',mmaj7:'mmaj7',mM7:'mmaj7',m7M:'mmaj7',5:'major'};
+function findChord(db,disp){
+  const m=/^([A-G])([#b]?)([^/]*)(?:\/([A-G][#b]?))?$/.exec(String(disp).trim());if(!m)return null;
+  let k=m[1]+m[2];k=CENH[k]||k;if(!db.keys.includes(k))return null;
+  const q=m[3].replace(/[()\s]/g,''),suf=CSUF[q]??(db.suffixes.includes(q)?q:null);if(!suf)return null;
+  const list=db.chords[k.replace('#','sharp')]||[];let note=q==='5'?'acorde de força: mostrei a versão maior':'';
+  if(m[4]){const b=CBASS[m[4]]||m[4],s=(suf==='minor'?'m':suf==='major'?'':'x')+'/'+b,c=suf==='major'||suf==='minor'?list.find(x=>x.suffix===s):null;
+    if(c)return{pos:c.positions,note};note='sem a variação com baixo '+m[4]+': mostrei o acorde base'}
+  const c=list.find(x=>x.suffix===suf);return c?{pos:c.positions,note}:null}
+/* posição da base -> formato do editor (casas absolutas, pestana {f,a,z}) */
+function posToEd(p){
+  const bf=p.baseFret||1,fr=p.frets.map(f=>f>0?f+bf-1:f);let b=null;
+  const bs=(p.barres||[]).map(x=>x+bf-1).sort((x,y)=>y-x)[0];
+  if(bs){const ix=fr.map((f,i)=>f===bs?i:-1).filter(i=>i>=0);if(ix.length>1)b={f:bs,a:ix[0],z:ix[ix.length-1]}}
+  return{fr,b,st:bf,x:[]}}
 function editChord(name,disp,tr,sh){
   document.getElementById('ce')?.remove();
   const E=toEd(sh),o=el('div'),bx=el('div','cbox'),t=el('div','ct'),box=el('div','ced');let mode='d';
@@ -1376,6 +1396,19 @@ function editChord(name,disp,tr,sh){
   g.querySelectorAll('.btn').forEach(k=>k.style.cssText='background:none;border:0;padding:6px 12px;font-size:1.1rem');
   const sg=el('div','seg'),sc=el('div','seg');sg.append(bd,bb);sc.append(el('span','sub'),g);sc.firstChild.textContent='Casa no traste';
   const hint=el('div','sub');hint.style.cssText='margin:6px 0 10px;line-height:1.4';
+  const src=el('div','sub');src.style.cssText='margin:2px 0 8px;min-height:1.2em;color:var(--gold);font-size:.8rem;line-height:1.35';
+  let found=null,fi=0;
+  const applyPos=()=>{const e=posToEd(found.pos[fi]);E.fr=e.fr;E.b=e.b;E.st=e.st;E.x=[];draw();
+    src.textContent='Formação '+(fi+1)+' de '+found.pos.length+' · '+disp+(found.note?' ('+found.note+')':'')+' · base chords-db'};
+  const bs=mk('🔍 Buscar formação online',async()=>{
+    if(found){fi=(fi+1)%found.pos.length;applyPos();return}
+    bs.disabled=true;bs.textContent='Buscando…';
+    try{const f=findChord(await loadChordDB(),disp);
+      if(!f){await modal('Acorde não encontrado','Não achei "'+disp+'" na base online. Monte o diagrama manualmente.',[['OK',1]],'err');return}
+      found=f;fi=0;applyPos();bs.textContent='Próxima formação'}
+    catch(e){await modal('Sem conexão','Não consegui buscar agora. Verifique a internet e tente de novo.',[['OK',1]],'err')}
+    finally{bs.disabled=false;if(!found)bs.textContent='🔍 Buscar formação online'}},'sec');
+  bs.style.cssText='width:100%;margin-bottom:6px';
   const draw=()=>{box.innerHTML=chordSvg({fr:E.fr,b:E.b,st:E.st,x:E.x},{tmp:E.tmp});
     bd.className='btn'+(mode==='d'?'':' sec');bb.className='btn'+(mode==='b'?'':' sec');cn.textContent='Casa '+E.st;
     hint.textContent=mode==='d'?'Toque na bolinha acima da corda para alternar × / ○. Toque no traste para pôr ou tirar o dedo.':'Arraste sobre as cordas que a pestana cobre (pode ser só de algumas). Toque nela para remover.'};
@@ -1417,7 +1450,7 @@ function editChord(name,disp,tr,sh){
     const B=unshiftKey({fr:[...E.fr],b:E.b?{...E.b}:null,st:E.st,x:E.x.map(a=>[...a])},dOf(tr));
     if(!B){await modal('Volte ao tom original','Este desenho usa casas que não existem no tom original da música. Volte ao Tom 0 para editar esse acorde.',[['OK',1]],'err');return}
     cur.cd=cur.cd||{};cur.cd[name]={fr:B.fr,b:B.b,st:B.st,...(B.x&&B.x.length?{x:B.x}:{})};cur.eds=edsNew(cur.eds);store(songs);enqueue('save',cur.id);done()}));
-  bx.append(t,sg,box,sc,hint,r);o.append(bx);document.body.append(o);draw();
+  bx.append(t,sg,box,sc,hint,bs,src,r);o.append(bx);document.body.append(o);draw();
 }
 
 $('#cp').onclick=e=>{if(e.target.id==='cp')$('#cp').hidden=true};

@@ -108,7 +108,8 @@ body:not(.onhome) #homeBg,body:not(.onhome) #vig,body:not(.onhome) #cifrasSkyLay
 #home .card:active{background:rgba(60,45,0,.7)}
 .card.wide{grid-column:1/-1;aspect-ratio:auto;flex-direction:row;gap:14px;padding:16px}.card.wide svg{width:42px;max-width:none}
 body{min-height:100vh;min-height:100dvh}
-#home{height:100vh;height:100dvh;min-height:0;justify-content:flex-start;padding-top:34px}
+#home{height:100vh;height:100dvh;min-height:0;justify-content:flex-start;padding-top:34px;padding-bottom:calc(46px + env(safe-area-inset-bottom,0px));box-sizing:border-box}
+body.onhome #ft{position:fixed;bottom:0}
 #home .hm{flex:1;min-height:0;display:flex;flex-direction:column}
 #home .logo{flex:0 1 auto;min-height:0;align-self:center;max-height:24vh;max-height:24dvh;margin:0 auto 14px}
 #home .cards{flex:none;grid-template-rows:auto auto auto}

@@ -111,7 +111,8 @@ body{min-height:100vh;min-height:100dvh}
 #home{height:100vh;height:100dvh;min-height:0;justify-content:flex-start;padding-top:34px}
 #home .hm{flex:1;min-height:0;display:flex;flex-direction:column}
 #home .logo{flex:0 1 auto;min-height:0;align-self:center;max-height:24vh;max-height:24dvh;margin:0 auto 14px}
-#home .cards{flex:1;min-height:0;max-height:580px;grid-template-rows:minmax(0,1fr) auto auto}
+#home .cards{flex:none;grid-template-rows:auto auto auto}
+#home .card:not(.wide){height:clamp(168px,27dvh,230px)}#home .card:not(.wide) .ic3{height:min(56%,108px)}
 #home .card{aspect-ratio:auto;min-height:0}
 #home .card svg{width:auto;height:min(42%,120px);max-width:70%}
 #home .card.wide{padding:14px}#home .card.wide svg{height:40px;width:auto}

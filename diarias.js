@@ -56,18 +56,18 @@ const MARKS_SALAO = [
     { at: 900, text: '[SISTEMA] MARCO (15 min), NÃO responda falando agora; aplique na sua próxima fala: a competição esquenta; a rodada final com as duas finalistas deve se aproximar.' },
     { at: 1260, text: '[SISTEMA] MARCO (21 min), NÃO responda falando agora; aplique na sua próxima fala: se as duas finalistas ainda não foram ao quarto, conduza a prova final AGORA, para a escolha e o epílogo caberem no tempo.' },
 ];
-const marksFor = (adv) => adv.advType === ADV_PERS ? []
+const marksFor = (adv) => adv.isCustom || adv.advType === ADV_PERS ? []
     : adv.advType === ADV_FE ? MARKS_FE
     : adv.advType === 'salao_amor' && S.romance === 'visita' ? MARKS_VISITA
     : adv.advType === 'salao_amor' && S.romance === 'salao' ? MARKS_SALAO
     : adv.noCombat ? MARKS_SOCIAL : MARKS;
 
-// marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico precisa caber antes da conversa com os apóstolos)
+// marcos para a Fé Cristã (sem chefe, sem dados: o acontecimento bíblico escolhido precisa caber antes da conversa final)
 const MARKS_FE = [
-    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio está em andamento, fiel aos relatos. Vivencie cada cena com calma (2 a 4 min cada) e enriqueça com contexto histórico confiável.' },
-    { at: 720, text: '[SISTEMA] MARCO (12 min), NÃO responda falando agora; aplique na sua próxima fala: o episódio deve estar na segunda ou terceira cena; conduza a travessia para a próxima cidade ou cena, com contexto histórico e sem inventar nada.' },
-    { at: 1200, text: '[SISTEMA] MARCO (20 min), NÃO responda falando agora; aplique na sua próxima fala: leve o episódio ao seu desfecho nos próximos minutos, exatamente como nos relatos; depois chame objective_complete e objective_delivered e passe à conversa em particular com o(s) apóstolo(s).' },
-    { at: 1380, text: '[SISTEMA] MARCO (23 min), NÃO responda falando agora; aplique na sua próxima fala: se o episódio ainda não terminou, conclua-o AGORA, fiel aos relatos, para sobrar tempo de conversar com o(s) apóstolo(s).' },
+    { at: 300, text: '[SISTEMA] MARCO (5 min), NÃO responda falando agora; aplique na sua próxima fala: o herói já deve ter chegado e entendido o contexto; a PRIMEIRA cena do episódio escolhido está em andamento, fiel ao relato bíblico. Vivencie cada cena com calma (2 a 4 min cada) e enriqueça com contexto histórico confiável.' },
+    { at: 720, text: '[SISTEMA] MARCO (12 min), NÃO responda falando agora; aplique na sua próxima fala: o episódio deve estar na segunda ou terceira cena; conduza a travessia para a próxima cena do relato, com contexto histórico e sem inventar nada.' },
+    { at: 1200, text: '[SISTEMA] MARCO (20 min), NÃO responda falando agora; aplique na sua próxima fala: leve o episódio ao seu desfecho nos próximos minutos, exatamente como no relato; depois chame objective_complete e objective_delivered e passe à conversa final com o personagem principal do episódio.' },
+    { at: 1380, text: '[SISTEMA] MARCO (23 min), NÃO responda falando agora; aplique na sua próxima fala: se o episódio ainda não terminou, conclua-o AGORA, fiel ao relato, para sobrar tempo da conversa final.' },
 ];
 const BOSS_MIN_S = 15 * 60;                                // chefe derrotado só dá recompensa máxima com pelo menos 15 min de sessão
 const END_OK_S = 20 * 60;                                  // a partir daqui o Mestre pode encerrar quando o jogador escolher concluir
@@ -667,7 +667,7 @@ function tickLobby() {
     if ($('typeModal').classList.contains('open') && my?.status === 'reserved') {
         const left = new Date(my.start_deadline).getTime() - now;
         $('typeTimer').textContent = left > 0 ? `Tempo para começar: ${mmss(left)}` : 'O tempo de tolerância acabou.';
-        if (left <= 0) { closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); }
+        if (left <= 0) { closeOv('vipModal'); closeOv('fendaModal'); closeOv('feModal'); closeOv('typeModal'); }
     }
 
     if (my && my.status === 'reserved') {
@@ -897,7 +897,7 @@ const ADV_TYPES = [
       svg: _svg(_sword(45) + _sword(-45) + '<circle cx="24" cy="24" r="3" fill="#e6c27a" stroke="#a88235" stroke-width="1.2"/>') },
     { id: 'frio', vip: false, name: 'Abrigo do frio', desc: 'Um inverno mágico cai sobre a região. Sobreviva 3 dias num abrigo cheio de medo, fome e criaturas.',
       svg: _svg('<path d="M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20" stroke="#9fe3ff" stroke-width="2.8"/><path d="M19 8l5 4 5-4M19 40l5-4 5 4M8 19.5l6 .5-1.5-5.8M40 28.5l-6-.5 1.5 5.8M8 28.5l6-.5-1.5 5.8M40 19.5l-6 .5 1.5-5.8" stroke="#d8f6ff" stroke-width="2"/><circle cx="24" cy="24" r="4.2" fill="#d8f6ff" stroke="#6fb8d9" stroke-width="1.4"/>') },
-    { id: 'fe_crista', vip: false, name: 'Fé Cristã', desc: 'Você é transportado para a época dos apóstolos para reviver momentos bíblicos e ter uma conversa com eles.',
+    { id: 'fe_crista', vip: false, name: 'Fé Cristã', desc: 'Escolha um acontecimento do Antigo ou do Novo Testamento e reviva-o, participando da cena com fidelidade à Bíblia.',
       svg: _svg('<circle cx="24" cy="24" r="20" fill="#2a1d0a" stroke="#e6c27a" stroke-width="1.6" opacity=".9"/><path d="M24 7v34M14 18h20" stroke="#ffe27a" stroke-width="5.2"/><path d="M24 7v34M14 18h20" stroke="#a88235" stroke-width="1.4"/><path d="M8 40c5-3 11-3 16 0 5-3 11-3 16 0" stroke="#fff3cf" stroke-width="1.6"/><path d="M24 2v3M10 8l2 2M38 8l-2 2" stroke="#fff3cf" stroke-width="1.6"/>') },
     { id: 'fenda_temporal', vip: true, name: 'Fenda Temporal', coin: FENDA_COIN_COST, desc: 'Uma fenda no tempo leva você a um grande evento da história ou ao mundo de uma obra (FanFiction de games, novelas, séries, TV, filmes...), sempre fiel ao original.',
       svg: _svg('<path d="M12 5h24M12 43h24" stroke="#e6c27a" stroke-width="3.2"/><path d="M14 5h20c0 11-10 13-10 19s10 8 10 19H14c0-11 10-13 10-19S14 16 14 5z" fill="#2a1740" stroke="#cbb8ff" stroke-width="2.2"/><path d="M19 10h10l-5 7z" fill="#ffd35a" stroke="none"/><path d="M17 41c2.2-6 5.4-8.6 7-8.6s4.8 2.6 7 8.6z" fill="#ffd35a" stroke="none"/><path d="M24 20v10" stroke="#ffd35a" stroke-width="1.4" stroke-dasharray="1.5 2.5"/><circle cx="40" cy="12" r="1.4" fill="#cbb8ff" stroke="none"/><circle cx="8" cy="30" r="1.2" fill="#cbb8ff" stroke="none"/>') },
@@ -918,6 +918,134 @@ const ADV_PERS = 'personalizado';                                // Personalizad
 const ADV_FE = 'fe_crista';                                        // Fé Cristã (grátis): acontecimento bíblico fiel + conversa com os apóstolos. Sem dados, sem combate, sem pregação
 const isSemPregacao = (t) => t === 'salao_amor' || t === 'fenda_temporal' || t === ADV_FE || t === ADV_PERS;   // sem pregação (modo_longo)
 const ADV_BY_ID = Object.fromEntries(ADV_TYPES.map((t) => [t.id, t]));
+
+// ---------------------------------------------------------------------
+// FÉ CRISTÃ: temas bíblicos. Os ids precisam ser os mesmos de FE_TEMAS no mission-token.ts (ver mission-token_fe_patch.md).
+// Novo Testamento: sem os Evangelhos e sem o Apocalipse (o jogador nunca conversa com Jesus).
+// ---------------------------------------------------------------------
+const FE_AT = [
+    ['eden', 'O Jardim do Éden e a Queda', 'Gênesis 2–3'],
+    ['caim_abel', 'Caim e Abel', 'Gênesis 4'],
+    ['diluvio', 'O Dilúvio e a Arca de Noé', 'Gênesis 6–9'],
+    ['babel', 'A Torre de Babel', 'Gênesis 11'],
+    ['abraao_chamado', 'O Chamado de Abraão e a Jornada a Canaã', 'Gênesis 12'],
+    ['batalha_reis', 'A Batalha dos Reis e o Resgate de Ló', 'Gênesis 14'],
+    ['sodoma', 'A Destruição de Sodoma e Gomorra', 'Gênesis 18–19'],
+    ['isaque', 'O Sacrifício de Isaque no Monte Moriá', 'Gênesis 22'],
+    ['jaco_esau', 'Jacó e Esaú: A Primogenitura e a Fuga para Harã', 'Gênesis 25–28'],
+    ['jaboque', 'A Luta de Jacó no Vau de Jaboque', 'Gênesis 32'],
+    ['jose_vendido', 'José Vendido pelos Irmãos', 'Gênesis 37'],
+    ['jose_governador', 'José na Prisão e Governador do Egito', 'Gênesis 39–41'],
+    ['jose_reencontro', 'O Reencontro de José com seus Irmãos no Egito', 'Gênesis 42–45'],
+    ['moises_sarca', 'O Nascimento de Moisés e a Sarça Ardente', 'Êxodo 2–3'],
+    ['pragas', 'As Dez Pragas do Egito e a Primeira Páscoa', 'Êxodo 7–12'],
+    ['mar_vermelho', 'A Travessia do Mar Vermelho', 'Êxodo 14'],
+    ['amalequitas', 'A Batalha contra os Amalequitas em Refidim', 'Êxodo 17'],
+    ['sinai', 'Os Dez Mandamentos no Monte Sinai e o Bezerro de Ouro', 'Êxodo 19–32'],
+    ['espias', 'Os Doze Espias em Canaã', 'Números 13–14'],
+    ['serpente_bronze', 'A Serpente de Bronze no Deserto', 'Números 21'],
+    ['balaao', 'Balaão e a Jumenta', 'Números 22'],
+    ['raabe', 'Raabe e os Espias em Jericó', 'Josué 2'],
+    ['jerico', 'A Travessia do Rio Jordão e a Queda de Jericó', 'Josué 3–6'],
+    ['gibeao', 'A Batalha de Gibeão e o Sol Detido', 'Josué 10'],
+    ['debora', 'Débora e Baraque contra Sísera', 'Juízes 4–5'],
+    ['gideao', 'Gideão e os Trezentos Soldados', 'Juízes 6–7'],
+    ['sansao', 'Sansão contra os Filisteus', 'Juízes 13–16'],
+    ['rute', 'Rute e Boaz em Belém', 'Rute 1–4'],
+    ['samuel_chamado', 'O Chamado de Samuel no Tabernáculo', '1 Samuel 3'],
+    ['arca_capturada', 'A Captura da Arca da Aliança pelos Filisteus', '1 Samuel 4–6'],
+    ['davi_golias', 'Davi e Golias no Vale de Elá', '1 Samuel 17'],
+    ['davi_fuga', 'Davi Fugindo de Saul nas Cavernas', '1 Samuel 19–24'],
+    ['jerusalem_davi', 'A Tomada de Jerusalém por Davi', '2 Samuel 5'],
+    ['absalao', 'A Rebelião de Absalão', '2 Samuel 15–18'],
+    ['salomao', 'A Sabedoria de Salomão e a Construção do Templo', '1 Reis 3–8'],
+    ['saba', 'A Visita da Rainha de Sabá', '1 Reis 10'],
+    ['reino_dividido', 'A Divisão do Reino: Israel e Judá', '1 Reis 12'],
+    ['carmelo', 'Elias e os Profetas de Baal no Monte Carmelo', '1 Reis 18'],
+    ['horebe', 'A Fuga de Elias ao Monte Horebe', '1 Reis 19'],
+    ['carruagem_fogo', 'A Carruagem de Fogo e a Sucessão de Eliseu', '2 Reis 2'],
+    ['naama', 'A Cura de Naamã, o Sírio', '2 Reis 5'],
+    ['samaria_cerco', 'O Cerco de Samaria e o Acampamento Abandonado', '2 Reis 6–7'],
+    ['samaria_queda', 'A Queda de Samaria e o Exílio de Israel', '2 Reis 17'],
+    ['senaqueribe', 'O Cerco de Jerusalém por Senaqueribe nos Dias de Ezequias', '2 Reis 18–19'],
+    ['josias', 'A Reforma do Rei Josias e a Descoberta do Livro da Lei', '2 Reis 22–23'],
+    ['jerusalem_queda', 'A Queda de Jerusalém e o Exílio na Babilônia', '2 Reis 25'],
+    ['jo', 'Jó e as Provações de sua Fé', 'Jó 1–2'],
+    ['jonas', 'Jonas e o Grande Peixe rumo a Nínive', 'Jonas 1–3'],
+    ['fornalha', 'Sadraque, Mesaque e Abednego na Fornalha Ardente', 'Daniel 3'],
+    ['belsazar', 'A Escrita na Parede no Banquete de Belsazar', 'Daniel 5'],
+    ['leoes', 'Daniel na Cova dos Leões', 'Daniel 6'],
+    ['zorobabel', 'O Retorno dos Exilados e a Reconstrução do Templo com Zorobabel', 'Esdras 1–6'],
+    ['ester', 'A Rainha Ester e o Livramento dos Judeus em Susã', 'Ester 1–9'],
+    ['neemias', 'Neemias e a Reconstrução dos Muros de Jerusalém', 'Neemias 1–6'],
+];
+const FE_NT = [
+    ['n_pentecostes', 'O Dia de Pentecostes em Jerusalém', 'Atos 2'],
+    ['n_coxo', 'A Cura do Coxo na Porta Formosa', 'Atos 3–4'],
+    ['n_ananias_safira', 'A Generosidade da Igreja e o Caso de Ananias e Safira', 'Atos 4:32–5:11'],
+    ['n_apostolos_preso', 'Os Apóstolos Presos e Libertados pelo Anjo', 'Atos 5:12–42'],
+    ['n_estevao', 'Estêvão, o Primeiro Mártir', 'Atos 6–7'],
+    ['n_filipe_eunuco', 'Filipe e o Eunuco Etíope', 'Atos 8'],
+    ['n_saulo_damasco', 'Ananias e Saulo em Damasco', 'Atos 9:10–31'],
+    ['n_tabita', 'Pedro e a Ressurreição de Tabita em Jope', 'Atos 9:32–43'],
+    ['n_cornelio', 'Pedro e Cornélio em Cesareia', 'Atos 10'],
+    ['n_pedro_prisao', 'A Libertação de Pedro da Prisão', 'Atos 12'],
+    ['n_chipre', 'Paulo e Barnabé em Chipre e o Mágico Elimas', 'Atos 13:1–12'],
+    ['n_listra', 'Paulo e Barnabé em Listra', 'Atos 14'],
+    ['n_concilio', 'O Concílio de Jerusalém', 'Atos 15'],
+    ['n_filipos', 'Paulo e Silas na Prisão de Filipos', 'Atos 16'],
+    ['n_bereia', 'Paulo em Tessalônica e Bereia', 'Atos 17:1–15'],
+    ['n_atenas', 'Paulo no Areópago de Atenas', 'Atos 17:16–34'],
+    ['n_corinto', 'Paulo em Corinto com Priscila e Áquila', 'Atos 18'],
+    ['n_efeso', 'O Tumulto dos Ourives em Éfeso', 'Atos 19'],
+    ['n_eutico', 'Paulo em Trôade e a Queda de Êutico', 'Atos 20:1–12'],
+    ['n_mileto', 'A Despedida de Paulo dos Presbíteros de Éfeso em Mileto', 'Atos 20:17–38'],
+    ['n_jerusalem_preso', 'A Prisão de Paulo no Templo em Jerusalém', 'Atos 21–23'],
+    ['n_agripa', 'Paulo diante de Félix, Festo e Agripa', 'Atos 24–26'],
+    ['n_naufragio', 'A Tempestade e o Naufrágio de Paulo em Malta', 'Atos 27–28:10'],
+    ['n_roma', 'Paulo Prisioneiro em Roma', 'Atos 28:11–31'],
+    ['n_onesimo', 'Onésimo, o Escravo Fugitivo, e a Carta a Filemom', 'Filemom 1'],
+];
+const FE_TEMAS = [...FE_AT.map(([id, name, ref]) => ({ id, name, ref, sec: 'at' })), ...FE_NT.map(([id, name, ref]) => ({ id, name, ref, sec: 'nt' }))];
+const FE_BY_ID = Object.fromEntries(FE_TEMAS.map((t) => [t.id, t]));
+const feLabel = (id) => { const t = FE_BY_ID[id]; return t ? `${t.name} (${t.ref})` : ''; };
+
+function buildFeList(box, draft, onPick) {                       // lista com seções (Antigo / Novo Testamento); um tema por vez, clicar de novo desmarca
+    box.innerHTML = '';
+    const livre = document.createElement('button');
+    livre.type = 'button'; livre.className = 'fenda-opt' + (!draft.id ? ' sel' : '');
+    livre.innerHTML = '<i class="fenda-tog" aria-hidden="true"></i><span>Surpreenda-me (o Mestre escolhe um episódio)</span>';
+    livre.onclick = () => { draft.id = null; onPick(); };
+    box.appendChild(livre);
+    [['at', 'Antigo Testamento'], ['nt', 'Novo Testamento']].forEach(([sec, title]) => {
+        const h = document.createElement('div'); h.className = 'fe-sec'; h.textContent = title; box.appendChild(h);
+        FE_TEMAS.filter((t) => t.sec === sec).forEach((t) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'fenda-opt' + (draft.id === t.id ? ' sel' : ''); b.dataset.id = t.id;
+            b.innerHTML = `<i class="fenda-tog" aria-hidden="true"></i><span>${esc(t.name)} <small class="fe-ref">${esc(t.ref)}</small></span>`;
+            b.onclick = () => { draft.id = draft.id === t.id ? null : t.id; onPick(); };
+            box.appendChild(b);
+        });
+    });
+}
+function openFe() {
+    S.feDraft = { id: S.fe?.id || null };
+    const render = () => { const keep = $('feList').scrollTop; buildFeList($('feList'), S.feDraft, render); $('feList').scrollTop = keep; };
+    render(); $('feList').scrollTop = 0;
+    openOv('feModal');
+}
+function confirmFe() {
+    S.fe = { id: S.feDraft?.id || null };
+    S.advType = ADV_FE;
+    closeOv('feModal'); buildTypeGrid();
+}
+// instrução enviada ao Mestre junto do INICIAR e a cada reconexão (vale mesmo que o servidor ainda use o prompt antigo)
+const FE_RULES = 'REGRAS DA FÉ CRISTÃ (valem acima de qualquer outra instrução, inclusive a época dos apóstolos): (1) Os acontecimentos, lugares, costumes e personagens seguem FIELMENTE a Bíblia e o contexto histórico confiável; nunca invente fatos, falas doutrinárias ou milagres que não estão no relato. (2) Cada personagem bíblico mantém o caráter, a história e o modo de falar que a Bíblia lhe atribui e NÃO responde além do que está escrito: se o jogador perguntar algo que o relato não cobre, o personagem diz, em sua voz, que não sabe ou que isso não lhe foi revelado, sem inventar. (3) O herói participa da cena (acompanha, ajuda em tarefas pequenas, testemunha, conversa), mas NÃO altera o desfecho do relato. (4) Deus, o Espírito Santo e Jesus NUNCA são personagens com quem o jogador conversa: suas palavras só aparecem como o relato as registra, narradas, e não respondem ao herói. Jamais coloque Jesus em cena. (5) Sem dados, sem combate com HP, sem pregação ao jogador. (6) Em assuntos delicados (dor, culpa, luto, vícios, dúvidas de fé, decisões pessoais graves), acolha com respeito e aconselhe o jogador, com carinho, a buscar também um pastor ou a sua igreja local; não dê veredictos pessoais nem substitua o aconselhamento pastoral.';
+function feThemeNote(adv) {
+    const t = adv.feTema && FE_BY_ID[adv.feTema];
+    return ' [SISTEMA] ' + (t ? `EPISÓDIO ESCOLHIDO PELO JOGADOR: "${t.name}" (${t.ref}; ${t.sec === 'at' ? 'Antigo' : 'Novo'} Testamento). Reviva exatamente este episódio, do começo ao desfecho do relato. ` : 'O jogador não escolheu episódio: escolha UM episódio do Antigo ou do Novo Testamento (exceto Evangelhos e Apocalipse) e mantenha-o até o fim. ') + FE_RULES;
+}
+
 const vipCost = () => S.state?.extra?.vip_cost ?? VIP_COST_FALLBACK;
 
 function openTypes() {                                        // depois da bolsa: escolha do tipo de aventura
@@ -948,6 +1076,7 @@ function onTypeClick(t) {
     if (t.vip && !S.vipOwned.has(t.id)) { openVipConfirm(t); return; }   // VIP ainda não adquirida: pede confirmação
     if (S.advType === t.id) { S.advType = null; buildTypeGrid(); return; }   // toggle: clicar de novo desmarca
     if (t.id === 'fenda_temporal') { openFenda(); return; }              // Fenda Temporal: personalizar o tema antes de selecionar
+    if (t.id === ADV_FE) { openFe(); return; }                           // Fé Cristã: escolher o episódio bíblico antes de selecionar
     if (t.id === 'salao_amor') { pickRomance(t); return; }                // Romance & Conquista: escolhe a modalidade
     S.advType = t.id;
     buildTypeGrid();
@@ -1108,6 +1237,16 @@ function buildCustomTipo() {
     ADV_TYPES.filter((t) => t.id !== ADV_PERS).forEach((t) => add(t.id, t.name));   // mesma ordem do seletor de aventuras (Fenda depois de Fé Cristã)
     add('fanfic', 'FanFiction (apenas diálogo)');                // sempre a última
 }
+function buildCustomFe() {
+    const sel = $('customFe'); if (sel.options.length) return;
+    const add = (v, label, grp) => { const o = document.createElement('option'); o.value = v; o.textContent = label; (grp || sel).appendChild(o); };
+    add('', 'Surpreenda-me (o Mestre escolhe)');
+    [['at', 'Antigo Testamento'], ['nt', 'Novo Testamento']].forEach(([sec, title]) => {
+        const g = document.createElement('optgroup'); g.label = title;
+        FE_TEMAS.filter((t) => t.sec === sec).forEach((t) => add(t.id, `${t.name} (${t.ref})`, g));
+        sel.appendChild(g);
+    });
+}
 function customCurrentMax() { return isBaseTipo($('customTipo').value) ? CUSTOM_EXTRAS_MAX : CUSTOM_MAX; }
 function saveCustomDraft() {                                    // cada modo tem o seu rascunho (90 mil x 1000 caracteres)
     const v = $('customText').value;
@@ -1122,6 +1261,7 @@ function updateCustomUI() {                                     // campos e text
     $('customThemeWrap').style.display = tipo === 'fenda_temporal' || tipo === 'fanfic' ? '' : 'none';   // tema (obra/universo): antes dos personagens
     $('customThemeLabel').innerHTML = tipo === 'fanfic' ? 'Tema <em>(obrigatório: a obra)</em>' : 'Tema <em>(opcional: obra, série, jogo, filme...)</em>';
     $('customRomanceWrap').style.display = tipo === 'salao_amor' ? '' : 'none';
+    $('customFeWrap').style.display = tipo === 'fe_crista' ? '' : 'none';                       // tema bíblico (opcional)
     $('customTextLabel').innerHTML = base ? 'Detalhes extras <em>(opcional)</em>' : 'Prompt';
     $('customText').placeholder = base
         ? 'Ex.: Quero que a história tenha mais mistério e um rival do meu passado…'
@@ -1129,10 +1269,10 @@ function updateCustomUI() {                                     // campos e text
             ? 'Ex.: Quero viver uma história em Hogwarts, no sexto ano, com muita conversa, segredos e romance entre adultos…'
             : 'Ex.: Sou um mercenário que chega a uma cidade portuária governada por uma rainha misteriosa. Quero muita conversa com os nobres, intrigas e romance, num tom sombrio e sensual…';
     $('customIntro').textContent = tipo === 'fanfic'
-        ? 'FanFiction: você entra no universo de uma obra (game, novela, série, TV, filme, anime, livro, HQ...) e o Mestre a conduz 100% fiel ao original: ambiente, atmosfera e personagens. Só diálogo, sem objetivos nem dados (os itens da bolsa não são usados). Informe a obra no campo Tema, depois os personagens e o que quer viver.'
+        ? 'FanFiction: você entra no universo de uma obra (game, novela, série, TV, filme, anime, livro, HQ...) e o Mestre a conduz 100% fiel ao original: ambiente, atmosfera e personagens. Só diálogo, sem objetivos nem dados (os itens da bolsa não são usados). A sessão dura até 120 minutos e só termina quando você pedir ou tocar em Finalizar aventura. Informe a obra no campo Tema, depois os personagens e o que quer viver.'
         : base
-            ? `Esta aventura segue as regras ORIGINAIS do tipo escolhido (objetivo, dados, bolsa e combate quando houver). Use os detalhes extras (até ${nf(CUSTOM_EXTRAS_MAX)} caracteres) para dizer como quer o rumo da história.${tipo === 'fenda_temporal' ? ' Dica: informe o Tema (obra ou evento) e depois os personagens; em branco, o Mestre escolhe.' : ''}${tipo === 'fe_crista' ? ' A Fé Cristã mantém as regras originais, sem conteúdo adulto.' : ''}`
-            : 'Escreva como você quer a aventura: o mundo, quem é você, os personagens, o tom e o que quer viver. Não há objetivos nem dados (os itens da bolsa não são usados): só diálogo livre e exploração.';
+            ? `Esta aventura segue as regras ORIGINAIS do tipo escolhido (objetivo, dados, bolsa e combate quando houver). Use os detalhes extras (até ${nf(CUSTOM_EXTRAS_MAX)} caracteres) para dizer como quer o rumo da história. A sessão dura até 120 minutos e só termina quando você pedir ou tocar em Finalizar aventura.${tipo === 'fenda_temporal' ? ' Dica: informe o Tema (obra ou evento) e depois os personagens; em branco, o Mestre escolhe.' : ''}${tipo === 'fe_crista' ? ' A Fé Cristã mantém as regras originais, sem conteúdo adulto.' : ''}`
+            : 'Escreva como você quer a aventura: o mundo, quem é você, os personagens, o tom e o que quer viver. Não há objetivos nem dados (os itens da bolsa não são usados): só diálogo livre e exploração. A sessão dura até 120 minutos e só termina quando você pedir ou tocar em Finalizar aventura.';
     $('customWarn').textContent = tipo === 'fe_crista'
         ? 'Conteúdo adulto não se aplica à Fé Cristã: este tipo mantém as regras originais.'
         : 'Conteúdo adulto (18+): o modo Personalizado permite cenas sexuais explícitas entre adultos fictícios. Todos os personagens são sempre maiores de idade (nunca de aparência infantil), o consentimento é obrigatório e pessoas reais não entram em cenas explícitas.';
@@ -1140,8 +1280,9 @@ function updateCustomUI() {                                     // campos e text
 }
 function openCustomConfig() {
     closeOv('itemsModal'); closeOv('typeModal');
-    buildCustomTipo();
+    buildCustomTipo(); buildCustomFe();
     $('customTipo').value = S.customTipo || '';
+    $('customFe').value = S.customFe || '';
     $('customRomance').value = S.customRomance || 'livre';
     S.customMode = isBaseTipo($('customTipo').value) ? 'short' : 'long';
     $('customText').value = S.customMode === 'short' ? S.customExtras : S.customText;
@@ -1156,7 +1297,7 @@ function updateCustomCount() {
     $('customCount').parentElement.classList.toggle('over', n >= max);
 }
 function cancelCustom() {
-    flushTags('custom'); saveCustomDraft(); S.customTipo = $('customTipo').value; S.customRomance = $('customRomance').value; S.customTheme = $('customTheme').value.trim();
+    flushTags('custom'); saveCustomDraft(); S.customTipo = $('customTipo').value; S.customRomance = $('customRomance').value; S.customTheme = $('customTheme').value.trim(); S.customFe = $('customFe').value;
     closeOv('customModal');
     openOv(S.bag.length === BAG_SIZE ? 'typeModal' : 'itemsModal');       // volta para onde o jogador estava
 }
@@ -1172,7 +1313,8 @@ function confirmCustom() {
     if (!base && txt.length < CUSTOM_MIN) { $('customErr').textContent = `Escreva pelo menos ${CUSTOM_MIN} caracteres sobre como quer a aventura.`; return; }
     if (base && S.bag.length !== BAG_SIZE) { $('customErr').textContent = 'Escolha primeiro os 8 itens da bolsa.'; return; }
     if (!my || !S.customProof || S.customProof.slot !== my.id) { closeOv('customModal'); openCustomAuth(); return; }
-    S.customSend = { tipo, text: txt, theme, chars: (tipo === 'fenda_temporal' || tipo === 'fanfic') ? [...tagState.custom] : [], romance: tipo === 'salao_amor' ? S.customRomance : 'livre' };
+    S.customFe = $('customFe').value;
+    S.customSend = { tipo, fe: tipo === 'fe_crista' ? (S.customFe || null) : null, text: txt, theme, chars: (tipo === 'fenda_temporal' || tipo === 'fanfic') ? [...tagState.custom] : [], romance: tipo === 'salao_amor' ? S.customRomance : 'livre' };
     S.advType = ADV_PERS;
     startAdventure(base ? bagCounts() : {}, ADV_PERS);                   // tipo-base usa a bolsa; livre e FanFiction não
 }
@@ -1217,6 +1359,7 @@ function renderDuel() {
         $('duelFoeName').textContent = a.enemy.name; setHp('Foe', a.enemy.hp);
         foe.classList.remove('dead'); foe.classList.add('show');
     } else foe.classList.remove('show', 'dead');
+    syncEpilogueUI();
 }
 
 function defeatFoe(adv) {
@@ -1378,7 +1521,7 @@ function clearDiariasDot() {
 
 async function _startAdventure(loadout, advType) {
     const my = S.state?.my_slot; if (!my || my.status !== 'reserved') return;
-    closeOv('vipModal'); closeOv('fendaModal'); closeOv('typeModal'); closeOv('itemsModal'); closeOv('customModal'); closeOv('customPassModal');
+    closeOv('vipModal'); closeOv('fendaModal'); closeOv('feModal'); closeOv('typeModal'); closeOv('itemsModal'); closeOv('customModal'); closeOv('customPassModal');
     busy(true, 'Preparando o microfone…');
 
     let A = null, ctx = null;
@@ -1392,7 +1535,9 @@ async function _startAdventure(loadout, advType) {
         if (advType === ADV_PERS) {                              // o servidor confere a prova da senha
             const c = S.customSend || { tipo: '', text: S.customText, chars: [], romance: 'livre' };
             body.custom = { prompt: c.text, proof: S.customProof?.proof, tipo: c.tipo, theme: c.theme || '', characters: c.chars, romance: c.romance };
+            if (c.tipo === 'fe_crista') body.fe = { tema: c.fe || null };
         }
+        if (advType === ADV_FE) body.fe = { tema: S.fe?.id || null };          // Fé Cristã: episódio bíblico escolhido (null = o Mestre escolhe)
         if ($('chkScript')?.checked) body.script = true;         // "Atuar com roteiro": o Mestre conduz a história (Modo Espectador desde o início)
         if (advType === 'fenda_temporal') body.fenda = S.fenda ? { choice: S.fenda.choice, theme: S.fenda.theme, theme_proof: S.fenda.theme_proof, mundo: S.fenda.mundo, characters: S.fenda.characters || [] } : { choice: 'livre' };   // o servidor confere a prova do tema digitado
         trail(`mission-token: pedindo (tipo ${advType || 'comum'})`);
@@ -1404,6 +1549,8 @@ async function _startAdventure(loadout, advType) {
         S.busyUntil = 0; S.busyFor = null;                       // entrou: some qualquer espera anterior
         const sdk = await import(GENAI_URL);
         S.adv = newAdv(my.id, ctx, A, sdk);
+        S.adv.isCustom = advType === ADV_PERS || !!ctx.custom;                   // Personalizado (qualquer tipo): 120 min e NUNCA encerra sozinho
+        S.adv.feTema = advType === ADV_FE ? (S.fe?.id || null) : (S.customSend?.fe || null);
         if (ctx.script_note) { S.adv.spectator = true; S.adv.scriptNote = ctx.script_note; S.adv.specNudgeAt = Date.now(); }   // roteiro ligado: a nota autenticada segue junto do INICIAR
         if (S.adv.advType === ADV_PERS) { S.adv.epilogue = true; S.adv.delivered = true; S.adv.epilogueAt = Date.now(); }   // sem objetivo: o botão "Finalizar aventura" fica disponível desde o início
         trail('conectando ao Gemini Live…');
@@ -1439,6 +1586,7 @@ async function _startAdventure(loadout, advType) {
 
     busy(false);
     enterStage();
+    syncEpilogueUI();                                          // Personalizado: o botão Finalizar aventura já aparece
 }
 
 function newAdv(slotId, ctx, A, sdk) {
@@ -1504,7 +1652,7 @@ async function connectLive(isRetry) {
         sendText(recapText(adv, speech));
     } else {
         const roteiro = adv.scriptNote ? ' ' + adv.scriptNote + ' [SISTEMA] ATUAR COM ROTEIRO: depois da abertura NÃO pergunte o que o herói faz; mostre o herói agindo e falando e continue a história com cenas dialogadas.' : '';
-        sendText((adv.advType === ADV_PERS
+        sendText((adv.isCustom ? CUSTOM_RULE : '') + (adv.advType === ADV_FE ? feThemeNote(adv) : '') + (adv.advType === ADV_PERS
             ? '[SISTEMA] INICIAR. Siga a configuração do jogador (se for FanFiction, tudo 100% fiel à obra original): set_scene, boas-vindas calorosas (3 a 4 frases) chamando o herói pelo nome real, abra a cena com um personagem falando com ele em primeira pessoa e pergunte o que o herói faz (sem listar opções). Não pergunte o nome.'
             : '[SISTEMA] INICIAR. Siga a abertura: set_scene, boas-vindas chamando o herói pelo nome real e comece o Ato 1 com um NPC em cena que fala com ele em primeira pessoa. Não pergunte o nome nem liste opções: termine perguntando o que o herói faz.') + roteiro);
     }
@@ -1513,7 +1661,7 @@ async function connectLive(isRetry) {
 // Texto de retomada após reconexão: estado do jogo + últimas falas (o handle nem sempre restaura o contexto)
 function recapText(adv, spoke = false) {
     const t = recapTextBase(adv, spoke && !adv.spectator);
-    return adv.spectator ? t + ' MODO ESPECTADOR ATIVO: o jogador só assiste e não vai responder. Em vez de esperar o jogador, decida e narre agora o que o herói faz ou diz e continue (cada "[SISTEMA] ESPECTADOR" pede isso a cada turno).' : t;
+    return (adv.isCustom ? CUSTOM_RULE + ' ' : '') + (adv.advType === ADV_FE ? feThemeNote(adv) + ' ' : '') + (adv.spectator ? t + ' MODO ESPECTADOR ATIVO: o jogador só assiste e não vai responder. Em vez de esperar o jogador, decida e narre agora o que o herói faz ou diz e continue (cada "[SISTEMA] ESPECTADOR" pede isso a cada turno).' : t);
 }
 function recapTextBase(adv, spoke = false) {
     const left = Math.max(0, adv.endMs - serverNow());
@@ -1529,7 +1677,7 @@ function recapTextBase(adv, spoke = false) {
     }
     if (adv.advType === ADV_FE) {
         return `[SISTEMA] RECONECTADO após queda de conexão. Continue a MESMA cena da Fé Cristã, sem recomeçar e sem repetir a abertura, SEMPRE fiel aos relatos bíblicos e sem inventar nada. Herói: ${adv.hero.name}. Não há dados, combate nem chefe. `
-            + (adv.epilogue ? 'O acontecimento JÁ terminou: vocês estão na conversa em particular com o(s) apóstolo(s); continue-a. ' : 'O acontecimento ainda está em andamento: continue-o do ponto em que parou. ')
+            + (adv.epilogue ? 'O acontecimento JÁ terminou: vocês estão na conversa final com o personagem principal do episódio, dentro do que a Bíblia registra; continue-a. ' : 'O acontecimento ainda está em andamento: continue-o do ponto em que parou. ')
             + `Cenário atual: ${adv.scene}. Tempo decorrido: ${elapsedMin} min de ${Math.round(adv.totalMs / 60000)}. `
             + (hist.length ? `Últimas falas: ${hist.join(' | ')}. ` : '')
             + (spoke ? 'O jogador acabou de falar durante a queda (você vai ouvi-lo agora): responda a ELE e continue.' : 'Retome com UMA frase curta, voltando de onde parou, e espere o jogador.');
@@ -1653,6 +1801,7 @@ async function onLiveMessage(msg) {
             adv.youBuf += sc.inputTranscription.text;
             if (adv.long) onPlayerSpeechLong(adv);
             checkSpecialCommand(adv);
+            if (adv.isCustom && END_SAY_RE.test(adv.youBuf)) adv.endSaidAt = Date.now();   // o jogador pediu para finalizar: libera end_adventure por 2 min
             $('capYou').textContent = '“' + adv.youBuf.trim().slice(-200) + '”';
         }
         if (sc.turnComplete) {
@@ -1663,6 +1812,8 @@ async function onLiveMessage(msg) {
     if (msg.toolCall?.functionCalls?.length) await onToolCall(msg.toolCall.functionCalls);
 }
 
+const CUSTOM_RULE = ' [SISTEMA] REGRA DO MODO PERSONALIZADO: a sessão dura até 120 minutos e VOCÊ NUNCA ENCERRA POR CONTA PRÓPRIA. Não faça despedida, não conclua a história, não resuma como se fosse o fim e NÃO chame end_adventure, mesmo que o objetivo tenha sido cumprido ou o tempo pareça longo. Continue a história indefinidamente. SÓ encerre quando o jogador pedir EXPLICITAMENTE para finalizar/encerrar a aventura (ou quando o sistema enviar [SISTEMA] FINALIZAR ou [SISTEMA] ENCERRAR): aí faça uma despedida de 30 a 45 segundos e chame end_adventure.';
+const END_SAY_RE = /(finaliz|encerr|termin|acab|conclu)\w*[^.!?]{0,30}(avent|hist[óo]ria|jogo|sess[ãa]o)|(avent|hist[óo]ria|sess[ãa]o)[^.!?]{0,30}(finaliz|encerr|termin|acab)|\b(finalizar|encerrar)\b|(end|finish|stop|quit)\s+(the\s+)?(adventure|story|game|session)|(terminar|finalizar|acabar)\s+(la\s+)?aventura/i;   // pedido explícito do jogador (PT/EN/ES); em outros idiomas vale o botão
 const ROLL_HINT = {
     critical_success: 'Sucesso crítico! Narre um triunfo extraordinário com benefício extra. Se foi um ataque, aplique dano maior ao inimigo com damage.',
     success: 'Sucesso. Narre o êxito. Se foi um ataque, aplique dano ao inimigo com damage.',
@@ -1747,7 +1898,9 @@ function toolDamage(adv, args) {
     }
     const pct = Math.min(Math.round(base * f), PLAYER_MAX_HIT);
     adv.hp = Math.max(0, adv.hp - pct);
+    if (adv.isCustom && adv.hp <= 0) adv.hp = 1;                // Personalizado: o herói cai, mas a aventura NÃO termina
     floatHp('You', '−' + pct + '%', 'dmg'); setHp('You', adv.hp);
+    if (adv.isCustom && adv.hp <= 1 && pct > 0) return { ok: true, aplicado_percent: pct, ...hpState(adv), instrucao: 'O herói foi levado ao limite: narre-o caindo desacordado ou gravemente ferido, mas VIVO (é socorrido, poupado ou acorda depois). A aventura NÃO termina. Continue a história e pergunte o que o herói faz.' };
     if (adv.hp <= 0) {
         adv.dead = true;
         clearTimeout(adv.deadTimer);
@@ -1927,7 +2080,7 @@ function spectatorPrompt(adv, left, notes) {
     const head = `[SISTEMA] ESPECTADOR. O jogador só assiste: ${nome} é conduzido por VOCÊ e ninguém vai responder. Fale AGORA, sem esperar: em 1 a 3 frases mostre o que ${nome} decide fazer ou dizer (discurso direto, coerente com a história, o gênero e a personalidade do herói), depois siga como Mestre mostrando as consequências, com NPCs falando em primeira pessoa. NÃO pergunte "o que você faz" e NÃO liste opções; deixe a cena em aberto e CALE-SE. Tempo: ${elapsedMin} min de ${total}. `;
     let body;
     if (t === ADV_PERS) body = 'Modo Personalizado: sem dados, HP nem bolsa. Decida as falas e ações do herói seguindo a configuração do jogador, com iniciativa e variedade, e mantenha a história andando.';
-    else if (t === ADV_FE) body = 'Fé Cristã: sem dados nem combate. O herói é testemunha: ' + (adv.epilogue ? 'está na conversa em particular com o(s) apóstolo(s); faça perguntas sinceras e respeitosas, uma de cada vez, e escute.' : 'acompanha o acontecimento, pergunta com respeito e ajuda em coisas pequenas, SEM alterar nada dos relatos.');
+    else if (t === ADV_FE) body = 'Fé Cristã: sem dados nem combate. O herói participa do episódio bíblico escolhido: ' + (adv.epilogue ? 'está na conversa final com o personagem principal do episódio; faça perguntas sinceras e respeitosas, uma de cada vez, e escute, sem ir além do que a Bíblia registra.' : 'acompanha o acontecimento, pergunta com respeito e ajuda em coisas pequenas, SEM alterar nada dos relatos.');
     else {
         const estado = `Estado real: HP de ${nome} ${adv.hp}%; ` + (adv.enemy ? `EM COMBATE contra ${adv.enemy.name} (HP ${adv.enemy.hp}%${adv.enemy.boss ? ', chefe' : ''}; só termina com a morte dele); ` : 'sem combate; ')
             + `bolsa: ${Object.entries(adv.inv).filter(([, q]) => q > 0).map(([id, q]) => `${ITEM_BY_ID[id]?.name || id} x${q}`).join(', ') || 'vazia'}. `;
@@ -1994,7 +2147,10 @@ async function onToolCall(calls) {
                 out = toolStatus(adv);
             } else if (c.name === 'end_adventure') {
                 const left = adv.endMs - serverNow();
-                if (!adv.dead && !adv.delivered && !adv.playerEnd && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
+                const customBlock = adv.isCustom && !adv.playerEnd && !adv.forced && !(adv.endSaidAt && Date.now() - adv.endSaidAt < 120000);
+                if (customBlock) {
+                    out = { ok: false, erro: 'Modo Personalizado: a aventura NÃO termina sozinha. O jogador ainda não pediu para finalizar. NÃO encerre e NÃO se despeça: continue a história de onde está e pergunte o que o herói faz. Só chame end_adventure quando o jogador pedir explicitamente para finalizar/encerrar (ou o sistema enviar FINALIZAR/ENCERRAR).' };
+                } else if (!adv.isCustom && !adv.dead && !adv.delivered && !adv.playerEnd && !bossReady(adv) && elapsedS(adv) < END_OK_S && left > EARLY_END_GUARD_S * 1000) {
                     out = { ok: false, erro: 'Ainda é cedo para encerrar. A história precisa de jornada, chefe, entrega e celebração. Só dá para encerrar depois que o objetivo for entregue (objective_delivered) e o jogador pedir para finalizar, quando o sistema enviar [SISTEMA] FINALIZAR ou [SISTEMA] ENCERRAR, ou se o herói cair.' };
                 } else {
                     adv.endPayload = { ...a };
@@ -2230,7 +2386,7 @@ function enterEpilogue(adv) {
 function syncEpilogueUI() {
     const a = S.adv;
     const done = !!a && a.epilogue;
-    const show = !!a && a.delivered && !a.playerEnd && !a.forced && !a.finished && !a.dead;
+    const show = !!a && (a.delivered || (a.isCustom && !a.enemy)) && !a.playerEnd && !a.forced && !a.finished && !a.dead;   // Personalizado: sempre disponível (some só durante um combate, que ocupa o mesmo lugar)
     $('duel').classList.toggle('finish-on', show);
     $('btnFinish').classList.toggle('show', show);
     $('btnFinish').style.pointerEvents = show ? 'auto' : '';   // o HUD do duelo pode ter pointer-events:none no CSS; o botão precisa receber o toque
@@ -2239,6 +2395,8 @@ function syncEpilogueUI() {
 
 function openFinishConfirm() {
     const a = S.adv; if (!a || a.finished || a.playerEnd) return;
+    $('finishSub').textContent = a.isCustom ? 'Modo Personalizado' : 'Objetivo cumprido';
+    $('finishText').textContent = a.isCustom ? 'A aventura só termina quando você decidir. Deseja finalizar agora?' : 'Você já concluiu o objetivo da aventura. Deseja finalizar?';
     $('finishEarly').style.display = elapsedS(a) < BOSS_MIN_S ? 'block' : 'none';
     openOv('finishModal');
 }
@@ -2266,7 +2424,7 @@ const DETOUR_STEPS = [
 ];
 function markProgress(adv) { adv.progressAt = Date.now(); adv.detourTurns = 0; adv.detourNudges = 0; }
 function checkDetour(adv) {
-    if (adv.spectator || adv.noCombat || adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;   // no Salão do Amor, conversar com os convidados É a missão
+    if (adv.isCustom || adv.spectator || adv.noCombat || adv.epilogue || adv.enemy || adv.dead || adv.warned || adv.playerEnd || adv.finished) return;   // no Salão do Amor, conversar com os convidados É a missão
     const step = DETOUR_STEPS[adv.detourNudges || 0];
     if (!step) return;
     if ((Date.now() - (adv.progressAt || Date.now())) / 1000 < step.s || (adv.detourTurns || 0) < step.turns) return;
@@ -2322,14 +2480,14 @@ function advTick() {
         for (const m of marksFor(adv)) if (!adv.marks[m.at] && elapsedS >= m.at && left > WARN_AT_S * 1000) { adv.marks[m.at] = true; if (!adv.epilogue) queueNote(adv, m.text, false); }
         if (!adv.warned && left <= WARN_AT_S * 1000) {
             adv.warned = true;
-            if (adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Comece a levar a cena a um bom ponto de pausa, sem abrir novos assuntos. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
-            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel aos relatos; depois leve a conversa com o(s) apóstolo(s) a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            if (adv.isCustom || adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS DO TEMPO MÁXIMO DE 120 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a cena a um bom ponto de pausa, sem abrir novos assuntos, e avise o jogador em uma frase de que o tempo máximo da sessão está acabando. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Se o acontecimento ainda não terminou, conclua-o agora, fiel ao relato; depois leve a conversa final a um fechamento caloroso. NÃO chame end_adventure ainda: só quando o jogador escolher finalizar ou você receber [SISTEMA] ENCERRAR (resta 1 minuto).', false);
             else queueNote(adv, '[SISTEMA] RESTAM 2 MINUTOS (NÃO responda falando agora; aplique na sua próxima fala). Leve a história às cenas finais: se o chefe ainda vive, conduza o confronto ao ápice e à derrota dele; se o objetivo já foi cumprido, vá à entrega (se ainda não houve) e feche a celebração com calor (sem novas jornadas). NÃO chame end_adventure ainda: só quando o jogador escolher concluir ou você receber [SISTEMA] ENCERRAR (resta 1 minuto). Não inicie novos combates.', false);
         }
         if (!adv.forced && left <= END_AT_S * 1000) {
             adv.forced = true; adv.A.endMute = true; syncEpilogueUI();                  // a partir do ENCERRAR o Mestre fala sem ser cortado
-            if (adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça uma despedida de 30 a 45 segundos, fechando a cena do ponto em que está, e chame end_adventure (title e chronicle sem conteúdo sexual explícito).', true);
-            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o apóstolo dá uma palavra final de bênção e encorajamento fiel às Escrituras; resuma a experiência em tom de narrador e chame end_adventure.', true);
+            if (adv.isCustom || adv.advType === ADV_PERS) queueNote(adv, '[SISTEMA] ENCERRAR. O tempo máximo de 120 minutos da sessão acabou (resta 1 minuto). Faça uma despedida de 30 a 45 segundos, fechando a cena do ponto em que está, e chame end_adventure (title e chronicle sem conteúdo sexual explícito).', true);
+            else if (adv.advType === ADV_FE) queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Faça a despedida (30 a 45 segundos): o personagem principal do episódio dá uma palavra final fiel ao que a Bíblia registra, em tom de encorajamento (sem inventar doutrina); resuma a experiência em tom de narrador e chame end_adventure.', true);
             else queueNote(adv, '[SISTEMA] ENCERRAR. Resta 1 minuto. Se ainda não entregou o objetivo ao NPC, faça isso agora em poucas frases; depois narre a despedida (30 a 45 segundos), resuma o desempenho do jogador e chame end_adventure.', true);
         }
     }
@@ -2499,6 +2657,8 @@ function bindUI() {
     $('typeCancel').onclick = () => { closeOv('vipModal'); closeOv('typeModal'); openOv('itemsModal'); };
     $('typeGo').onclick = () => { if (S.advType && S.bag.length === BAG_SIZE) startAdventure(bagCounts(), S.advType); };
     $('fendaCancel').onclick = () => closeOv('fendaModal');
+    $('feCancel').onclick = () => closeOv('feModal');
+    $('feOk').onclick = confirmFe;
     $('fendaOk').onclick = confirmFenda;
     $('fendaOtherSys').onclick = () => { if (S.fendaDraft) { S.fendaDraft.other = 'sistema'; buildFendaList(); } };
     $('fendaOtherDef').onclick = () => { if (S.fendaDraft) { S.fendaDraft.other = 'definir'; buildFendaList(); setTimeout(() => $('fendaText').focus(), 60); } };

@@ -580,3 +580,8 @@ body.hud-hidden #frostOverlay { opacity: .6; }
 .custom-box .dm-actions { position: sticky; bottom: -22px; z-index: 2; margin: 8px -20px -22px; padding: 12px 20px 22px; background: #111; border-top: 1px solid rgba(168,130,53,.35); }
 /* o campo de etiquetas não pode herdar a borda/largura de um estilo global de input */
 .tag-field .tag-input { flex: 1 1 120px; width: auto !important; min-width: 110px; height: auto !important; margin: 0 !important; padding: 4px 2px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; outline: 0 !important; }
+
+/* Fé Cristã: seções do seletor de episódios */
+.fe-list { max-height: 50vh; }
+.fe-sec { position: sticky; top: 0; z-index: 1; margin: 8px 0 2px; padding: 6px 4px; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-light); background: #14100a; border-bottom: 1px solid var(--gold-dark); }
+.fe-ref { display: block; margin-top: 2px; opacity: .7; font-size: .75em; }

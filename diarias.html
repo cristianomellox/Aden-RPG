@@ -290,6 +290,19 @@
         </div>
     </div>
 
+    <!-- ═════════ MODAL: FÉ CRISTÃ — ESCOLHER O EPISÓDIO ═════════ -->
+    <div id="feModal" class="overlay dm-modal" aria-hidden="true">
+        <div class="dm-box buy-box fenda-box">
+            <h3 class="dm-title">Fé Cristã</h3>
+            <p class="dm-sub">Escolha o acontecimento bíblico que deseja reviver (opcional). Tudo segue fielmente o relato da Bíblia.</p>
+            <div class="fenda-list fe-list" id="feList"></div>
+            <div class="dm-actions">
+                <button class="btn-ghost" id="feCancel">Cancelar</button>
+                <button class="btn-epic sm" id="feOk">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ═════════ MODAL: PERSONALIZADO — SENHA ═════════ -->
     <div id="customPassModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box buy-box">
@@ -321,6 +334,10 @@
                     <option value="salao">Salão do Amor</option>
                     <option value="visita">Visita Inesperada</option>
                 </select>
+            </div>
+            <div class="custom-field" id="customFeWrap" style="display:none">
+                <label class="custom-label" for="customFe">Episódio bíblico <em>(opcional)</em></label>
+                <select id="customFe" class="fenda-input custom-select"></select>
             </div>
             <div class="custom-field" id="customThemeWrap" style="display:none">
                 <label class="custom-label" for="customTheme" id="customThemeLabel">Tema <em>(obra, série, jogo, filme...)</em></label>
@@ -377,8 +394,8 @@
     <div id="finishModal" class="overlay dm-modal" aria-hidden="true">
         <div class="dm-box buy-box">
             <h3 class="dm-title">Finalizar aventura</h3>
-            <p class="dm-sub">Objetivo cumprido</p>
-            <p class="buy-text">Você já concluiu o objetivo da aventura. Deseja finalizar?</p>
+            <p class="dm-sub" id="finishSub">Objetivo cumprido</p>
+            <p class="buy-text" id="finishText">Você já concluiu o objetivo da aventura. Deseja finalizar?</p>
             <p class="hint buy-bal" id="finishEarly" style="display:none">A recompensa máxima exige pelo menos 15 minutos de aventura. Continuar aproveitando a história pode render mais.</p>
             <div class="dm-actions">
                 <button class="btn-ghost" id="finishCancel">Continuar na aventura</button>
@@ -398,10 +415,10 @@
                 <li><b>Diálogos e Dica:</b> A aventura é feita de conversa: os personagens falam direto com você, em primeira pessoa, e o Mestre só guia o básico e pergunta <b>o que você decide fazer</b>, sem listar opções a toda hora. Não sabe o que fazer? Diga <b>"Dica"</b> (ou fique mais de <b>10 segundos em silêncio</b>) e o Mestre sugere três opções.</li>
                 <li><b>Ações e Combate por Voz:</b> Esqueça os botões. Quer atacar com sua arma? Quer tentar convencer um guarda ou se esgueirar pelas sombras? <b>Basta dizer ao Mestre!</b> Ele reconhecerá sua intenção e narrará as consequências. Ações de risco rolam um <b>d20</b> automático.</li>
                 <li><b>Sua Bolsa de Itens:</b> Antes da jornada, você escolhe 8 itens. <b>Atenção: você não clica neles para usar.</b> O botão da bolsa serve apenas para você consultar o seu inventário. Para usar uma poção, corda ou encantamento, <b>fale para o Mestre</b> o que deseja usar e ele aplicará o efeito na história.</li>
-                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágica,realizar uma infiltração furtiva, participar do Salão do Amor e conquistar seu par, embarcar na Fenda Temporal e viver um momento da história ou uma FanFiction de uma obra famosa (game, novela, série, TV, filme, anime, livro...), ou mergulhar na Fé Cristã para reviver um acontecimento bíblico ao lado dos apóstolos e conversar com eles. Mais tipos em breve. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
+                <li><b>Mundo e Histórias Dinâmicas:</b> Cada aventura é única! Você pode enfrentar uma jornada épica contra monstros, investigar um assassinato misterioso, sobreviver a um inverno mágica,realizar uma infiltração furtiva, participar do Salão do Amor e conquistar seu par, embarcar na Fenda Temporal e viver um momento da história ou uma FanFiction de uma obra famosa (game, novela, série, TV, filme, anime, livro...), ou mergulhar na Fé Cristã para reviver um acontecimento bíblico do Antigo ou do Novo Testamento, à sua escolha. Mais tipos em breve. Além disso, o mundo se adapta a você: quanto maior o seu Poder de Combate, mais letais serão os perigos.</li>
                 <li><b>Epílogo e Liberdade:</b> Cumpriu o objetivo ou derrotou o chefe e ainda sobrou tempo? A aventura não acaba! O jogo entra no <b>Epílogo</b>. Use esse tempo livre para comemorar na taverna, explorar o cenário, conversar com os personagens e descobrir segredos. A imersão é ilimitada até você decidir partir!</li>
                 <li><b>Fenda Temporal e FanFiction:</b> A Fenda Temporal custa <b>50 Moedas Rúnicas</b> (cobradas só quando você entra na aventura e devolvidas se a conexão com o Mestre falhar antes de ele começar a falar). Você escolhe um personagem, evento ou obra da história e viaja até lá. Se o tema for uma obra (game, novela, série, TV, filme, anime, livro, HQ...), a aventura vira uma <b>FanFiction 100% fiel ao original</b>: ambiente, atmosfera e personagens iguais aos da obra, na aparência, personalidade, jeito de falar e humor. No campo <b>Personagens</b> (opcional) digite os nomes separados por vírgula: cada um vira uma etiqueta, e o × remove. Em branco, o Mestre decide quem aparece.</li>
-                <li><b>Modo Personalizado (senha):</b> Liberado só com senha e com conteúdo adulto (18+). Os campos <b>Tipo</b> e <b>Personagens</b> são opcionais. Em <b>Tipo</b> você escolhe um modo de aventura (comum, Fé Cristã, Fenda Temporal etc.): ele funciona como o original, com objetivo, dados e bolsa, e o texto vira <b>Detalhes extras</b> (até 1.000 caracteres); a Fenda Temporal não cobra moedas aqui. A última opção, <b>FanFiction (apenas diálogo)</b>, é só conversa e exploração, sem objetivos nem dados, no universo de uma obra, com um prompt de até 90 mil caracteres. Sem escolher o tipo, vale o diálogo livre de sempre. O campo <b>Personagens</b> só aparece na Fenda Temporal e na FanFiction. Pantokrator e o sermão não existem neste modo.</li>
+                <li><b>Modo Personalizado (senha):</b> Liberado só com senha e com conteúdo adulto (18+). Os campos <b>Tipo</b> e <b>Personagens</b> são opcionais. Em <b>Tipo</b> você escolhe um modo de aventura (comum, Fé Cristã, Fenda Temporal etc.): ele funciona como o original, com objetivo, dados e bolsa, e o texto vira <b>Detalhes extras</b> (até 1.000 caracteres); a Fenda Temporal não cobra moedas aqui. A última opção, <b>FanFiction (apenas diálogo)</b>, é só conversa e exploração, sem objetivos nem dados, no universo de uma obra, com um prompt de até 90 mil caracteres. Sem escolher o tipo, vale o diálogo livre de sempre. O campo <b>Personagens</b> só aparece na Fenda Temporal e na FanFiction. Pantokrator e o sermão não existem neste modo. A sessão dura até <b>120 minutos</b> e só termina quando você pedir para finalizar ou tocar em <b>Finalizar aventura</b>.</li>
                 <li><b>Aventuras Extras:</b> Perdeu o horário ou quer jogar mais? Você pode comprar até <b>3 Aventuras Extras</b> por dia usando Ouro, jogando na hora que quiser, sem precisar disputar as vagas aleatórias.</li>
             </ul>
             <p class="tip">Dica de Ouro: Mergulhe no personagem! Decisões criativas, exploração e diálogos ricos rendem as melhores notas e as recompensas máximas no final da sessão.</p>

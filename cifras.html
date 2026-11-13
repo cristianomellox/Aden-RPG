@@ -124,7 +124,7 @@ body.hud-hidden #home .hm{transform:translateY(-30px)}
 .hud-toggle-btn:hover{background:#241b08}
 .hud-toggle-btn svg{width:26px;height:26px;stroke-width:2.8}
 body:not(.onhome) .hud-toggle-btn{display:none}
-#ft{position:absolute;left:0;right:0;bottom:0;z-index:5;background:#555;color:#fff;text-align:center;font-size:14px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
+#ft{position:absolute;left:0;right:0;bottom:0;z-index:5;background:red;color:#fff;text-align:center;font-size:14px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
 details{border:1px solid var(--ln);border-radius:12px;background:#0c0c0c;margin-bottom:10px}
 summary{padding:14px;color:var(--gold);font-weight:700;cursor:pointer}
 details .tx{padding:0 14px 14px;line-height:1.55;color:#ddd;font-size:.95rem}
@@ -201,6 +201,25 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .nt .x{margin-top:6px;color:#ddd;white-space:pre-wrap;line-height:1.45;font-size:.95rem;overflow-wrap:anywhere}
 .nt .d{color:#666;font-size:.72rem;margin-top:6px}
 #mdf textarea,#mdf select{width:100%;background:#111;color:#fff;border:1px solid var(--ln);border-radius:8px;padding:10px;font:inherit}
+
+/* áudio do YouTube */
+#ytw{position:fixed;z-index:15;right:max(12px,calc((100vw - 760px)/2 + 16px));top:120px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+#ytw>*{pointer-events:auto}
+#ytb{position:relative;width:60px;height:60px;padding:0;border:0;border-radius:50%;background:rgba(0,0,0,.88);color:var(--gold);display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.7)}
+#ytb svg{position:absolute;inset:0;width:60px;height:60px}
+#ytb .ytr{transform:rotate(-90deg)}
+#ytb .ytr circle{fill:none;stroke-width:4}
+#ytb .tr{stroke:#3a3200}
+#ytb .pg{stroke:var(--gold);stroke-linecap:round;stroke-dasharray:169.65;stroke-dashoffset:0;transition:stroke-dashoffset .3s linear}
+#ytb .yti{position:relative;inset:auto;width:26px;height:26px}
+#ytb .yti path{fill:currentColor;stroke:none}
+#ytb .pa{display:none}#ytb.on .pa{display:block}#ytb.on .pl{display:none}
+#ytb.off{opacity:.4;pointer-events:none}
+#ytb.load .pg{opacity:.4}
+#ytad{width:min(300px,calc(100vw - 24px));background:#000;border:1px solid var(--gold);border-radius:12px;padding:8px}
+#ytad.hid{position:fixed;left:-400px;top:0;pointer-events:none}
+#ytmsg{font-size:.8rem;color:var(--gold);margin:0 0 6px}
+#ytad iframe{display:block;width:100%;height:200px;border:0;border-radius:8px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -715,6 +734,9 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <label for="t">Título *</label>
   <input id="t" maxlength="120" autocomplete="off">
   <div class="err" id="terr"></div>
+  <label for="yt">Link do YouTube (opcional)</label>
+  <input id="yt" type="url" inputmode="url" maxlength="300" placeholder="https://youtu.be/… ou youtube.com/watch?v=…" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <div class="err" id="yterr"></div>
   <label for="l">Letra (opcional)</label><div class="cnt" style="text-align:left;margin:-2px 0 6px">Cole a cifra pronta (acordes sobre a letra): tudo é alinhado à esquerda, seções como [Refrão], Intro: ou Verso viram títulos e os acordes são posicionados sozinhos. Ao editar uma música, as cifras aparecem acima da letra.</div>
   <textarea id="l" maxlength="40000" wrap="off" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
   <div class="cnt"><span id="c">0</span>/10000</div>
@@ -753,7 +775,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 
 <section class="screen" id="tut">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Tutorial</h1></div>
-  <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver e tocar as músicas e as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido sempre que você for criar ou alterar algo. Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
+  <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver as músicas e executar as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido sempre que você for criar ou alterar algo. Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
   <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Setlist &amp; Playlist:</b> abre as setlists (aba padrão) e as músicas.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Afinador:</b> afina violão, guitarra e baixo pelo microfone.</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
   <details><summary>Avisos e notificações</summary><div class="tx"><ul><li>Instale o app e toque em <b>Ativar notificações</b> na tela inicial para receber avisos de músicas, setlists e outros recados.</li><li>O <b>sino</b> (canto superior direito) mostra os avisos; o número vermelho indica os que você ainda não viu.</li><li>Para publicar um aviso, abra o sino e toque em <b>Criar aviso</b> (pede o código da banda).</li></ul></div></details>
   <details><summary>Afinador</summary><div class="tx"><ul><li>Toque em <b>Ativar microfone</b> e permita o acesso. Escolha <b>Violão / Guitarra</b>, <b>Baixo 4</b>, <b>Baixo 5</b> ou <b>Cromático</b>.</li><li>Toque uma corda: o app detecta a nota sozinho (<b>Auto</b>) e o <b>ponteiro deve ficar no meio</b>. Azul = grave (aperte), vermelho = agudo (afrouxe), verde = afinado.</li><li>Toque numa corda (E, A, D…) para fixá-la; toque de novo ou em <b>Auto</b> para soltar.</li><li><b>Dica:</b> uma corda por vez, solta, microfone perto e sem barulho ao redor. No baixo, aguarde 1–2 s.</li></ul></div></details>
@@ -765,7 +787,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
     <li><b>Seta de sair:</b> volta para o início (ou para a setlist, se você estiver tocando uma).</li>
     <li><b>♭ Tom ♯:</b> sobe ou desce meio tom e muda todas as cifras. "Tom 0" é o original. O tom escolhido fica salvo só no seu aparelho.</li>
     <li><b>Ícone de lista:</b> aparece quando a música tem seções e leva direto até uma delas.</li>
-    <li><b>‹ 2/8 ›:</b> aparece ao tocar uma setlist e passa para a música anterior ou seguinte.</li>
+    <li><b>‹ 2/8 ›:</b> aparece ao executar uma setlist e passa para a música anterior ou seguinte.</li>
     <li><b>Cifra | Partitura:</b> aparece no topo quando a música tem partitura; escolha o que quer ver.</li>
     <li>A tela fica ligada enquanto você está na música.</li></ul></div></details>
   <details><summary>Diagramas de acordes</summary><div class="tx">Toque numa cifra dourada para ver o desenho do braço do violão/guitarra: bolinhas nos dedos, <b>×</b> nas cordas que não tocam, <b>○</b> nas soltas e a pestana como barra. As setas ‹ › mostram outras posições do mesmo acorde. O botão <b>Editar diagrama</b> (pede o código) abre o editor: toque acima da corda para alternar × e ○, toque no traste para pôr ou tirar o dedo, use <b>Pestana</b> e arraste só pelas cordas que ela cobre, e ajuste a <b>Casa no traste</b> com − e +. O desenho editado vale para essa cifra naquela música, para toda a banda, e <b>acompanha a transposição</b>: ao mudar o tom, o desenho sobe pelo braço (cordas soltas viram pestana, como Am solto → Bm com pestana), e o botão <b>Padrão</b> volta ao automático. O diagrama acompanha o tom transposto. Para acordes com baixo (como D/F#), mostra o acorde base e avisa o baixo.</div></details>
@@ -776,7 +798,8 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <details><summary>Colar cifra pronta</summary><div class="tx">Cole no campo da letra uma cifra copiada de um site, com os acordes numa linha acima de cada verso. O texto é alinhado à esquerda automaticamente. Ao tocar em <b>Próximo</b>, os acordes são reconhecidos, posicionados sobre a letra e adicionados à lista de cifras. A posição é aproximada: se precisar, arraste o acorde para ajustar.</div></details>
   <details><summary>Posicionar cifras — passo 2</summary><div class="tx"><ul><li>Na aba <b>Cifras</b>, <b>segure e arraste</b> uma cifra da barra de baixo até a linha da letra e solte no ponto exato.</li><li>A mesma cifra pode ser usada várias vezes.</li><li>Outra forma: <b>segure um espaço vazio</b> acima da letra (ou numa linha sem letra) e toque na cifra desejada no card que abre. Para mover, arraste a cifra já posicionada. Para remover, arraste para fora das linhas.</li><li>Sem letra, você ganha linhas vazias para montar só as cifras. O botão <b>+ Linha</b> acrescenta mais.</li><li>Toque em <b>Salvar</b> para guardar e enviar para a banda.</li></ul></div></details>
   <details><summary>Partitura</summary><div class="tx"><ul><li>Na aba <b>Partitura</b>, arraste <b>Semibreve, Mínima, Semínima, Colcheia, Pausa</b> ou <b>Compasso</b> até a pauta. A altura onde você solta define a nota.</li><li>Enquanto arrasta, um <b>guia dourado</b> mostra a linha ou o espaço exato, e o item aparece acima do dedo.</li><li>Toque em <b>♯</b>, <b>♭</b> ou <b>♮</b> antes de soltar para usar acidente. Toque de novo para desligar.</li><li>Arraste uma nota para mover; arraste para fora para apagar.</li><li><b>+ Pauta</b> cria outra pauta e o <b>×</b> remove a pauta. Há semicolcheias, notas pontuadas, ligaduras, fermata, acordes, ritornelos, armadura e compasso (escolha nas listas acima da pauta). Notas curtas vizinhas são ligadas por barra automaticamente. <b>Importar MusicXML / PDF</b>: um arquivo MusicXML (.musicxml, .xml, .mxl) preenche a pauta; um PDF (até 1,2 MB) fica na aba <b>PDF</b> da música.</li></ul></div></details>
-  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e tocam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Tocar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
+  <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e executam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Executar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
+  <details><summary>Áudio do YouTube</summary><div class="tx"><ul><li>Ao criar ou editar uma música, cole o <b>link do YouTube</b> abaixo do título (vale link comprido, curto youtu.be ou de playlist com <b>v=</b>).</li><li>Na tela da música aparece um botão redondo no canto superior direito: toque para <b>tocar/pausar</b>. O anel dourado vai diminuindo conforme a música passa.</li><li>Só o áudio toca. Se o YouTube exibir um <b>anúncio</b>, aparece um mini vídeo para você tocar em <b>Pular</b>; ele some sozinho quando a música começa.</li><li>Precisa de internet. Ao sair da música, o áudio para.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -787,7 +810,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div id="sedit" hidden><div class="row-btns" style="margin:6px 0 8px;flex-wrap:nowrap"><input id="stit" type="date" style="flex:1;min-width:0"><select id="sper" style="flex:0 0 110px"><option value="" hidden>Dia/Noite</option><option value="dia">Dia</option><option value="noite">Noite</option></select></div><div class="sub" id="sph" hidden style="margin:0 0 8px"></div><div style="height:6px"></div><div class="sub" style="margin:0 0 8px">Músicos (nome e instrumento)</div><div id="smed"></div><button class="btn sec" id="smadd" type="button">+ Músico</button><div style="height:14px"></div></div>
   <div id="siv"></div>
   <div class="row-btns" id="srow" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
-  <div class="row-btns"><button class="btn" id="splay">Tocar</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button><button class="btn" id="ssave" hidden disabled>Salvar</button></div>
+  <div class="row-btns"><button class="btn" id="splay">Executar</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button><button class="btn" id="ssave" hidden disabled>Salvar</button></div>
 </section>
 
 <section class="screen" id="song">
@@ -827,9 +850,9 @@ function hcommit(h){if(!h||hrest)return;clearTimeout(h.t);const n=h.snap();if(n=
 function hdeb(h){if(!h||hrest)return;clearTimeout(h.t);h.t=setTimeout(()=>hcommit(h),500)}
 function hmove(h,d){if(!h)return;hcommit(h);const from=d<0?h.past:h.future,to=d<0?h.future:h.past;if(!from.length)return;
   to.push(h.cur);const x=from.pop();hrest=true;try{h.apply(JSON.parse(x))}finally{hrest=false}h.cur=h.snap();hbtn()}
-const hsnapD=()=>JSON.stringify({t:$('#t').value,l:$('#l').value,ch:$('#ch').value,d:{title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,pend:draft.pend,shown:draft.shown,score:draft.score}});
+const hsnapD=()=>JSON.stringify({t:$('#t').value,y:$('#yt').value,l:$('#l').value,ch:$('#ch').value,d:{title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,pend:draft.pend,shown:draft.shown,score:draft.score}});
 function happlyD(x){
-  $('#t').value=x.t;$('#l').value=x.l;$('#ch').value=x.ch;const d=x.d;
+  $('#t').value=x.t;$('#yt').value=x.y||'';$('#l').value=x.l;$('#ch').value=x.ch;const d=x.d;
   draft.title=d.title??'';draft.lyrics=d.lyrics??'';draft.chordsText=d.chordsText??'';draft.lines=d.lines||[];draft.placed=d.placed||[];draft.pend=d.pend??null;draft.shown=d.shown??null;draft.score=d.score||[];
   updCount();
   if($('#add2').classList.contains('active')){
@@ -846,7 +869,7 @@ function metaEl(s){
 let songs=load(), view='c', pq=loadQ(), sets=loadS(), curSet=null, play=null, cur=null, draft=null, fs=20, speed=3, scrolling=false, raf=0, openId=null;
 
 function show(n){
-  stopScroll();
+  stopScroll();if(n!=='song')ytStop();
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
   document.body.classList.toggle('onhome',n==='home');if(n!=='home'&&window.CifrasHud)CifrasHud.show();if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
@@ -876,10 +899,10 @@ $('#q').oninput=renderList;
 /* adicionar / editar */
 function newDraft(){draft={id:null,title:'',lyrics:'',chordsText:'',lines:[],placed:[],score:[]};fillForm();show('add1')}
 function fillForm(){
-  $('#t').value=draft.title;$('#ch').value=draft.chordsText;$('#terr').textContent='';
+  $('#t').value=draft.title;$('#ch').value=draft.chordsText;$('#terr').textContent='';$('#yt').value=draft.yt?'https://youtu.be/'+draft.yt:'';$('#yterr').textContent='';
   $('#h1add').textContent=draft.id?'Editar música':'Adicionar';$('#del').hidden=!draft.id;fillText();HD=mkH(hsnapD,happlyD);hbase(HD);
 }
-$('#l').oninput=updCount;$('#t').addEventListener('input',()=>hdeb(HD));$('#ch').addEventListener('input',()=>hdeb(HD));
+$('#l').oninput=updCount;$('#t').addEventListener('input',()=>hdeb(HD));$('#ch').addEventListener('input',()=>hdeb(HD));$('#yt').addEventListener('input',()=>hdeb(HD));
 $('#l').addEventListener('paste',e=>{
   const raw=e.clipboardData&&e.clipboardData.getData('text/plain');if(!raw||!raw.includes('\n'))return;
   e.preventDefault();const t=$('#l');t.setRangeText(alignPaste(raw),t.selectionStart,t.selectionEnd,'end');updCount();
@@ -888,6 +911,9 @@ $('#back1').onclick=()=>{HD=null;hbtn();show(draft&&draft.id?'song':'home')};
 $('#next').onclick=()=>{
   const t=$('#t').value.trim();
   if(!t){modal('Título obrigatório','Informe o título da música para continuar.',[['OK',1]],'err').then(()=>$('#t').focus());return}
+  const yv=ytParse($('#yt').value);
+  if(yv===null){$('#yterr').textContent='Link inválido. Use youtube.com/watch?v=…, youtu.be/… ou um link de playlist que tenha v=… (o vídeo).';$('#yt').focus();return}
+  $('#yterr').textContent='';draft.yt=yv||null;
   hcommit(HD);draft.title=t;draft.chordsText=$('#ch').value;
   const raw=$('#l').value;
   if(!(draft.shown!=null&&raw===draft.shown&&draft.lines&&draft.lines.length)){ /* texto mudou: relê letra e cifras */
@@ -949,7 +975,7 @@ function startDrag(e,name,k,hold,drop,hover,tap){
 }
 $('#save').onclick=async()=>{
   if(!await needOnline())return;
-  const s={id:draft.id||uid(),title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
+  const s={id:draft.id||uid(),title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,yt:draft.yt||null,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
   const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);
   store(songs);enqueue('save',s.id);HD=null;hbtn();show('list');saveSync();
 };
@@ -970,13 +996,13 @@ function renderSong(){
   const p=$('#secp');p.innerHTML='';p.hidden=true;
   s.lines.forEach((t,i)=>{if(!isSec(t))return;const b=el('button','item');b.textContent=secName(t);
     b.onclick=()=>{rows.children[i].scrollIntoView({behavior:'smooth',block:'start'});p.hidden=true};p.append(b)});
-  $('#sx').hidden=!p.children.length||view!=='c';refit();
+  $('#sx').hidden=!p.children.length||view!=='c';refit();ytSetup(s.yt);
 }
 function openSong(id){
   cur=songs.find(x=>x.id===id);if(!cur)return;renderSong();
-  $('#sg').hidden=!play;if(play)$('#sn').textContent=(play.i+1)+'/'+curSet.ids.length;show('song');refit();
+  $('#sg').hidden=!play;if(play)$('#sn').textContent=(play.i+1)+'/'+curSet.ids.length;show('song');refit();ytPos();
 }
-function setFs(d){fs=Math.max(10,Math.min(48,fs+d));$('#sv').style.setProperty('--fs',fs+'px');refit()}
+function setFs(d){fs=Math.max(10,Math.min(48,fs+d));$('#sv').style.setProperty('--fs',fs+'px');refit();ytPos()}
 $('#fm').onclick=()=>setFs(-2);$('#fp').onclick=()=>setFs(2);
 function setSpeed(d){speed=Math.max(1,Math.min(10,speed+d));$('#spd').textContent=speed}
 $('#sm').onclick=()=>setSpeed(-1);$('#sp').onclick=()=>setSpeed(1);
@@ -1000,6 +1026,88 @@ $('#ed').onclick=async()=>{
   draft=JSON.parse(JSON.stringify(s));fillForm();show('add1');
 };
 $('#ex').onclick=()=>{if(play){if(!setOrig)unl=false;show('set');renderSet()}else show('home')};
+
+/* ===== áudio do YouTube (só áudio; mini vídeo aparece apenas em anúncio) ===== */
+var YA={id:null,p:null,w:null,b:null,ad:null,pg:null,ready:false,isAd:false,stuck:false,want:false,dur:0,iv:0,st:0,api:null};
+var ytRaf=0;
+function ytParse(u){u=(u||'').trim();if(!u)return '';if(/^[\w-]{11}$/.test(u))return u;
+  try{const x=new URL(/^https?:\/\//i.test(u)?u:'https://'+u),h=x.hostname.replace(/^(www|m|music)\./,'');let m;
+    if(h==='youtu.be'){m=x.pathname.slice(1).split('/')[0];return /^[\w-]{11}$/.test(m)?m:null}
+    if(h==='youtube.com'||h==='youtube-nocookie.com'){const v=x.searchParams.get('v');if(/^[\w-]{11}$/.test(v||''))return v;
+      m=x.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/);if(m)return m[1]}
+  }catch(e){}
+  return null}
+function ytApi(){
+  if(window.YT&&window.YT.Player)return Promise.resolve();
+  if(YA.api)return YA.api;
+  YA.api=new Promise((res,rej)=>{const pr=window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady=()=>{if(pr)pr();res()};
+    const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';s.onerror=()=>{YA.api=null;rej()};document.head.append(s)});
+  return YA.api}
+function ytFill(){YA.ad.innerHTML='<div id="ytmsg"></div><div id="ytp"></div>'}
+function ytUi(){
+  if(YA.w)return;
+  const w=el('div');w.id='ytw';w.hidden=true;
+  w.innerHTML='<button id="ytb" type="button" class="load" aria-label="Tocar ou pausar o áudio"><svg class="ytr" viewBox="0 0 60 60" aria-hidden="true"><circle class="tr" cx="30" cy="30" r="27"/><circle class="pg" cx="30" cy="30" r="27"/></svg><svg class="yti" viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5v14l11-7z"/><path class="pa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button><div id="ytad" class="hid"></div>';
+  document.body.append(w);YA.w=w;YA.b=w.querySelector('#ytb');YA.ad=w.querySelector('#ytad');YA.pg=w.querySelector('.pg');
+  ytFill();
+  YA.b.onclick=()=>{const p=YA.p;if(!YA.ready||!p)return;
+    const s=p.getPlayerState();
+    if(s===1||s===3){YA.want=false;p.pauseVideo();return}
+    YA.want=true;YA.stuck=false;p.playVideo();clearTimeout(YA.st);
+    /* se em 3,5 s não começou (ex.: o navegador exige toque no vídeo), mostra o mini vídeo */
+    YA.st=setTimeout(()=>{if(YA.want&&YA.p&&YA.p.getPlayerState()!==1){YA.stuck=true;ytShow()}},3500)};
+  addEventListener('scroll',()=>{if(YA.id&&!ytRaf)ytRaf=requestAnimationFrame(()=>{ytRaf=0;ytPos()})},{passive:true});
+  addEventListener('resize',ytPos);
+}
+function ytPos(){
+  if(!YA.w||!YA.id)return;const h=document.querySelector('#sv .shd');let t=8;
+  if(h&&$('#song').classList.contains('active'))t=Math.max(8,Math.round(h.getBoundingClientRect().bottom+6));
+  YA.w.style.top='max('+t+'px, calc(env(safe-area-inset-top,0px) + 8px))'}
+function ytShow(){
+  const on=YA.isAd||YA.stuck;YA.ad.classList.toggle('hid',!on);
+  const m=YA.ad.querySelector('#ytmsg');if(m)m.textContent=YA.isAd?'Anúncio do YouTube: toque em “Pular” quando aparecer.':'Toque no vídeo para iniciar o áudio.'}
+function ytAdCheck(){
+  const p=YA.p;if(!p||!YA.ready||!p.getVideoData)return;
+  let ad=false,du=0;
+  try{const d=p.getVideoData();du=p.getDuration()||0;ad=!!(d&&d.video_id&&d.video_id!==YA.id);
+    if(!ad&&du>0){if(!YA.dur)YA.dur=du;else if(Math.abs(du-YA.dur)>2)ad=true}}catch(e){}
+  if(ad!==YA.isAd){YA.isAd=ad;if(!ad)YA.stuck=false;ytShow()}
+  if(!ad&&YA.stuck&&p.getPlayerState()===1){YA.stuck=false;ytShow()}}
+function ytTick(){
+  const p=YA.p;if(!p||!YA.ready)return;
+  ytAdCheck();
+  let s=-1;try{s=p.getPlayerState()}catch(e){return}
+  YA.b.classList.toggle('on',s===1||s===3);
+  if(YA.isAd)return;
+  let t=0,d=0;try{t=p.getCurrentTime()||0;d=p.getDuration()||0}catch(e){}
+  if(d>0)YA.pg.style.strokeDashoffset=(169.65*Math.min(1,t/d)).toFixed(2);
+}
+function ytStop(){
+  if(!YA||!YA.w&&!YA.p)return;
+  clearInterval(YA.iv);clearTimeout(YA.st);
+  try{if(YA.p)YA.p.destroy()}catch(e){}
+  YA.p=null;YA.id=null;YA.ready=false;YA.isAd=false;YA.stuck=false;YA.want=false;YA.dur=0;
+  if(YA.w){YA.w.hidden=true;YA.ad.classList.add('hid');ytFill();YA.b.classList.remove('on');YA.b.classList.add('load');YA.pg.style.strokeDashoffset=0}}
+function ytSetup(id){
+  if(!id){ytStop();return}
+  ytUi();
+  if(YA.id===id){ytPos();return}
+  ytStop();YA.id=id;YA.w.hidden=false;ytPos();setTimeout(ytPos,300);
+  YA.b.classList.remove('off');YA.b.classList.add('load');
+  ytApi().then(()=>{
+    if(YA.id!==id)return;
+    const pv={playsinline:1,controls:1,rel:0,fs:0,disablekb:1,modestbranding:1};
+    if(/^https?:$/.test(location.protocol))pv.origin=location.origin;
+    YA.p=new window.YT.Player('ytp',{width:'100%',height:'200',videoId:id,playerVars:pv,events:{
+      onReady:()=>{if(YA.id!==id)return;YA.ready=true;YA.b.classList.remove('load');clearInterval(YA.iv);YA.iv=setInterval(ytTick,300)},
+      onStateChange:e=>{
+        if(e.data===1){YA.want=false;clearTimeout(YA.st)}
+        if(e.data===0){YA.pg.style.strokeDashoffset=0;YA.b.classList.remove('on')}
+        ytTick()},
+      onError:()=>{YA.b.classList.remove('load');YA.b.classList.add('off');clearInterval(YA.iv)}}})
+  }).catch(()=>{if(YA.b){YA.b.classList.remove('load');YA.b.classList.add('off')}});
+}
 
 /* transposição, seções, colar cifra, setlists */
 const SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];

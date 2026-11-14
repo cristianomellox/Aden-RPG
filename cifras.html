@@ -274,6 +274,9 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 @media (prefers-reduced-motion:reduce){.ecard.on .eic svg{animation:none}}
 .egrid.hub .ecard{min-height:196px}
 .egrid.hub .eic{width:108px;height:108px}
+.lvl{flex:1;height:8px;min-width:40px;border-radius:4px;background:#2a2410;overflow:hidden}
+.lvl i{display:block;height:100%;width:0;background:var(--gold);transition:width .08s linear}
+.lvl.clip i{background:#e53935}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -1035,7 +1038,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div class="top"><button class="ib" id="bknotes" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div style="flex:1;min-width:0"><h1 style="margin:0">Notas</h1><div class="sub" id="nsub" style="margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div></div></div>
   <div id="chlist"></div>
   <div id="ncmp">
-    <div id="nrec" hidden><button class="ib" id="ncan" type="button" aria-label="Cancelar gravação"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><span class="rdot"></span><span id="nt">0:00</span><span class="sub" style="margin:0">/ 3:00</span></div>
+    <div id="nrec" hidden><button class="ib" id="ncan" type="button" aria-label="Cancelar gravação"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><span class="rdot"></span><span id="nt">0:00</span><span class="sub" style="margin:0">/ 3:00</span><span class="lvl" id="nlv" aria-hidden="true"><i></i></span></div>
     <textarea id="ntx" rows="1" maxlength="500" placeholder="Mensagem" enterkeyhint="send"></textarea>
     <button id="nbtn" type="button" aria-label="Gravar áudio"></button>
   </div>
@@ -2299,20 +2302,26 @@ async function nMic(){
   if(NT.rec){nStopRec(true);return}
   if(!await nReady())return;
   if(!navigator.mediaDevices||!window.MediaRecorder){modal('Gravação indisponível','Este navegador não permite gravar áudio.',[['OK',1]],'err');return}
-  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}
+  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1,sampleRate:48000}})}
   catch(e){modal('Microfone bloqueado','Permita o acesso ao microfone nas configurações do navegador para gravar áudio.',[['OK',1]],'err');return}
   const mt=['audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t))||'';
-  let mr;try{mr=new MediaRecorder(st,mt?{mimeType:mt,audioBitsPerSecond:48000}:{audioBitsPerSecond:48000})}
+  let mr;try{mr=new MediaRecorder(st,mt?{mimeType:mt,audioBitsPerSecond:128000}:{audioBitsPerSecond:128000})}
   catch(e){st.getTracks().forEach(t=>t.stop());modal('Gravação indisponível','Não foi possível iniciar a gravação neste aparelho.',[['OK',1]],'err');return}
   const R={mr,st,ch:[],t0:Date.now(),send:true,iv:0,sid:NT.id};NT.rec=R;
   mr.ondataavailable=e=>{if(e.data&&e.data.size)R.ch.push(e.data)};
   mr.onstop=()=>nRecDone(R);
+  /* medidor de nível (só mostra; não altera o som gravado) */
+  try{const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){R.ac=new AC();if(R.ac.resume)R.ac.resume();const src=R.ac.createMediaStreamSource(st),an=R.ac.createAnalyser();an.fftSize=1024;src.connect(an);
+      const buf=new Uint8Array(an.fftSize),lv=$('#nlv');
+      R.mv=setInterval(()=>{an.getByteTimeDomainData(buf);let pk=0;for(let i=0;i<buf.length;i++){const v=Math.abs(buf[i]-128)/128;if(v>pk)pk=v}
+        lv.firstElementChild.style.width=Math.min(100,pk*115)+'%';lv.classList.toggle('clip',pk>.96)},80)}}catch(e){}
   mr.start(1000);
   $('#nt').textContent='0:00';
   R.iv=setInterval(()=>{const s=Math.floor((Date.now()-R.t0)/1000);$('#nt').textContent=nDur(s);if(s>=NMAX)nStopRec(true)},250);
   nBtn()}
 function nStopRec(send){
-  const R=NT.rec;if(!R)return;R.send=send;clearInterval(R.iv);NT.rec=null;
+  const R=NT.rec;if(!R)return;R.send=send;clearInterval(R.iv);clearInterval(R.mv);if(R.ac){try{R.ac.close()}catch(e){}}NT.rec=null;
   try{R.mr.stop()}catch(e){nRecDone(R)}
   R.st.getTracks().forEach(t=>t.stop());nBtn()}
 function nRecDone(R){

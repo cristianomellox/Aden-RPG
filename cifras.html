@@ -971,7 +971,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 
 <section class="screen" id="tut">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Tutorial</h1></div>
-  <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver as músicas e executar as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido sempre que você for criar ou alterar algo. Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
+  <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver as músicas e executar as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido <b>uma vez por sessão</b> (vale por 30 minutos e é esquecido ao fechar a página ou o app). Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
   <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Setlist &amp; Playlist:</b> abre as setlists (aba padrão) e as músicas.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Afinador:</b> afina violão, guitarra e baixo pelo microfone.</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
   <details><summary>Avisos e notificações</summary><div class="tx"><ul><li>Instale o app e toque em <b>Ativar notificações</b> na tela inicial para receber avisos de músicas, setlists e outros recados.</li><li>O <b>sino</b> (canto superior direito) mostra os avisos; o número vermelho indica os que você ainda não viu.</li><li>Para publicar um aviso, abra o sino e toque em <b>Criar aviso</b> (pede o código da banda).</li></ul></div></details>
   <details><summary>Afinador</summary><div class="tx"><ul><li>Toque em <b>Ativar microfone</b> e permita o acesso. Escolha <b>Violão / Guitarra</b>, <b>Baixo 4</b>, <b>Baixo 5</b> ou <b>Cromático</b>.</li><li>Toque uma corda: o app detecta a nota sozinho (<b>Auto</b>) e o <b>ponteiro deve ficar no meio</b>. Azul = grave (aperte), vermelho = agudo (afrouxe), verde = afinado.</li><li>Toque numa corda (E, A, D…) para fixá-la; toque de novo ou em <b>Auto</b> para soltar.</li><li><b>Dica:</b> uma corda por vez, solta, microfone perto e sem barulho ao redor. No baixo, aguarde 1–2 s.</li></ul></div></details>
@@ -997,7 +997,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e executam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Executar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Áudio do YouTube</summary><div class="tx"><ul><li>Ao criar ou editar uma música, cole o <b>link do YouTube</b> abaixo do título (vale link comprido, curto youtu.be ou de playlist com <b>v=</b>).</li><li>Na tela da música aparece um botão redondo no canto superior direito: toque para <b>tocar/pausar</b>. O anel dourado vai diminuindo conforme a música passa.</li><li>Só o áudio toca. Se o YouTube exibir um <b>anúncio</b>, aparece um mini vídeo para você tocar em <b>Pular</b>; ele some sozinho quando a música começa.</li><li>Precisa de internet. Ao sair da música, o áudio para.</li></ul></div></details>
   <details><summary>Áudio próprio e Ensaio &amp; Notas</summary><div class="tx"><ul><li>Ao criar ou editar uma música, você pode anexar um <b>MP3 ou M4A</b>. Com arquivo, ele toca no lugar do YouTube.</li><li>Ao tocar pela primeira vez, o áudio é <b>baixado em segundo plano</b> e fica salvo no aparelho (aparece um ✓ no botão), então toca <b>offline</b>.</li><li>Na setlist, <b>Ensaio &amp; Notas</b> abre duas áreas: <b>Base Vocal</b> (um áudio de referência para Soprano, Contralto, Tenor e Baixo; card colorido = tem áudio) e <b>Notas</b> (chat da banda com texto e áudios de até 3 minutos).</li><li>Enviar, trocar ou remover um áudio da Base Vocal pede o código da banda. Nas Notas, <b>segure</b> uma mensagem sua para apagar.</li><li>Cada setlist tem a sua própria Base Vocal e o seu próprio chat, que são apagados junto com ela.</li></ul></div></details>
-  <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>sempre</b> que você tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
+  <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>uma vez</b> ao tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist, e vale por <b>30 minutos</b>. Depois disso, ou ao fechar a página ou o app, ele é pedido de novo.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
 
@@ -1973,7 +1973,10 @@ $('#mst').onclick=()=>{const f=draft.score[0]||{};draft.score.push({n:[],k:f.k||
 /* sincronização com o Supabase (offline primeiro) */
 const SB='https://lqzlblvmkuwedcofmgfb.supabase.co',SBK='sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const SBH={apikey:SBK,Authorization:'Bearer '+SBK,'Content-Type':'application/json'};
-const UU=/^[0-9a-f]{8}-[0-9a-f]{4}-/i;let syncing=false,pushing=false,memCode='',unl=false;
+const UU=/^[0-9a-f]{8}-[0-9a-f]{4}-/i;let syncing=false,pushing=false,unl=false;
+/* código da banda: fica só na memória (some ao fechar a página ou o app) e vale 30 minutos desde que foi informado */
+let _mc='',_mcAt=0;const MC_TTL=30*60*1000;
+Object.defineProperty(window,'memCode',{configurable:true,get(){if(_mc&&Date.now()-_mcAt>=MC_TTL){_mc='';_mcAt=0}return _mc},set(v){_mc=v||'';_mcAt=_mc?Date.now():0}});
 function uid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:r&3|8).toString(16)})}
 function loadQ(){try{return JSON.parse(localStorage.getItem('cifras.q'))||[]}catch(e){return []}}
 function pqSave(){try{localStorage.setItem('cifras.q',JSON.stringify(pq))}catch(e){}}
@@ -2034,6 +2037,10 @@ async function sync(push){
 }
 async function saveSync(){
   if(!navigator.onLine){await modal('Salvo neste aparelho','Sem internet agora. A alteração será enviada para a banda automaticamente quando a conexão voltar.',[['OK',1]],'ok');return}
+  if(pq.length&&!memCode){
+    const ok=await unlock('Por segurança o código vale por 30 minutos. Informe o código da banda para enviar sua alteração.');
+    if(!ok){await modal('Salvo neste aparelho','A alteração ficou salva neste aparelho, mas não foi enviada. Informe o código da banda ao tocar em Adicionar ou no lápis para enviar.',[['OK',1]],'err');return}
+  }
   modal('Sincronizando…','Enviando para a banda.',[],'spin');
   const t0=Date.now();let r;do{r=await sync(true);if(r==='busy')await new Promise(z=>setTimeout(z,400))}while(r==='busy');
   const w=800-(Date.now()-t0);if(w>0)await new Promise(z=>setTimeout(z,w));
@@ -2048,6 +2055,7 @@ async function needOnline(){
 }
 function unlock(msg){
   if(!navigator.onLine)return needOnline();
+  if(memCode&&(cfg().name||'').trim())return Promise.resolve(true);
   return new Promise(res=>{
     modal('Acesso restrito',msg||'Para adicionar ou editar músicas, informe o código da banda.',[]);
     $('#mdf').innerHTML='<input id="mc" type="password" placeholder="Código da banda" autocomplete="off"><input id="mn" placeholder="Seu nome" maxlength="60" style="margin-top:8px"'+(cfg().name?' readonly aria-label="Seu nome (não pode ser alterado)" style="margin-top:8px;color:var(--gold);opacity:.85"':'')+'>';

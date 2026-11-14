@@ -277,6 +277,12 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .lvl{flex:1;height:8px;min-width:40px;border-radius:4px;background:#2a2410;overflow:hidden}
 .lvl i{display:block;height:100%;width:0;background:var(--gold);transition:width .08s linear}
 .lvl.clip i{background:#e53935}
+/* botões de retroceder/avançar 10 s */
+#ytsk{display:flex;gap:2px}
+#ytsk .sk{width:29px;height:34px;padding:0;border:0;border-radius:12px;background:rgba(0,0,0,.88);color:var(--gold);display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.7);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#ytsk .sk svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+#ytsk .sk:active{background:#2a2300}
+#ytw:has(#ytb.load,#ytb.off) #ytsk{opacity:.4;pointer-events:none}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -1288,8 +1294,9 @@ function ytFill(){YA.ad.innerHTML='<div id="ytmsg"></div><div id="ytp"></div>'}
 function ytUi(){
   if(YA.w)return;
   const w=el('div');w.id='ytw';w.hidden=true;
-  w.innerHTML='<button id="ytb" type="button" class="load" aria-label="Tocar ou pausar o áudio"><svg class="ytr" viewBox="0 0 60 60" aria-hidden="true"><circle class="tr" cx="30" cy="30" r="27"/><circle class="pg" cx="30" cy="30" r="27"/></svg><svg class="yti" viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5v14l11-7z"/><path class="pa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button><div id="ytad" class="hid"></div>';
+  w.innerHTML='<button id="ytb" type="button" class="load" aria-label="Tocar ou pausar o áudio"><svg class="ytr" viewBox="0 0 60 60" aria-hidden="true"><circle class="tr" cx="30" cy="30" r="27"/><circle class="pg" cx="30" cy="30" r="27"/></svg><svg class="yti" viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5v14l11-7z"/><path class="pa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button><div id="ytsk"><button id="ytbk" type="button" class="sk" aria-label="Voltar 10 segundos" title="Voltar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button><button id="ytfw" type="button" class="sk" aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button></div><div id="ytad" class="hid"></div>';
   document.body.append(w);YA.w=w;YA.b=w.querySelector('#ytb');YA.ad=w.querySelector('#ytad');YA.pg=w.querySelector('.pg');
+  w.querySelector('#ytbk').onclick=()=>mediaSkip(-10);w.querySelector('#ytfw').onclick=()=>mediaSkip(10);
   ytFill();
   YA.b.onclick=()=>{if(AU&&AU.on)return auClick();const p=YA.p;if(!YA.ready||!p)return;
     const s=p.getPlayerState();
@@ -2108,6 +2115,7 @@ function auSetup(au){
   YA.b.classList.remove('off','load','on');YA.pg.style.strokeDashoffset=0;auSaved(false);
   /* se já está no aparelho, toca do cache (funciona offline) */
   auCached(au.p).then(b=>{if(!b||AU.a!==a)return;auSaved(true);if(a.paused&&!a.currentTime){AU.url=URL.createObjectURL(b);a.src=AU.url}});
+  a.onseeked=()=>{AU.skT=null};
   a.onplay=()=>YA.b.classList.add('on');
   a.onpause=()=>YA.b.classList.remove('on');
   a.onended=()=>{YA.b.classList.remove('on');YA.pg.style.strokeDashoffset=0;a.currentTime=0};
@@ -2492,6 +2500,24 @@ async function vRemove(k){
       if(r&&r.old)auDelete(r.old);
       if(VC.id===sid){delete VC.data[k];vSave();vRender()}
     }catch(e){if(/forbidden|42501/i.test(e.message))memCode='';modal('Não foi possível remover','Verifique a conexão e o código da banda e tente de novo.',[['OK',1]],'err')}})}
+
+/* ±10 s no áudio próprio ou no YouTube (botões « e » logo abaixo do play) */
+function mediaSkip(dt){
+  if(AU&&AU.on&&AU.a){
+    const a=AU.a,d=a.duration;
+    /* toques rápidos acumulam: enquanto o salto anterior não terminou, parte do destino dele */
+    let n=(a.seeking&&AU.skT!=null?AU.skT:(a.currentTime||0))+dt;if(n<0)n=0;if(isFinite(d)&&d>0&&n>d)n=d;
+    AU.skT=n;a.currentTime=n;if(isFinite(d)&&d>0)YA.pg.style.strokeDashoffset=(169.65*Math.min(1,n/d)).toFixed(2);return}
+  const p=YA.p;if(!p||!YA.ready||YA.isAd)return;
+  try{
+    const st=p.getPlayerState(),d=p.getDuration()||0,now=Date.now();
+    let n=((YA.skT!=null&&now-YA.skAt<900)?YA.skT:(p.getCurrentTime()||0))+dt;
+    if(n<0)n=0;if(d>0&&n>d-.3)n=Math.max(0,d-.3);
+    YA.skT=n;YA.skAt=now;p.seekTo(n,true);
+    if(st!==1&&st!==2&&st!==3)setTimeout(()=>{try{p.pauseVideo()}catch(e){}},0);   /* não deixa começar a tocar sozinho */
+    if(d>0)YA.pg.style.strokeDashoffset=(169.65*Math.min(1,n/d)).toFixed(2)
+  }catch(e){}}
+
 
 /* botão que recolhe a interface da tela inicial (só aparece na home) */
 (function(){

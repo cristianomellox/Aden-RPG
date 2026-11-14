@@ -283,6 +283,15 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 #ytsk .sk svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 #ytsk .sk:active{background:#2a2300}
 #ytw:has(#ytb.load,#ytb.off) #ytsk{opacity:.4;pointer-events:none}
+/* separar instrumentos */
+#sep select{width:100%;flex:none;margin-top:2px}
+#sep label{display:block;margin-top:14px}
+.sepbar{height:8px;border-radius:4px;background:#2a2410;overflow:hidden;margin:12px 0 0}
+.sepbar i{display:block;height:100%;width:0;background:var(--gold);transition:width .25s}
+.sstem{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px;border:1px solid var(--ln);border-radius:12px;margin:8px 0;background:#0c0c0c}
+.sstem b{min-width:118px;color:var(--gold)}
+.sstem audio{flex:1;min-width:170px;height:36px}
+.sstem a.btn{text-decoration:none}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -911,6 +920,10 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
       <svg viewBox="0 0 64 64"><path d="M8 44a24 24 0 0148 0"/><path d="M32 44L42 20"/><circle cx="32" cy="44" r="3"/><path d="M32 8v6M14 16l4 4M50 16l-4 4"/></svg>
       Afinador
     </button>
+    <button class="card wide" data-go="sep">
+      <svg viewBox="0 0 64 64"><path d="M6 32h6M16 22v20M24 12v40M32 24v16M40 16v32M48 26v12M54 32h4"/></svg>
+      Separar instrumentos
+    </button>
     <button class="card wide" data-go="tut">
       <svg viewBox="0 0 64 64"><path d="M8 12h18a6 6 0 016 6v34a5 5 0 00-5-5H8zM56 12H38a6 6 0 00-6 6v34a5 5 0 015-5h19z"/></svg>
       Tutorial
@@ -1048,6 +1061,22 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
     <textarea id="ntx" rows="1" maxlength="500" placeholder="Mensagem" enterkeyhint="send"></textarea>
     <button id="nbtn" type="button" aria-label="Gravar áudio"></button>
   </div>
+</section>
+
+<section class="screen" id="sep">
+  <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
+  <p class="sub" style="line-height:1.45">Separa uma música em bateria, baixo, vocais e outros instrumentos usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
+  <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
+  <label for="sepn">Stems</label>
+  <select id="sepn"><option value="6">Todos: 6 stems (+ violão e piano)</option><option value="4">4 stems (bateria, baixo, vocais, outros)</option></select>
+  <label for="sepm">Processamento</label>
+  <select id="sepm"><option value="auto">Automático (GPU se houver)</option><option value="wasm">Somente CPU (WebAssembly)</option></select>
+  <div class="row-btns" style="margin-top:14px"><button class="btn" id="sepgo" type="button">Separar</button><button class="btn sec" id="sepcx" type="button" hidden>Cancelar</button></div>
+  <div class="sepbar" hidden><i></i></div>
+  <div id="sepst" class="sub" style="margin:10px 0"></div>
+  <div id="sepout"></div>
+  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4">Os pesos do HTDemucs são da Meta e têm licença de uso <b>não comercial</b>. Use apenas músicas que a banda tem direito de usar. O stem de piano costuma sair com ruído.</p>
 </section>
 
 <section class="screen" id="song">
@@ -2518,6 +2547,99 @@ function mediaSkip(dt){
     if(d>0)YA.pg.style.strokeDashoffset=(169.65*Math.min(1,n/d)).toFixed(2)
   }catch(e){}}
 
+/* ===== Separar instrumentos: HTDemucs no próprio navegador (onnxruntime-web + demucs-onnx) ===== */
+var SEP={busy:false,cancel:false,urls:[]};
+const ORTB='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
+const SEP_HF=window.SEP_HF||'https://huggingface.co/HRSadeghi/demucs-onnx/resolve/main/';
+const SEPN={drums:'Bateria',bass:'Baixo',other:'Outros',vocals:'Vocais',guitar:'Violão / guitarra',piano:'Piano'};
+const sepSt=t=>{$('#sepst').textContent=t};
+const sepBar=p=>{const b=$('#sep .sepbar');b.hidden=p==null;if(p!=null)b.firstElementChild.style.width=Math.round(Math.min(1,p)*100)+'%'};
+const mbs=n=>(n/1048576).toFixed(0)+' MB';
+async function sepModel(name,ext){            /* baixa uma vez e guarda no aparelho (Cache Storage) */
+  const url=SEP_HF+name+ext,c=await caches.open('cifras-models-v1');let r=await c.match(url);
+  if(!r){
+    const q=await fetch(url);if(!q.ok)throw new Error('HTTP '+q.status+' em '+name+ext);
+    const tot=+q.headers.get('content-length')||0,rd=q.body.getReader(),ch=[];let got=0;
+    for(;;){const {done,value}=await rd.read();if(done)break;ch.push(value);got+=value.length;
+      sepSt('Baixando o modelo '+name+' (só na primeira vez): '+mbs(got)+(tot?' de '+mbs(tot):''));if(tot)sepBar(got/tot)}
+    const blob=new Blob(ch);
+    try{await c.put(url,new Response(blob,{headers:{'content-type':ext==='.json'?'application/json':'application/octet-stream'}}))}catch(e){}
+    r=new Response(blob)}
+  return r}
+async function sepSession(core,n,dev){
+  const ort=await import(ORTB+(dev==='webgpu'?'ort.webgpu.bundle.min.mjs':'ort.wasm.bundle.min.mjs'));
+  ort.env.wasm.wasmPaths=ORTB;ort.env.wasm.numThreads=self.crossOriginIsolated?Math.min(4,navigator.hardwareConcurrency||2):1;
+  if(dev!=='webgpu')ort.env.wasm.proxy=true;  /* mantém a tela responsiva */
+  const base=n===6?'htdemucs_6s':'htdemucs',names=dev==='webgpu'?[base]:[base+'_int8',base];let last;
+  for(const nm of names){
+    try{
+      let side;try{side=await(await sepModel(nm,'.json')).json()}catch(e){side=await(await sepModel(base,'.json')).json()}
+      const buf=new Uint8Array(await(await sepModel(nm,'.onnx')).arrayBuffer());
+      sepSt('Carregando o modelo ('+(dev==='webgpu'?'GPU':'CPU / WebAssembly')+')…');sepBar(null);
+      const session=await ort.InferenceSession.create(buf,{executionProviders:[dev],graphOptimizationLevel:'all'});
+      if(dev!=='webgpu'){   /* no modo CPU o ORT transfere os buffers para o worker; o Separator reaproveita os mesmos, então entrega-se uma cópia */
+        const run0=session.run.bind(session);
+        session.run=(feeds,...r)=>{const f={};for(const k in feeds){const t=feeds[k];f[k]=new ort.Tensor(t.type,t.data.slice(),t.dims)}return run0(f,...r)}}
+      const config=core.ModelConfig.fromSession(session,{sidecar:side});
+      return{session,dev,sep:new core.Separator({ort,session,config,device:dev==='webgpu'?'webgpu':'cpu'},{batch:dev==='webgpu'?4:1})}
+    }catch(e){last=e}}
+  throw last}
+async function sepOpen(core,n,mode){
+  const gpu=mode==='auto'&&navigator.gpu&&await navigator.gpu.requestAdapter().catch(()=>null);
+  for(const dev of gpu?['webgpu','wasm']:['wasm']){
+    try{return await sepSession(core,n,dev)}catch(e){if(dev==='wasm')throw e;sepSt('WebGPU indisponível neste aparelho, usando a CPU…')}}}
+async function sepDecode(file,rate){
+  const b=await new OfflineAudioContext(2,1,rate).decodeAudioData(await file.arrayBuffer()),n=b.length,s=new Float32Array(2*n);
+  for(let c=0;c<2;c++)s.set(b.getChannelData(Math.min(c,b.numberOfChannels-1)),c*n);
+  return{s,n}}
+function sepWav(ab,n,ch,rate){
+  const v=new DataView(ab),t=(a,x)=>{for(let i=0;i<x.length;i++)v.setUint8(a+i,x.charCodeAt(i))};
+  t(0,'RIFF');v.setUint32(4,36+n*ch*2,true);t(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*ch*2,true);v.setUint16(32,ch*2,true);v.setUint16(34,16,true);t(36,'data');v.setUint32(40,n*ch*2,true)}
+async function sepRun(){
+  if(SEP.busy)return;
+  const f=$('#sepf').files[0];if(!f){sepSt('Escolha um arquivo de áudio primeiro.');return}
+  SEP.busy=true;SEP.cancel=false;$('#sepgo').hidden=true;$('#sepcx').hidden=false;$('#sepout').innerHTML='';
+  SEP.urls.forEach(u=>URL.revokeObjectURL(u));SEP.urls=[];
+  let wl=null,cur=null;const t0=Date.now();
+  try{
+    try{wl=await navigator.wakeLock.request('screen')}catch(e){}
+    const core=await import('./demucs-core.js');
+    cur=await sepOpen(core,+$('#sepn').value,$('#sepm').value);
+    const sep=cur.sep,C=sep.channels,rate=sep.sampleRate;
+    sepSt('Lendo o áudio…');sepBar(null);
+    const {s:mix,n}=await sepDecode(f,rate);
+    if(n/rate>480)throw new Error('O arquivo tem mais de 8 minutos. Use um trecho menor.');
+    const S=sep.sources.length,abs=sep.sources.map(()=>{const ab=new ArrayBuffer(44+n*C*2);sepWav(ab,n,C,rate);return ab}),outs=abs.map(ab=>new Int16Array(ab,44));
+    const t1=Date.now();
+    await sep.separate(mix,n,(off,count,block)=>{
+      for(let k=0;k<S;k++)for(let c=0;c<C;c++){const src=block.subarray((k*C+c)*count,(k*C+c+1)*count),dst=outs[k];
+        for(let i=0;i<count;i++){let x=src[i];x=x<-1?-1:x>1?1:x;dst[(off+i)*C+c]=Math.round(x*32767)}}
+    },(done,total)=>{
+      if(SEP.cancel)throw new Error('cancelado');
+      const el=(Date.now()-t1)/1000,eta=done?el/done*(total-done):0;
+      sepBar(done/total);sepSt('Separando… '+Math.round(done/total*100)+'%'+(done?' · faltam ~'+(eta>90?Math.round(eta/60)+' min':Math.round(eta)+' s'):''))});
+    const name=f.name.replace(/\.[^.]+$/,''),box=$('#sepout'),links=[];
+    sep.sources.forEach((k,i)=>{
+      const url=URL.createObjectURL(new Blob([abs[i]],{type:'audio/wav'}));SEP.urls.push(url);
+      const row=el('div','sstem'),b=el('b'),au=el('audio'),a=el('a','btn sec');
+      b.textContent=SEPN[k]||k;au.controls=true;au.preload='metadata';au.src=url;
+      a.textContent='Baixar';a.href=url;a.download=name+' - '+(SEPN[k]||k).replace(/ \/ /,'-').toLowerCase()+'.wav';a.style.cssText='padding:8px 14px;font-size:.85rem';
+      row.append(b,au,a);box.append(row);links.push(a)});
+    const all=el('button','btn');all.type='button';all.textContent='Baixar todos';
+    all.onclick=()=>links.forEach((a,i)=>setTimeout(()=>a.click(),i*700));box.append(all);
+    const tot=(Date.now()-t0)/1000;
+    sepBar(null);sepSt('Pronto em '+(tot>90?Math.round(tot/60)+' min':Math.round(tot)+' s')+' · '+(cur.dev==='webgpu'?'GPU (WebGPU)':'CPU (WebAssembly)')+'. Os arquivos ficam disponíveis enquanto esta tela estiver aberta.')
+  }catch(e){
+    sepBar(null);
+    sepSt(e&&e.message==='cancelado'?'Separação cancelada.':/HTTP|fetch|network|Failed/i.test(String(e&&e.message))?'Não foi possível baixar o modelo. Verifique a conexão e tente de novo. ('+(e.message||e)+')':'Erro: '+(e&&e.message||e));
+    console.error(e)
+  }finally{
+    try{if(cur)await cur.session.release()}catch(e){}
+    try{if(wl)await wl.release()}catch(e){}
+    SEP.busy=false;$('#sepgo').hidden=false;$('#sepcx').hidden=true}}
+$('#sepgo').onclick=sepRun;
+$('#sepcx').onclick=()=>{SEP.cancel=true;sepSt('Cancelando…')};
 
 /* botão que recolhe a interface da tela inicial (só aparece na home) */
 (function(){

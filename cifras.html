@@ -1087,7 +1087,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 
 <section class="screen" id="sep">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
-  <p class="sub" style="line-height:1.45">Separa uma música em bateria, baixo, vocais e outros instrumentos usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <p class="sub" style="line-height:1.45">Separe uma música em bateria, baixo, vocais e outros instrumentos. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
   <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
   <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
   <label for="sepn">Stems</label>
@@ -1098,7 +1098,8 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div class="sepbar" hidden><i></i></div>
   <div id="sepst" class="sub" style="margin:10px 0"></div>
   <div id="sepout"></div>
-  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4">Os pesos do HTDemucs são da Meta e têm licença de uso <b>não comercial</b>. Use apenas músicas que a banda tem direito de usar. O stem de piano costuma sair com ruído.</p>
+  <p class="sub" style="margin-top:16px;font-size:.98rem;line-height:1.4"><b style="color: yellow!important;">Continue nesta tela até o fim do processamento.</b><br>
+    O separador está em fase beta e pode apresentar falhas. O stem de piano costuma sair com ruído.</p>
 </section>
 
 <section class="screen" id="song">
@@ -2752,6 +2753,77 @@ MT.prototype.seek=function(t){
   this.ontime&&this.ontime(t,this.dur())};
 MT.prototype.destroy=function(){this.pause();Object.values(this.els).forEach(a=>{a.onended=a.ontimeupdate=a.onerror=null;a.removeAttribute('src');try{a.load()}catch(e){}});this.els={};this.master=null};
 
+/* Mixer de PCM com relógio único (Web Audio): todos os instrumentos são agendados na MESMA linha do tempo,
+   em blocos de 5 s, então ficam alinhados por amostra (inclusive os que entram com a música tocando). */
+function PCMMix(rate,ch){this.rate=rate;this.ch=ch;this.tr={};this.on=new Set();this.playing=false;this.t=0;this.ctx=null;this.Ls=5;
+  this.nodes={};this.gain={};this.nxt={};this.iv=0;this.c0=0;this.p0=0;this.ontime=null;this.onstate=null;this.onend=null}
+PCMMix.prototype.add=function(k,pcm){this.tr[k]=pcm};
+PCMMix.prototype.dur=function(){const k=Object.keys(this.tr)[0];return k?this.tr[k].length/this.ch/this.rate:0};
+PCMMix.prototype.time=function(){return this.playing?Math.max(this.p0,Math.min(this.dur(),this.p0+(this.ctx.currentTime-this.c0))):this.t};
+PCMMix.prototype.ensure=function(){
+  if(!this.ctx){const AC=window.AudioContext||window.webkitAudioContext;
+    try{this.ctx=new AC({sampleRate:this.rate,latencyHint:'playback'})}catch(e){this.ctx=new AC()}}
+  if(this.ctx.state==='suspended')this.ctx.resume();
+  try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}      /* iPhone: toca mesmo no modo silencioso */
+  if(!this.sil){this.sil=new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');this.sil.loop=true;this.sil.setAttribute('playsinline','')}
+  this.sil.play().catch(()=>{});return this.ctx};
+PCMMix.prototype.chunk=function(k,i){
+  const C=this.ch,pcm=this.tr[k],tot=pcm.length/C,L=this.Ls*this.rate,s=i*L,e=Math.min(tot,s+L),n=e-s;
+  if(n<=0)return null;
+  const b=this.ctx.createBuffer(C,n,this.rate);
+  for(let c=0;c<C;c++){const d=b.getChannelData(c);for(let j=0;j<n;j++)d[j]=pcm[(s+j)*C+c]/32768}
+  return b};
+PCMMix.prototype.startK=function(k){
+  const ctx=this.ctx,g=ctx.createGain(),n=ctx.currentTime;
+  g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(1,n+.012);g.connect(ctx.destination);
+  this.gain[k]=g;this.nodes[k]=[];this.nxt[k]=Math.floor(this.time()/this.Ls)};
+PCMMix.prototype.stopK=function(k){
+  const g=this.gain[k],ns=this.nodes[k]||[],ctx=this.ctx;delete this.gain[k];delete this.nodes[k];delete this.nxt[k];
+  if(!g)return;
+  const n=ctx.currentTime;try{g.gain.cancelScheduledValues(n);g.gain.setValueAtTime(g.gain.value,n);g.gain.linearRampToValueAtTime(0,n+.012)}catch(e){}
+  setTimeout(()=>{ns.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});try{g.disconnect()}catch(e){}},40)};
+PCMMix.prototype.fill=function(k,horizon){
+  const ctx=this.ctx,dur=this.dur();let i=this.nxt[k];
+  while(i*this.Ls<horizon&&i*this.Ls<dur){
+    const b=this.chunk(k,i);if(!b)break;
+    let when=this.c0+(i*this.Ls-this.p0),off=0;const min=ctx.currentTime+.02;
+    if(when<min){off=min-when;when=min}                       /* começo no meio do bloco: mesmo ponto da linha do tempo */
+    if(off<b.duration){const s=ctx.createBufferSource();s.buffer=b;s.connect(this.gain[k]);s.start(when,off);
+      const arr=this.nodes[k];arr.push(s);s.onended=()=>{const j=arr.indexOf(s);if(j>=0)arr.splice(j,1)}}
+    i++}
+  this.nxt[k]=i};
+PCMMix.prototype.pump=function(){
+  if(!this.playing)return;
+  const t=this.time(),h=t+4;
+  this.on.forEach(k=>{if(this.gain[k])this.fill(k,h)});
+  this.ontime&&this.ontime(t,this.dur());
+  if(t>=this.dur()-.02)this.stopAll(true)};
+PCMMix.prototype.begin=function(pos){
+  this.p0=pos;this.c0=this.ctx.currentTime+.06;this.playing=true;
+  this.on.forEach(k=>this.startK(k));
+  clearInterval(this.iv);this.iv=setInterval(()=>this.pump(),120);this.pump();this.onstate&&this.onstate(true)};
+PCMMix.prototype.setSel=function(keys){
+  const nk=new Set(keys.filter(k=>this.tr[k])),old=this.on;this.on=nk;
+  if(!this.playing)return;
+  if(!nk.size){this.pause();return}
+  old.forEach(k=>{if(!nk.has(k))this.stopK(k)});
+  nk.forEach(k=>{if(!old.has(k)){this.startK(k)}});
+  this.pump()};
+PCMMix.prototype.play=function(){if(!this.on.size)return false;this.ensure();this.begin(this.t);return true};
+PCMMix.prototype.pause=function(){
+  if(!this.playing)return;
+  this.t=this.time();this.playing=false;clearInterval(this.iv);
+  Object.keys(this.gain).forEach(k=>this.stopK(k));if(this.sil)this.sil.pause();this.onstate&&this.onstate(false)};
+PCMMix.prototype.stopAll=function(ended){
+  this.pause();if(ended){this.t=0;this.onend&&this.onend();this.ontime&&this.ontime(0,this.dur())}};
+PCMMix.prototype.seek=function(t){
+  t=Math.max(0,Math.min(this.dur(),t));
+  if(this.playing){Object.keys(this.gain).forEach(k=>{const ns=this.nodes[k]||[];ns.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});delete this.nodes[k];this.nodes[k]=[];this.nxt[k]=Math.floor(t/this.Ls)});
+    this.p0=t;this.c0=this.ctx.currentTime+.06;this.pump()}
+  else this.t=t;
+  this.ontime&&this.ontime(t,this.dur())};
+PCMMix.prototype.destroy=function(){this.pause();this.tr={};this.sil=null;try{this.ctx&&this.ctx.close()}catch(e){}this.ctx=null};
+
 /* ---- cards com ícone 3D (aceso = colorido e animado; apagado = cinza e parado) ---- */
 function icOn(n,on){n.dataset.off=on?'0':'1';n.classList.toggle('ic-off',!on);if(n.dataset.k)ensSet(n,on);else if(window.CifrasI3D&&window.CifrasI3D.setOn)window.CifrasI3D.setOn(n,on)}
 function stemCard(kind,label,color){
@@ -2765,9 +2837,9 @@ function stemCardOn(c,on){c.classList.toggle('on',on);c.classList.toggle('off',!
 function sepPause(){if(SEP&&SEP.mt)SEP.mt.pause()}
 function sepShow(sep,abs,fname){
   if(SEP.mt)SEP.mt.destroy();
-  const mt=SEP.mt=new MT(),sel=new Set(),box=$('#sepout'),name=fname.replace(/\.[^.]+$/,''),grid=el('div','egrid stgrid'),links=[];box.innerHTML='';
+  const mt=SEP.mt=new PCMMix(sep.sampleRate,sep.channels),sel=new Set(),box=$('#sepout'),name=fname.replace(/\.[^.]+$/,''),grid=el('div','egrid stgrid'),links=[];box.innerHTML='';
   sep.sources.forEach((k,i)=>{
-    const lb=SEPN[k]||k,url=URL.createObjectURL(new Blob([abs[i]],{type:'audio/wav'}));SEP.urls.push(url);mt.add(k,url);
+    const lb=SEPN[k]||k,url=URL.createObjectURL(new Blob([abs[i]],{type:'audio/wav'}));SEP.urls.push(url);mt.add(k,new Int16Array(abs[i],44));
     const c=stemCard(SEPI[k]||'other',lb,SEPC[k]||'#d4af37'),d=el('a','dl');
     d.href=url;d.download=name+' - '+lb.replace(/ \/ /,'-').toLowerCase()+'.wav';d.title='Baixar '+lb;d.setAttribute('aria-label',d.title);d.innerHTML=ST_DL;d.onclick=e=>e.stopPropagation();links.push(d);c.append(d);
     c.onclick=()=>{const on=!sel.has(k);if(on)sel.add(k);else sel.delete(k);stemCardOn(c,on);mt.setSel([...sel])};

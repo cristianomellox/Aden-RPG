@@ -1087,7 +1087,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 
 <section class="screen" id="sep">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
-  <p class="sub" style="line-height:1.45">Separe uma música em bateria, baixo, vocais e outros instrumentos. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <p class="sub" style="line-height:1.45">Separa uma música em bateria, baixo, vocais e outros instrumentos usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
   <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
   <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
   <label for="sepn">Stems</label>
@@ -1098,8 +1098,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div class="sepbar" hidden><i></i></div>
   <div id="sepst" class="sub" style="margin:10px 0"></div>
   <div id="sepout"></div>
-  <p class="sub" style="margin-top:16px;font-size:.98rem;line-height:1.4"><b style="color: yellow!important;">Continue nesta tela até o fim do processamento.</b><br>
-    O separador está em fase beta e pode apresentar falhas. O stem de piano costuma sair com ruído.</p>
+  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4">Os pesos do HTDemucs são da Meta e têm licença de uso <b>não comercial</b>. Use apenas músicas que a banda tem direito de usar. O stem de piano costuma sair com ruído.</p>
 </section>
 
 <section class="screen" id="song">
@@ -2669,29 +2668,88 @@ const ST_DL='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 11l
 const ST_PLAY='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>',ST_PAUSE='<svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" stroke="none"/></svg>';
 const hexRgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)).join(',');
 
-/* vários áudios tocando juntos, alinhados; a seleção pode mudar enquanto toca */
-function MT(){this.els={};this.on=new Set();this.master=null;this.playing=false;this.t=0;this.iv=0;this.ontime=null;this.onstate=null;this.onend=null;this.onerror=null}
+/* vários áudios tocando juntos, alinhados; a seleção pode mudar enquanto toca.
+   Sincronia: (1) o grupo só começa quando TODOS estão carregados na mesma posição;
+   (2) quem entra durante a música é pré-posicionado à frente e agendado para entrar no instante certo;
+   (3) um laço contínuo corrige o resíduo suavemente (velocidade ±6%), sem "pulos". */
+function MT(){this.els={};this.on=new Set();this.master=null;this.mk=null;this.playing=false;this.t=0;this.iv=0;this.gen=0;this.pend=new Set();this.jt={};this.pl=.05;
+  this.ontime=null;this.onstate=null;this.onend=null;this.onerror=null}
 MT.prototype.add=function(k,url){const a=new Audio();a.preload='auto';a.setAttribute('playsinline','');a.src=url;a.onerror=()=>{this.onerror&&this.onerror(k)};this.els[k]=a;return a};
 MT.prototype.time=function(){return this.playing&&this.master?this.master.currentTime:this.t};
 MT.prototype.dur=function(){for(const k in this.els){const d=this.els[k].duration;if(isFinite(d)&&d>0)return d}return 0};
-MT.prototype.setSel=function(keys){this.on=new Set(keys.filter(k=>this.els[k]));if(this.playing)this.apply()};
-MT.prototype.apply=function(){
-  const cur=this.time(),ks=[...this.on];
-  Object.keys(this.els).forEach(k=>{if(!this.on.has(k))this.els[k].pause()});
-  if(!ks.length){this.pause();return}
-  const m=this.els[ks[0]];
-  if(this.master&&this.master!==m){this.master.ontimeupdate=null;this.master.onended=null}
-  this.master=m;this.t=cur;
-  ks.forEach(k=>{const a=this.els[k];if(a.paused||Math.abs(a.currentTime-cur)>.05){try{a.currentTime=cur}catch(e){}}if(a.paused)a.play().catch(()=>{})});
+MT.prototype.ready=function(a,to){return new Promise(res=>{
+  let done=false;const ok=()=>a.readyState>=3&&!a.seeking,fin=()=>{if(done)return;done=true;clearInterval(iv);clearTimeout(tm);res()};
+  const iv=setInterval(()=>{if(ok())fin()},30),tm=setTimeout(fin,to||4000);if(ok())fin()})};
+MT.prototype.unlock=function(a){a.muted=true;const p=a.play();if(p&&p.catch)p.catch(()=>{})};   /* feito dentro do toque (exigência do iOS) */
+MT.prototype.setMaster=function(k){
+  if(this.master){this.master.ontimeupdate=null;this.master.onended=null}
+  const m=this.els[k];this.master=m;this.mk=k;
   m.ontimeupdate=()=>{this.ontime&&this.ontime(m.currentTime,this.dur())};
-  m.onended=()=>this.stopAll(true);
+  m.onended=()=>this.stopAll(true)};
+MT.prototype.loop=function(){
   clearInterval(this.iv);
-  this.iv=setInterval(()=>{if(!this.playing)return;const c=m.currentTime;ks.forEach(k=>{const a=this.els[k];if(a!==m&&!a.paused&&Math.abs(a.currentTime-c)>.08)a.currentTime=c})},500);
-  this.playing=true;this.onstate&&this.onstate(true)};
-MT.prototype.play=function(){if(!this.on.size)return false;this.playing=true;this.apply();return true};
-MT.prototype.pause=function(){this.t=this.master?this.master.currentTime:this.t;this.playing=false;clearInterval(this.iv);Object.values(this.els).forEach(a=>a.pause());this.onstate&&this.onstate(false)};
+  this.iv=setInterval(()=>{
+    const m=this.master;if(!this.playing||!m||m.paused||m.seeking)return;
+    const now=performance.now();
+    this.on.forEach(k=>{
+      const a=this.els[k];if(a===m||a.paused||a.seeking||this.pend.has(k))return;
+      const d=a.currentTime-m.currentTime,dd=a.__d==null?d:a.__d*.6+d*.4;a.__d=dd;   /* média móvel: o currentTime tem ruído de leitura */
+      if(a.__j&&now-a.__j>120){this.pl=Math.max(0,Math.min(.3,this.pl-d*.8));a.__j=0}   /* aprende o atraso de início da faixa */
+      if(a.__sk&&now-a.__sk<350)return;                                                    /* espera o salto anterior assentar */
+      if(a.__chk){a.__b=Math.max(-.1,Math.min(.4,(a.__b==null?.02:a.__b)-d*.8));a.__chk=0}  /* aprende a latência do salto */
+      if(Math.abs(d)>.07&&Math.abs(dd)>.05){a.__sk=now;a.__chk=1;a.__j=0;a.__d=null;a.currentTime=m.currentTime+(a.__b==null?.02:a.__b);a.playbackRate=1}
+      else if(Math.abs(dd)>.012)a.playbackRate=1-Math.max(-.06,Math.min(.06,dd*.8));
+      else if(a.playbackRate!==1)a.playbackRate=1})},100)};
+/* começa (ou recomeça) o grupo inteiro de uma só vez, a partir de pos */
+MT.prototype.start=function(keys,pos){
+  const g=++this.gen,els=keys.map(k=>this.els[k]);
+  this.t=pos;this.playing=true;this.pend=new Set(keys);this.onstate&&this.onstate(true);
+  Object.keys(this.els).forEach(k=>{if(!keys.includes(k)){this.els[k].pause();this.els[k].playbackRate=1}});
+  els.forEach(a=>this.unlock(a));
+  Promise.all(els.map(a=>this.ready(a))).then(()=>{
+    if(g!==this.gen)return;
+    els.forEach(a=>{a.pause();a.playbackRate=1;try{a.currentTime=pos}catch(e){}});
+    return Promise.all(els.map(a=>this.ready(a)))
+  }).then(()=>{
+    if(g!==this.gen)return;
+    els.forEach(a=>{a.muted=false;a.play().catch(()=>{})});
+    this.setMaster(keys[0]);this.pend.clear();this.loop()})};
+/* entra no meio da música: pré-posiciona à frente do mestre e liga exatamente quando o tempo chega */
+MT.prototype.join=function(k,tries){
+  const a=this.els[k],g=this.gen,id=this.jt[k]=(this.jt[k]||0)+1;tries=tries||0;
+  this.pend.add(k);
+  if(!tries)this.unlock(a);
+  const live=()=>g===this.gen&&this.jt[k]===id&&this.on.has(k)&&this.master;
+  this.ready(a,2500).then(()=>{
+    if(!live())return;
+    a.pause();a.playbackRate=1;
+    const lead=.3*(tries+1),target=this.master.currentTime+lead;
+    try{a.currentTime=target}catch(e){}
+    return this.ready(a,2500).then(()=>{
+      if(!live())return;
+      const rem=target-this.master.currentTime;
+      if(rem<.03&&tries<3){this.join(k,tries+1);return}
+      setTimeout(()=>{if(!live())return;a.muted=false;a.play().catch(()=>{});a.__j=performance.now();this.pend.delete(k)},Math.max(0,(rem-this.pl)*1000))})})};
+MT.prototype.setSel=function(keys){
+  const nk=new Set(keys.filter(k=>this.els[k])),old=this.on;this.on=nk;
+  if(!this.playing)return;
+  if(!nk.size){this.pause();return}
+  Object.keys(this.els).forEach(k=>{if(!nk.has(k)){this.els[k].pause();this.els[k].playbackRate=1;this.pend.delete(k);this.jt[k]=(this.jt[k]||0)+1}});
+  const run=[...nk].filter(k=>old.has(k)&&!this.pend.has(k)&&!this.els[k].paused);
+  if(!run.length){this.start([...nk],this.time());return}      /* nada continuou tocando: recomeça o grupo do ponto atual */
+  if(!this.master||!nk.has(this.mk)||this.els[this.mk].paused)this.setMaster(run[0]);
+  [...nk].filter(k=>!run.includes(k)&&!this.pend.has(k)).forEach(k=>this.join(k,0))};
+MT.prototype.play=function(){if(!this.on.size)return false;this.start([...this.on],this.t);return true};
+MT.prototype.pause=function(){
+  this.gen++;this.pend.clear();
+  this.t=this.master&&this.playing?this.master.currentTime:this.t;this.playing=false;clearInterval(this.iv);
+  Object.values(this.els).forEach(a=>{a.pause();a.playbackRate=1;a.muted=false});this.onstate&&this.onstate(false)};
 MT.prototype.stopAll=function(ended){this.pause();if(ended){this.t=0;Object.values(this.els).forEach(a=>{try{a.currentTime=0}catch(e){}});this.onend&&this.onend()}};
-MT.prototype.seek=function(t){this.t=t;Object.values(this.els).forEach(a=>{try{a.currentTime=t}catch(e){}});this.ontime&&this.ontime(t,this.dur())};
+MT.prototype.seek=function(t){
+  this.t=t;
+  if(this.playing&&this.on.size)this.start([...this.on],t);
+  else Object.values(this.els).forEach(a=>{try{a.currentTime=t}catch(e){}});
+  this.ontime&&this.ontime(t,this.dur())};
 MT.prototype.destroy=function(){this.pause();Object.values(this.els).forEach(a=>{a.onended=a.ontimeupdate=a.onerror=null;a.removeAttribute('src');try{a.load()}catch(e){}});this.els={};this.master=null};
 
 /* ---- cards com ícone 3D (aceso = colorido e animado; apagado = cinza e parado) ---- */

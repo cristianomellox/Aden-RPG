@@ -310,38 +310,6 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .strow .stn{flex:0 0 112px;font-weight:700;color:var(--gold);font-size:.9rem}
 .strow .stc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;color:var(--mut)}
 .strow .stb{flex:none;padding:6px 12px;font-size:.8rem;margin:0}
-/* ===== cifras em tempo real (palco) ===== */
-#stg{position:fixed;inset:0;z-index:10;background:radial-gradient(120% 70% at 50% 0%,#15130a 0%,#000 62%);display:flex;flex-direction:column;padding:max(12px,env(safe-area-inset-top,0px)) 14px 150px;box-sizing:border-box;overflow:hidden}
-#stg[hidden]{display:none}
-.stg-top{display:flex;align-items:center;gap:12px;min-height:44px;padding-right:76px}
-.stg-tt{min-width:0}
-#stg-t{font-weight:800;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#stg-s{font-size:.72rem;color:var(--mut)}
-.stg-hero{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center}
-#stg-cv{width:min(56vw,240px);height:min(56vw,240px);flex:none;opacity:.98}
-.stg-sc{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);min-height:1em}
-.stg-c{font-weight:900;line-height:1;font-size:clamp(84px,31vw,200px);color:#fff;letter-spacing:-.02em}
-.stg-n{font-size:1.05rem;color:#cfcfcf;min-height:1.3em;letter-spacing:.04em}
-.stg-next{display:flex;gap:10px;justify-content:center;margin:8px 0}
-.stg-next .nc{flex:1;max-width:120px;border:1px solid hsl(var(--h,45),60%,38%);background:hsla(var(--h,45),55%,30%,.16);border-radius:14px;padding:8px 6px;text-align:center}
-.stg-next .nc b{display:block;font-size:1.55rem;font-weight:800;color:#fff;line-height:1.1}
-.stg-next .nc span{font-size:.72rem;color:var(--gold);font-variant-numeric:tabular-nums}
-.stg-ly{text-align:center;min-height:3.2em;margin-top:2px}
-.stg-ly .cur{font-size:1.15rem;font-weight:700;color:#fff}
-.stg-ly .nxt{font-size:.9rem;color:#8a8a8a;margin-top:2px}
-.stg-tl{position:relative;height:30px;margin-top:10px;border-radius:8px;background:#0e0e0e;border:1px solid var(--ln);overflow:hidden}
-.stg-tl i.sg{position:absolute;top:0;bottom:0;border-right:1px solid #000;opacity:.8}
-.stg-tl i.sg.on{opacity:1;filter:brightness(1.8)}
-#stg-ph{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;box-shadow:0 0 8px #fff;left:0}
-body.rt #sv{visibility:hidden}
-.rtrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 4px 0;padding:10px 12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c;font-weight:700;text-align:left}
-.rtrow input{position:absolute;opacity:0;pointer-events:none}
-.rtrow .rtsw{flex:none;width:44px;height:26px;border-radius:13px;background:#2a2a2a;position:relative;transition:background .15s}
-.rtrow .rtsw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#bbb;transition:transform .15s,background .15s}
-.rtrow input:checked~.rtsw{background:#6b5500}.rtrow input:checked~.rtsw::after{transform:translateX(18px);background:var(--gold)}
-.rtrow.dis{opacity:.45}.rth{font-size:.75rem;color:var(--mut);margin:6px 6px 0;text-align:left;line-height:1.35}
-.cfbox{margin:18px 0 8px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c}
-.cfbox .cft{font-weight:800;color:var(--gold);margin-bottom:4px}
 /* encerrar setlist */
 .item.closed{filter:grayscale(1)}
 .item .clb{position:absolute;top:6px;right:8px;background:#000;color:#fff;border:1px solid #fff;border-radius:8px;padding:3px 8px;font:800 .62rem/1 system-ui,sans-serif;letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
@@ -1084,11 +1052,6 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div id="pdfinfo" class="cnt" style="text-align:left;margin:0 0 10px" hidden></div>
   <div class="sheet edit" id="rows"></div><div class="sheet" id="staves" hidden></div>
   <div class="row-btns"><button class="btn sec" id="more">+ Linha</button><button class="btn sec" id="mst" hidden>+ Pauta</button><button class="btn sec" id="imp" hidden>Importar MusicXML / PDF</button><input type="file" id="fi" hidden accept=".xml,.musicxml,.mxl,.pdf,application/pdf"><button class="btn" id="save">Salvar</button></div>
-<div class="cfbox" id="cfbox">
-    <div class="cft">Cifras em tempo real</div>
-    <div class="sub" id="cfinfo" style="line-height:1.4"></div>
-    <div class="row-btns" style="margin-top:10px"><button class="btn sec" id="cfgo" type="button">Analisar acordes</button><button class="btn sec" id="cfrm" type="button" hidden>Remover análise</button></div>
-  </div>
   
   <div id="tray"><div class="hint">Segure e arraste a cifra para cima de uma linha, ou segure um espaço vazio da linha e escolha a cifra no card. Arraste uma cifra posicionada para fora para removê-la.</div><div id="chips"></div></div>
   <div id="ptray" hidden><div class="hint">Segure e arraste para a pauta: a altura define a nota. Arraste uma nota para fora para removê-la. Escolha ♯ ♭ ♮ antes de soltar. Ligadura, Ponto e Fermata: ative e toque numa nota. Solte uma nota sobre outra para formar acorde.</div><div id="pchips"></div></div>
@@ -1138,7 +1101,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e executam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Executar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Áudio do YouTube</summary><div class="tx"><ul><li>Ao criar ou editar uma música, cole o <b>link do YouTube</b> abaixo do título (vale link comprido, curto youtu.be ou de playlist com <b>v=</b>).</li><li>Na tela da música aparece um botão redondo no canto superior direito: toque para <b>tocar/pausar</b>. O anel dourado vai diminuindo conforme a música passa.</li><li>Só o áudio toca. Se o YouTube exibir um <b>anúncio</b>, aparece um mini vídeo para você tocar em <b>Pular</b>; ele some sozinho quando a música começa.</li><li>Precisa de internet. Ao sair da música, o áudio para.</li></ul></div></details>
   <details><summary>Áudio próprio e Ensaio &amp; Notas</summary><div class="tx"><ul><li>Ao criar ou editar uma música, você pode anexar um <b>MP3 ou M4A</b>. Com arquivo, ele toca no lugar do YouTube.</li><li>Ao tocar pela primeira vez, o áudio é <b>baixado em segundo plano</b> e fica salvo no aparelho (aparece um ✓ no botão), então toca <b>offline</b>.</li><li>Na setlist, <b>Ensaio &amp; Notas</b> abre duas áreas: <b>Base Vocal</b> (um áudio de referência para Soprano, Contralto, Tenor e Baixo; card colorido = tem áudio) e <b>Notas</b> (chat da banda com texto e áudios de até 3 minutos).</li><li>Enviar, trocar ou remover um áudio da Base Vocal pede o código da banda. Nas Notas, <b>segure</b> uma mensagem sua para apagar.</li><li><b>Stems da música:</b> além do áudio completo, ao criar ou editar uma música você pode anexar um arquivo por instrumento (bateria, baixo, guitarra/violão, teclado e vocais). Com stems, o play abre uma escolha: <b>Tudo</b> ou só alguns instrumentos (cards que ligam e desligam), e depois o botão <b>Tocar</b>.</li><li><b>Separar instrumentos (Beta):</b> na tela inicial, separa uma música em instrumentos direto no aparelho. Toque nos instrumentos para ouvir o mix que quiser e use a seta para baixar cada um.</li><li>Cada setlist tem a sua própria Base Vocal e o seu próprio chat, que são apagados junto com ela.</li></ul></div></details>
-  <details><summary>Cifras em tempo real e setlist encerrada</summary><div class="tx"><ul><li><b>Analisar acordes:</b> ao editar uma música com áudio, na tela de posicionar cifras, toque em <b>Analisar acordes</b>. A análise roda no aparelho, descobre em que momento cada acorde da cifra entra e salva isso com a música.</li><li><b>Ver cifras em tempo real:</b> no play da música, ligue a opção e a tela mostra o acorde atual, as notas, os próximos acordes e a linha da letra.</li><li><b>Encerrar setlist:</b> em Editar, o botão <b>Encerrar setlist</b> apaga do servidor o chat, a base vocal e os áudios. A setlist continua na lista, em cinza, só neste aparelho, e some depois de 7 dias.</li></ul></div></details>
+  <details><summary>Setlist encerrada</summary><div class="tx"><ul><li><b>Encerrar setlist:</b> em Editar, o botão <b>Encerrar setlist</b> apaga do servidor a setlist, o chat, a base vocal e os áudios (música e stems) das músicas dela que não estejam em outra setlist. Letras, cifras, partituras e links do YouTube continuam salvos. Neste aparelho a setlist fica em cinza, no fim da lista, por 7 dias; nos outros aparelhos ela some na próxima sincronização.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>uma vez</b> ao tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist, e vale por <b>30 minutos</b>. Depois disso, ou ao fechar a página ou o app, ele é pedido de novo.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -1205,13 +1168,6 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div class="sheet" id="sv"></div>
 </section>
 
-<div id="stg" hidden>
-  <div class="stg-top"><button class="ib" id="stg-x" type="button" aria-label="Sair das cifras em tempo real"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="stg-tt"><div id="stg-t"></div><div id="stg-s"></div></div></div>
-  <div class="stg-hero"><canvas id="stg-cv" width="360" height="360" aria-hidden="true"></canvas><div class="stg-sc" id="stg-sc"></div><div class="stg-c" id="stg-now">♪</div><div class="stg-n" id="stg-nt"></div></div>
-  <div class="stg-next" id="stg-nx"></div>
-  <div class="stg-ly" id="stg-ly"></div>
-  <div class="stg-tl" id="stg-tl"><div id="stg-ph"></div></div>
-</div>
 <div id="md" hidden><div class="cbox" style="max-width:340px"><div id="mdi"></div><div class="ct" id="mdt" style="font-size:1.25rem"></div><div id="mdx" style="color:#ccc;margin:10px 0 16px;font-size:.95rem;line-height:1.4"></div><div id="mdf" style="margin:0 0 14px"></div><div class="row-btns" id="mdbt" style="justify-content:center;margin-top:0"></div></div></div>
 <div id="cp" hidden><div class="cbox"><div class="ct" id="ct"></div><div id="cs"></div><div class="grp" style="justify-content:center;margin:8px auto;width:max-content"><button class="bb" id="cpv" aria-label="Anterior">‹</button><span class="spd" id="cn" style="min-width:44px"></span><button class="bb" id="cnx" aria-label="Próxima">›</button></div><div class="seg" style="margin-bottom:0"><button class="btn sec" id="cedit">Editar diagrama</button><button class="btn sec" id="cx">Fechar</button></div></div></div>
 <div id="secp" hidden></div>
@@ -1264,7 +1220,7 @@ function metaEl(s){
 let songs=load(), view='c', pq=loadQ(), sets=loadS(), curSet=null, play=null, cur=null, draft=null, fs=20, speed=3, scrolling=false, raf=0, openId=null;
 
 function show(n){
-  stopScroll();if(n!=='song'){ytStop();auStop()}if(n!=='notes')nStop();if(n!=='bvoc')vStop();if(n!=='sep')sepPause();if(n==='add2')cfUi();if(n!=='song')rtOff();
+  stopScroll();if(n!=='song'){ytStop();auStop()}if(n!=='notes')nStop();if(n!=='bvoc')vStop();if(n!=='sep')sepPause();
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
   document.body.classList.toggle('onhome',n==='home');if(n!=='home'&&window.CifrasHud)CifrasHud.show();if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
@@ -1380,7 +1336,7 @@ $('#save').onclick=async()=>{
       await modal('Não foi possível enviar o áudio','Verifique a conexão e o código da banda e tente de novo. A música ainda não foi salva.',[['OK',1]],'err');return}
   }
   const st={};ST_K.forEach(([k])=>{if(newSt[k])st[k]=newSt[k];else if(!(draft.stDel&&draft.stDel[k])&&oldSt[k])st[k]=oldSt[k]});
-  const s={id:sid,title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,yt:draft.yt||null,au:au||undefined,st:Object.keys(st).length?st:undefined,cf:draft.cf||undefined,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
+  const s={id:sid,title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,yt:draft.yt||null,au:au||undefined,st:Object.keys(st).length?st:undefined,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
   const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);
   store(songs);enqueue('save',s.id);HD=null;hbtn();show('list');saveSync().then(()=>{if(!pq.some(x=>x.id===sid)){if(oldP&&(!au||au.p!==oldP))auDelete(oldP);ST_K.forEach(([k])=>{const o=oldSt[k]&&oldSt[k].p;if(o&&(!st[k]||st[k].p!==o))auDelete(o)})}});
 };
@@ -1652,7 +1608,7 @@ const i2d=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');return m?m[3]+'/'+
 /* ordem automática: data crescente; na mesma data, dia antes de noite; sem data (antigas) no fim */
 const dkey=n=>{const m=DRE.exec(n||'');return m?+(m[3]+m[2]+m[1]):99999999};
 const pkey=p=>p==='dia'?0:p==='noite'?1:2;
-const cmpSet=(a,b)=>dkey(a.name)-dkey(b.name)||pkey(a.per)-pkey(b.per)||a.name.localeCompare(b.name,'pt-BR');
+const cmpSet=(a,b)=>(a.closed?1:0)-(b.closed?1:0)||dkey(a.name)-dkey(b.name)||pkey(a.per)-pkey(b.per)||a.name.localeCompare(b.name,'pt-BR');
 /* efeitos 3D (three.js, módulo no fim da página); sem internet fica o SVG e o degradê */
 document.querySelectorAll('.ic3[data-i3]').forEach(n=>{const a=[n,n.dataset.i3,100,false,256];if(window.CifrasI3D)window.CifrasI3D.mount(...a);else(window.__i3q=window.__i3q||[]).push(['m',...a])});
 function i3(node,k,s,big){const a=[node,INST[k]?k:'microfone',s,big];if(window.CifrasI3D)window.CifrasI3D.mount(...a);else(window.__i3q=window.__i3q||[]).push(['m',...a])}
@@ -2193,9 +2149,8 @@ async function sync(push){
       if(r2.ok){const sr=await r2.json();const first=unseen===null;if(first)unseen={};/* 1ª sincronização do aparelho: nada é "novidade" */
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(!first)unseen[w.id]=i<0||unseen[w.id]==='n'?'n':'u';if(i>=0)sets[i]=n;else sets.push(n)});
-        const sid=new Set(sr.map(w=>w.id));let cl=null;try{const rc=await fetch(SB+'/rest/v1/cifras_setlists_closed?select=id,closed_at',{headers:SBH});if(rc.ok)cl=await rc.json()}catch(e){}
-        if(cl){sets.forEach(x=>{if(x.u&&!x.closed&&!sid.has(x.id)){const c=cl.find(z=>z.id===x.id);if(c){x.closed=true;x.closedAt=Date.parse(c.closed_at)||Date.now()}}});
-          sets=sets.filter(x=>x.closed||!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id))}
+        const sid=new Set(sr.map(w=>w.id));
+          sets=sets.filter(x=>x.closed||!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id));
         clExpire();
         Object.keys(unseen).forEach(id=>{if(!sets.some(x=>x.id===id))delete unseen[id]});saveUn();updSets();
         sets.sort(cmpSet);if($('#sets')&&!$('#sets').hidden)renderSets()}
@@ -2291,7 +2246,7 @@ function auClick(){
   a.play().catch(()=>{})}
 function auStop(){
   if(!AU||!AU.on)return;
-  clearTimeout(AU.tm);if(AU.multi){rtOff();if(AU.multi.mt)AU.multi.mt.destroy();Object.values(AU.multi.blobs||{}).forEach(u=>URL.revokeObjectURL(u));AU.multi=null}
+  clearTimeout(AU.tm);if(AU.multi){if(AU.multi.mt)AU.multi.mt.destroy();Object.values(AU.multi.blobs||{}).forEach(u=>URL.revokeObjectURL(u));AU.multi=null}
   const a=AU.a;AU.on=false;AU.p=null;AU.a=null;
   if(a){a.onplay=a.onpause=a.onended=a.ontimeupdate=a.onerror=null;try{a.pause()}catch(e){}a.removeAttribute('src');try{a.load()}catch(e){}}
   if(AU.url){URL.revokeObjectURL(AU.url);AU.url=null}
@@ -2701,6 +2656,7 @@ async function sepModel(name,ext){            /* baixa uma vez e guarda no apare
     for(;;){const {done,value}=await rd.read();if(done)break;ch.push(value);got+=value.length;
       sepSt('Baixando o modelo '+name+' (só na primeira vez): '+mbs(got)+(tot?' de '+mbs(tot):''));if(tot)sepBar(got/tot)}
     const blob=new Blob(ch);
+    try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
     try{await c.put(url,new Response(blob,{headers:{'content-type':ext==='.json'?'application/json':'application/octet-stream'}}))}catch(e){}
     r=new Response(blob)}
   return r}
@@ -2977,7 +2933,7 @@ async function sepAsk(){
 
 /* ---- música com stems: o play abre o modal de escolha ---- */
 function stHas(s){return !!(s&&s.st&&Object.keys(s.st).length)}
-function mediaSetup(s){if(stHas(s)||(s.au&&s.au.p&&s.cf&&s.cf.e&&s.cf.e.length))auSetupMulti(s);else if(s.au&&s.au.p)auSetup(s.au);else{auStop();ytSetup(s.yt)}}
+function mediaSetup(s){if(stHas(s))auSetupMulti(s);else if(s.au&&s.au.p)auSetup(s.au);else{auStop();ytSetup(s.yt)}}
 function auSetupMulti(s){
   ytUi();const key='multi:'+s.id+':'+JSON.stringify(s.st)+(s.au?s.au.p:'');
   if(AU.on&&AU.p===key){ytPos();return}
@@ -3004,12 +2960,9 @@ function stModal(M){
       else{if(M.sel.has(k))M.sel.delete(k);else M.sel.add(k)}
       msg.textContent='';refresh()};
     grid.append(c)});
-  const hasCf=!!(S.cf&&S.cf.e&&S.cf.e.length),rtRow=el('label','rtrow'+(hasCf?'':' dis')),chk=el('input'),sw=el('i','rtsw'),lb=el('span'),rth=el('div','rth');
-  chk.type='checkbox';chk.id='rtchk';chk.checked=hasCf&&M.rt!==false&&localStorage.getItem('cifras.rt')==='1';chk.disabled=!hasCf;sw.className='rtsw';lb.textContent='Ver cifras em tempo real';
-  rtRow.append(lb,chk,sw);rth.textContent=hasCf?'Mostra o acorde atual e os próximos, acompanhando a música.':'Disponível depois que a música for analisada (editar a música > Analisar acordes).';
-  f.append(grid,rtRow,rth,msg);
+  f.append(grid,msg);
   const go=el('button','btn'),cx=el('button','btn sec');go.type=cx.type='button';go.textContent='Tocar';cx.textContent='Cancelar';
-  go.onclick=()=>{if(!M.sel.size){msg.textContent='Escolha pelo menos uma opção.';return}M.rt=!!chk.checked;if(hasCf)try{localStorage.setItem('cifras.rt',M.rt?'1':'0')}catch(e){}$('#md').hidden=true;stStart(M)};
+  go.onclick=()=>{if(!M.sel.size){msg.textContent='Escolha pelo menos uma opção.';return}$('#md').hidden=true;stStart(M)};
   cx.onclick=()=>{$('#md').hidden=true};b.append(go,cx);refresh()}
 function stStart(M){
   const S=M.s,tracks=[];
@@ -3025,7 +2978,7 @@ function stStart(M){
   mt.onend=()=>{YA.pg.style.strokeDashoffset=0};
   mt.onerror=()=>auMsg(navigator.onLine?'Não foi possível tocar este áudio.':'Sem internet e o áudio ainda não foi baixado neste aparelho.');
   mt.setSel(tracks.map(x=>x[0]));mt.play();
-  if(M.rt)rtOpen(S);else rtOff()}
+}
 
 /* ---- formulário da música: um arquivo por instrumento ---- */
 function stUi(){
@@ -3046,131 +2999,44 @@ function stUi(){
       x.onclick=()=>{if(draft.stFiles&&draft.stFiles[k])delete draft.stFiles[k];else{draft.stDel=draft.stDel||{};draft.stDel[k]=1}stUi()};row.append(x)}
     box.append(row)})}
 
-/* ===== Cifras em tempo real: análise (Essentia, em acordes.js) ===== */
-const PCS_SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],PCS_FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
-const PC_OF={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
-function chordPcs(name){
-  const m=/^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/.exec(name||'');if(!m||PC_OF[m[1]]==null)return{root:-1,pcs:[],fl:false};
-  const root=PC_OF[m[1]],q=m[2]||'',iv=[0,7],minor=/^(m(?!aj)|min|-)/.test(q)&&!/^dim/.test(q);
-  if(/dim/.test(q)){iv[1]=6;iv.push(3)}else if(/aug|\+/.test(q)){iv[1]=8;iv.push(4)}else if(/sus2/.test(q))iv.push(2);else if(/sus/.test(q))iv.push(5);else if(/^5$/.test(q)){}else iv.push(minor?3:4);
-  if(/maj7|M7|Δ|7M/.test(q))iv.push(11);else if(/(^|[^a-z])(7|9|11|13)/.test(q)&&!/add/.test(q))iv.push(10);
-  if(/6/.test(q))iv.push(9);if(/9|add9|add2/.test(q))iv.push(2);
-  return{root,pcs:[...new Set(iv.map(i=>(root+i)%12))],fl:/b/.test(m[1])}}
-function cfSeq(s){                       /* acordes da cifra na ordem de leitura + onde começa cada linha */
-  const it=[];(s.placed||[]).forEach(p=>{const t=(s.lines||[])[p.l];if(t==null||isSec(t))return;it.push({l:p.l,x:+p.x||0,n:p.n})});
-  it.sort((a,b)=>a.l-b.l||a.x-b.x);
-  let sec='';const secOf={};(s.lines||[]).forEach((t,i)=>{if(isSec(t))sec=secName(t);secOf[i]=sec});
-  const inicios=[];let last=-1;it.forEach((c,i)=>{c.sec=secOf[c.l]||'';if(c.l!==last){inicios.push(i);last=c.l}});
-  return{seq:it.map(c=>c.n),inicios,items:it}}
-async function cfBuf(file,au){
-  if(file)return file.arrayBuffer();
-  if(au&&au.p){const b=await auCached(au.p);if(b)return b.arrayBuffer();const r=await fetch(auUrl(au.p));if(r.ok)return r.arrayBuffer()}
-  return null}
-async function cfDecode(ab){
-  const b=await new OfflineAudioContext(1,1,22050).decodeAudioData(ab),n=b.length,o=new Float32Array(n),C=b.numberOfChannels;
-  if(n/22050>720)throw new Error('A música tem mais de 12 minutos.');
-  for(let c=0;c<C;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)o[i]+=d[i]/C}
-  return o}
-const CF_ST=['guitar','keys','bass'];
-function cfHasAudio(){return !!(draft.auFile||(!draft.auDel&&draft.au&&draft.au.p)||CF_ST.some(k=>(draft.stFiles||{})[k]||(!(draft.stDel||{})[k]&&draft.st&&draft.st[k])))}
-async function cfSamples(){
-  const ab=await cfBuf(draft.auFile,!draft.auDel&&draft.au?draft.au:null);
-  if(ab)return cfDecode(ab);
-  const parts=[];                       /* sem o áudio completo: soma os instrumentos harmônicos (violão, teclado e baixo) */
-  for(const k of CF_ST){const b=await cfBuf((draft.stFiles||{})[k],(!(draft.stDel||{})[k]&&draft.st&&draft.st[k])||null);if(b)parts.push(await cfDecode(b))}
-  if(!parts.length)return null;
-  const n=Math.min(...parts.map(p=>p.length)),o=new Float32Array(n);parts.forEach(p=>{for(let i=0;i<n;i++)o[i]+=p[i]/parts.length});return o}
-function cfUi(){
-  if(!draft)return;const cf=draft.cf,has=!!(cf&&cf.e&&cf.e.length),i=$('#cfinfo');
-  $('#cfgo').textContent=has?'Analisar de novo':'Analisar acordes';$('#cfrm').hidden=!has;$('#cfgo').disabled=!cfHasAudio();
-  if(!cfHasAudio()&&!has)i.textContent='Anexe o áudio da música (ou os stems de violão, teclado ou baixo) na tela anterior para poder analisar.';
-  else if(!has)i.textContent='Ainda não analisada. A análise acontece neste aparelho e descobre em que momento cada acorde da cifra entra na música. Depois, o play da música oferece "Ver cifras em tempo real".';
-  else if(cf.m==='a'){const sh=cf.sh>6?cf.sh-12:cf.sh;i.textContent='✓ Cifra sincronizada com a música ('+cf.e.length+' trocas de acorde)'+(sh?' · a gravação está '+Math.abs(sh)+' semitom'+(Math.abs(sh)>1?'s':'')+(sh>0?' acima':' abaixo')+' do tom da cifra':'')+'.'}
-  else i.textContent='Acordes detectados automaticamente ('+cf.e.length+' trocas). A cifra escrita não combinou com a gravação, então podem existir erros.'}
-async function cfRun(){
-  if(!cfHasAudio())return;
-  modal('Analisando acordes…','Preparando o áudio…',[],'spin');
-  const say=t=>{const m=$('#mdx');if(m)m.textContent=t};
-  try{
-    const x=await cfSamples();
-    if(!x){$('#md').hidden=true;modal('Sem áudio','Anexe o áudio da música (ou os stems de violão, teclado ou baixo) para analisar.',[['OK',1]],'err');return}
-    say('Carregando o analisador…');
-    const mod=await import('./acordes.js'),ess=await mod.carregar(),q=cfSeq(draft);
-    draft.cf=await mod.analisar(ess,x,22050,{sequencia:q.seq,inicios:q.inicios,onProgress:p=>say('Analisando… '+Math.round(p*100)+'%')});
-    $('#md').hidden=true;cfUi();
-  }catch(e){
-    $('#md').hidden=true;console.error(e);
-    modal('Não foi possível analisar',navigator.onLine?String(e&&e.message||e):'Sem internet e o analisador ainda não foi baixado neste aparelho. Conecte-se uma vez para baixá-lo.',[['OK',1]],'err')}}
-$('#cfgo').onclick=cfRun;
-$('#cfrm').onclick=()=>{delete draft.cf;cfUi()};
-
-/* ===== Cifras em tempo real: tela de palco ===== */
-const RT_LEAD=.2;var RT={on:false,raf:0,idx:-2,R:null,seg:[],nx:[]};
-const stgMount=()=>{const c=$('#stg-cv');if(window.CifrasStage)window.CifrasStage.mount(c);else(window.__stgq=window.__stgq||[]).push(c)};
-function rtPrep(s){
-  const cf=s.cf;if(!cf||!cf.e||!cf.e.length||!cf.n)return null;
-  const ev=cf.e.map(e=>({t:e[0],i:e[1],n:cf.n[e[1]]})).filter(e=>e.n);if(!ev.length)return null;
-  let items=null;
-  if(cf.m==='a'){const q=cfSeq(s);if(q.seq.length===cf.n.length&&q.seq.every((n,i)=>n===cf.n[i]))items=q.items}
-  return{s,cf,ev,items,total:Math.max(ev[ev.length-1].t+3,1)}}
-function rtOpen(s){
-  const R=rtPrep(s);if(!R)return;RT.R=R;RT.on=true;RT.idx=-2;RT.nx=[];
-  const tr=s.tr||0;$('#stg-t').textContent=s.title;
-  $('#stg-s').textContent=R.cf.m==='a'?'Cifra sincronizada com a música':'Acordes detectados automaticamente';
-  const tl=$('#stg-tl');[...tl.querySelectorAll('i.sg')].forEach(n=>n.remove());RT.seg=[];
-  R.ev.forEach((e,k)=>{const nx=R.ev[k+1],d=el('i','sg'),pc=chordPcs(tchord(e.n,tr));
-    d.style.left=(e.t/R.total*100)+'%';d.style.width=(((nx?nx.t:R.total)-e.t)/R.total*100)+'%';d.style.background='hsl('+Math.max(0,pc.root)*30+',55%,34%)';tl.insertBefore(d,$('#stg-ph'));RT.seg.push(d)});
-  $('#stg').hidden=false;document.body.classList.add('rt');stgMount();
-  cancelAnimationFrame(RT.raf);RT.raf=requestAnimationFrame(rtTick)}
-function rtOff(){
-  RT.on=false;cancelAnimationFrame(RT.raf);const g=$('#stg');if(g)g.hidden=true;document.body.classList.remove('rt');
-  if(window.CifrasStage&&window.CifrasStage.unmount)window.CifrasStage.unmount()}
-function rtShow(k){
-  const R=RT.R,tr=R.s.tr||0,E=k>=0?R.ev[k]:null,now=$('#stg-now'),nt=$('#stg-nt');
-  if(RT.seg.length)RT.seg.forEach((d,j)=>d.classList.toggle('on',j===k));
-  if(!E){now.textContent='♪';now.style.textShadow='none';nt.textContent='Introdução';$('#stg-sc').textContent='';$('#stg-ly').textContent='';
-    if(window.CifrasStage)window.CifrasStage.set([],-1,45)}
-  else{
-    const nm=tchord(E.n,tr),pc=chordPcs(nm),names=pc.fl?PCS_FL:PCS_SH,hue=Math.max(0,pc.root)*30;
-    now.textContent=nm;now.style.textShadow='0 0 46px hsla('+hue+',90%,60%,.65)';nt.textContent=pc.pcs.map(p=>names[p]).join('   ·   ');
-    if(window.CifrasStage)window.CifrasStage.set(pc.pcs,pc.root,hue);
-    const it=R.items&&R.items[E.i];$('#stg-sc').textContent=it&&it.sec?it.sec:'';
-    const ly=$('#stg-ly');ly.innerHTML='';
-    if(it){const L=R.s.lines||[],a=el('div','cur'),b=el('div','nxt');a.textContent=L[it.l]||'';let j=it.l+1;while(j<L.length&&(!L[j]||isSec(L[j])))j++;b.textContent=j<L.length?L[j]:'';ly.append(a,b)}}
-  const nx=$('#stg-nx');nx.innerHTML='';RT.nx=[];let shown=E?tchord(E.n,tr):'',c=0;
-  for(let j=k+1;j<R.ev.length&&c<3;j++){
-    const n2=tchord(R.ev[j].n,tr);if(n2===shown)continue;shown=n2;c++;
-    const card=el('div','nc'),nm2=el('b'),cd=el('span'),pc2=chordPcs(n2);nm2.textContent=n2;card.style.setProperty('--h',Math.max(0,pc2.root)*30);card.append(nm2,cd);nx.append(card);RT.nx.push({el:cd,t:R.ev[j].t})}}
-function rtTick(){
-  if(!RT.on)return;RT.raf=requestAnimationFrame(rtTick);
-  const M=AU.multi,tm=M&&M.mt?M.mt.time():0,t=tm+RT_LEAD,ev=RT.R.ev;
-  let lo=0,hi=ev.length-1,k=-1;while(lo<=hi){const m=(lo+hi)>>1;if(ev[m].t<=t){k=m;lo=m+1}else hi=m-1}
-  if(k!==RT.idx){RT.idx=k;rtShow(k)}
-  $('#stg-ph').style.left=Math.min(100,tm/RT.R.total*100)+'%';
-  RT.nx.forEach(o=>{o.el.textContent='em '+Math.max(0,o.t-t).toFixed(1).replace('.',',')+' s'})}
-$('#stg-x').onclick=rtOff;
 
 /* ===== Encerrar setlist ===== */
 const CL_MS=7*864e5,clsd=id=>{const x=sets.find(z=>z.id===id);return !!(x&&x.closed)};
 function clExpire(){const n=sets.length;sets=sets.filter(x=>!x.closed||Date.now()-(x.closedAt||0)<CL_MS);if(sets.length!==n)storeS()}
+/* Storage: apaga vários arquivos de uma vez e confere o resultado (antes os erros eram engolidos em silêncio) */
+async function stList(prefix){
+  try{const r=await fetch(SB+'/storage/v1/object/list/cifras-audio',{method:'POST',headers:{...SBH,'x-band-code':memCode},body:JSON.stringify({prefix,limit:1000,offset:0})});
+    if(!r.ok)return[];return(await r.json()).filter(o=>o&&o.id).map(o=>prefix+'/'+o.name)}catch(e){return[]}}
+async function stDelMany(ps){
+  ps=[...new Set(ps.filter(Boolean))];
+  for(let i=0;i<ps.length;i+=100){
+    try{await fetch(SB+'/storage/v1/object/cifras-audio',{method:'DELETE',headers:{...SBH,'x-band-code':memCode},body:JSON.stringify({prefixes:ps.slice(i,i+100)})})}catch(e){}}
+  try{const c=await auCache();if(c)for(const p of ps)await c.delete(auUrl(p))}catch(e){}}
 $('#sclose').onclick=async()=>{
   if(!curSet||curSet.closed)return;
-  const ok=await modal('Encerrar setlist?','Isso apaga do servidor o chat, a base vocal e os áudios desta setlist, para todos. Quem já a tem salva guarda uma cópia só no próprio aparelho por 7 dias; depois ela some da lista. As músicas continuam salvas. Não dá para desfazer.',[['Cancelar',0,'sec'],['Encerrar',1,'del']]);
+  const ok=await modal('Encerrar setlist?','Isso apaga do servidor, para todos: a setlist, o chat, a base vocal e os áudios (música e stems) das músicas dela que não estejam em outra setlist. Letras, cifras, partituras e links do YouTube continuam salvos. Só este aparelho guarda uma cópia cinza da setlist por 7 dias; nos outros ela some. Não dá para desfazer.',[['Cancelar',0,'sec'],['Encerrar',1,'del']]);
   if(ok!==1)return;
   if(!await needOnline())return;
   if(!memCode&&!await unlock('Para encerrar a setlist, informe o código da banda.'))return;
   const id=curSet.id;
   if(pq.some(p=>p.id===id)){await modal('Envie as alterações primeiro','Esta setlist ainda tem alterações que não foram enviadas. Salve e sincronize antes de encerrar.',[['OK',1]],'err');return}
-  modal('Encerrando…','Apagando os dados da setlist do servidor.',[],'spin');
+  modal('Encerrando…','Apagando os dados e os arquivos da setlist do servidor.',[],'spin');
   try{
-    const r=await rpc('cifras_set_close',{p_code:memCode,p_id:id});
-    for(const m of nNorm(r&&r.notes))if(m.a)await auDelete(m.a);
-    const v=(r&&r.vocals)||{};for(const k in v)if(v[k]&&v[k].p)await auDelete(v[k].p);
+    const r=await rpc('cifras_set_close',{p_code:memCode,p_id:id}),paths=[],pre=['n/'+id,'v/'+id];
+    for(const m of nNorm(r&&r.notes))if(m.a)paths.push(m.a);
+    const v=(r&&r.vocals)||{};for(const k in v)if(v[k]&&v[k].p)paths.push(v[k].p);
+    for(const p of (r&&r.audio)||[])paths.push(p);
+    for(const sid of (r&&r.songs)||[])pre.push('s/'+sid);
+    for(const p of pre)paths.push(...await stList(p));      /* pega também arquivos órfãos das pastas */
+    await stDelMany(paths);
+    let left=0;for(const p of pre)left+=(await stList(p)).length;  /* confere se sobrou algo */
     endEdit();
     const x=sets.find(z=>z.id===id);if(x){x.closed=true;x.closedAt=Date.now()}
     if(unseen&&unseen[id]){delete unseen[id];saveUn()}
-    storeS();$('#md').hidden=true;show('list');tab(true);
-    modal('Setlist encerrada','Os dados foram apagados do servidor. Esta cópia fica neste aparelho por 7 dias.',[['OK',1]],'ok');
+    sets.sort(cmpSet);storeS();$('#md').hidden=true;show('list');tab(true);
+    saveSync().catch(()=>{});
+    if(left)modal('Setlist encerrada, mas sobraram arquivos','Os dados foram apagados, porém '+left+' arquivo(s) de áudio não puderam ser removidos do servidor. Apague-os pelo painel do Supabase (Storage > cifras-audio).',[['OK',1]],'err');
+    else modal('Setlist encerrada','Setlist, chat, base vocal e áudios foram apagados do servidor. Esta cópia fica neste aparelho por 7 dias.',[['OK',1]],'ok');
   }catch(e){
     if(/forbidden|42501/i.test(e.message))memCode='';
     $('#md').hidden=true;
@@ -3181,9 +3047,10 @@ clExpire();
 async function sepPrepare(){
   const st=$('#sepoffst'),btn=$('#sepoff');if(SEP.busy)return;btn.disabled=true;
   try{
+    try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
     if(!navigator.onLine)throw new Error('conecte-se à internet para baixar');
-    const O=ORTB,E='https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/',gpu=!!(navigator.gpu&&await navigator.gpu.requestAdapter().catch(()=>null));
-    const urls=['./demucs-core.js','./acordes.js',O+'ort.wasm.bundle.min.mjs',O+'ort-wasm-simd-threaded.mjs',O+'ort-wasm-simd-threaded.wasm',E+'essentia-wasm.es.js',E+'essentia.js-core.es.js',
+    const O=ORTB,gpu=!!(navigator.gpu&&await navigator.gpu.requestAdapter().catch(()=>null));
+    const urls=['./demucs-core.js',O+'ort.wasm.bundle.min.mjs',O+'ort-wasm-simd-threaded.mjs',O+'ort-wasm-simd-threaded.wasm',
       ...(gpu?[O+'ort.webgpu.bundle.min.mjs',O+'ort-wasm-simd-threaded.jsep.mjs',O+'ort-wasm-simd-threaded.jsep.wasm']:[])];
     const c=await caches.open('cifras-scripts-v1');let i=0;
     for(const u of urls){i++;const abs=new URL(u,location.href).href;

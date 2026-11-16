@@ -1,7 +1,12 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v67'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v68'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
+
+// Caches da página de cifras (modelo do separador, scripts onnxruntime, áudios baixados). Nomes começam com 'cifras-'.
+// NUNCA apagar no activate: antes cada nova versão do SW apagava tudo isso e o separador/áudios deixavam de funcionar offline.
+const CACHE_CIFRAS_LIB = 'cifras-scripts-v1';
+const isCifrasCache = key => key.startsWith('cifras-');
 
 const ASSET_PREFIX = '/assets/';
 const CLOUDINARY_HOST = 'res.cloudinary.com';
@@ -39,6 +44,7 @@ const ASSETS_TO_PRECACHE = [
     '/assets/pibm.png',
     '/assets/pibmlogo.png',
     '/cifras_skybox.js',
+    '/demucs-core.js',
     '/postfx.js',
     '/assets/goldcoin.webp',
     '/assets/cristais.webp',
@@ -171,7 +177,7 @@ self.addEventListener('activate', event => {
             Promise.all(
                 keys.map(key => {
                     // PROTEÇÃO MÁXIMA: apaga caches velhos, mas nunca o atual nem o dos ZIPs/versões!
-                    if (key !== CACHE_NAME && key !== CACHE_ZIP_ASSETS) {
+                    if (key !== CACHE_NAME && key !== CACHE_ZIP_ASSETS && !isCifrasCache(key)) {
                         console.log('🗑️ [SW] Apagando cache antigo:', key);
                         return caches.delete(key);
                     }
@@ -245,7 +251,7 @@ self.addEventListener('fetch', event => {
     }
 
     // Skybox das cifras: JS próprio (rede primeiro, cache offline) e three.js do CDN (cache primeiro)
-    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/postfx.js')) {
+    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/postfx.js' || url.pathname === '/demucs-core.js')) {
         event.respondWith(fetch(request).then(r => {
             if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
             return r;
@@ -253,8 +259,10 @@ self.addEventListener('fetch', event => {
         return;
     }
     if (url.hostname === 'cdn.jsdelivr.net') {
+        // onnxruntime-web (separador de instrumentos) vai para o cache protegido; o resto (three.js etc.) para o cache normal
+        const target = url.pathname.includes('/onnxruntime-web') ? CACHE_CIFRAS_LIB : CACHE_NAME;
         event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(r => {
-            if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
+            if (r && r.status === 200) { const c = r.clone(); caches.open(target).then(ch => ch.put(request, c)); }
             return r;
         })));
         return;

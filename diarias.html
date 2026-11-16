@@ -206,8 +206,20 @@
             <label class="dm-switch">
                 <input type="checkbox" id="chkScript">
                 <span class="sw"></span>
-                <span><b>Atuar com roteiro</b> <small>(o Mestre conduz a história sozinho, como um roteiro, e você só assiste. Para assumir o herói, toque em Especial e digite 444)</small></span>
+                <span><b>Modo Enredo</b> <small>(você não entra na história: só assiste e escuta os personagens que você escolher conversando entre si)</small></span>
             </label>
+            <div class="script-box" id="scriptBox" style="display:none">
+                <div class="custom-field">
+                    <label class="custom-label" for="scriptTagInput">Personagens do enredo <em>(opcional)</em></label>
+                    <div class="tag-field" id="scriptTags"><input id="scriptTagInput" class="tag-input" type="text" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="done" placeholder="Ex.: Harry Potter, Hermione…"></div>
+                    <p class="hint">Separe com vírgula: cada nome vira uma etiqueta (toque no × para remover). Até 8 personagens.</p>
+                </div>
+                <div class="custom-field">
+                    <label class="custom-label" for="scriptPrompt">Enredo <em>(opcional)</em></label>
+                    <textarea id="scriptPrompt" class="fenda-input custom-area" maxlength="1000" spellcheck="true" placeholder="Ex.: Dois rivais são trancados juntos numa taverna durante uma tempestade e acabam revelando um segredo."></textarea>
+                    <p class="hint">Escolha os personagens, descreva o enredo, ou os dois. Em branco, o Mestre decide o que faltar.</p>
+                </div>
+            </div>
             <div class="dm-actions">
                 <button class="btn-ghost" id="briefCancel">Voltar</button>
                 <button class="btn-epic sm" id="briefGo">Começar</button>

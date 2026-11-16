@@ -310,6 +310,43 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .strow .stn{flex:0 0 112px;font-weight:700;color:var(--gold);font-size:.9rem}
 .strow .stc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;color:var(--mut)}
 .strow .stb{flex:none;padding:6px 12px;font-size:.8rem;margin:0}
+/* ===== cifras em tempo real (palco) ===== */
+#stg{position:fixed;inset:0;z-index:10;background:radial-gradient(120% 70% at 50% 0%,#15130a 0%,#000 62%);display:flex;flex-direction:column;padding:max(12px,env(safe-area-inset-top,0px)) 14px 150px;box-sizing:border-box;overflow:hidden}
+#stg[hidden]{display:none}
+.stg-top{display:flex;align-items:center;gap:12px;min-height:44px;padding-right:76px}
+.stg-tt{min-width:0}
+#stg-t{font-weight:800;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stg-s{font-size:.72rem;color:var(--mut)}
+.stg-hero{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center}
+#stg-cv{width:min(56vw,240px);height:min(56vw,240px);flex:none;opacity:.98}
+.stg-sc{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);min-height:1em}
+.stg-c{font-weight:900;line-height:1;font-size:clamp(84px,31vw,200px);color:#fff;letter-spacing:-.02em}
+.stg-n{font-size:1.05rem;color:#cfcfcf;min-height:1.3em;letter-spacing:.04em}
+.stg-next{display:flex;gap:10px;justify-content:center;margin:8px 0}
+.stg-next .nc{flex:1;max-width:120px;border:1px solid hsl(var(--h,45),60%,38%);background:hsla(var(--h,45),55%,30%,.16);border-radius:14px;padding:8px 6px;text-align:center}
+.stg-next .nc b{display:block;font-size:1.55rem;font-weight:800;color:#fff;line-height:1.1}
+.stg-next .nc span{font-size:.72rem;color:var(--gold);font-variant-numeric:tabular-nums}
+.stg-ly{text-align:center;min-height:3.2em;margin-top:2px}
+.stg-ly .cur{font-size:1.15rem;font-weight:700;color:#fff}
+.stg-ly .nxt{font-size:.9rem;color:#8a8a8a;margin-top:2px}
+.stg-tl{position:relative;height:30px;margin-top:10px;border-radius:8px;background:#0e0e0e;border:1px solid var(--ln);overflow:hidden}
+.stg-tl i.sg{position:absolute;top:0;bottom:0;border-right:1px solid #000;opacity:.8}
+.stg-tl i.sg.on{opacity:1;filter:brightness(1.8)}
+#stg-ph{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;box-shadow:0 0 8px #fff;left:0}
+body.rt #sv{visibility:hidden}
+.rtrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 4px 0;padding:10px 12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c;font-weight:700;text-align:left}
+.rtrow input{position:absolute;opacity:0;pointer-events:none}
+.rtrow .rtsw{flex:none;width:44px;height:26px;border-radius:13px;background:#2a2a2a;position:relative;transition:background .15s}
+.rtrow .rtsw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#bbb;transition:transform .15s,background .15s}
+.rtrow input:checked~.rtsw{background:#6b5500}.rtrow input:checked~.rtsw::after{transform:translateX(18px);background:var(--gold)}
+.rtrow.dis{opacity:.45}.rth{font-size:.75rem;color:var(--mut);margin:6px 6px 0;text-align:left;line-height:1.35}
+.cfbox{margin:18px 0 8px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:#0c0c0c}
+.cfbox .cft{font-weight:800;color:var(--gold);margin-bottom:4px}
+/* encerrar setlist */
+.item.closed{filter:grayscale(1)}
+.item .clb{position:absolute;top:6px;right:8px;background:#000;color:#fff;border:1px solid #fff;border-radius:8px;padding:3px 8px;font:800 .62rem/1 system-ui,sans-serif;letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
+#sclbn{margin:0 0 12px;padding:10px 12px;border:1px solid #777;border-radius:12px;color:#ddd;background:#111;font-size:.88rem;line-height:1.4}
+#sepoffst{margin:8px 0 0;font-size:.82rem;color:var(--mut);line-height:1.35;min-height:1em}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -640,6 +677,60 @@ function mount(node,k){
 function set(node,on){const it=node.__it;if(!it)return;it.on=!!on;it.born=performance.now();draw(it,performance.now())}
 window.CifrasEns={mount,set,ready};
 pre.forEach(a=>mount(...a));
+})();
+</script>
+<script type="module">
+/* Cifras PIBM — roda das notas em three.js (círculo das quintas): as notas do acorde atual acendem.
+   Sem WebGL, desenha uma versão 2D. Só anima enquanto a tela de cifras em tempo real está aberta. */
+(function(){
+const NN=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'],POS=pc=>(pc*7)%12,TAU=Math.PI*2;
+let TH=null,R=null,cam=null,scene=null,grp=null,spheres=[],ring=null,line=null,cv=null,raf=0,ctx2=null,mounted=0;
+const st={pcs:[],root:-1,hue:45},pre=window.__stgq||[];window.__stgq=null;
+let pulse=0,t0=performance.now(),loading=null;
+const ang=pc=>POS(pc)/12*TAU-Math.PI/2;
+function label(txt){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.font='700 34px system-ui,sans-serif';g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(txt,32,34);return new TH.CanvasTexture(c)}
+async function init(){
+  TH=await import('three');
+  R=new TH.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));R.setSize(cv.width,cv.height,false);R.setClearColor(0,0);
+  scene=new TH.Scene();cam=new TH.PerspectiveCamera(32,1,.1,50);cam.position.set(0,0,11.5);
+  scene.add(new TH.AmbientLight(0xffffff,.8));const d=new TH.DirectionalLight(0xffffff,2.2);d.position.set(2,3,5);scene.add(d);
+  grp=new TH.Group();scene.add(grp);
+  ring=new TH.Mesh(new TH.TorusGeometry(2,.018,8,96),new TH.MeshBasicMaterial({color:0x3a3a3a}));grp.add(ring);
+  for(let pc=0;pc<12;pc++){
+    const m=new TH.MeshStandardMaterial({color:0x2c2c2c,roughness:.35,metalness:.3}),s=new TH.Mesh(new TH.SphereGeometry(.24,32,24),m);
+    s.position.set(Math.cos(ang(pc))*2,-Math.sin(ang(pc))*2,0);grp.add(s);
+    const sp=new TH.Sprite(new TH.SpriteMaterial({map:label(NN[pc]),transparent:true,depthTest:false}));sp.scale.set(.62,.62,1);sp.position.set(s.position.x,s.position.y,.42);grp.add(sp);
+    spheres.push({s,m,k:.55,sp})}
+  line=new TH.LineLoop(new TH.BufferGeometry(),new TH.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.9}));grp.add(line);
+  grp.rotation.x=-.5}
+function pts(){const a=st.pcs.slice().sort((x,y)=>ang(x)-ang(y)).map(pc=>new TH.Vector3(Math.cos(ang(pc))*2,-Math.sin(ang(pc))*2,0));line.geometry.setFromPoints(a.length>1?a:[]);line.visible=a.length>1}
+function tick(){
+  raf=requestAnimationFrame(tick);const t=(performance.now()-t0)/1000;pulse*=.93;
+  grp.rotation.y=Math.sin(t*.55)*.4;grp.rotation.x=-.5+Math.sin(t*.4)*.05;
+  const col=new TH.Color().setHSL(((st.hue%360)+360)%360/360,.85,.58);
+  spheres.forEach((o,pc)=>{
+    const on=st.pcs.includes(pc),root=pc===st.root,tk=root?1.45:on?1.05:.55,k=o.k+(tk-o.k)*.18;o.k=k;
+    o.s.scale.setScalar(k*(on?1+pulse*.35:1));
+    if(on){o.m.color.copy(col);o.m.emissive.copy(col);o.m.emissiveIntensity=root?.95:.5}else{o.m.color.set(0x2c2c2c);o.m.emissive.set(0x000000);o.m.emissiveIntensity=0}});
+  if(line.visible)line.material.color.copy(col);ring.material.color.copy(st.pcs.length?col.clone().multiplyScalar(.4):new TH.Color(0x3a3a3a));
+  R.render(scene,cam)}
+/* versão 2D (sem WebGL) */
+function draw2d(){
+  const g=ctx2,W=cv.width,c=W/2,r=W*.3;g.clearRect(0,0,W,W);g.font='700 '+W*.07+'px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';
+  const col='hsl('+st.hue+',85%,58%)';g.strokeStyle='#3a3a3a';g.lineWidth=2;g.beginPath();g.arc(c,c,r,0,TAU);g.stroke();
+  const P=pc=>[c+Math.cos(ang(pc))*r,c-Math.sin(ang(pc))*r];
+  if(st.pcs.length>1){g.strokeStyle=col;g.lineWidth=3;g.beginPath();st.pcs.slice().sort((a,b)=>ang(a)-ang(b)).forEach((pc,i)=>{const[x,y]=P(pc);i?g.lineTo(x,y):g.moveTo(x,y)});g.closePath();g.stroke()}
+  for(let pc=0;pc<12;pc++){const[x,y]=P(pc),on=st.pcs.includes(pc),rt=pc===st.root;g.fillStyle=on?col:'#2c2c2c';g.beginPath();g.arc(x,y,W*(rt?.065:on?.05:.032),0,TAU);g.fill();g.fillStyle=on?'#000':'#aaa';if(on||true){g.font='700 '+W*.05+'px system-ui,sans-serif';g.fillText(NN[pc],x,y+1)}}}
+async function mount(canvas){
+  cv=canvas;mounted=1;
+  if(!R&&!ctx2){loading=loading||(async()=>{try{await init()}catch(e){console.warn('Roda 3D indisponível; usando 2D',e);R=null;ctx2=null}})();await loading;loading=null}
+  if(!mounted)return;
+  if(R){R.setSize(cv.width,cv.height,false);pts();cancelAnimationFrame(raf);raf=requestAnimationFrame(tick)}
+  else{ctx2=cv.getContext('2d');if(ctx2)draw2d()}}
+function set(pcs,root,hue){st.pcs=pcs;st.root=root;st.hue=hue;pulse=1;if(R){pts()}else if(ctx2)draw2d()}
+function unmount(){mounted=0;cancelAnimationFrame(raf)}
+window.CifrasStage={mount,set,unmount};
+pre.forEach(c=>mount(c));
 })();
 </script>
 <script type="module">
@@ -993,6 +1084,12 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div id="pdfinfo" class="cnt" style="text-align:left;margin:0 0 10px" hidden></div>
   <div class="sheet edit" id="rows"></div><div class="sheet" id="staves" hidden></div>
   <div class="row-btns"><button class="btn sec" id="more">+ Linha</button><button class="btn sec" id="mst" hidden>+ Pauta</button><button class="btn sec" id="imp" hidden>Importar MusicXML / PDF</button><input type="file" id="fi" hidden accept=".xml,.musicxml,.mxl,.pdf,application/pdf"><button class="btn" id="save">Salvar</button></div>
+<div class="cfbox" id="cfbox">
+    <div class="cft">Cifras em tempo real</div>
+    <div class="sub" id="cfinfo" style="line-height:1.4"></div>
+    <div class="row-btns" style="margin-top:10px"><button class="btn sec" id="cfgo" type="button">Analisar acordes</button><button class="btn sec" id="cfrm" type="button" hidden>Remover análise</button></div>
+  </div>
+  
   <div id="tray"><div class="hint">Segure e arraste a cifra para cima de uma linha, ou segure um espaço vazio da linha e escolha a cifra no card. Arraste uma cifra posicionada para fora para removê-la.</div><div id="chips"></div></div>
   <div id="ptray" hidden><div class="hint">Segure e arraste para a pauta: a altura define a nota. Arraste uma nota para fora para removê-la. Escolha ♯ ♭ ♮ antes de soltar. Ligadura, Ponto e Fermata: ative e toque numa nota. Solte uma nota sobre outra para formar acorde.</div><div id="pchips"></div></div>
 </section>
@@ -1041,6 +1138,7 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <details><summary>Setlists</summary><div class="tx"><ul><li>Na Playlist, abra a aba <b>Setlists</b>. Todos veem e executam.</li><li><b>Ordem:</b> automática, por data (a mais próxima primeiro); na mesma data, a de dia vem antes da de noite.</li><li><b>Editar</b>: permite mudar a data/período e cadastrar os músicos (nome e instrumento) que aparecem no topo da setlist. As mudanças ficam só neste aparelho até você tocar em <b>Salvar</b>; aí tudo é enviado de uma vez e a banda recebe um único aviso.</li><li><b>Criar</b>: escolha a data e se a setlist é de <b>dia</b> ou de <b>noite</b> e toque em Criar (pede o código). Não pode haver duas setlists na mesma data e período. Toque no título para ver o período.</li><li><b>Executar</b> abre a primeira música; use ‹ › no rodapé para avançar.</li><li><b>Editar</b> (pede o código) mostra ↑ ↓ para ordenar, × para remover, a lista para adicionar músicas e o botão para excluir a setlist.</li></ul></div></details>
   <details><summary>Áudio do YouTube</summary><div class="tx"><ul><li>Ao criar ou editar uma música, cole o <b>link do YouTube</b> abaixo do título (vale link comprido, curto youtu.be ou de playlist com <b>v=</b>).</li><li>Na tela da música aparece um botão redondo no canto superior direito: toque para <b>tocar/pausar</b>. O anel dourado vai diminuindo conforme a música passa.</li><li>Só o áudio toca. Se o YouTube exibir um <b>anúncio</b>, aparece um mini vídeo para você tocar em <b>Pular</b>; ele some sozinho quando a música começa.</li><li>Precisa de internet. Ao sair da música, o áudio para.</li></ul></div></details>
   <details><summary>Áudio próprio e Ensaio &amp; Notas</summary><div class="tx"><ul><li>Ao criar ou editar uma música, você pode anexar um <b>MP3 ou M4A</b>. Com arquivo, ele toca no lugar do YouTube.</li><li>Ao tocar pela primeira vez, o áudio é <b>baixado em segundo plano</b> e fica salvo no aparelho (aparece um ✓ no botão), então toca <b>offline</b>.</li><li>Na setlist, <b>Ensaio &amp; Notas</b> abre duas áreas: <b>Base Vocal</b> (um áudio de referência para Soprano, Contralto, Tenor e Baixo; card colorido = tem áudio) e <b>Notas</b> (chat da banda com texto e áudios de até 3 minutos).</li><li>Enviar, trocar ou remover um áudio da Base Vocal pede o código da banda. Nas Notas, <b>segure</b> uma mensagem sua para apagar.</li><li><b>Stems da música:</b> além do áudio completo, ao criar ou editar uma música você pode anexar um arquivo por instrumento (bateria, baixo, guitarra/violão, teclado e vocais). Com stems, o play abre uma escolha: <b>Tudo</b> ou só alguns instrumentos (cards que ligam e desligam), e depois o botão <b>Tocar</b>.</li><li><b>Separar instrumentos (Beta):</b> na tela inicial, separa uma música em instrumentos direto no aparelho. Toque nos instrumentos para ouvir o mix que quiser e use a seta para baixar cada um.</li><li>Cada setlist tem a sua própria Base Vocal e o seu próprio chat, que são apagados junto com ela.</li></ul></div></details>
+  <details><summary>Cifras em tempo real e setlist encerrada</summary><div class="tx"><ul><li><b>Analisar acordes:</b> ao editar uma música com áudio, na tela de posicionar cifras, toque em <b>Analisar acordes</b>. A análise roda no aparelho, descobre em que momento cada acorde da cifra entra e salva isso com a música.</li><li><b>Ver cifras em tempo real:</b> no play da música, ligue a opção e a tela mostra o acorde atual, as notas, os próximos acordes e a linha da letra.</li><li><b>Encerrar setlist:</b> em Editar, o botão <b>Encerrar setlist</b> apaga do servidor o chat, a base vocal e os áudios. A setlist continua na lista, em cinza, só neste aparelho, e some depois de 7 dias.</li></ul></div></details>
   <details><summary>Código da banda, sincronização e offline</summary><div class="tx"><ul><li>O código é pedido <b>uma vez</b> ao tocar em Adicionar, no lápis, em Criar setlist ou em Editar setlist, e vale por <b>30 minutos</b>. Depois disso, ou ao fechar a página ou o app, ele é pedido de novo.</li><li>Ao salvar ou excluir, aparece um modal de sincronização e depois a confirmação.</li><li>Sem internet você continua vendo e tocando as músicas já carregadas, mas <b>adicionar, editar e alterar setlists exigem conexão</b>.</li><li>Quem não tem o código só consegue ler e tocar. O que a banda altera chega sozinho.</li></ul></div></details>
   <details><summary>Dicas para tocar</summary><div class="tx"><ul><li>Ajuste a fonte e a velocidade antes de começar e deixe a rolagem ligada.</li><li>Use o tom para adaptar à voz do cantor sem reescrever a música.</li><li>Monte a setlist do dia com antecedência para passar de uma música à outra com ‹ ›.</li></ul></div></details>
 </section>
@@ -1050,9 +1148,9 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
   <div id="smus" hidden></div>
   <div id="sedit" hidden><div class="row-btns" style="margin:6px 0 8px;flex-wrap:nowrap"><input id="stit" type="date" style="flex:1;min-width:0"><select id="sper" style="flex:0 0 110px"><option value="" hidden>Dia/Noite</option><option value="dia">Dia</option><option value="noite">Noite</option></select></div><div class="sub" id="sph" hidden style="margin:0 0 8px"></div><div style="height:6px"></div><div class="sub" style="margin:0 0 8px">Músicos (nome e instrumento)</div><div id="smed"></div><button class="btn sec" id="smadd" type="button">+ Músico</button><div style="height:14px"></div></div>
   <div id="siv"></div>
-  <div class="row-btns" id="srow" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
+  <div id="sclbn" hidden></div><div class="row-btns" id="srow" style="margin-top:6px"><select id="ssel"></select><button class="btn sec" id="sins">Adicionar</button></div>
   <div class="row-btns"><button class="btn" id="splay">Executar</button>
-    <button class="btn sec" id="snotes">Ensaio &amp; Notas</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sunl">Editar</button><button class="btn" id="ssave" hidden disabled>Salvar</button></div>
+    <button class="btn sec" id="snotes">Ensaio &amp; Notas</button><button class="btn del" id="sdel">Excluir setlist</button><button class="btn sec" id="sclose">Encerrar setlist</button><button class="btn sec" id="sunl">Editar</button><button class="btn" id="ssave" hidden disabled>Salvar</button></div>
 </section>
 
 <section class="screen" id="ens">
@@ -1087,25 +1185,33 @@ pre.forEach(a=>a[0]==='m'?mount(...a.slice(1)):chord(a[1],a[2]));
 
 <section class="screen" id="sep">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
-  <p class="sub" style="line-height:1.45">Separe uma música em bateria, baixo, vocais e outros instrumentos. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <p class="sub" style="line-height:1.45">Separa uma música em bateria, baixo, vocais e outros instrumentos usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
   <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
   <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
   <label for="sepn">Stems</label>
   <select id="sepn"><option value="4" selected>4 stems (bateria, baixo, vocais, outros)</option><option value="6">6 stems (+ violão e piano)</option></select>
   <label for="sepm">Processamento</label>
   <select id="sepm"><option value="auto">Automático (GPU se houver)</option><option value="wasm">Somente CPU (WebAssembly)</option></select>
+  <button class="btn sec" id="sepoff" type="button" style="margin-top:14px">Preparar para uso offline</button>
+  <div id="sepoffst" class="sub"></div>
   <div class="row-btns" style="margin-top:14px"><button class="btn" id="sepgo" type="button">Separar</button><button class="btn sec" id="sepcx" type="button" hidden>Cancelar</button></div>
   <div class="sepbar" hidden><i></i></div>
   <div id="sepst" class="sub" style="margin:10px 0"></div>
   <div id="sepout"></div>
-  <p class="sub" style="margin-top:16px;font-size:.98rem;line-height:1.4"><b style="color: yellow!important;">Continue nesta tela até o fim do processamento.</b><br>
-    O separador está em fase beta e pode apresentar falhas. O stem de piano costuma sair com ruído.</p>
+  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4">Os pesos do HTDemucs são da Meta e têm licença de uso <b>não comercial</b>. Use apenas músicas que a banda tem direito de usar. O stem de piano costuma sair com ruído.</p>
 </section>
 
 <section class="screen" id="song">
   <div class="sheet" id="sv"></div>
 </section>
 
+<div id="stg" hidden>
+  <div class="stg-top"><button class="ib" id="stg-x" type="button" aria-label="Sair das cifras em tempo real"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="stg-tt"><div id="stg-t"></div><div id="stg-s"></div></div></div>
+  <div class="stg-hero"><canvas id="stg-cv" width="360" height="360" aria-hidden="true"></canvas><div class="stg-sc" id="stg-sc"></div><div class="stg-c" id="stg-now">♪</div><div class="stg-n" id="stg-nt"></div></div>
+  <div class="stg-next" id="stg-nx"></div>
+  <div class="stg-ly" id="stg-ly"></div>
+  <div class="stg-tl" id="stg-tl"><div id="stg-ph"></div></div>
+</div>
 <div id="md" hidden><div class="cbox" style="max-width:340px"><div id="mdi"></div><div class="ct" id="mdt" style="font-size:1.25rem"></div><div id="mdx" style="color:#ccc;margin:10px 0 16px;font-size:.95rem;line-height:1.4"></div><div id="mdf" style="margin:0 0 14px"></div><div class="row-btns" id="mdbt" style="justify-content:center;margin-top:0"></div></div></div>
 <div id="cp" hidden><div class="cbox"><div class="ct" id="ct"></div><div id="cs"></div><div class="grp" style="justify-content:center;margin:8px auto;width:max-content"><button class="bb" id="cpv" aria-label="Anterior">‹</button><span class="spd" id="cn" style="min-width:44px"></span><button class="bb" id="cnx" aria-label="Próxima">›</button></div><div class="seg" style="margin-bottom:0"><button class="btn sec" id="cedit">Editar diagrama</button><button class="btn sec" id="cx">Fechar</button></div></div></div>
 <div id="secp" hidden></div>
@@ -1158,7 +1264,7 @@ function metaEl(s){
 let songs=load(), view='c', pq=loadQ(), sets=loadS(), curSet=null, play=null, cur=null, draft=null, fs=20, speed=3, scrolling=false, raf=0, openId=null;
 
 function show(n){
-  stopScroll();if(n!=='song'){ytStop();auStop()}if(n!=='notes')nStop();if(n!=='bvoc')vStop();if(n!=='sep')sepPause();
+  stopScroll();if(n!=='song'){ytStop();auStop()}if(n!=='notes')nStop();if(n!=='bvoc')vStop();if(n!=='sep')sepPause();if(n==='add2')cfUi();if(n!=='song')rtOff();
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
   document.body.classList.toggle('onhome',n==='home');if(n!=='home'&&window.CifrasHud)CifrasHud.show();if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
@@ -1274,7 +1380,7 @@ $('#save').onclick=async()=>{
       await modal('Não foi possível enviar o áudio','Verifique a conexão e o código da banda e tente de novo. A música ainda não foi salva.',[['OK',1]],'err');return}
   }
   const st={};ST_K.forEach(([k])=>{if(newSt[k])st[k]=newSt[k];else if(!(draft.stDel&&draft.stDel[k])&&oldSt[k])st[k]=oldSt[k]});
-  const s={id:sid,title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,yt:draft.yt||null,au:au||undefined,st:Object.keys(st).length?st:undefined,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
+  const s={id:sid,title:draft.title,lyrics:draft.lyrics,chordsText:draft.chordsText,lines:draft.lines,placed:draft.placed,score:(draft.score||[]).filter(x=>x.n.length),pdf:draft.pdf||null,yt:draft.yt||null,au:au||undefined,st:Object.keys(st).length?st:undefined,cf:draft.cf||undefined,tr:draft.tr||0,u:draft.u,cd:draft.cd,cb:draft.cb||(draft.id?undefined:(cfg().name||'Anônimo')),eds:edsNew(draft.eds)};
   const i=songs.findIndex(x=>x.id===s.id);if(i>=0)songs[i]=s;else songs.push(s);
   store(songs);enqueue('save',s.id);HD=null;hbtn();show('list');saveSync().then(()=>{if(!pq.some(x=>x.id===sid)){if(oldP&&(!au||au.p!==oldP))auDelete(oldP);ST_K.forEach(([k])=>{const o=oldSt[k]&&oldSt[k].p;if(o&&(!st[k]||st[k].p!==o))auDelete(o)})}});
 };
@@ -1517,12 +1623,12 @@ $('#tbM').onclick=()=>tab(false);$('#tbS').onclick=()=>tab(true);
 function renderSets(){
   const b=$('#sitems');b.innerHTML='';if(!sets.length){const d=el('div','empty');d.textContent='Nenhuma setlist criada.';b.append(d)}
   [...sets].sort(cmpSet).forEach(x=>{
-    const sd=fxSeed(x.id),i=el('button','item sc'+(x.per==='noite'?' n':x.per?' d':''));
+    const sd=fxSeed(x.id),i=el('button','item sc'+(x.per==='noite'?' n':x.per?' d':'')+(x.closed?' closed':''));
     if(x.per)fxMount(i,'bg',x.per,0,sd);
     const t1=el('span','st');t1.textContent=x.name;i.append(t1);
     if(x.per)i.append(fxIcon(x.per,48,sd));
     const c1=el('span','st');c1.textContent='· '+x.ids.length;i.append(c1);
-    if(unseen&&unseen[x.id]){const p=el('span','nwt');p.textContent=unseen[x.id]==='n'?'NOVA':'ATUALIZADA';i.append(p)}
+    if(x.closed){const p=el('span','clb');p.textContent='Setlist encerrada';i.append(p)}else if(unseen&&unseen[x.id]){const p=el('span','nwt');p.textContent=unseen[x.id]==='n'?'NOVA':'ATUALIZADA';i.append(p)}
     i.onclick=()=>{if(unseen&&unseen[x.id]){delete unseen[x.id];saveUn();updSets()}unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
 /* setlists novas/atualizadas por outra pessoa: id -> 'n' (nova) | 'u' (atualizada). Fica salvo até a setlist ser aberta. */
@@ -1619,7 +1725,7 @@ $('#sunl').onclick=async()=>{if(!await unlock())return;setOrig=curSet;curSet=clo
 $('#ssave').onclick=saveSet;
 function decSet(w){const m=Array.isArray(w.musicians)?w.musicians.filter(x=>x&&typeof x.n==='string').map(x=>({n:x.n,i:x.i})):[];return{id:w.id,name:w.name,per:w.period||null,ids:w.ids||[],u:w.updated_at,mus:m,pos:w.position||0}}
 function renderSet(){
-  const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;$('#ssave').hidden=!un;$('#snotes').hidden=un;
+  const un=unl;$('#srow').hidden=$('#sdel').hidden=!un;$('#sunl').hidden=un;$('#ssave').hidden=!un;$('#snotes').hidden=un;{const cl=!!(curSet&&curSet.closed);$('#sclose').hidden=!un||cl||pq.some(p=>p.id===(curSet&&curSet.id));$('#sclbn').hidden=!cl;if(cl){$('#sunl').hidden=true;$('#srow').hidden=true;$('#sclbn').textContent='Setlist encerrada. Os dados já foram apagados do servidor e esta cópia só existe neste aparelho; ela some da lista em '+Math.max(1,Math.ceil(((curSet.closedAt||0)+7*864e5-Date.now())/864e5))+' dia(s).'}}
   setTitle();renderMus(un);const b=$('#siv');b.innerHTML='';
   curSet.ids.forEach((id,i)=>{const s=songs.find(x=>x.id===id);if(!s)return;
     const d=el('div','item it'),n=el('span');n.textContent=(i+1)+'. '+s.title;n.onclick=()=>{play={i};openSong(id)};d.append(n);
@@ -2087,7 +2193,10 @@ async function sync(push){
       if(r2.ok){const sr=await r2.json();const first=unseen===null;if(first)unseen={};/* 1ª sincronização do aparelho: nada é "novidade" */
         sr.forEach(w=>{if(pq.some(x=>x.id===w.id))return;const i=sets.findIndex(x=>x.id===w.id);if(i>=0&&sets[i].u===w.updated_at)return;
           const n=decSet(w);if(!first)unseen[w.id]=i<0||unseen[w.id]==='n'?'n':'u';if(i>=0)sets[i]=n;else sets.push(n)});
-        const sid=new Set(sr.map(w=>w.id));sets=sets.filter(x=>!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id));
+        const sid=new Set(sr.map(w=>w.id));let cl=null;try{const rc=await fetch(SB+'/rest/v1/cifras_setlists_closed?select=id,closed_at',{headers:SBH});if(rc.ok)cl=await rc.json()}catch(e){}
+        if(cl){sets.forEach(x=>{if(x.u&&!x.closed&&!sid.has(x.id)){const c=cl.find(z=>z.id===x.id);if(c){x.closed=true;x.closedAt=Date.parse(c.closed_at)||Date.now()}}});
+          sets=sets.filter(x=>x.closed||!x.u||sid.has(x.id)||pq.some(p=>p.id===x.id))}
+        clExpire();
         Object.keys(unseen).forEach(id=>{if(!sets.some(x=>x.id===id))delete unseen[id]});saveUn();updSets();
         sets.sort(cmpSet);if($('#sets')&&!$('#sets').hidden)renderSets()}
     }catch(e){}
@@ -2182,7 +2291,7 @@ function auClick(){
   a.play().catch(()=>{})}
 function auStop(){
   if(!AU||!AU.on)return;
-  clearTimeout(AU.tm);if(AU.multi){if(AU.multi.mt)AU.multi.mt.destroy();Object.values(AU.multi.blobs||{}).forEach(u=>URL.revokeObjectURL(u));AU.multi=null}
+  clearTimeout(AU.tm);if(AU.multi){rtOff();if(AU.multi.mt)AU.multi.mt.destroy();Object.values(AU.multi.blobs||{}).forEach(u=>URL.revokeObjectURL(u));AU.multi=null}
   const a=AU.a;AU.on=false;AU.p=null;AU.a=null;
   if(a){a.onplay=a.onpause=a.onended=a.ontimeupdate=a.onerror=null;try{a.pause()}catch(e){}a.removeAttribute('src');try{a.load()}catch(e){}}
   if(AU.url){URL.revokeObjectURL(AU.url);AU.url=null}
@@ -2248,14 +2357,14 @@ async function openNotes(){
   if(pq.some(x=>x.id===curSet.id)){await modal('Setlist ainda não sincronizada','Sincronize esta setlist antes de usar o Ensaio & Notas, para que toda a banda a veja.',[['OK',1]],'err');return}
   nStop();NT.id=curSet.id;NT.msgs=nLoad(NT.id);NT.pend=[];NT.play=null;NT.ui={};NT.busy=false;$('#chlist').innerHTML='';
   setSub();
-  $('#ntx').value='';nGrow();nBtn();show('notes');nVp();nRender(true);nFetch(true);
+  $('#ntx').value='';nGrow();nBtn();show('notes');nVp();$('#ncmp').hidden=clsd(NT.id);nRender(true);nFetch(true);
   clearInterval(NT.iv);NT.iv=setInterval(()=>{if(!document.hidden&&$('#notes').classList.contains('active'))nFetch(false)},6000)}
 function nStop(){
   if(!NT)return;clearInterval(NT.iv);NT.iv=0;
   if(NT.au){try{NT.au.pause()}catch(e){}}NT.play=null;
   if(NT.rec)nStopRec(false)}
 async function nFetch(full){
-  const id=NT.id;if(!id||!navigator.onLine||NT.busy)return;NT.busy=true;
+  const id=NT.id;if(!id||!navigator.onLine||NT.busy||clsd(id))return;NT.busy=true;
   try{
     let ch=false;
     if(!full&&NT.msgs.length){
@@ -2487,7 +2596,7 @@ async function vPruneCache(){try{
   const pre=auUrl('v/'+VC.id+'/'),keep=new Set(Object.values(VC.data).map(e=>auUrl(e.p)));
   for(const rq of await c.keys())if(rq.url.startsWith(pre)&&!keep.has(rq.url))await c.delete(rq)}catch(e){}}
 async function vFetch(){
-  const id=VC.id;if(!id||!navigator.onLine||VC.busy)return;VC.busy=true;
+  const id=VC.id;if(!id||!navigator.onLine||VC.busy||clsd(id))return;VC.busy=true;
   try{
     const q=await fetch(SB+'/rest/v1/cifras_setlists?id=eq.'+id+'&select=vocals',{headers:SBH});
     if(!q.ok)throw 0;const j=await q.json();if(VC.id!==id||!j.length)return;
@@ -2518,8 +2627,9 @@ function vOpen(k,pick){
   const up=()=>{
     if(pick||(memCode&&(cfg().name||'').trim())){vPick(k);return}
     unlock('Para enviar o áudio de '+name+', informe o código da banda.').then(ok=>{if(ok)vOpen(k,true)})};
-  if(!d){btn(pick?'Escolher arquivo':'Fazer upload','',up);btn('Fechar','sec',close)}
-  else{btn(pick?'Escolher arquivo':'Trocar áudio','sec',up);btn('Remover','del',()=>vRemove(k));btn('Fechar','sec',close)}}
+  const ro=clsd(VC.id);
+  if(!d){if(!ro)btn(pick?'Escolher arquivo':'Fazer upload','',up);btn('Fechar','sec',close)}
+  else{if(!ro){btn(pick?'Escolher arquivo':'Trocar áudio','sec',up);btn('Remover','del',()=>vRemove(k))}btn('Fechar','sec',close)}}
 function vPick(k){VC.pv=k;const i=$('#vfile');i.value='';i.click()}
 $('#vfile').onchange=()=>{const f=$('#vfile').files[0];if(f&&VC.pv)vUp(VC.pv,f)};
 async function vUp(k,f){
@@ -2867,7 +2977,7 @@ async function sepAsk(){
 
 /* ---- música com stems: o play abre o modal de escolha ---- */
 function stHas(s){return !!(s&&s.st&&Object.keys(s.st).length)}
-function mediaSetup(s){if(stHas(s))auSetupMulti(s);else if(s.au&&s.au.p)auSetup(s.au);else{auStop();ytSetup(s.yt)}}
+function mediaSetup(s){if(stHas(s)||(s.au&&s.au.p&&s.cf&&s.cf.e&&s.cf.e.length))auSetupMulti(s);else if(s.au&&s.au.p)auSetup(s.au);else{auStop();ytSetup(s.yt)}}
 function auSetupMulti(s){
   ytUi();const key='multi:'+s.id+':'+JSON.stringify(s.st)+(s.au?s.au.p:'');
   if(AU.on&&AU.p===key){ytPos();return}
@@ -2879,12 +2989,12 @@ function stClick(){
   const M=AU.multi;if(!M)return;
   if(M.mt&&M.mt.playing){M.mt.pause();return}
   stModal(M)}
-function stPaths(M){const S=M.s;return[...(S.au?[S.au.p]:[]),...Object.values(S.st).map(x=>x.p)]}
+function stPaths(M){const S=M.s;return[...(S.au?[S.au.p]:[]),...Object.values(S.st||{}).map(x=>x.p)]}
 function stModal(M){
   const S=M.s;modal('Tocar a música','Escolha o que ouvir. Os cards funcionam como interruptores.',[]);
   const f=$('#mdf'),b=$('#mdbt');f.innerHTML='';b.innerHTML='';
   stPaths(M).forEach(p=>{if(!M.blobs[p])auCached(p).then(bl=>{if(bl&&!M.blobs[p]&&AU.multi===M)M.blobs[p]=URL.createObjectURL(bl)})});
-  const avail=k=>k==='all'?!!(S.au||stHas(S)):!!S.st[k],items=[['all','Tudo','other','#d4af37'],...ST_K],grid=el('div','egrid stgrid'),cards={},msg=el('div','sub');
+  const avail=k=>k==='all'?!!(S.au||stHas(S)):!!(S.st&&S.st[k]),items=[['all','Tudo','other','#d4af37'],...ST_K],grid=el('div','egrid stgrid'),cards={},msg=el('div','sub');
   msg.style.cssText='color:#e57373;min-height:1.3em;margin-top:8px;text-align:center';
   const refresh=()=>{const all=M.sel.has('all');items.forEach(([k])=>{const c=cards[k],on=M.sel.has(k);stemCardOn(c,on);c.classList.toggle('dis',!avail(k)||(all&&k!=='all'))})};
   items.forEach(([k,l,ic,col])=>{
@@ -2894,14 +3004,17 @@ function stModal(M){
       else{if(M.sel.has(k))M.sel.delete(k);else M.sel.add(k)}
       msg.textContent='';refresh()};
     grid.append(c)});
-  f.append(grid,msg);
+  const hasCf=!!(S.cf&&S.cf.e&&S.cf.e.length),rtRow=el('label','rtrow'+(hasCf?'':' dis')),chk=el('input'),sw=el('i','rtsw'),lb=el('span'),rth=el('div','rth');
+  chk.type='checkbox';chk.id='rtchk';chk.checked=hasCf&&M.rt!==false&&localStorage.getItem('cifras.rt')==='1';chk.disabled=!hasCf;sw.className='rtsw';lb.textContent='Ver cifras em tempo real';
+  rtRow.append(lb,chk,sw);rth.textContent=hasCf?'Mostra o acorde atual e os próximos, acompanhando a música.':'Disponível depois que a música for analisada (editar a música > Analisar acordes).';
+  f.append(grid,rtRow,rth,msg);
   const go=el('button','btn'),cx=el('button','btn sec');go.type=cx.type='button';go.textContent='Tocar';cx.textContent='Cancelar';
-  go.onclick=()=>{if(!M.sel.size){msg.textContent='Escolha pelo menos uma opção.';return}$('#md').hidden=true;stStart(M)};
+  go.onclick=()=>{if(!M.sel.size){msg.textContent='Escolha pelo menos uma opção.';return}M.rt=!!chk.checked;if(hasCf)try{localStorage.setItem('cifras.rt',M.rt?'1':'0')}catch(e){}$('#md').hidden=true;stStart(M)};
   cx.onclick=()=>{$('#md').hidden=true};b.append(go,cx);refresh()}
 function stStart(M){
   const S=M.s,tracks=[];
-  if(M.sel.has('all')){if(S.au)tracks.push(['all',S.au.p]);else Object.entries(S.st).forEach(([k,v])=>tracks.push([k,v.p]))}
-  else M.sel.forEach(k=>{if(S.st[k])tracks.push([k,S.st[k].p])});
+  if(M.sel.has('all')){if(S.au)tracks.push(['all',S.au.p]);else Object.entries(S.st||{}).forEach(([k,v])=>tracks.push([k,v.p]))}
+  else M.sel.forEach(k=>{if(S.st&&S.st[k])tracks.push([k,S.st[k].p])});
   if(!tracks.length)return;
   const keep=M.mt?M.mt.t:0;if(M.mt)M.mt.destroy();
   const mt=M.mt=new MT();mt.t=keep;
@@ -2911,7 +3024,8 @@ function stStart(M){
   mt.ontime=(t,d)=>{if(d>0)YA.pg.style.strokeDashoffset=(169.65*Math.min(1,t/d)).toFixed(2)};
   mt.onend=()=>{YA.pg.style.strokeDashoffset=0};
   mt.onerror=()=>auMsg(navigator.onLine?'Não foi possível tocar este áudio.':'Sem internet e o áudio ainda não foi baixado neste aparelho.');
-  mt.setSel(tracks.map(x=>x[0]));mt.play()}
+  mt.setSel(tracks.map(x=>x[0]));mt.play();
+  if(M.rt)rtOpen(S);else rtOff()}
 
 /* ---- formulário da música: um arquivo por instrumento ---- */
 function stUi(){
@@ -2931,6 +3045,159 @@ function stUi(){
     if(cur){const x=el('button','ib');x.type='button';x.setAttribute('aria-label','Remover');x.innerHTML='<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
       x.onclick=()=>{if(draft.stFiles&&draft.stFiles[k])delete draft.stFiles[k];else{draft.stDel=draft.stDel||{};draft.stDel[k]=1}stUi()};row.append(x)}
     box.append(row)})}
+
+/* ===== Cifras em tempo real: análise (Essentia, em acordes.js) ===== */
+const PCS_SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],PCS_FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const PC_OF={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+function chordPcs(name){
+  const m=/^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/.exec(name||'');if(!m||PC_OF[m[1]]==null)return{root:-1,pcs:[],fl:false};
+  const root=PC_OF[m[1]],q=m[2]||'',iv=[0,7],minor=/^(m(?!aj)|min|-)/.test(q)&&!/^dim/.test(q);
+  if(/dim/.test(q)){iv[1]=6;iv.push(3)}else if(/aug|\+/.test(q)){iv[1]=8;iv.push(4)}else if(/sus2/.test(q))iv.push(2);else if(/sus/.test(q))iv.push(5);else if(/^5$/.test(q)){}else iv.push(minor?3:4);
+  if(/maj7|M7|Δ|7M/.test(q))iv.push(11);else if(/(^|[^a-z])(7|9|11|13)/.test(q)&&!/add/.test(q))iv.push(10);
+  if(/6/.test(q))iv.push(9);if(/9|add9|add2/.test(q))iv.push(2);
+  return{root,pcs:[...new Set(iv.map(i=>(root+i)%12))],fl:/b/.test(m[1])}}
+function cfSeq(s){                       /* acordes da cifra na ordem de leitura + onde começa cada linha */
+  const it=[];(s.placed||[]).forEach(p=>{const t=(s.lines||[])[p.l];if(t==null||isSec(t))return;it.push({l:p.l,x:+p.x||0,n:p.n})});
+  it.sort((a,b)=>a.l-b.l||a.x-b.x);
+  let sec='';const secOf={};(s.lines||[]).forEach((t,i)=>{if(isSec(t))sec=secName(t);secOf[i]=sec});
+  const inicios=[];let last=-1;it.forEach((c,i)=>{c.sec=secOf[c.l]||'';if(c.l!==last){inicios.push(i);last=c.l}});
+  return{seq:it.map(c=>c.n),inicios,items:it}}
+async function cfBuf(file,au){
+  if(file)return file.arrayBuffer();
+  if(au&&au.p){const b=await auCached(au.p);if(b)return b.arrayBuffer();const r=await fetch(auUrl(au.p));if(r.ok)return r.arrayBuffer()}
+  return null}
+async function cfDecode(ab){
+  const b=await new OfflineAudioContext(1,1,22050).decodeAudioData(ab),n=b.length,o=new Float32Array(n),C=b.numberOfChannels;
+  if(n/22050>720)throw new Error('A música tem mais de 12 minutos.');
+  for(let c=0;c<C;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)o[i]+=d[i]/C}
+  return o}
+const CF_ST=['guitar','keys','bass'];
+function cfHasAudio(){return !!(draft.auFile||(!draft.auDel&&draft.au&&draft.au.p)||CF_ST.some(k=>(draft.stFiles||{})[k]||(!(draft.stDel||{})[k]&&draft.st&&draft.st[k])))}
+async function cfSamples(){
+  const ab=await cfBuf(draft.auFile,!draft.auDel&&draft.au?draft.au:null);
+  if(ab)return cfDecode(ab);
+  const parts=[];                       /* sem o áudio completo: soma os instrumentos harmônicos (violão, teclado e baixo) */
+  for(const k of CF_ST){const b=await cfBuf((draft.stFiles||{})[k],(!(draft.stDel||{})[k]&&draft.st&&draft.st[k])||null);if(b)parts.push(await cfDecode(b))}
+  if(!parts.length)return null;
+  const n=Math.min(...parts.map(p=>p.length)),o=new Float32Array(n);parts.forEach(p=>{for(let i=0;i<n;i++)o[i]+=p[i]/parts.length});return o}
+function cfUi(){
+  if(!draft)return;const cf=draft.cf,has=!!(cf&&cf.e&&cf.e.length),i=$('#cfinfo');
+  $('#cfgo').textContent=has?'Analisar de novo':'Analisar acordes';$('#cfrm').hidden=!has;$('#cfgo').disabled=!cfHasAudio();
+  if(!cfHasAudio()&&!has)i.textContent='Anexe o áudio da música (ou os stems de violão, teclado ou baixo) na tela anterior para poder analisar.';
+  else if(!has)i.textContent='Ainda não analisada. A análise acontece neste aparelho e descobre em que momento cada acorde da cifra entra na música. Depois, o play da música oferece "Ver cifras em tempo real".';
+  else if(cf.m==='a'){const sh=cf.sh>6?cf.sh-12:cf.sh;i.textContent='✓ Cifra sincronizada com a música ('+cf.e.length+' trocas de acorde)'+(sh?' · a gravação está '+Math.abs(sh)+' semitom'+(Math.abs(sh)>1?'s':'')+(sh>0?' acima':' abaixo')+' do tom da cifra':'')+'.'}
+  else i.textContent='Acordes detectados automaticamente ('+cf.e.length+' trocas). A cifra escrita não combinou com a gravação, então podem existir erros.'}
+async function cfRun(){
+  if(!cfHasAudio())return;
+  modal('Analisando acordes…','Preparando o áudio…',[],'spin');
+  const say=t=>{const m=$('#mdx');if(m)m.textContent=t};
+  try{
+    const x=await cfSamples();
+    if(!x){$('#md').hidden=true;modal('Sem áudio','Anexe o áudio da música (ou os stems de violão, teclado ou baixo) para analisar.',[['OK',1]],'err');return}
+    say('Carregando o analisador…');
+    const mod=await import('./acordes.js'),ess=await mod.carregar(),q=cfSeq(draft);
+    draft.cf=await mod.analisar(ess,x,22050,{sequencia:q.seq,inicios:q.inicios,onProgress:p=>say('Analisando… '+Math.round(p*100)+'%')});
+    $('#md').hidden=true;cfUi();
+  }catch(e){
+    $('#md').hidden=true;console.error(e);
+    modal('Não foi possível analisar',navigator.onLine?String(e&&e.message||e):'Sem internet e o analisador ainda não foi baixado neste aparelho. Conecte-se uma vez para baixá-lo.',[['OK',1]],'err')}}
+$('#cfgo').onclick=cfRun;
+$('#cfrm').onclick=()=>{delete draft.cf;cfUi()};
+
+/* ===== Cifras em tempo real: tela de palco ===== */
+const RT_LEAD=.2;var RT={on:false,raf:0,idx:-2,R:null,seg:[],nx:[]};
+const stgMount=()=>{const c=$('#stg-cv');if(window.CifrasStage)window.CifrasStage.mount(c);else(window.__stgq=window.__stgq||[]).push(c)};
+function rtPrep(s){
+  const cf=s.cf;if(!cf||!cf.e||!cf.e.length||!cf.n)return null;
+  const ev=cf.e.map(e=>({t:e[0],i:e[1],n:cf.n[e[1]]})).filter(e=>e.n);if(!ev.length)return null;
+  let items=null;
+  if(cf.m==='a'){const q=cfSeq(s);if(q.seq.length===cf.n.length&&q.seq.every((n,i)=>n===cf.n[i]))items=q.items}
+  return{s,cf,ev,items,total:Math.max(ev[ev.length-1].t+3,1)}}
+function rtOpen(s){
+  const R=rtPrep(s);if(!R)return;RT.R=R;RT.on=true;RT.idx=-2;RT.nx=[];
+  const tr=s.tr||0;$('#stg-t').textContent=s.title;
+  $('#stg-s').textContent=R.cf.m==='a'?'Cifra sincronizada com a música':'Acordes detectados automaticamente';
+  const tl=$('#stg-tl');[...tl.querySelectorAll('i.sg')].forEach(n=>n.remove());RT.seg=[];
+  R.ev.forEach((e,k)=>{const nx=R.ev[k+1],d=el('i','sg'),pc=chordPcs(tchord(e.n,tr));
+    d.style.left=(e.t/R.total*100)+'%';d.style.width=(((nx?nx.t:R.total)-e.t)/R.total*100)+'%';d.style.background='hsl('+Math.max(0,pc.root)*30+',55%,34%)';tl.insertBefore(d,$('#stg-ph'));RT.seg.push(d)});
+  $('#stg').hidden=false;document.body.classList.add('rt');stgMount();
+  cancelAnimationFrame(RT.raf);RT.raf=requestAnimationFrame(rtTick)}
+function rtOff(){
+  RT.on=false;cancelAnimationFrame(RT.raf);const g=$('#stg');if(g)g.hidden=true;document.body.classList.remove('rt');
+  if(window.CifrasStage&&window.CifrasStage.unmount)window.CifrasStage.unmount()}
+function rtShow(k){
+  const R=RT.R,tr=R.s.tr||0,E=k>=0?R.ev[k]:null,now=$('#stg-now'),nt=$('#stg-nt');
+  if(RT.seg.length)RT.seg.forEach((d,j)=>d.classList.toggle('on',j===k));
+  if(!E){now.textContent='♪';now.style.textShadow='none';nt.textContent='Introdução';$('#stg-sc').textContent='';$('#stg-ly').textContent='';
+    if(window.CifrasStage)window.CifrasStage.set([],-1,45)}
+  else{
+    const nm=tchord(E.n,tr),pc=chordPcs(nm),names=pc.fl?PCS_FL:PCS_SH,hue=Math.max(0,pc.root)*30;
+    now.textContent=nm;now.style.textShadow='0 0 46px hsla('+hue+',90%,60%,.65)';nt.textContent=pc.pcs.map(p=>names[p]).join('   ·   ');
+    if(window.CifrasStage)window.CifrasStage.set(pc.pcs,pc.root,hue);
+    const it=R.items&&R.items[E.i];$('#stg-sc').textContent=it&&it.sec?it.sec:'';
+    const ly=$('#stg-ly');ly.innerHTML='';
+    if(it){const L=R.s.lines||[],a=el('div','cur'),b=el('div','nxt');a.textContent=L[it.l]||'';let j=it.l+1;while(j<L.length&&(!L[j]||isSec(L[j])))j++;b.textContent=j<L.length?L[j]:'';ly.append(a,b)}}
+  const nx=$('#stg-nx');nx.innerHTML='';RT.nx=[];let shown=E?tchord(E.n,tr):'',c=0;
+  for(let j=k+1;j<R.ev.length&&c<3;j++){
+    const n2=tchord(R.ev[j].n,tr);if(n2===shown)continue;shown=n2;c++;
+    const card=el('div','nc'),nm2=el('b'),cd=el('span'),pc2=chordPcs(n2);nm2.textContent=n2;card.style.setProperty('--h',Math.max(0,pc2.root)*30);card.append(nm2,cd);nx.append(card);RT.nx.push({el:cd,t:R.ev[j].t})}}
+function rtTick(){
+  if(!RT.on)return;RT.raf=requestAnimationFrame(rtTick);
+  const M=AU.multi,tm=M&&M.mt?M.mt.time():0,t=tm+RT_LEAD,ev=RT.R.ev;
+  let lo=0,hi=ev.length-1,k=-1;while(lo<=hi){const m=(lo+hi)>>1;if(ev[m].t<=t){k=m;lo=m+1}else hi=m-1}
+  if(k!==RT.idx){RT.idx=k;rtShow(k)}
+  $('#stg-ph').style.left=Math.min(100,tm/RT.R.total*100)+'%';
+  RT.nx.forEach(o=>{o.el.textContent='em '+Math.max(0,o.t-t).toFixed(1).replace('.',',')+' s'})}
+$('#stg-x').onclick=rtOff;
+
+/* ===== Encerrar setlist ===== */
+const CL_MS=7*864e5,clsd=id=>{const x=sets.find(z=>z.id===id);return !!(x&&x.closed)};
+function clExpire(){const n=sets.length;sets=sets.filter(x=>!x.closed||Date.now()-(x.closedAt||0)<CL_MS);if(sets.length!==n)storeS()}
+$('#sclose').onclick=async()=>{
+  if(!curSet||curSet.closed)return;
+  const ok=await modal('Encerrar setlist?','Isso apaga do servidor o chat, a base vocal e os áudios desta setlist, para todos. Quem já a tem salva guarda uma cópia só no próprio aparelho por 7 dias; depois ela some da lista. As músicas continuam salvas. Não dá para desfazer.',[['Cancelar',0,'sec'],['Encerrar',1,'del']]);
+  if(ok!==1)return;
+  if(!await needOnline())return;
+  if(!memCode&&!await unlock('Para encerrar a setlist, informe o código da banda.'))return;
+  const id=curSet.id;
+  if(pq.some(p=>p.id===id)){await modal('Envie as alterações primeiro','Esta setlist ainda tem alterações que não foram enviadas. Salve e sincronize antes de encerrar.',[['OK',1]],'err');return}
+  modal('Encerrando…','Apagando os dados da setlist do servidor.',[],'spin');
+  try{
+    const r=await rpc('cifras_set_close',{p_code:memCode,p_id:id});
+    for(const m of nNorm(r&&r.notes))if(m.a)await auDelete(m.a);
+    const v=(r&&r.vocals)||{};for(const k in v)if(v[k]&&v[k].p)await auDelete(v[k].p);
+    endEdit();
+    const x=sets.find(z=>z.id===id);if(x){x.closed=true;x.closedAt=Date.now()}
+    if(unseen&&unseen[id]){delete unseen[id];saveUn()}
+    storeS();$('#md').hidden=true;show('list');tab(true);
+    modal('Setlist encerrada','Os dados foram apagados do servidor. Esta cópia fica neste aparelho por 7 dias.',[['OK',1]],'ok');
+  }catch(e){
+    if(/forbidden|42501/i.test(e.message))memCode='';
+    $('#md').hidden=true;
+    modal('Não foi possível encerrar',/notfound/.test(e.message)?'Esta setlist não existe mais no servidor.':'Verifique a conexão e o código da banda e tente de novo.',[['OK',1]],'err')}};
+clExpire();
+
+/* ===== Separador: preparar para uso offline (scripts no service worker + modelo no aparelho) ===== */
+async function sepPrepare(){
+  const st=$('#sepoffst'),btn=$('#sepoff');if(SEP.busy)return;btn.disabled=true;
+  try{
+    if(!navigator.onLine)throw new Error('conecte-se à internet para baixar');
+    const O=ORTB,E='https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/',gpu=!!(navigator.gpu&&await navigator.gpu.requestAdapter().catch(()=>null));
+    const urls=['./demucs-core.js','./acordes.js',O+'ort.wasm.bundle.min.mjs',O+'ort-wasm-simd-threaded.mjs',O+'ort-wasm-simd-threaded.wasm',E+'essentia-wasm.es.js',E+'essentia.js-core.es.js',
+      ...(gpu?[O+'ort.webgpu.bundle.min.mjs',O+'ort-wasm-simd-threaded.jsep.mjs',O+'ort-wasm-simd-threaded.jsep.wasm']:[])];
+    const c=await caches.open('cifras-scripts-v1');let i=0;
+    for(const u of urls){i++;const abs=new URL(u,location.href).href;
+      if(!await c.match(abs)){st.textContent='Baixando scripts ('+i+'/'+urls.length+')…';const r=await fetch(abs);if(!r.ok)throw new Error('HTTP '+r.status+' em '+u);await c.put(abs,r)}}
+    const n=+$('#sepn').value,base=n===6?'htdemucs_6s':'htdemucs',useGpu=gpu&&$('#sepm').value==='auto',names=useGpu?[base]:[base+'_int8',base];let ok=false,last;
+    for(const nm of names){try{try{await sepModel(nm,'.json')}catch(e){await sepModel(base,'.json')}await sepModel(nm,'.onnx');ok=true;break}catch(e){last=e}}
+    if(!ok)throw last||new Error('modelo indisponível');
+    sepBar(null);try{localStorage.setItem('cifras.sepoff',JSON.stringify({n,gpu:useGpu,t:Date.now()}))}catch(e){}
+    st.textContent='✓ Pronto para uso offline neste aparelho ('+n+' stems, '+(useGpu?'GPU':'CPU')+'). Se mudar as opções, toque de novo.';
+    sepSt('');
+  }catch(e){sepBar(null);st.textContent='Não foi possível preparar: '+(e&&e.message||e)}
+  finally{btn.disabled=false}}
+$('#sepoff').onclick=sepPrepare;
+(function(){try{const o=JSON.parse(localStorage.getItem('cifras.sepoff'));if(o)$('#sepoffst').textContent='✓ Preparado para uso offline ('+o.n+' stems, '+(o.gpu?'GPU':'CPU')+'). Toque de novo se mudar as opções.'}catch(e){}})();
 
 /* botão que recolhe a interface da tela inicial (só aparece na home) */
 (function(){

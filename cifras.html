@@ -1296,7 +1296,7 @@ function show(n){
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===n));
   $('#bar').classList.toggle('on',n==='song');
   document.body.classList.toggle('onhome',n==='home');if(n!=='home'&&window.CifrasHud)CifrasHud.show();if(window.CifrasSkybox)n==='home'?CifrasSkybox.resume():CifrasSkybox.pause();
-  wake(n==='song'||n==='tuner');if(window.CifrasTuner)n==='tuner'?CifrasTuner.start():CifrasTuner.stop();
+  wake(n==='song'||n==='tuner'||n==='sep');if(window.CifrasTuner)n==='tuner'?CifrasTuner.start():CifrasTuner.stop();
   scrollTo(0,0);
   if(n==='list'){$('#q').value='';renderList()}
   if(n==='notices'&&window.CifrasNt)CifrasNt.open();
@@ -2775,9 +2775,9 @@ async function sepRun(){
   const f=$('#sepf').files[0];if(!f){sepSt('Escolha um arquivo de áudio primeiro.');return}
   SEP.busy=true;SEP.cancel=false;$('#sepgo').hidden=true;$('#sepcx').hidden=false;if(SEP.mt){SEP.mt.destroy();SEP.mt=null}$('#sepout').innerHTML='';
   SEP.urls.forEach(u=>URL.revokeObjectURL(u));SEP.urls=[];
-  let wl=null,cur=null;const t0=Date.now();
+  let cur=null;const t0=Date.now();
   try{
-    try{wl=await navigator.wakeLock.request('screen')}catch(e){}
+    wake(true);   /* tela ligada durante todo o processamento (reativada ao voltar de outro app) */
     const core=await import('./demucs-core.js');
     cur=await sepOpen(core,+$('#sepn').value,$('#sepm').value);
     const sep=cur.sep,C=sep.channels,rate=sep.sampleRate;
@@ -2802,7 +2802,6 @@ async function sepRun(){
     console.error(e)
   }finally{
     try{if(cur)await cur.session.release()}catch(e){}
-    try{if(wl)await wl.release()}catch(e){}
     SEP.busy=false;$('#sepgo').hidden=false;$('#sepcx').hidden=true}}
 $('#sepgo').onclick=sepAsk;
 $('#sepcx').onclick=()=>{SEP.cancel=true;sepSt('Cancelando…')};
@@ -3193,7 +3192,7 @@ let rzT;addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(refit,15
 /* tela ligada */
 let wl=null;
 async function wake(on){try{if(wl){wl.release();wl=null}if(on&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen')}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#song').classList.contains('active'))wake(true)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&($('#song').classList.contains('active')||$('#sep').classList.contains('active')))wake(true)});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
 migrate();store(songs);storeS();pqSave();updSets();

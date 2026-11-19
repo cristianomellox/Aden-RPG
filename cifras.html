@@ -3031,12 +3031,12 @@ function stModal(M){
   stPaths(M).forEach(p=>{if(!M.blobs[p])auCached(p).then(bl=>{if(bl&&!M.blobs[p]&&AU.multi===M)M.blobs[p]=URL.createObjectURL(bl)})});
   const avail=k=>k==='all'?!!(S.au||stHas(S)):!!(S.st&&S.st[k]),items=[['all','Tudo','other','#d4af37'],...ST_K],grid=el('div','egrid stgrid'),cards={},msg=el('div','sub');
   msg.style.cssText='color:#e57373;min-height:1.3em;margin-top:8px;text-align:center';
-  const refresh=()=>{const all=M.sel.has('all');items.forEach(([k])=>{const c=cards[k],on=M.sel.has(k);stemCardOn(c,on);c.classList.toggle('dis',!avail(k)||(all&&k!=='all'))})};
+  const refresh=()=>{const all=M.sel.has('all');items.forEach(([k])=>{const c=cards[k],on=M.sel.has(k);stemCardOn(c,on);c.classList.toggle('dis',!avail(k))})};
   items.forEach(([k,l,ic,col])=>{
     const c=stemCard(ic,l,col);cards[k]=c;
     c.onclick=()=>{if(!avail(k))return;
       if(k==='all'){if(M.sel.has('all'))M.sel.delete('all');else{M.sel.clear();M.sel.add('all')}}
-      else{if(M.sel.has(k))M.sel.delete(k);else M.sel.add(k)}
+      else{M.sel.delete('all');if(M.sel.has(k))M.sel.delete(k);else M.sel.add(k)}
       msg.textContent='';refresh()};
     grid.append(c)});
   f.append(grid,msg);

@@ -1443,7 +1443,7 @@ const F=window.CifrasForge={
 
 <section class="screen" id="sep">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
-  <p class="sub" style="line-height:1.45">Separa uma música em 6 stems (bateria, baixo, vocais, violão/guitarra, piano e outros) usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <p class="sub" style="line-height:1.45">Separa uma música em 6 stems (bateria, baixo, vocais, violão/guitarra, piano e outros). Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
   <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
   <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
   <select id="sepn" hidden><option value="6" selected>6 stems</option></select>
@@ -1455,7 +1455,8 @@ const F=window.CifrasForge={
   <div class="sepbar" hidden><i></i></div>
   <div id="sepst" class="sub" style="margin:10px 0"></div>
   <div id="sepout"></div>
-  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4">Os pesos do HTDemucs são da Meta e têm licença de uso <b>não comercial</b>. Use apenas músicas que a banda tem direito de usar. O stem de piano costuma sair com ruído.</p>
+  <p class="sub" style="margin-top:16px;font-size:.78rem;line-height:1.4"><b style="color: yellow">Fique nesta tela até o fim do processamento.</b>
+    O separador está em fase beta e pode apresentar falhas, o stem de piano costuma sair com ruído.</p>
 </section>
 
 <section class="screen" id="song">

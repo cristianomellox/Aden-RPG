@@ -1075,7 +1075,8 @@ const RED=matchMedia('(prefers-reduced-motion: reduce)').matches,A=nw/nh,PX=.14,
 cv=document.createElement('canvas');cv.setAttribute('aria-hidden','true');cv.style.cssText='position:absolute;pointer-events:none;z-index:3';hm.appendChild(cv);
 const R=new T.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setClearColor(0,0);
 const sc=new T.Scene(),cam=new T.PerspectiveCamera(FOV,1,.1,50),G=new TW.Group(),rig=new T.Group();sc.add(rig);
-const tex=new T.Texture(img);tex.needsUpdate=true;tex.anisotropy=4;tex.minFilter=T.LinearMipmapLinearFilter;
+const tw0=Math.min(1024,nw),tc=document.createElement('canvas');tc.width=tw0;tc.height=Math.round(tw0/A);tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
+const tex=new T.CanvasTexture(tc);tex.anisotropy=4;tex.minFilter=T.LinearMipmapLinearFilter;
 const U={uT:{value:0},uSh:{value:-1},uR:{value:0},uP:{value:0},uPx:{value:1}};
 
 /* ---- camadas da logo: sombra, "miolo" dourado (extrusão) e face frontal com brilho ---- */
@@ -1087,7 +1088,7 @@ void main(){vec4 t=texture2D(uM,vU,uB);float a=t.a*uR;vec3 c=uCol;
  else if(uK>.5){c=t.rgb;float l=dot(c,vec3(.3,.59,.11));
   float b=vU.x*.75+vU.y*.45-uSh;c+=vec3(1.,.82,.4)*exp(-b*b*90.)*(.3+l)*1.15;
   vec2 g=floor(vU*vec2(170.,95.));float r=h(g);float tw=pow(max(0.,sin(uT*3.+r*40.)),24.)*step(.93,r)*step(.6,l);
-  c+=vec3(1.,.9,.6)*tw*1.3;c*=1.+.05*sin(uT*1.5+vU.x*6.);}
+  tw*=smoothstep(.5,.05,length(fract(vU*vec2(170.,95.))-.5));c+=vec3(1.,.9,.6)*tw*1.6;c*=1.+.05*sin(uT*1.5+vU.x*6.);}
  else{c*=.7+.3*vU.y;}
  gl_FragColor=vec4(c,a);}`;
 const geo=new T.PlaneGeometry(A,1),NL=12,DEP=.11,lc=(u)=>new T.Vector3(.23+.56*u,.15+.44*u,.02+.1*u);
@@ -1106,12 +1107,12 @@ for(let i=P.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[P[i],P[j]]=[P[j],P[
 const NP=P.length,pos=new Float32Array(NP*3),aS=new Float32Array(NP*3),aC=new Float32Array(NP*3),aD=new Float32Array(NP),aZ=new Float32Array(NP);
 P.forEach((p,i)=>{pos.set([(p[0]-.5)*A,.5-p[1],0],i*3);aC.set([p[2],p[3],p[4]],i*3);
   const th=Math.random()*6.283,ph=Math.acos(2*Math.random()-1),r=1.1+Math.random()*1.9;aS.set([r*Math.sin(ph)*Math.cos(th)*1.5,r*Math.sin(ph)*Math.sin(th),r*Math.cos(ph)*.9],i*3);
-  aD[i]=Math.random();aZ[i]=.007+Math.random()*.008});
+  aD[i]=Math.random();aZ[i]=.009+Math.random()*.009});
 const pg=new T.BufferGeometry();pg.setAttribute('position',new T.BufferAttribute(pos,3));pg.setAttribute('aS',new T.BufferAttribute(aS,3));pg.setAttribute('aC',new T.BufferAttribute(aC,3));pg.setAttribute('aD',new T.BufferAttribute(aD,1));pg.setAttribute('aZ',new T.BufferAttribute(aZ,1));
 const PV=`attribute vec3 aS,aC;attribute float aD,aZ;uniform float uP,uT,uPx,uR;varying vec3 vC;varying float vA;
 void main(){float k=clamp((uP-aD*.45)/.55,0.,1.);float e=1.-pow(1.-k,3.);vec3 p=mix(aS,position,e);float g=(1.-e)*aD*4.;float c=cos(g),s=sin(g);p.xy=mat2(c,-s,s,c)*p.xy;
  vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=aZ*uPx*(1.+sin(k*3.1416)*1.8)/-mv.z;vC=mix(vec3(1.,.78,.25),aC,e);vA=smoothstep(0.,.12,k)*(1.-uR);}`;
-const PF='varying vec3 vC;varying float vA;void main(){float r=length(gl_PointCoord-.5)*2.;float a=smoothstep(1.,0.,r);gl_FragColor=vec4(vC,a*a*vA);}';
+const PF='varying vec3 vC;varying float vA;void main(){float r=length(gl_PointCoord-.5)*2.;float a=smoothstep(1.,0.,r);gl_FragColor=vec4(vC*1.25,a*vA);}';
 const pts=new T.Points(pg,new T.ShaderMaterial({uniforms:{uP:U.uP,uT:U.uT,uPx:U.uPx,uR:U.uR},vertexShader:PV,fragmentShader:PF,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));pts.frustumCulled=false;pts.renderOrder=40;rig.add(pts);
 
 /* ---- poeira dourada que sobe depois que a logo se forma ---- */
@@ -1442,11 +1443,10 @@ const F=window.CifrasForge={
 
 <section class="screen" id="sep">
   <div class="top"><button class="ib" data-go="home" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Separar instrumentos</h1></div>
-  <p class="sub" style="line-height:1.45">Separa uma música em bateria, baixo, vocais e outros instrumentos usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
+  <p class="sub" style="line-height:1.45">Separa uma música em 6 stems (bateria, baixo, vocais, violão/guitarra, piano e outros) usando o <b>HTDemucs</b>. Tudo roda <b>no seu aparelho</b>: o arquivo não é enviado para lugar nenhum e é grátis. Na primeira vez o modelo é baixado (fica salvo), e músicas de 3–4 min podem levar de alguns minutos (com GPU) a bem mais (só CPU).</p>
   <label for="sepf">Arquivo de áudio (até 8 minutos)</label>
   <input type="file" id="sepf" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg">
-  <label for="sepn">Stems</label>
-  <select id="sepn"><option value="4" selected>4 stems (bateria, baixo, vocais, outros)</option><option value="6">6 stems (+ violão e piano)</option></select>
+  <select id="sepn" hidden><option value="6" selected>6 stems</option></select>
   <label for="sepm">Processamento</label>
   <select id="sepm"><option value="auto">Automático (GPU se houver)</option><option value="wasm">Somente CPU (WebAssembly)</option></select>
   <button class="btn sec" id="sepoff" type="button" style="margin-top:14px">Preparar para uso offline</button>

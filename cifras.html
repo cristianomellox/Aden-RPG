@@ -2474,9 +2474,9 @@ function rdPack(segs,W,H){
 }
 function rdFrame(){
   const r=$('#rd'),R=RD.rot,w=innerWidth,h=innerHeight;
-  if(matchMedia('(orientation:landscape)').matches||R==='0'){r.style.cssText='width:'+w+'px;height:'+h+'px;transform:none';return {W:w,H:h}}
-  if(R==='L'){r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateX('+w+'px) rotate(90deg)';return {W:h,H:w}}
-  r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateY('+h+'px) rotate(-90deg)';return {W:h,H:w}
+  if(matchMedia('(orientation:landscape)').matches||R==='0'){RD.k='N';r.style.cssText='width:'+w+'px;height:'+h+'px;transform:none';return {W:w,H:h}}
+  if(R==='L'){RD.k='L';r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateX('+w+'px) rotate(90deg)';return {W:h,H:w}}
+  RD.k='R';r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateY('+h+'px) rotate(-90deg)';return {W:h,H:w}
 }
 function rdPageTop(i){let t=0;for(let k=0;k<i&&k<RD.pages.length;k++)RD.pages[k].forEach(sc=>t+=Math.round(sc.height*RD.W/sc.width));return t}
 function rdPct(){
@@ -2496,6 +2496,7 @@ function rdAuto(){
   let y=P.scrollTop,last=performance.now();
   const step=now=>{
     if(!RD.sc)return;
+    if(RD.drag){last=now;y=P.scrollTop;RD.raf=requestAnimationFrame(step);return}
     const dt=Math.min(now-last,100)/1000;last=now;
     if(Math.abs(P.scrollTop-Math.round(y))>3)y=P.scrollTop;
     y+=spdPx(speed)*dt;P.scrollTop=y;
@@ -2542,6 +2543,7 @@ function rdMake(){
   r=document.createElement('div');r.id='rd';r.hidden=true;
   r.innerHTML='<div class="rdb"><button type="button" data-a="x" aria-label="Fechar">✕</button><button type="button" data-a="rot" aria-label="Girar">⟳</button><span class="sp"></span><button type="button" data-a="zm" aria-label="Diminuir">A−</button><button type="button" data-a="zp" aria-label="Aumentar">A+</button><span class="sp"></span><button type="button" data-a="sm" aria-label="Mais devagar">−</button><button type="button" data-a="sc" aria-label="Rolagem automática"><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="6"/><path d="M12 7v3M9 14l3 3 3-3"/></svg></button><button type="button" data-a="sp" aria-label="Mais rápido">+</button><span class="sd">3</span><span class="sp"></span><button type="button" data-a="pv" aria-label="Anterior">‹</button><button type="button" class="pg" data-a="pgm" aria-label="Alternar páginas e rolagem">–</button><button type="button" data-a="nx" aria-label="Próxima">›</button></div><div class="rdp"></div><div class="rdz a" data-a="pv"></div><div class="rdz b" data-a="nx"></div>';
   r.addEventListener('click',e=>{
+    if(RD.noClick){RD.noClick=false;return}
     const a=e.target.closest('[data-a]');if(!a)return;const k=a.dataset.a;
     if(k==='x')rdClose();else if(k==='pv')rdGo(-1);else if(k==='nx')rdGo(1);
     else if(k==='sc')rdAuto();else if(k==='sm'){setSpeed(-1);rdSpd()}else if(k==='sp'){setSpeed(1);rdSpd()}
@@ -2550,6 +2552,35 @@ function rdMake(){
     else if(k==='zm'||k==='zp'){RD.z=Math.max(.5,Math.min(1,Math.round((RD.z+(k==='zp'?.1:-.1))*10)/10));RD.pi=0;rdShow()}
   });
   r.querySelector('.rdp').addEventListener('scroll',rdPct,{passive:true});
+  /* rolagem com o dedo: o leitor é girado por CSS, então o movimento na tela é convertido para o eixo do conteúdo
+     (arrastar o conteúdo "para cima" no sentido da leitura = descer), com inércia ao soltar */
+  const loc=(dx,dy)=>RD.k==='L'?{x:dy,y:-dx}:RD.k==='R'?{x:-dy,y:dx}:{x:dx,y:dy};
+  let ds=null,mom=0;const stopMom=()=>{cancelAnimationFrame(mom);mom=0};
+  r.addEventListener('pointerdown',e=>{
+    if(e.target.closest('.rdb')||(e.pointerType==='mouse'&&e.button))return;
+    stopMom();ds={id:e.pointerId,x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,t:performance.now(),v:0,drag:false,tot:0};
+  });
+  r.addEventListener('pointermove',e=>{
+    if(!ds||e.pointerId!==ds.id)return;
+    if(!ds.drag){if(Math.hypot(e.clientX-ds.x,e.clientY-ds.y)<8)return;ds.drag=true;RD.drag=true}
+    const P=r.querySelector('.rdp'),d=loc(e.clientX-ds.lx,e.clientY-ds.ly),now=performance.now(),dt=Math.max(1,now-ds.t);
+    P.scrollTop-=d.y;ds.tot+=d.y;ds.v=ds.v*.6+(-d.y/dt)*.4;
+    ds.lx=e.clientX;ds.ly=e.clientY;ds.t=now;
+  });
+  const end=e=>{
+    if(!ds||e.pointerId!==ds.id)return;const s=ds;ds=null;
+    if(!s.drag)return;
+    RD.drag=false;RD.noClick=true;setTimeout(()=>{RD.noClick=false},400);
+    const P=r.querySelector('.rdp');
+    if(!RD.cont&&P.scrollHeight<=P.clientHeight+2){ /* modo páginas sem sobra: deslizar troca de tela */
+      if(Math.abs(s.tot)>50)rdGo(s.tot<0?1:-1);return}
+    let v=performance.now()-s.t>80?0:s.v;if(Math.abs(v)<.05)return;
+    let last=performance.now();
+    const f=now=>{const dt=Math.min(now-last,50);last=now;const b=P.scrollTop;P.scrollTop=b+v*dt;v*=Math.pow(.94,dt/16);
+      if(Math.abs(v)>.02&&P.scrollTop!==b)mom=requestAnimationFrame(f);else mom=0};
+    mom=requestAnimationFrame(f);
+  };
+  r.addEventListener('pointerup',end);r.addEventListener('pointercancel',end);
   document.body.append(r);return r;
 }
 async function rdOpen(pdf){

@@ -2562,7 +2562,8 @@ function rdMake(){
   });
   r.addEventListener('pointermove',e=>{
     if(!ds||e.pointerId!==ds.id)return;
-    if(!ds.drag){if(Math.hypot(e.clientX-ds.x,e.clientY-ds.y)<8)return;ds.drag=true;RD.drag=true}
+    if(!ds.drag){if(Math.hypot(e.clientX-ds.x,e.clientY-ds.y)<8)return;ds.drag=true;RD.drag=true;
+      if(!RD.cont){RD.cont=true;RD.startTop=rdPageTop(RD.pi);rdShow()}} /* arrastar = rolagem contínua, sem trocar de página */
     const P=r.querySelector('.rdp'),d=loc(e.clientX-ds.lx,e.clientY-ds.ly),now=performance.now(),dt=Math.max(1,now-ds.t);
     P.scrollTop-=d.y;ds.tot+=d.y;ds.v=ds.v*.6+(-d.y/dt)*.4;
     ds.lx=e.clientX;ds.ly=e.clientY;ds.t=now;
@@ -2572,8 +2573,6 @@ function rdMake(){
     if(!s.drag)return;
     RD.drag=false;RD.noClick=true;setTimeout(()=>{RD.noClick=false},400);
     const P=r.querySelector('.rdp');
-    if(!RD.cont&&P.scrollHeight<=P.clientHeight+2){ /* modo páginas sem sobra: deslizar troca de tela */
-      if(Math.abs(s.tot)>50)rdGo(s.tot<0?1:-1);return}
     let v=performance.now()-s.t>80?0:s.v;if(Math.abs(v)<.05)return;
     let last=performance.now();
     const f=now=>{const dt=Math.min(now-last,50);last=now;const b=P.scrollTop;P.scrollTop=b+v*dt;v*=Math.pow(.94,dt/16);

@@ -97,8 +97,8 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
 #rd .rdb{position:absolute;left:0;right:0;top:0;height:40px;background:#0a0a0a;border-bottom:1px solid var(--gold);display:flex;align-items:center;justify-content:center;gap:6px;z-index:3;padding:0 6px}
 #rd .rdb button{background:none;border:1px solid var(--ln);color:var(--gold);border-radius:8px;min-width:38px;height:30px;font-size:1rem;font-weight:700;padding:0 8px}
 #rd .rdb button:active{background:var(--gold);color:#000}
-#rd .rdb .sp{flex:1}
-#rd .rdb .pg{color:var(--gold);font-weight:700;min-width:46px;text-align:center;font-size:.95rem}
+#rd .rdb .sp{flex:1;min-width:2px}#rd .rdb{overflow-x:auto;gap:4px}#rd .rdb button.act{background:var(--gold);color:#000}#rd .rdb svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}#rd .rdb .sd{color:var(--gold);font-weight:700;min-width:16px;text-align:center}#rd.auto .rdz{display:none}
+#rd .rdb .pg{color:var(--gold);font-weight:700;min-width:54px;text-align:center;font-size:.95rem}
 #rd .rdp{position:absolute;left:0;right:0;top:40px;bottom:0;overflow-y:auto;overflow-x:hidden;background:#fff;touch-action:pan-y}
 #rd .rdp canvas{display:block;margin:0 auto;background:#fff}
 #rd .rdz{position:absolute;top:40px;bottom:0;z-index:2}
@@ -1437,7 +1437,7 @@ function renderSong(){
   const s=cur,box=$('#sv');box.innerHTML='';box.style.setProperty('--fs',fs+'px');
   const h=el('h2');h.textContent=s.title;const hd=el('div','shd');hd.append(h);const mt=metaEl(s);if(mt)hd.append(mt);const rows=el('div');renderRows(rows,s,false);
   const hs=(s.score||[]).some(x=>x.n.length),hp=!!(s.pdf&&s.pdf.d);if((view==='s'&&!hs)||(view==='p'&&!hp))view='c';const vs=[['c','Cifra'],...(hs?[['s','Partitura']]:[]),...(hp?[['p','PDF']]:[])];
-  if(vs.length>1){const sg=el('div','row-btns');sg.style.margin='0 0 14px';vs.forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});if(view==='p'){const rb=el('button','btn');rb.textContent='Modo leitura';rb.style.cssText='padding:8px 18px;margin-left:auto';rb.onclick=()=>rdOpen(s.pdf);sg.append(rb)}box.append(hd,sg)}else box.append(hd);
+  if(vs.length>1){const sg=el('div','row-btns');sg.style.margin='0 0 14px';vs.forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});if(view==='p'){const rb=el('button','btn');rb.textContent='Modo leitura';rb.style.cssText='padding:8px 18px';rb.onclick=()=>rdOpen(s.pdf);sg.append(rb)}box.append(hd,sg)}else box.append(hd);
   if(view==='s'){const w=el('div');renderStaves(w,s.score,false);box.append(w)}else if(view==='p'){const w=el('div');box.append(w);renderPdf(w,s.pdf)}else box.append(rows);
   const n=((s.tr||0)+12)%12,d=n>6?n-12:n;$('#tv').textContent='Tom '+(d>0?'+':'')+d;
   const p=$('#secp');p.innerHTML='';p.hidden=true;
@@ -2268,30 +2268,83 @@ function rdFrame(){
   if(R==='L'){r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateX('+w+'px) rotate(90deg)';return {W:h,H:w}}
   r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateY('+h+'px) rotate(-90deg)';return {W:h,H:w}
 }
+function rdPageTop(i){let t=0;for(let k=0;k<i&&k<RD.pages.length;k++)RD.pages[k].forEach(sc=>t+=Math.round(sc.height*RD.W/sc.width));return t}
+function rdPct(){
+  const r=$('#rd');if(!r||!RD.cont)return;const P=r.querySelector('.rdp');
+  r.querySelector('.pg').textContent=Math.round(P.scrollTop/Math.max(1,P.scrollHeight-P.clientHeight)*100)+'%';
+}
+function rdSpd(){const e=document.querySelector('#rd .sd');if(e)e.textContent=speed}
+/* rolagem automática: o scrollTop é do próprio leitor, então "descer" vale também com o conteúdo girado */
+function rdStopAuto(){
+  RD.sc=false;cancelAnimationFrame(RD.raf);const r=$('#rd');
+  if(r){r.classList.remove('auto');const b=r.querySelector('[data-a=sc]');if(b)b.classList.remove('act')}
+}
+function rdAuto(){
+  if(RD.sc){rdStopAuto();return}
+  if(!RD.cont){RD.cont=true;RD.startTop=rdPageTop(RD.pi);rdShow()}
+  const r=$('#rd'),P=r.querySelector('.rdp');RD.sc=true;r.classList.add('auto');r.querySelector('[data-a=sc]').classList.add('act');
+  let y=P.scrollTop,last=performance.now();
+  const step=now=>{
+    if(!RD.sc)return;
+    const dt=Math.min(now-last,100)/1000;last=now;
+    if(Math.abs(P.scrollTop-Math.round(y))>3)y=P.scrollTop;
+    y+=speed*12*dt;P.scrollTop=y;
+    if(P.scrollTop+P.clientHeight>=P.scrollHeight-2&&y>P.scrollTop+5){rdStopAuto();return}
+    RD.raf=requestAnimationFrame(step);
+  };
+  RD.raf=requestAnimationFrame(step);
+}
 function rdShow(){
   const r=$('#rd'),f=rdFrame(),P=r.querySelector('.rdp'),W=Math.floor(f.W*RD.z),Hc=f.H-40;
-  RD.pages=rdPack(RD.segs,W,Hc);RD.pi=Math.min(RD.pi,Math.max(0,RD.pages.length-1));
-  P.innerHTML='';P.scrollTop=0;
-  (RD.pages[RD.pi]||[]).forEach(sc=>{const c=document.createElement('canvas');c.width=sc.width;c.height=sc.height;c.getContext('2d').drawImage(sc,0,0);c.style.width=W+'px';c.style.height=Math.round(sc.height*W/sc.width)+'px';P.append(c)});
-  r.querySelector('.pg').textContent=RD.pages.length?(RD.pi+1)+'/'+RD.pages.length:'–';
+  let frac=null;if(RD.cont&&RD.startTop==null&&P.childElementCount)frac=P.scrollTop/Math.max(1,P.scrollHeight);
+  RD.W=W;RD.Hc=Hc;RD.pages=rdPack(RD.segs,W,Hc);
+  const put=sc=>{sc.style.width=W+'px';sc.style.height=Math.round(sc.height*W/sc.width)+'px';P.append(sc)};
+  P.innerHTML='';
+  if(RD.cont){
+    RD.segs.forEach(put);
+    P.scrollTop=RD.startTop!=null?RD.startTop:(frac||0)*P.scrollHeight;RD.startTop=null;rdPct();
+  }else{
+    RD.pi=Math.min(RD.pi,Math.max(0,RD.pages.length-1));
+    (RD.pages[RD.pi]||[]).forEach(put);P.scrollTop=0;
+    r.querySelector('.pg').textContent=RD.pages.length?(RD.pi+1)+'/'+RD.pages.length:'–';
+  }
 }
-function rdGo(d){const n=RD.pi+d;if(n<0||n>=RD.pages.length)return;RD.pi=n;rdShow()}
-function rdClose(){const r=$('#rd');if(r){r.hidden=true;r.querySelector('.rdp').innerHTML=''}removeEventListener('resize',rdShow);removeEventListener('orientationchange',rdShow);RD.open=false}
+function rdGo(d){
+  const P=$('#rd .rdp');
+  if(RD.cont){P.scrollBy({top:d*RD.Hc*.85,behavior:'smooth'});return}
+  const n=RD.pi+d;if(n<0||n>=RD.pages.length)return;RD.pi=n;rdShow()
+}
+function rdMode(){ /* alterna entre telas (páginas) e rolagem contínua */
+  const P=$('#rd .rdp');
+  if(RD.cont){
+    rdStopAuto();const t=P.scrollTop;let acc=0,idx=0;
+    for(let k=0;k<RD.pages.length;k++){let h=0;RD.pages[k].forEach(sc=>h+=Math.round(sc.height*RD.W/sc.width));if(t<acc+h-2){idx=k;break}acc+=h;idx=k}
+    RD.cont=false;RD.pi=idx;rdShow();
+  }else{RD.cont=true;RD.startTop=rdPageTop(RD.pi);rdShow()}
+}
+function rdClose(){
+  rdStopAuto();RD.cont=false;
+  const r=$('#rd');if(r){r.hidden=true;r.querySelector('.rdp').innerHTML=''}
+  removeEventListener('resize',rdShow);removeEventListener('orientationchange',rdShow);RD.open=false
+}
 function rdMake(){
   let r=$('#rd');if(r)return r;
   r=document.createElement('div');r.id='rd';r.hidden=true;
-  r.innerHTML='<div class="rdb"><button type="button" data-a="x" aria-label="Fechar">✕</button><button type="button" data-a="rot" aria-label="Girar">⟳</button><span class="sp"></span><button type="button" data-a="zm" aria-label="Menor">−</button><button type="button" data-a="zp" aria-label="Maior">+</button><span class="sp"></span><button type="button" data-a="pv" aria-label="Anterior">‹</button><span class="pg">–</span><button type="button" data-a="nx" aria-label="Próxima">›</button></div><div class="rdp"></div><div class="rdz a" data-a="pv"></div><div class="rdz b" data-a="nx"></div>';
+  r.innerHTML='<div class="rdb"><button type="button" data-a="x" aria-label="Fechar">✕</button><button type="button" data-a="rot" aria-label="Girar">⟳</button><span class="sp"></span><button type="button" data-a="zm" aria-label="Diminuir">A−</button><button type="button" data-a="zp" aria-label="Aumentar">A+</button><span class="sp"></span><button type="button" data-a="sm" aria-label="Mais devagar">−</button><button type="button" data-a="sc" aria-label="Rolagem automática"><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="6"/><path d="M12 7v3M9 14l3 3 3-3"/></svg></button><button type="button" data-a="sp" aria-label="Mais rápido">+</button><span class="sd">3</span><span class="sp"></span><button type="button" data-a="pv" aria-label="Anterior">‹</button><button type="button" class="pg" data-a="pgm" aria-label="Alternar páginas e rolagem">–</button><button type="button" data-a="nx" aria-label="Próxima">›</button></div><div class="rdp"></div><div class="rdz a" data-a="pv"></div><div class="rdz b" data-a="nx"></div>';
   r.addEventListener('click',e=>{
     const a=e.target.closest('[data-a]');if(!a)return;const k=a.dataset.a;
     if(k==='x')rdClose();else if(k==='pv')rdGo(-1);else if(k==='nx')rdGo(1);
+    else if(k==='sc')rdAuto();else if(k==='sm'){setSpeed(-1);rdSpd()}else if(k==='sp'){setSpeed(1);rdSpd()}
+    else if(k==='pgm')rdMode();
     else if(k==='rot'){RD.rot=RD.rot==='L'?'R':RD.rot==='R'?'0':'L';rdSaveRot(RD.rot);RD.pi=0;rdShow()}
     else if(k==='zm'||k==='zp'){RD.z=Math.max(.5,Math.min(1,Math.round((RD.z+(k==='zp'?.1:-.1))*10)/10));RD.pi=0;rdShow()}
   });
+  r.querySelector('.rdp').addEventListener('scroll',rdPct,{passive:true});
   document.body.append(r);return r;
 }
 async function rdOpen(pdf){
   if(!pdf||!pdf.d||RD.busy)return;
-  RD.busy=1;const r=rdMake();RD.rot=rdRot();RD.pi=0;RD.open=true;r.hidden=false;rdFrame();
+  RD.busy=1;const r=rdMake();rdStopAuto();RD.cont=false;RD.startTop=null;RD.rot=rdRot();RD.pi=0;RD.open=true;r.hidden=false;rdFrame();rdSpd();
   const P=r.querySelector('.rdp');P.innerHTML='<div class="rdm">Preparando a partitura…</div>';
   try{
     RD.segs=await rdBuild(pdf,(n,t)=>{const m=P.querySelector('.rdm');if(m)m.textContent='Preparando a partitura… '+n+'/'+t});

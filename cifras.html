@@ -90,6 +90,20 @@ select{flex:1;min-width:0;background:#0c0c0c;color:var(--tx);border:1px solid va
 .it{display:flex;align-items:center;gap:6px;padding:8px 8px 8px 14px}.it span{flex:1;cursor:pointer}.it .ib{width:36px;height:36px;font-size:1rem}
 .row.sec .ly{color:var(--gold);font-size:.75em;letter-spacing:.14em;text-transform:uppercase;font-weight:700;border-left:3px solid var(--gold);padding-left:8px;margin:.9em 0 .3em}
 .row.sec .lane{display:none}
+
+/* ===== Modo leitura do PDF (gira o conteúdo 90° porque o PWA é só vertical) ===== */
+#rd{position:fixed;left:0;top:0;background:#fff;z-index:5000;transform-origin:0 0;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+#rd[hidden]{display:none}
+#rd .rdb{position:absolute;left:0;right:0;top:0;height:40px;background:#0a0a0a;border-bottom:1px solid var(--gold);display:flex;align-items:center;justify-content:center;gap:6px;z-index:3;padding:0 6px}
+#rd .rdb button{background:none;border:1px solid var(--ln);color:var(--gold);border-radius:8px;min-width:38px;height:30px;font-size:1rem;font-weight:700;padding:0 8px}
+#rd .rdb button:active{background:var(--gold);color:#000}
+#rd .rdb .sp{flex:1}
+#rd .rdb .pg{color:var(--gold);font-weight:700;min-width:46px;text-align:center;font-size:.95rem}
+#rd .rdp{position:absolute;left:0;right:0;top:40px;bottom:0;overflow-y:auto;overflow-x:hidden;background:#fff;touch-action:pan-y}
+#rd .rdp canvas{display:block;margin:0 auto;background:#fff}
+#rd .rdz{position:absolute;top:40px;bottom:0;z-index:2}
+#rd .rdz.a{left:0;width:30%}#rd .rdz.b{left:30%;right:0}
+#rd .rdm{position:absolute;inset:40px 0 0 0;display:grid;place-items:center;color:#222;font:600 1rem system-ui,sans-serif;text-align:center;padding:20px;z-index:1}
 #secp{position:fixed;left:12px;right:12px;bottom:150px;max-height:40vh;overflow:auto;background:#0a0a0a;border:1px solid var(--gold);border-radius:12px;padding:8px;z-index:30}
 .stw{position:relative;margin-bottom:10px}.stw .ib{position:absolute;right:0;top:0;width:30px;height:30px}.nt{touch-action:none;cursor:grab}
 .btn:disabled{filter:grayscale(1);opacity:.45;cursor:not-allowed}
@@ -1423,7 +1437,7 @@ function renderSong(){
   const s=cur,box=$('#sv');box.innerHTML='';box.style.setProperty('--fs',fs+'px');
   const h=el('h2');h.textContent=s.title;const hd=el('div','shd');hd.append(h);const mt=metaEl(s);if(mt)hd.append(mt);const rows=el('div');renderRows(rows,s,false);
   const hs=(s.score||[]).some(x=>x.n.length),hp=!!(s.pdf&&s.pdf.d);if((view==='s'&&!hs)||(view==='p'&&!hp))view='c';const vs=[['c','Cifra'],...(hs?[['s','Partitura']]:[]),...(hp?[['p','PDF']]:[])];
-  if(vs.length>1){const sg=el('div','row-btns');sg.style.margin='0 0 14px';vs.forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});box.append(hd,sg)}else box.append(hd);
+  if(vs.length>1){const sg=el('div','row-btns');sg.style.margin='0 0 14px';vs.forEach(([v,t])=>{const b=el('button','btn'+(view===v?'':' sec'));b.textContent=t;b.style.padding='8px 18px';b.onclick=()=>{view=v;renderSong()};sg.append(b)});if(view==='p'){const rb=el('button','btn');rb.textContent='Modo leitura';rb.style.cssText='padding:8px 18px;margin-left:auto';rb.onclick=()=>rdOpen(s.pdf);sg.append(rb)}box.append(hd,sg)}else box.append(hd);
   if(view==='s'){const w=el('div');renderStaves(w,s.score,false);box.append(w)}else if(view==='p'){const w=el('div');box.append(w);renderPdf(w,s.pdf)}else box.append(rows);
   const n=((s.tr||0)+12)%12,d=n>6?n-12:n;$('#tv').textContent='Tom '+(d>0?'+':'')+d;
   const p=$('#secp');p.innerHTML='';p.hidden=true;
@@ -2165,6 +2179,127 @@ async function renderPdf(w,pdf){
       c.width=vp.width;c.height=vp.height;c.style.cssText='width:100%;display:block;margin-bottom:10px;background:#fff';w.append(c);await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise}
   }catch(e){w.innerHTML='';const a=el('a');a.textContent='Abrir PDF';a.style.cssText='color:var(--gold);font-size:1.1rem';
     try{const bin=atob(pdf.d.split(',')[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.target='_blank'}catch(x){}w.append(a)}
+}
+
+/* ===== Modo leitura do PDF: corta margens, separa os sistemas (pautas) e mostra grande, página por página ===== */
+var RD={cache:null,key:'',pages:[],pi:0,z:1,rot:null,busy:0};
+function rdRot(){try{const v=localStorage.getItem('cifras.rd.rot');if(v==='L'||v==='R'||v==='0')return v}catch(e){}return 'L'}
+function rdSaveRot(v){try{localStorage.setItem('cifras.rd.rot',v)}catch(e){}}
+function rdLib(){
+  if(window.pdfjsLib)return Promise.resolve();
+  return new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    sc.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok()};sc.onerror=no;document.head.append(sc)});
+}
+/* analisa uma página renderizada: devolve caixa do conteúdo e os recortes (sistemas) */
+function rdAnalyze(cv){
+  const W=cv.width,H=cv.height,d=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H).data;
+  const row=new Int32Array(H),col=new Int32Array(W);
+  for(let y=0,i=0;y<H;y++)for(let x=0;x<W;x++,i+=4){if(d[i]*.3+d[i+1]*.59+d[i+2]*.11<190){row[y]++;col[x]++}}
+  let t=0,b=H-1,l=0,r=W-1;
+  while(t<H&&row[t]<2)t++;while(b>t&&row[b]<2)b--;while(l<W&&col[l]<2)l++;while(r>l&&col[r]<2)r--;
+  if(t>=b||l>=r)return null;
+  const pad=Math.round(W*.006);t=Math.max(0,t-pad);b=Math.min(H-1,b+pad);l=Math.max(0,l-pad);r=Math.min(W-1,r+pad);
+  const cw=r-l+1;
+  /* linhas de pauta: linhas finas que cruzam boa parte da largura */
+  const raw=[];let y=t;
+  while(y<=b){if(row[y]>=cw*.35){let y0=y;while(y<=b&&row[y]>=cw*.35)y++;if(y-y0<=Math.max(4,Math.round(W*.0025)))raw.push((y0+y-1)/2);}else y++}
+  let cuts=null;
+  if(raw.length>=3){
+    const df=[];for(let i=1;i<raw.length;i++)df.push(raw[i]-raw[i-1]);
+    const sm=df.slice().sort((a,c)=>a-c),mn=sm[0],near=sm.filter(v=>v<mn*1.8),sp=near[near.length>>1]||mn;
+    const staves=[];let cur=[raw[0]];
+    for(let i=1;i<raw.length;i++){if(raw[i]-raw[i-1]<sp*1.6)cur.push(raw[i]);else{staves.push(cur);cur=[raw[i]]}}staves.push(cur);
+    const st=staves.filter(a=>a.length>=3).map(a=>({t:a[0],b:a[a.length-1]}));
+    if(st.length){
+      /* pautas muito próximas (sistema de piano) ficam juntas */
+      const sys=[st[0]];for(let i=1;i<st.length;i++){const q=sys[sys.length-1];if(st[i].t-q.b<sp*6)q.b=st[i].b;else sys.push({t:st[i].t,b:st[i].b})}
+      /* corte entre sistemas = meio da maior faixa em branco (ou a linha com menos tinta) */
+      cuts=[t];
+      for(let i=0;i<sys.length-1;i++){
+        const a=Math.round(sys[i].b+sp*1),c=Math.round(sys[i+1].t-sp*1);let best=-1,bl=0,bs=-1,run=0,mi=a,mv=1e9;
+        for(let k=a;k<=c;k++){if(row[k]<=1){if(!run)bs=k;run++;if(run>bl){bl=run;best=bs+(run>>1)}}else run=0;if(row[k]<mv){mv=row[k];mi=k}}
+        cuts.push(bl>0?best:mi);
+      }
+      cuts.push(b+1);
+    }
+  }
+  if(!cuts){ /* sem pauta (texto, imagem escaneada): separa por faixas em branco */
+    cuts=[t];const minGap=Math.max(6,Math.round(H*.012));let run=0,rs=0;
+    for(let k=t;k<=b;k++){if(row[k]<=1){if(!run)rs=k;run++}else{if(run>=minGap&&rs>t)cuts.push(rs+(run>>1));run=0}}
+    cuts.push(b+1);
+  }
+  return {l,w:cw,cuts};
+}
+async function rdBuild(pdf,prog){
+  const key=pdf.n+'|'+pdf.d.length+'|'+Math.max(innerWidth,innerHeight);
+  if(RD.cache&&RD.key===key)return RD.cache;
+  await rdLib();
+  const bin=atob(pdf.d.split(',')[1]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  const doc=await pdfjsLib.getDocument({data:u}).promise,segs=[];
+  const target=Math.round(Math.max(innerWidth,innerHeight)*Math.min(devicePixelRatio||1,2)/.88);
+  for(let n=1;n<=doc.numPages;n++){
+    prog&&prog(n,doc.numPages);
+    const pg=await doc.getPage(n),vp=pg.getViewport({scale:target/pg.getViewport({scale:1}).width}),c=document.createElement('canvas');
+    c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+    const cx=c.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:cx,viewport:vp}).promise;
+    const a=rdAnalyze(c);
+    if(!a){c.width=c.height=0;continue}
+    for(let i=0;i<a.cuts.length-1;i++){
+      const y0=a.cuts[i],h=a.cuts[i+1]-y0;if(h<4)continue;
+      const sc=document.createElement('canvas');sc.width=a.w;sc.height=h;
+      sc.getContext('2d').drawImage(c,a.l,y0,a.w,h,0,0,a.w,h);segs.push(sc);
+    }
+    c.width=c.height=0;
+  }
+  RD.cache=segs;RD.key=key;return segs;
+}
+/* monta as telas: junta sistemas seguidos enquanto couberem na altura disponível */
+function rdPack(segs,W,H){
+  const pages=[];let cur=[],hh=0;
+  segs.forEach(sc=>{const h=sc.height*W/sc.width;
+    if(cur.length&&hh+h>H){pages.push(cur);cur=[];hh=0}
+    cur.push(sc);hh+=h});
+  if(cur.length)pages.push(cur);return pages;
+}
+function rdFrame(){
+  const r=$('#rd'),R=RD.rot,w=innerWidth,h=innerHeight;
+  if(matchMedia('(orientation:landscape)').matches||R==='0'){r.style.cssText='width:'+w+'px;height:'+h+'px;transform:none';return {W:w,H:h}}
+  if(R==='L'){r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateX('+w+'px) rotate(90deg)';return {W:h,H:w}}
+  r.style.cssText='width:'+h+'px;height:'+w+'px;transform:translateY('+h+'px) rotate(-90deg)';return {W:h,H:w}
+}
+function rdShow(){
+  const r=$('#rd'),f=rdFrame(),P=r.querySelector('.rdp'),W=Math.floor(f.W*RD.z),Hc=f.H-40;
+  RD.pages=rdPack(RD.segs,W,Hc);RD.pi=Math.min(RD.pi,Math.max(0,RD.pages.length-1));
+  P.innerHTML='';P.scrollTop=0;
+  (RD.pages[RD.pi]||[]).forEach(sc=>{const c=document.createElement('canvas');c.width=sc.width;c.height=sc.height;c.getContext('2d').drawImage(sc,0,0);c.style.width=W+'px';c.style.height=Math.round(sc.height*W/sc.width)+'px';P.append(c)});
+  r.querySelector('.pg').textContent=RD.pages.length?(RD.pi+1)+'/'+RD.pages.length:'–';
+}
+function rdGo(d){const n=RD.pi+d;if(n<0||n>=RD.pages.length)return;RD.pi=n;rdShow()}
+function rdClose(){const r=$('#rd');if(r){r.hidden=true;r.querySelector('.rdp').innerHTML=''}removeEventListener('resize',rdShow);removeEventListener('orientationchange',rdShow);RD.open=false}
+function rdMake(){
+  let r=$('#rd');if(r)return r;
+  r=document.createElement('div');r.id='rd';r.hidden=true;
+  r.innerHTML='<div class="rdb"><button type="button" data-a="x" aria-label="Fechar">✕</button><button type="button" data-a="rot" aria-label="Girar">⟳</button><span class="sp"></span><button type="button" data-a="zm" aria-label="Menor">−</button><button type="button" data-a="zp" aria-label="Maior">+</button><span class="sp"></span><button type="button" data-a="pv" aria-label="Anterior">‹</button><span class="pg">–</span><button type="button" data-a="nx" aria-label="Próxima">›</button></div><div class="rdp"></div><div class="rdz a" data-a="pv"></div><div class="rdz b" data-a="nx"></div>';
+  r.addEventListener('click',e=>{
+    const a=e.target.closest('[data-a]');if(!a)return;const k=a.dataset.a;
+    if(k==='x')rdClose();else if(k==='pv')rdGo(-1);else if(k==='nx')rdGo(1);
+    else if(k==='rot'){RD.rot=RD.rot==='L'?'R':RD.rot==='R'?'0':'L';rdSaveRot(RD.rot);RD.pi=0;rdShow()}
+    else if(k==='zm'||k==='zp'){RD.z=Math.max(.5,Math.min(1,Math.round((RD.z+(k==='zp'?.1:-.1))*10)/10));RD.pi=0;rdShow()}
+  });
+  document.body.append(r);return r;
+}
+async function rdOpen(pdf){
+  if(!pdf||!pdf.d||RD.busy)return;
+  RD.busy=1;const r=rdMake();RD.rot=rdRot();RD.pi=0;RD.open=true;r.hidden=false;rdFrame();
+  const P=r.querySelector('.rdp');P.innerHTML='<div class="rdm">Preparando a partitura…</div>';
+  try{
+    RD.segs=await rdBuild(pdf,(n,t)=>{const m=P.querySelector('.rdm');if(m)m.textContent='Preparando a partitura… '+n+'/'+t});
+    if(!RD.open)return;
+    if(!RD.segs.length)throw 0;
+    rdShow();addEventListener('resize',rdShow);addEventListener('orientationchange',rdShow);
+  }catch(e){P.innerHTML='<div class="rdm">Não foi possível preparar este PDF para leitura.<br>Use a aba PDF normal.</div>'}
+  finally{RD.busy=0}
 }
 function setEm(m){
   draft.score=draft.score||[];

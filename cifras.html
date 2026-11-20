@@ -1303,7 +1303,7 @@ function metaEl(s){
   const l=[],e=s.eds||[];if(s.cb)l.push(['Criado por: ',s.cb]);if(e.length)l.push(['Última edição: ',e[0]+(e.length>1?' +':'')]);
   if(!l.length)return null;const d=el('div','meta');if(e.length>1)d.title='Já editaram: '+e.join(', ');
   l.forEach(([a,b])=>{const r=el('div');r.append(a);const k=el('b');k.textContent=b;r.append(k);d.append(r)});return d}
-let songs=load(), view='c', pq=loadQ(), sets=loadS(), curSet=null, play=null, cur=null, draft=null, fs=20, speed=3, scrolling=false, raf=0, openId=null;
+let songs=load(), view='c', pq=loadQ(), sets=loadS(), curSet=null, play=null, cur=null, draft=null, fs=20, speed=6, scrolling=false, raf=0, openId=null;
 
 function show(n){
   stopScroll();if(n!=='song'){ytStop();auStop()}if(n!=='notes')nStop();if(n!=='bvoc')vStop();if(n!=='sep')sepPause();
@@ -1451,7 +1451,8 @@ function openSong(id){
 }
 function setFs(d){fs=Math.max(10,Math.min(48,fs+d));$('#sv').style.setProperty('--fs',fs+'px');refit();ytPos()}
 $('#fm').onclick=()=>setFs(-2);$('#fp').onclick=()=>setFs(2);
-function setSpeed(d){speed=Math.max(1,Math.min(10,speed+d));$('#spd').textContent=speed}
+function spdPx(n){return n<=8?n*2.5:20+(n-8)*(100/12)} /* níveis 1-20: 2,5 a 120 px/s (1-8 em passos finos) */
+function setSpeed(d){speed=Math.max(1,Math.min(20,speed+d));$('#spd').textContent=speed}
 $('#sm').onclick=()=>setSpeed(-1);$('#sp').onclick=()=>setSpeed(1);
 function stopScroll(){scrolling=false;cancelAnimationFrame(raf);$('#sc').classList.remove('act')}
 $('#sc').onclick=()=>{
@@ -1462,7 +1463,7 @@ $('#sc').onclick=()=>{
     if(!scrolling)return;
     const dt=Math.min(now-last,100)/1000;last=now;
     if(Math.abs(scrollY-Math.round(y))>3)y=scrollY;
-    y+=speed*12*dt;scrollTo(0,y);
+    y+=spdPx(speed)*dt;scrollTo(0,y);
     if(scrollY+innerHeight>=document.documentElement.scrollHeight-2&&y>scrollY+5){stopScroll();return}
     raf=requestAnimationFrame(step);
   };
@@ -2288,7 +2289,7 @@ function rdAuto(){
     if(!RD.sc)return;
     const dt=Math.min(now-last,100)/1000;last=now;
     if(Math.abs(P.scrollTop-Math.round(y))>3)y=P.scrollTop;
-    y+=speed*12*dt;P.scrollTop=y;
+    y+=spdPx(speed)*dt;P.scrollTop=y;
     if(P.scrollTop+P.clientHeight>=P.scrollHeight-2&&y>P.scrollTop+5){rdStopAuto();return}
     RD.raf=requestAnimationFrame(step);
   };

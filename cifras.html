@@ -1235,10 +1235,10 @@ gl_FragColor=vec4(c*uDim,clamp(max(max(tr,on),max(gl,hd)),0.,1.));
 }`}));ring.position.z=-4;sc.add(ring);
     /* chevrons ±10 s */
     const lab=tex(128,80,(g,W,H)=>{g.font='800 62px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillStyle='#f6dc8a';g.fillText('10',W/2,H/2+3)});
-    const sk=skb.map((el,n)=>{const dir=n?1:-1,g=new T.Group(),plate=new T.Mesh(ext(rrect(27.5,32.5,11),2,.8),plateM),edge=new T.Mesh(ext(rrect(29,34,12),1.5,.5),gold(0xd4af37,.5));edge.position.z=-1.5;g.add(edge),cv=new T.Group(),ms=[0,1].map(()=>gold(0xf4cf60,.55));
+    const sk=skb.map((el,n)=>{const dir=n?1:-1,g=new T.Group(),plate=new T.Mesh(ext(rrect(27.5,32.5,11),2,.8),plateM),edge=new T.Mesh(ext(rrect(29,34,12),1.5,.5),gold(0xd4af37,.5)),cv=new T.Group(),ms=[0,1].map(()=>gold(0xf4cf60,.55));
       ms.forEach((m,i)=>{const c=new T.Mesh(ext(poly([[-3.4,-5.6],[-1.1,-5.6],[3.4,0],[-1.1,5.6],[-3.4,5.6],[1.1,0]]),2.4,.9),m);c.position.x=(i-.5)*6.4;cv.add(c)});
       cv.rotation.y=n?0:Math.PI;cv.position.set(0,4,3);const sp=new T.Sprite(new T.SpriteMaterial({map:lab,transparent:true,depthTest:false}));sp.scale.set(16,10,1);sp.position.set(0,-10.5,6);
-      g.add(plate,cv,sp);sc.add(g);return{el,dir,g,cv,ms,k:0,pr:0,pv:0}});
+      edge.position.z=-1.5;g.add(edge,plate,cv,sp);sc.add(g);return{el,dir,g,cv,ms,k:0,pr:0,pv:0}});
     const sp=sparks(sc,90,5);let lay=0,prog=0,f=0,press=0,dim=1,pr=0,tx=0,ty=0,cx=0,cy=0;
     const hold=(el,fn)=>{el.addEventListener('pointerdown',e=>fn(e,1));['pointerup','pointercancel','pointerleave'].forEach(n=>el.addEventListener(n,e=>fn(e,0)))};
     hold(b,(e,d)=>{pr=d;if(d){const r=b.getBoundingClientRect();ty=(e.clientX-r.left-r.width/2)/r.width*.9;tx=(e.clientY-r.top-r.height/2)/r.height*.9;for(let i=0;i<14;i++)sp.emit(cx,cy,(R()-.5)*120,(R()-.5)*120)}});

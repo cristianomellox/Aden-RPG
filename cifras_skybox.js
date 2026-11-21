@@ -2,6 +2,7 @@
 // Imagem: /assets/pibm.png. Usa o mesmo postfx.js do jogo (mesma pasta).
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
+// cifras_skyfx.js (holofotes etc.) também é dinâmico e opcional.
 // postfx.js é importado dinamicamente (ver startSkybox), igual ao skybox da guilda:
 // se ele falhar em carregar, só o pós-processamento é perdido; cena, câmera e
 // arrastar continuam funcionando.
@@ -337,6 +338,10 @@ function loop(ts) {
         updateCameraLook();
     }
     TWEEN.update(ts);
+    if (_sky.fx) {
+        try { _sky.fx.update(ts / 1000, dt / 1000, camYaw); }
+        catch (e) { console.error('[CifrasSkybox] Erro nos efeitos (holofotes), desativando:', e); _sky.fx.setVisible(false); _sky.fx = null; }
+    }
     _sky.camera.updateMatrixWorld(true);
 
     if (_sky.pfx) {
@@ -422,6 +427,14 @@ function startSkybox() {
     _sky.raf = requestAnimationFrame(loop);
     flushPending();
     console.log('[CifrasSkybox] inicializado — arraste a tela (com a interface recolhida) para girar.');
+
+    // Efeitos de céu (holofotes, poeira de luz, véu celestial, estrelas cadentes) — best effort.
+    import('./cifras_skyfx.js').then((mod) => {
+        if (!_sky || _flat) return;
+        _sky.fx = mod.initSkyFX({ scene, camera, renderer });
+    }).catch((e) => {
+        console.warn('[CifrasSkybox] Falha ao carregar cifras_skyfx.js — seguindo sem os efeitos de céu:', e);
+    });
 
     // Pós-processamento (mesmo grading do skybox da guilda) — best effort.
     import('./postfx.js').then((mod) => {

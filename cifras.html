@@ -311,10 +311,6 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 #ytc.gl #ytb,#ytc.gl #ytb.load,#ytc.gl #ytb.off{opacity:1}
 .sepbar.gl{position:relative;height:30px;margin:8px 0 0;background:none;border-radius:0;overflow:visible}
 .sepbar.gl i{display:none}
-/* Palco 3D: canvas fixo ATRÁS da cifra; a mini banda é desenhada na faixa #bnd */
-#palco{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;display:none}
-#bnd{flex:1 1 90px;min-width:0;height:44px;margin-right:72px;pointer-events:none}
-body.palco-off #bnd{display:none}
 /* separar instrumentos */
 #sep select{width:100%;flex:none;margin-top:2px}
 #sep label{display:block;margin-top:14px}
@@ -357,6 +353,7 @@ body.palco-off #bnd{display:none}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
+<script type="module" src="/cifras_fx.js"></script>
 <script type="module">
 /* Cifras FX — fundos e ícones (sol/lua) das setlists em three.js.
    Um único renderer para todos os fundos e outro para todos os ícones: cada cartão só recebe uma cópia
@@ -1306,112 +1303,6 @@ function mount(w){if(w.__u3)return;w.__u3=1;const o=player(w);reg(o,()=>!w.hidde
 window.CifrasUI3D={mount};
 (window.__ui3d||[]).forEach(mount);
 const sb=document.querySelector('#sep .sepbar');if(sb)reg(sepbar(sb),()=>sb.getClientRects().length>0);
-})();
-</script>
-<script type="module">
-/* Cifras PALCO — fundo 3D atrás da cifra (feixes, poeira, névoa) + mini banda ao lado das abas, reagindo ao áudio.
-   Um só canvas/WebGL fixo ATRÁS de tudo (z-index:-1, sem toques); a mini banda é desenhada nele por "scissor" na área vazia da linha das abas.
-   Reação real (FFT) quando o áudio é tocado de um arquivo local/baixado; no YouTube (sem acesso ao som) a reação é simulada. */
-import*as T from 'three';
-import{RoomEnvironment}from 'three/addons/environments/RoomEnvironment.js';
-(()=>{
-const RED=matchMedia('(prefers-reduced-motion: reduce)').matches,$=s=>document.querySelector(s),R=Math.random,TAU=Math.PI*2,ease=(k,dt)=>Math.min(1,dt*k);
-let on=true;try{const v=localStorage.getItem('cifras.palco');on=v===null?!((navigator.hardwareConcurrency||4)<=2||(navigator.deviceMemory||4)<=2):v==='1'}catch(e){}
-/* botão liga/desliga na barra inferior */
-const bar=$('#bar'),tg=document.createElement('div');tg.className='grp';
-tg.innerHTML='<button class="bb" id="pltg" type="button" aria-label="Palco 3D" title="Palco 3D"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3 5.3 2.2-5.3 2.2L12 18l-2.2-5.3L4.5 10.5l5.3-2.2z"/><path d="M19 17v4M17 19h4"/></svg></button>';
-const apply=()=>{document.body.classList.toggle('palco-off',!on);tg.firstChild.style.opacity=on?1:.45;tg.firstChild.setAttribute('aria-pressed',on)};
-if(bar){bar.appendChild(tg);tg.firstChild.onclick=()=>{on=!on;try{localStorage.setItem('cifras.palco',on?'1':'0')}catch(e){}apply()};apply()}
-/* faixa vazia ao lado das abas (ou linha própria) que receberá a mini banda */
-const sv=$('#sv');
-function place(){if(!sv||sv.querySelector('#bnd'))return;const hd=sv.querySelector('.shd');if(!hd)return;
-  const h=document.createElement('div');h.id='bnd';h.setAttribute('aria-hidden','true');const row=sv.querySelector('.row-btns');
-  if(row)row.appendChild(h);else hd.after(h)}
-if(sv){new MutationObserver(place).observe(sv,{childList:true});place()}
-/* ---- áudio: níveis graves/médios/agudos ---- */
-const buf=new Uint8Array(128),lv={b:0,m:0,h:0,pl:0,real:false,sv:{}},cache=new WeakMap();
-const tapOf=el=>{if(cache.has(el))return cache.get(el);let a=null;try{a=window.auTap?window.auTap(el):null}catch(e){}if(a)cache.set(el,a);return a};
-function fft(an){an.getByteFrequencyData(buf);let b=0,m=0,h=0,i=0;for(;i<2;i++)b+=buf[i];for(;i<13;i++)m+=buf[i];for(;i<60;i++)h+=buf[i];return[Math.min(1,b/510*1.5),Math.min(1,m/2805*1.9),Math.min(1,h/12000*3.2)]}
-let flash=0,sweep=0;
-addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#ytbk,#ytfw');if(b){flash=1;sweep=b.id==='ytfw'?1:-1}},true);
-function read(t,dt){
-  const A=window.AU,Y=window.YA,pl=!!(Y&&Y.b&&Y.b.classList.contains('on')),st={};let rb=0,rm=0,rh=0,real=false;
-  if(pl&&A&&A.on){
-    if(A.multi&&A.multi.mt){const mt=A.multi.mt;for(const k in mt.els)if(mt.on.has(k)){const an=tapOf(mt.els[k]);if(an)st[k]=fft(an)}}
-    else if(A.tap)st.all=fft(A.tap)}
-  for(const k in st){real=true;const v=st[k];rb=Math.max(rb,v[0]);rm=Math.max(rm,v[1]);rh=Math.max(rh,v[2])}
-  if(pl&&!real){const bt=Math.pow(.5+.5*Math.sin(t*TAU*1.9),3),n=.8+.2*Math.sin(t*7.3)*Math.sin(t*2.1);rb=(.22+.5*bt)*n;rm=.25+.2*Math.sin(t*3.1)*Math.sin(t*.7);rh=.2+.18*Math.sin(t*9.7)}
-  lv.real=real;lv.sv=st;lv.b+=(rb-lv.b)*ease(rb>lv.b?25:6,dt);lv.m+=(rm-lv.m)*ease(rm>lv.m?22:6,dt);lv.h+=(rh-lv.h)*ease(rh>lv.h?22:7,dt);lv.pl+=((pl?1:0)-lv.pl)*ease(3,dt)}
-/* ---- cena ---- */
-const dot=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),q=g.createRadialGradient(32,32,0,32,32,32);q.addColorStop(0,'rgba(255,255,255,1)');q.addColorStop(.4,'rgba(255,220,130,.45)');q.addColorStop(1,'rgba(255,200,80,0)');g.fillStyle=q;g.fillRect(0,0,64,64);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t})();
-let r,cv,bg,cam,beams,dust,fog,W=0,H=0,vw=1,vh=1,bsc,bcam,items=null,building=0,envT;
-const BV='varying vec3 vN,vV;varying vec2 vU;void main(){vU=uv;vN=normalize(normalMatrix*normal);vec4 p=modelViewMatrix*vec4(position,1.);vV=normalize(-p.xyz);gl_Position=projectionMatrix*p;}';
-const BF=`uniform float uI;uniform vec3 uC;uniform vec2 uR;varying vec3 vN,vV;varying vec2 vU;
-void main(){float al=1.-vU.y;float e=pow(abs(dot(normalize(vN),normalize(vV))),1.6);float nx=abs(gl_FragCoord.x/uR.x-.5)*2.;
-float mask=.18+.82*smoothstep(.3,.95,nx);float a=uI*e*pow(1.-al,1.3)*smoothstep(0.,.06,al)*mask;gl_FragColor=vec4(uC*a,a);
-#include <colorspace_fragment>
-}`;
-function init(){
-  cv=document.createElement('canvas');cv.id='palco';cv.setAttribute('aria-hidden','true');document.body.prepend(cv);
-  r=new T.WebGLRenderer({canvas:cv,alpha:true,antialias:false,powerPreference:'low-power'});r.setClearColor(0,0);r.autoClear=false;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=1.25;r.setPixelRatio(Math.min(devicePixelRatio||1,1.75));
-  const pm=new T.PMREMGenerator(r);envT=pm.fromScene(new RoomEnvironment(),.04).texture;pm.dispose();
-  bg=new T.Scene();cam=new T.PerspectiveCamera(50,1,.1,60);cam.position.z=10;
-  const geo=new T.ConeGeometry(1.7,13,40,1,true);geo.translate(0,-6.5,0);
-  beams=[-.46,-.2,.2,.46].map((fx,i)=>{const m=new T.Mesh(geo,new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,blending:T.AdditiveBlending,vertexShader:BV,fragmentShader:BF,
-    uniforms:{uI:{value:.1},uC:{value:new T.Color(i%2?0xffc861:0xf2c84a)},uR:{value:new T.Vector2(1,1)}}}));m.frustumCulled=false;bg.add(m);return{m,fx,i,sg:fx<0?1:-1}});
-  const N=150,p=new Float32Array(N*3),c=new Float32Array(N*3),g=new T.BufferGeometry(),dd=[];
-  for(let i=0;i<N;i++)dd.push({x:R(),y:R(),z:R()*4-2,s:.05+R()*.12,ph:R()*TAU});
-  g.setAttribute('position',new T.BufferAttribute(p,3));g.setAttribute('color',new T.BufferAttribute(c,3));
-  const pt=new T.Points(g,new T.PointsMaterial({size:3.2,map:dot,vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false,sizeAttenuation:false}));pt.frustumCulled=false;bg.add(pt);dust={p,c,g,dd,N};
-  fog=[-.38,.4,0].map((fx,i)=>{const s=new T.Sprite(new T.SpriteMaterial({map:dot,color:0xd4a62a,transparent:true,opacity:.07,blending:T.AdditiveBlending,depthWrite:false}));s.userData={fx,ph:i*2.1};bg.add(s);return s});
-  bsc=new T.Scene();bsc.environment=envT;bcam=new T.PerspectiveCamera(30,3,.1,30);bcam.position.z=2.6;
-  const a=new T.DirectionalLight(0xfff1d6,2.6);a.position.set(1,2,3);const b2=new T.DirectionalLight(0x8fb0ff,1);b2.position.set(-3,1,-2);bsc.add(a,b2,new T.AmbientLight(0xffffff,.5))}
-function buildBand(){
-  if(items||building)return;const I=window.CifrasI3D;if(!I||!I.make)return;building=1;
-  Promise.resolve(I.ready).then(ok=>{if(!ok)return;
-    items=[['bateria',/bat|drum/i,0],['baixo',/bai|bass/i,0],['teclado',/tecl|key|piano|violao|viol/i,1],['microfone',/voc|mic|voz|vocal/i,2]].map(([k,re,bd],i)=>{
-      const m=I.make(k),root=new T.Group(),pv=new T.Group();if(m.fx){m.g.add(m.fx);m.fx.visible=false}pv.add(m.g);root.add(pv);
-      const bb=new T.Box3().setFromObject(pv),c=bb.getCenter(new T.Vector3()),s=bb.getSize(new T.Vector3());m.g.position.sub(c);pv.scale.setScalar(.85/Math.max(s.x,s.y,.01));
-      const h=new T.Sprite(new T.SpriteMaterial({map:dot,color:0xffc861,transparent:true,opacity:.1,blending:T.AdditiveBlending,depthWrite:false}));h.scale.set(1.25,1.25,1);h.position.z=-.3;root.add(h);bsc.add(root);
-      return{k,re,bd,root,pv,h,base:pv.scale.x,lv:0}})}).catch(()=>{});}
-const vis=()=>on&&$('#song')&&$('#song').classList.contains('active');
-let last=performance.now(),acc=0,dead=false;
-function frame(now){
-  requestAnimationFrame(frame);if(dead||document.hidden)return;
-  const ok=vis();if(cv)cv.style.display=ok?'block':'none';if(!ok)return;
-  const dt=Math.min(.05,(now-last)/1000);last=now;
-  if(!r){try{init()}catch(e){console.warn('Palco 3D indisponível',e);dead=true;if(cv)cv.remove();return}}
-  acc+=dt;if(lv.pl<.02&&acc<.05)return;const d=Math.max(dt,acc);acc=0;const t=now/1000;
-  const iw=innerWidth,ih=innerHeight;if(iw!==W||ih!==H){W=iw;H=ih;r.setSize(W,H);cam.aspect=W/H;cam.updateProjectionMatrix();vh=2*10*Math.tan(25*Math.PI/180);vw=vh*cam.aspect;beams.forEach(b=>b.m.material.uniforms.uR.value.set(W*r.getPixelRatio(),H*r.getPixelRatio()))}
-  read(t,d);flash=Math.max(0,flash-d*1.6);sweep*=Math.pow(.2,d);const mv=RED?0:1,P=lv.pl;
-  /* feixes: abrem e acendem com a música; onda de luz ao pular 10 s */
-  beams.forEach(b=>{const u=b.m.material.uniforms;b.m.position.set(b.fx*vw,vh/2+1,-1);
-    b.m.rotation.z=b.sg*(.2+.1*P+.12*lv.b*P)+mv*(Math.sin(t*.45+b.i*1.7)*.1*(.4+P)+sweep*flash*.35);
-    u.uI.value=Math.min(.5,.09+.11*P+.32*lv.b*P+flash*.28)*(.8+.2*Math.sin(t*1.3+b.i))});
-  /* poeira dourada */
-  const D=dust,sp=.25+P*1.1+lv.m*P;
-  for(let i=0;i<D.N;i++){const q=D.dd[i];q.y+=q.s*d*sp*mv*.2;if(q.y>1)q.y-=1;
-    const x=(q.x-.5)*vw*1.1+mv*Math.sin(t*.3+q.ph)*.15,y=(q.y-.5)*vh;D.p[i*3]=x;D.p[i*3+1]=y;D.p[i*3+2]=q.z;
-    const edge=.3+.7*Math.min(1,Math.abs(q.x-.5)*2.2),tw=(.45+.55*Math.sin(t*(1.5+q.s*8)+q.ph))*(.35+.65*P+lv.h*P),f=edge*tw*.5;
-    D.c[i*3]=f;D.c[i*3+1]=f*.8;D.c[i*3+2]=f*.4}
-  D.g.attributes.position.needsUpdate=D.g.attributes.color.needsUpdate=true;
-  fog.forEach(s=>{const u=s.userData;s.position.set(u.fx*vw+mv*Math.sin(t*.12+u.ph)*.5,-vh*.36,-2);s.scale.set(vw*.7,vh*.34,1);s.material.opacity=.05+.07*P+.05*lv.b*P})
-  r.setScissorTest(false);r.setViewport(0,0,W,H);r.clear();r.render(bg,cam);
-  /* mini banda na faixa vazia ao lado das abas */
-  buildBand();const host=$('#bnd');
-  if(items&&host){const rc=host.getBoundingClientRect();
-    if(rc.width>40&&rc.bottom>0&&rc.top<H){
-      bcam.aspect=rc.width/rc.height;bcam.updateProjectionMatrix();const bvh=2*2.6*Math.tan(15*Math.PI/180),bvw=bvh*bcam.aspect,n=items.length,spc=Math.min(bvw/n,1.05);
-      items.forEach((it,i)=>{
-        let L;const s=lv.sv;let hit=null;for(const k in s)if(it.re.test(k)){hit=s[k];break}
-        if(hit)L=Math.min(1,(hit[0]+hit[1]+hit[2])/1.6);else L=[lv.b,lv.b*.85,lv.m,lv.h][i]*P*(lv.real?.6:1);
-        it.lv+=(L-it.lv)*ease(18,d);const l=it.lv;
-        it.root.position.set((i-(n-1)/2)*spc,0,0);
-        it.pv.scale.setScalar(it.base*(1+.2*l));it.pv.position.y=mv*(Math.abs(Math.sin(t*3.1+i*1.3))*.03*P+l*.05);
-        it.pv.rotation.y=mv*(Math.sin(t*1.1+i*1.7)*(.3+.3*P)+l*.25);it.h.material.opacity=.08+.5*l*P});
-      r.setScissorTest(true);r.setViewport(rc.left,H-rc.bottom,rc.width,rc.height);r.setScissor(rc.left,H-rc.bottom,rc.width,rc.height);r.clearDepth();r.render(bsc,bcam);r.setScissorTest(false)}}
-}
-requestAnimationFrame(frame);
 })();
 </script>
 <script type="module">
@@ -3015,19 +2906,11 @@ function auSetup(au){
   /* se já está no aparelho, toca do cache (funciona offline) */
   auCached(au.p).then(b=>{if(!b||AU.a!==a)return;auSaved(true);if(a.paused&&!a.currentTime){AU.url=URL.createObjectURL(b);a.src=AU.url}});
   a.onseeked=()=>{AU.skT=null};
-  a.onplay=()=>{YA.b.classList.add('on');AU.tap=auTap(a)};
+  a.onplay=()=>YA.b.classList.add('on');
   a.onpause=()=>YA.b.classList.remove('on');
   a.onended=()=>{YA.b.classList.remove('on');YA.pg.style.strokeDashoffset=0;a.currentTime=0};
   a.ontimeupdate=()=>{const d=a.duration;if(d>0&&isFinite(d))YA.pg.style.strokeDashoffset=(169.65*Math.min(1,a.currentTime/d)).toFixed(2)};
   a.onerror=()=>{if(!AU.on||AU.a!==a)return;YA.b.classList.remove('on');auMsg(navigator.onLine?'Não foi possível tocar este áudio.':'Sem internet e o áudio ainda não foi baixado neste aparelho.')}}
-/* analisador de áudio para o palco 3D: só em blob: (mesma origem) e fora do iOS; nos demais casos o palco simula a reação */
-var TAP={ctx:null,m:new WeakMap()};
-function auTap(a){
-  if(/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))return null;
-  if(!/^blob:/.test(a.currentSrc||a.src||''))return null;
-  try{if(!TAP.ctx)TAP.ctx=new(window.AudioContext||window.webkitAudioContext)();if(TAP.ctx.state==='suspended')TAP.ctx.resume();
-    let n=TAP.m.get(a);if(!n){const s=TAP.ctx.createMediaElementSource(a);n=TAP.ctx.createAnalyser();n.fftSize=256;n.smoothingTimeConstant=.7;s.connect(n);n.connect(TAP.ctx.destination);TAP.m.set(a,n)}
-    return n}catch(e){return null}}
 function auClick(){
   if(AU.multi)return stClick();
   const a=AU.a;if(!a)return;

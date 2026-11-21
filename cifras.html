@@ -303,6 +303,14 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 #ytsk .sk svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 #ytsk .sk:active{background:#2a2300}
 #ytw:has(#ytb.load,#ytb.off) #ytsk{opacity:.4;pointer-events:none}
+/* UI 3D (three.js): botões viram "janelas" transparentes sobre o canvas; sem WebGL, o SVG original continua */
+#ytc{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+#ytc.gl #ytb,#ytc.gl #ytsk .sk{background:transparent}
+#ytc.gl #ytb svg,#ytc.gl #ytsk .sk svg{visibility:hidden}
+#ytc.gl #ytsk .sk:active{background:transparent}
+#ytc.gl #ytb,#ytc.gl #ytb.load,#ytc.gl #ytb.off{opacity:1}
+.sepbar.gl{position:relative;height:30px;margin:8px 0 0;background:none;border-radius:0;overflow:visible}
+.sepbar.gl i{display:none}
 /* separar instrumentos */
 #sep select{width:100%;flex:none;margin-top:2px}
 #sep label{display:block;margin-top:14px}
@@ -1171,6 +1179,132 @@ raf=requestAnimationFrame(frame);
 })();
 </script>
 <script type="module">
+/* Cifras UI 3D — tocar/pausar + progresso, ±10 s (um único canvas WebGL sobre os botões) e barra da separação, em three.js.
+   Os botões HTML continuam sendo os controles (acessibilidade, cliques e estados .on/.load/.off); o 3D só os desenha.
+   Se o WebGL falhar, o SVG original continua na tela. */
+import*as T from 'three';
+import{RoomEnvironment}from 'three/addons/environments/RoomEnvironment.js';
+(()=>{
+const RED=matchMedia('(prefers-reduced-motion: reduce)').matches,TAU=Math.PI*2,targets=[],R=Math.random;
+const tex=(w,h,fn)=>{const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t};
+let DOT;
+const VS='varying vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
+function mk(host,pad){
+  const cv=document.createElement('canvas');cv.setAttribute('aria-hidden','true');cv.style.cssText='position:absolute;left:'+-pad+'px;top:'+-pad+'px;pointer-events:none;z-index:0';host.prepend(cv);
+  const r=new T.WebGLRenderer({canvas:cv,alpha:true,antialias:true,powerPreference:'low-power'});r.setClearColor(0,0);r.toneMapping=T.ACESFilmicToneMapping;r.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  const pm=new T.PMREMGenerator(r),sc=new T.Scene();sc.environment=pm.fromScene(new RoomEnvironment(),.04).texture;pm.dispose();
+  const cam=new T.OrthographicCamera(0,1,1,0,-300,300),L=new T.DirectionalLight(0xfff0d0,2.2);L.position.set(-.5,1,1);sc.add(L);
+  DOT=DOT||tex(64,64,(g)=>{const q=g.createRadialGradient(32,32,0,32,32,32);q.addColorStop(0,'#fff');q.addColorStop(.35,'rgba(255,215,110,.5)');q.addColorStop(1,'rgba(255,200,80,0)');g.fillStyle=q;g.fillRect(0,0,64,64)});
+  const S={cv,r,sc,cam,W:0,H:0,fit(){const W=host.clientWidth+pad*2,H=host.clientHeight+pad*2;if(W===S.W&&H===S.H)return false;S.W=W;S.H=H;r.setSize(W,H,false);cv.style.width=W+'px';cv.style.height=H+'px';cam.right=W;cam.top=H;cam.updateProjectionMatrix();return true}};
+  return S}
+function sparks(sc,n,size){
+  const p=new Float32Array(n*3),c=new Float32Array(n*3),v=new Float32Array(n*2),l=new Float32Array(n),g=new T.BufferGeometry();let i=0;
+  g.setAttribute('position',new T.BufferAttribute(p,3));g.setAttribute('color',new T.BufferAttribute(c,3));
+  const pt=new T.Points(g,new T.PointsMaterial({size,map:DOT,vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false,sizeAttenuation:false}));pt.frustumCulled=false;pt.renderOrder=9;sc.add(pt);
+  return{emit(x,y,vx,vy){if(RED)return;i=(i+1)%n;p[i*3]=x;p[i*3+1]=y;p[i*3+2]=40;v[i*2]=vx;v[i*2+1]=vy;l[i]=1},
+    step(dt){for(let k=0;k<n;k++){let a=l[k];if(a<=0){c[k*3]=c[k*3+1]=c[k*3+2]=0;continue}a-=dt*1.5;l[k]=a;p[k*3]+=v[k*2]*dt;p[k*3+1]+=v[k*2+1]*dt;const f=Math.max(0,a);c[k*3]=f;c[k*3+1]=f*.8;c[k*3+2]=f*.35}g.attributes.position.needsUpdate=g.attributes.color.needsUpdate=true}}}
+const poly=(a)=>{const s=new T.Shape();a.forEach((q,i)=>i?s.lineTo(q[0],q[1]):s.moveTo(q[0],q[1]));return s};
+const rrect=(w,h,r)=>{const s=new T.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s};
+const ext=(s,d,b)=>{const g=new T.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:3,curveSegments:10});g.translate(0,0,-d/2);return g};
+const ease=(k,dt)=>Math.min(1,dt*k);
+
+/* ---------- tocar/pausar + anel de progresso + ±10 s ---------- */
+function player(w){
+  const host=w.querySelector('#ytc'),b=w.querySelector('#ytb'),pg=w.querySelector('.pg'),skb=[w.querySelector('#ytbk'),w.querySelector('#ytfw')],pad=14;
+  return{host,init(){
+    host.style.position='relative';const S=mk(host,pad),sc=S.sc,mats=[];
+    const gold=(c=0xe2b93b,e=0)=>{const m=new T.MeshPhysicalMaterial({color:c,metalness:1,roughness:.22,clearcoat:.6,emissive:0xffa000,emissiveIntensity:e});mats.push([m,new T.Color(c)]);return m};
+    const dark=new T.MeshPhysicalMaterial({color:0x15110a,metalness:.5,roughness:.3,clearcoat:1});mats.push([dark,dark.color.clone()]);
+    /* moeda */
+    const coin=new T.Group(),disc=new T.Mesh(new T.CylinderGeometry(22,22,6,56),dark);disc.rotation.x=Math.PI/2;
+    const rim=new T.Mesh(new T.TorusGeometry(22,1.3,12,64),gold());rim.position.z=3;
+    const ic=new T.Group(),pl=new T.Mesh(ext(poly([[-5.5,-9],[10,0],[-5.5,9]]),3,1.6),gold()),pa=new T.Group();
+    [-5.2,5.2].forEach(x=>{const m=new T.Mesh(ext(rrect(4.4,13,1.6),3,1.2),gold());m.position.x=x;pa.add(m)});
+    ic.add(pl,pa);ic.position.z=6;coin.add(disc,rim,ic);sc.add(coin);
+    /* anel de progresso (shader) */
+    const ru={uP:{value:0},uT:{value:0},uOn:{value:0},uLd:{value:0},uDim:{value:1}};
+    const ring=new T.Mesh(new T.PlaneGeometry(74,74),new T.ShaderMaterial({uniforms:ru,transparent:true,depthWrite:false,vertexShader:VS,fragmentShader:`uniform float uP,uT,uOn,uLd,uDim;varying vec2 vU;
+void main(){vec2 q=(vU-.5)*74.;float d=length(q),f=atan(q.x,q.y);if(f<0.)f+=6.2831853;f/=6.2831853;float rg=abs(d-27.);
+float tr=smoothstep(2.4,1.2,rg)*.55,p=uP;if(uLd>0.){p=.28;f=fract(f-uT*.45);}
+float on=step(f,p)*smoothstep(2.4,1.,rg),gl=exp(-rg*.4)*step(f,p)*.3*(.6+.4*uOn);
+float hd=exp(-(pow((f-p)*170.,2.)+pow(rg*.7,2.)))*step(.002,p);
+vec3 col=mix(vec3(.55,.38,.04),vec3(1.,.84,.34),f/max(p,.01))*(.88+.25*uOn*sin(f*70.-uT*6.));
+vec3 c=vec3(.24,.2,.02)*tr+col*(on+gl)+vec3(1.,.92,.65)*hd*(1.+uOn);
+gl_FragColor=vec4(c*uDim,clamp(max(max(tr,on),max(gl,hd)),0.,1.));
+#include <colorspace_fragment>
+}`}));ring.position.z=-4;sc.add(ring);
+    /* chevrons ±10 s */
+    const lab=tex(128,80,(g,W,H)=>{g.font='800 54px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillStyle='#e8cf7a';g.fillText('10',W/2,H/2+3)});
+    const sk=skb.map((el,n)=>{const dir=n?1:-1,g=new T.Group(),plate=new T.Mesh(ext(rrect(29,34,12),2,.8),dark),cv=new T.Group(),ms=[0,1].map(()=>gold(0xe8c04a,.0));
+      ms.forEach((m,i)=>{const c=new T.Mesh(ext(poly([[-3.4,-5.6],[-1.1,-5.6],[3.4,0],[-1.1,5.6],[-3.4,5.6],[1.1,0]]),2.4,.9),m);c.position.x=(i-.5)*6.4;cv.add(c)});
+      cv.rotation.y=n?0:Math.PI;cv.position.set(0,4,3);const sp=new T.Sprite(new T.SpriteMaterial({map:lab,transparent:true,depthTest:false}));sp.scale.set(14,8.75,1);sp.position.set(0,-10.5,6);
+      g.add(plate,cv,sp);sc.add(g);return{el,dir,g,cv,ms,k:0,pr:0,pv:0}});
+    const sp=sparks(sc,90,5);let lay=0,prog=0,f=0,press=0,dim=1,pr=0,tx=0,ty=0,cx=0,cy=0;
+    const hold=(el,fn)=>{el.addEventListener('pointerdown',e=>fn(e,1));['pointerup','pointercancel','pointerleave'].forEach(n=>el.addEventListener(n,e=>fn(e,0)))};
+    hold(b,(e,d)=>{pr=d;if(d){const r=b.getBoundingClientRect();ty=(e.clientX-r.left-r.width/2)/r.width*.9;tx=(e.clientY-r.top-r.height/2)/r.height*.9;for(let i=0;i<14;i++)sp.emit(cx,cy,(R()-.5)*120,(R()-.5)*120)}});
+    sk.forEach(s=>hold(s.el,(e,d)=>{s.pr=d;if(d){s.k=1;for(let i=0;i<12;i++)sp.emit(s.g.position.x,s.g.position.y,s.dir*(30+R()*90),(R()-.5)*60)}}));
+    const layout=()=>{const hr=host.getBoundingClientRect(),P=e=>{const r=e.getBoundingClientRect();return[r.left-hr.left+r.width/2+pad,S.H-(r.top-hr.top+r.height/2+pad)]};
+      [cx,cy]=P(b);coin.position.set(cx,cy,0);ring.position.set(cx,cy,-4);sk.forEach(s=>{const[x,y]=P(s.el);s.g.position.set(x,y,0)});lay=1};
+    host.classList.add('gl');
+    return(t,dt)=>{
+      if(S.fit()||!lay)layout();
+      const on=b.classList.contains('on'),bad=b.classList.contains('load')||b.classList.contains('off'),ld=b.classList.contains('load');
+      const tp=Math.min(1,Math.max(0,1-(parseFloat(pg.style.strokeDashoffset)||0)/169.65));prog+=(tp-prog)*ease(Math.abs(tp-prog)>.25?30:7,dt);
+      f+=((on?1:0)-f)*ease(9,dt);press+=((pr?1:0)-press)*ease(18,dt);dim+=((bad?.4:1)-dim)*ease(8,dt);
+      mats.forEach(([m,c])=>{m.color.copy(c).multiplyScalar(dim);m.envMapIntensity=dim});
+      const sw=RED?0:1;coin.rotation.y=sw*Math.sin(t*.9)*.2+ty*press;coin.rotation.x=sw*Math.cos(t*.7)*.12-tx*press;
+      coin.scale.setScalar(1-press*.1+(on&&!RED?Math.sin(t*3)*.012:0));
+      ic.rotation.y=f*Math.PI;pl.scale.setScalar(Math.max(.001,1-2*f));pa.scale.setScalar(Math.max(.001,2*f-1));
+      ru.uP.value=prog;ru.uT.value=t;ru.uOn.value=f;ru.uLd.value=ld?1:0;ru.uDim.value=dim;
+      if(on&&prog>0&&!ld&&R()<.55){const a=prog*TAU;sp.emit(cx+27*Math.sin(a),cy+27*Math.cos(a),(R()-.5)*34,(R()-.5)*34)}
+      sk.forEach(s=>{s.k=Math.max(0,s.k-dt*2.2);s.pv+=((s.pr?1:0)-s.pv)*ease(18,dt);const k=s.k*s.k;
+        s.cv.children.forEach((c,i)=>{c.position.x=(i-.5)*6.4+k*8*(i?1:.55);});
+        s.cv.position.x=s.dir*k*5;s.g.scale.setScalar(1-s.pv*.08);
+        s.ms.forEach((m,i)=>{m.emissiveIntensity=RED?0:Math.max(0,Math.sin(t*3.2-i*1.5))*.35+k*.9})});
+      sp.step(dt);S.r.render(sc,S.cam)}}}}
+
+/* ---------- barra de progresso da separação ---------- */
+function sepbar(bar){
+  const i=bar.firstElementChild;
+  return{host:bar,init(){
+    bar.classList.add('gl');const S=mk(bar,0),sc=S.sc,u={uR:{value:new T.Vector2(1,1)},uP:{value:0},uT:{value:0}};
+    const pl=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({uniforms:u,transparent:true,depthWrite:false,vertexShader:VS,fragmentShader:`uniform vec2 uR;uniform float uP,uT;varying vec2 vU;
+float cap(vec2 p,vec2 a,vec2 b,float r){vec2 pa=p-a,ba=b-a;return length(pa-ba*clamp(dot(pa,ba)/dot(ba,ba),0.,1.))-r;}
+void main(){vec2 p=vU*uR;float cy=uR.y*.5,m=14.,th=6.;float d=cap(p,vec2(m,cy),vec2(uR.x-m,cy),th),x1=m+(uR.x-2.*m)*uP;
+float tr=smoothstep(1.,-1.,d),fl=step(p.x,x1)*tr,vy=(p.y-cy)/th;
+float w=sin(p.x*.17-uT*4.)*.5+.5,s=sin((p.x-p.y*1.5)*.45-uT*5.)*.5+.5;
+vec3 g=mix(vec3(.6,.42,.04),vec3(1.,.84,.32),w)+vec3(.35,.3,.15)*pow(s,6.);g*=1.1-.5*vy*vy-.2*vy;
+float hd=exp(-pow((p.x-x1)/16.,2.))*smoothstep(th*3.,0.,abs(p.y-cy))*step(.004,uP),rim=smoothstep(1.6,0.,abs(d))*.55;
+vec3 c=vec3(.16,.13,.03)*tr*(1.-.4*vy*vy)+g*fl+vec3(1.,.85,.45)*hd*.9+vec3(.5,.4,.1)*rim*(1.-fl);
+gl_FragColor=vec4(c,clamp(max(max(tr,fl),max(hd*.6,rim)),0.,1.));
+#include <colorspace_fragment>
+}`}));sc.add(pl);
+    const gm=new T.MeshPhysicalMaterial({color:0xe2b93b,metalness:1,roughness:.2,clearcoat:.7,emissive:0xff9a00,emissiveIntensity:.25}),orb=new T.Mesh(new T.SphereGeometry(9,32,24),gm);
+    const halo=new T.Sprite(new T.SpriteMaterial({map:DOT,transparent:true,blending:T.AdditiveBlending,depthWrite:false}));halo.scale.set(46,46,1);orb.add(halo);halo.position.z=-3;sc.add(orb);
+    const sp=sparks(sc,80,4);let cur=0,done=0;
+    return(t,dt)=>{
+      if(S.fit()){pl.scale.set(S.W,S.H,1);pl.position.set(S.W/2,S.H/2,-10);u.uR.value.set(S.W,S.H)}
+      const tg=Math.min(1,Math.max(0,(parseFloat(i.style.width)||0)/100));cur+=(tg-cur)*ease(7,dt);if(tg<cur-.3)cur=tg;
+      u.uP.value=cur;u.uT.value=t;const m=14,x=m+(S.W-2*m)*cur,y=S.H/2;
+      orb.position.set(x,y,8);orb.scale.setScalar(Math.min(1,cur*25));orb.rotation.set(t*2.4,t*3,0);halo.material.opacity=.55+.25*Math.sin(t*5);
+      if(cur>.004&&cur<.999&&R()<.8)sp.emit(x-6,y+(R()-.5)*8,-20-R()*50,(R()-.5)*34);
+      if(tg>=.999&&!done){done=1;for(let k=0;k<40;k++)sp.emit(x,y,(R()-.5)*200,(R()-.5)*90)}if(tg<.999)done=0;
+      sp.step(dt);S.r.render(sc,S.cam)}}}}
+
+/* ---------- laço único: só desenha o que está visível ---------- */
+function reg(o,vis){o.vis=vis;targets.push(o)}
+let last=performance.now();
+(function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;if(document.hidden)return;
+  for(const o of targets){if(o.dead||!o.vis())continue;
+    if(!o.fr){try{o.fr=o.init()}catch(e){console.warn('UI 3D indisponível (usando o visual original)',e);o.dead=true;const c=o.host.querySelector(':scope>canvas');if(c)c.remove();o.host.classList.remove('gl');continue}}
+    o.fr(now/1000,dt)}})(last);
+function mount(w){if(w.__u3)return;w.__u3=1;const o=player(w);reg(o,()=>!w.hidden&&w.getClientRects().length>0)}
+window.CifrasUI3D={mount};
+(window.__ui3d||[]).forEach(mount);
+const sb=document.querySelector('#sep .sepbar');if(sb)reg(sepbar(sb),()=>sb.getClientRects().length>0);
+})();
+</script>
+<script type="module">
 /* Cifras FORGE — oficina 3D da separação: cada instrumento (os mesmos 3D do app) é montado peça por peça,
    um de cada vez, ligado ao progresso real da separação; ao chegar em 100% a banda completa se reúne e toca. */
 (()=>{
@@ -1711,9 +1845,9 @@ function ytFill(){YA.ad.innerHTML='<div id="ytmsg"></div><div id="ytp"></div>'}
 function ytUi(){
   if(YA.w)return;
   const w=el('div');w.id='ytw';w.hidden=true;
-  w.innerHTML='<button id="ytb" type="button" class="load" aria-label="Tocar ou pausar o áudio"><svg class="ytr" viewBox="0 0 60 60" aria-hidden="true"><circle class="tr" cx="30" cy="30" r="27"/><circle class="pg" cx="30" cy="30" r="27"/></svg><svg class="yti" viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5v14l11-7z"/><path class="pa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button><div id="ytsk"><button id="ytbk" type="button" class="sk" aria-label="Voltar 10 segundos" title="Voltar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button><button id="ytfw" type="button" class="sk" aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button></div><div id="ytad" class="hid"></div>';
+  w.innerHTML='<div id="ytc"><button id="ytb" type="button" class="load" aria-label="Tocar ou pausar o áudio"><svg class="ytr" viewBox="0 0 60 60" aria-hidden="true"><circle class="tr" cx="30" cy="30" r="27"/><circle class="pg" cx="30" cy="30" r="27"/></svg><svg class="yti" viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5v14l11-7z"/><path class="pa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button><div id="ytsk"><button id="ytbk" type="button" class="sk" aria-label="Voltar 10 segundos" title="Voltar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button><button id="ytfw" type="button" class="sk" aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button></div></div><div id="ytad" class="hid"></div>';
   document.body.append(w);YA.w=w;YA.b=w.querySelector('#ytb');YA.ad=w.querySelector('#ytad');YA.pg=w.querySelector('.pg');
-  w.querySelector('#ytbk').onclick=()=>mediaSkip(-10);w.querySelector('#ytfw').onclick=()=>mediaSkip(10);
+  (window.__ui3d=window.__ui3d||[]).push(w);window.CifrasUI3D&&window.CifrasUI3D.mount(w);w.querySelector('#ytbk').onclick=()=>mediaSkip(-10);w.querySelector('#ytfw').onclick=()=>mediaSkip(10);
   ytFill();
   YA.b.onclick=()=>{if(AU&&AU.on)return auClick();const p=YA.p;if(!YA.ready||!p)return;
     const s=p.getPlayerState();

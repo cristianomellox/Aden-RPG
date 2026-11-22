@@ -1,16 +1,19 @@
 // ═══════════════════════════════════════════════════════════════════════
 // CIFRAS — EFEITOS 3D (three.js + tween.js)
 //
-//  1) HALO CELESTIAL da logo (tela inicial): brilho dourado, raios de luz lentos,
-//     anel orbital com um cometa e estrelinhas cintilando. Fica ATRÁS da logo 3D
-//     existente e é discreto, para não competir com ela.
+//  1) (o HALO CELESTIAL da logo agora vive em cifras_skyfx.js, dentro do renderer do skybox)
 //
-//  2) PALCO ÉPICO da tela da música (atrás da letra e das cifras): um grande palco
+//  PALCO ÉPICO da tela da música (atrás da letra e das cifras): um grande palco
 //     escuro com holofotes móveis, portal de luz com uma cruz em silhueta, círculo
 //     de runas no chão, neblina, brasas douradas (sem bloom).
 //     O palco REAGE À MÚSICA: lê as seções da cifra ([Refrão], [Ponte]…) e a posição
 //     da rolagem. Verso = luz calma e azulada; Refrão = holofotes abertos, dourado,
 //     onda de choque. Ao abrir outra música, "abre a cortina".
+//
+// IMPORTANTE: o navegador só aguenta ~16 contextos WebGL por página e derruba o MAIS ANTIGO quando passa
+// disso (era o que apagava o skybox, a logo 3D e ícones). Por isso o palco NÃO cria contexto próprio:
+// empresta o renderer do skybox (que fica pausado fora da tela inicial) via CifrasSkybox.borrow().
+// Só se o skybox não existir é que cria um renderer próprio (fallback).
 //
 // Nada aqui bloqueia o app: sem WebGL / sem rede para o three.js, simplesmente não aparece.
 // Botão ✦ (canto esquerdo da tela da música) alterna: Épico → Suave → Desligado.
@@ -42,143 +45,6 @@ float lineG(float d,float w){float aa=fwidth(d);float s=sqrt(w*w+aa*aa);return e
 const addMat = (o) => Object.assign({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }, o);
 
 // ═══════════════════════════════════════════════════════════════════════
-// 1) HALO CELESTIAL DA LOGO
-// ═══════════════════════════════════════════════════════════════════════
-// Intensidade do halo da logo (1.5 era a versão anterior; 1.1 = ~25% mais discreto). Zere para desligar.
-const LOGO_INTENSITY = 1.1;
-function startLogoHalo() {
-    const img = $('#home .logo');
-    const home = $('#home');
-    if (!img || !home) return;
-
-    const scene = new THREE.Scene();
-    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const G = new TWEEN.Group();
-    const U = { uT: { value: 0 }, uIn: { value: 0 }, uA: { value: 1 }, uLog: { value: new THREE.Vector2(1, 0.4) } };
-    const mat = new THREE.ShaderMaterial({
-        uniforms: U, transparent: true, premultipliedAlpha: true, depthTest: false, depthWrite: false,
-        vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
-        fragmentShader: GLSL + `
-uniform float uT,uIn,uA; uniform vec2 uLog; varying vec2 vUv;
-void main(){
-    vec2 p=(vUv-.5)*2.; p.x*=uA;
-    vec2 q=p/uLog;                       // 1.0 = borda da elipse da logo
-    float e=length(q), a=atan(q.y,q.x);
-    float edge=1.-smoothstep(.70,1.,max(abs(p.x)/uA,abs(p.y)));
-    vec3 gold=vec3(1.,.80,.40), white=vec3(1.,.96,.86), blue=vec3(.55,.72,1.);
-    // brilho central
-    float glow=exp(-e*e*.55)*.20+exp(-e*.9)*.16;
-    // raios lentos
-    float rays=pow(.5+.5*sin(a*13.+uT*.10+sin(a*3.-uT*.07)*2.),5.)*.55+pow(.5+.5*sin(a*29.-uT*.06),8.)*.25;
-    rays*=smoothstep(.55,1.15,e)*exp(-max(e-1.,0.)*.85)*.34;
-    // anel orbital + cometa
-    float ringR=1.5;
-    float ringBand=exp(-pow((e-ringR)*9.,2.));
-    float ring=ringBand*(.20+.15*sin(a*4.-uT*.5));
-    float ph=uT*.45;
-    float da=mod(ph-a,TAU);
-    float tail=exp(-da*2.2)*exp(-pow((e-ringR)*11.,2.));
-    vec2 cp=vec2(cos(ph),sin(ph))*ringR;
-    float comet=exp(-dot(q-cp,q-cp)*160.)*1.6;
-    // estrelinhas (só fora da logo)
-    vec2 P=p*7.; vec2 id=floor(P); vec2 f=fract(P)-.5; float h=hash21(id);
-    vec2 off=(vec2(hash21(id+7.3),hash21(id+3.1))-.5)*.7; vec2 d=f-off;
-    float tw=pow(.5+.5*sin(uT*(.8+h*1.8)+h*60.),7.);
-    float st=step(.78,h)*tw*(exp(-dot(d,d)*260.)+(exp(-abs(d.x)*60.)*exp(-abs(d.y)*7.)+exp(-abs(d.y)*60.)*exp(-abs(d.x)*7.))*.5);
-    st*=smoothstep(.95,1.35,e);
-
-    vec3 col=gold*glow*.9+white*glow*.3+mix(gold,white,.5)*rays+blue*ring*.8+white*(tail*.5+comet)+white*st*.9;
-    col*=edge*uIn;
-    col=min(col*${LOGO_INTENSITY.toFixed(2)},vec3(1.));
-    float al=max(col.r,max(col.g,col.b))*.55;      // premultiplied: rgb <= alpha
-    gl_FragColor=vec4(col*.55,al);
-}`,
-    });
-    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
-
-    // O canvas/renderer são descartáveis: o navegador pode derrubar o contexto WebGL a qualquer momento
-    // (limite de ~16 por página), então criamos sob demanda e recriamos se for perdido.
-    let cv = null, R = null, curW = 0, curH = 0, lastKey = '', wasOn = false, tw = null;
-    let offSince = 0, lastTry = 0;
-    function create() {
-        const c = document.createElement('canvas');
-        c.setAttribute('aria-hidden', 'true');
-        // fixed: nunca gera rolagem; z-index -1 dentro do #home (que tem z-index): fica atrás da logo, dos cards e de tudo
-        c.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:-1;opacity:0;transition:opacity .5s';
-        let r;
-        try { r = new THREE.WebGLRenderer({ canvas: c, alpha: true, antialias: false, powerPreference: 'low-power' }); }
-        catch (e) { return false; }
-        r.setClearColor(0x000000, 0);
-        c.addEventListener('webglcontextlost', (e) => { e.preventDefault(); release(false); });
-        home.insertBefore(c, home.firstChild);
-        cv = c; R = r; curW = curH = 0; lastKey = '';
-        return true;
-    }
-    function release(force) {
-        if (R && force) { try { R.dispose(); R.forceContextLoss(); } catch (e) { /* já perdido */ } }
-        if (cv) cv.remove();
-        cv = null; R = null;
-    }
-    function place() {
-        const r = img.getBoundingClientRect();
-        if (!r.width || !r.height) return false;
-        const W = r.width * 1.9, H = r.height * 2.7;
-        const L = r.left - (W - r.width) / 2, T = r.top - (H - r.height) / 2;
-        const key = [L, T, W, H].map((v) => Math.round(v)).join(',');
-        if (key !== lastKey) {
-            lastKey = key;
-            cv.style.left = L + 'px'; cv.style.top = T + 'px';
-            cv.style.width = W + 'px'; cv.style.height = H + 'px';
-            if (Math.abs(W - curW) > 1 || Math.abs(H - curH) > 1) {
-                curW = W; curH = H;
-                R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-                R.setSize(W, H, false);
-            }
-            U.uA.value = W / H;
-            U.uLog.value.set(r.width / H, r.height / H);
-        }
-        return true;
-    }
-    function intro() {
-        if (tw) tw.stop();
-        U.uIn.value = 0;
-        tw = new TWEEN.Tween(U.uIn, G).to({ value: 1 }, 2600).easing(TWEEN.Easing.Cubic.Out).start();
-    }
-
-    function frame(now) {
-        requestAnimationFrame(frame);
-        const on = BODY.classList.contains('onhome') && !document.hidden && !BODY.classList.contains('needinstall');
-        const hid = BODY.classList.contains('hud-hidden');
-        if (!on) {
-            wasOn = false;
-            if (cv) cv.style.opacity = '0';
-            // saiu da tela inicial há um tempo: devolve o contexto WebGL para o navegador
-            if (R && document.body.classList.contains('onhome') === false) {
-                if (!offSince) offSince = now;
-                else if (now - offSince > 8000) { release(true); offSince = 0; }
-            }
-            return;
-        }
-        offSince = 0;
-        if (hid) { if (cv) cv.style.opacity = '0'; return; }
-        if (!R || R.getContext().isContextLost()) {                    // (re)cria sob demanda
-            if (R) release(false);
-            if (now - lastTry < 800) return;
-            lastTry = now;
-            if (!create()) return;
-            wasOn = false;
-        }
-        if (!place()) return;
-        cv.style.opacity = '1';
-        if (!wasOn) { wasOn = true; intro(); }
-        G.update(now);
-        U.uT.value = REDUCED ? 3 : now / 1000;
-        R.render(scene, cam);
-    }
-    requestAnimationFrame(frame);
-}
-
-// ═══════════════════════════════════════════════════════════════════════
 // 2) PALCO ÉPICO DA TELA DA MÚSICA
 // ═══════════════════════════════════════════════════════════════════════
 // Brilho geral do palco (0.4 = bem discreto · 0.7 = padrão · 1.0 = forte). Pode ajustar ao vivo: CifrasStage.setGain(0.5)
@@ -192,12 +58,12 @@ function injectStageDom() {
     const css = document.createElement('style');
     css.textContent = `
 #songStage,#songVeil{position:fixed;inset:0;pointer-events:none;display:none}
-#songStage{z-index:0;background:#02030a}
+#songStage{z-index:0;background:#02030a}   /* só usado no fallback (sem skybox) */
 #songVeil{z-index:1;background:
   linear-gradient(to bottom,rgba(0,0,0,.40),rgba(0,0,0,.26) 28%,rgba(0,0,0,.26) 66%,rgba(0,0,0,.58)),
   linear-gradient(90deg,rgba(0,0,0,.18),rgba(0,0,0,.50) calc(50% - 400px),rgba(0,0,0,.50) calc(50% + 400px),rgba(0,0,0,.18))}
 #songStage canvas{width:100%;height:100%;display:block}
-body.onsong #songStage,body.onsong #songVeil{display:block}
+body.onsong #songVeil,body.onsong #songStage.fb{display:block}
 body.onsong.stage-soft #songVeil{background:rgba(0,0,0,.62)}
 body.stage-off #songStage,body.stage-off #songVeil{display:none!important}
 body.onsong:not(.stage-off) #song .sheet{text-shadow:0 1px 2px #000,0 0 12px rgba(0,0,0,.9)}
@@ -211,7 +77,6 @@ body.onsong #stageBtn{display:grid}
 
     const stage = document.createElement('div');
     stage.id = 'songStage'; stage.setAttribute('aria-hidden', 'true');
-    stage.appendChild(document.createElement('canvas'));
     const veil = document.createElement('div');
     veil.id = 'songVeil'; veil.setAttribute('aria-hidden', 'true');
     BODY.insertBefore(veil, BODY.firstChild);
@@ -223,16 +88,48 @@ body.onsong #stageBtn{display:grid}
     const tip = document.createElement('div');
     tip.id = 'stageTip';
     BODY.append(btn, tip);
-    return { canvas: stage.firstChild, btn, tip };
+    return { host: stage, btn, tip };
 }
 
-async function buildStage(canvas) {
-    let R;
-    try { R = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' }); }
-    catch (e) { console.warn('[CifrasStage] WebGL indisponível', e); return null; }
-    // Todas as cores abaixo já são "de tela": sem conversão extra no final.
-    R.outputColorSpace = THREE.LinearSRGBColorSpace;
-    R.setClearColor(0x000000, 1);
+// Renderer do palco: o do skybox (emprestado) ou, sem skybox, um próprio.
+let ownR = null;
+function getRenderer(host) {
+    const SB = window.CifrasSkybox;
+    if (SB && SB.isReady && SB.isReady()) return SB.isFlat() ? null : SB.getRenderer();   // null = recuperando contexto
+    if (ownR === null) {
+        try {
+            const c = document.createElement('canvas');
+            c.style.cssText = 'width:100%;height:100%;display:block';
+            host.appendChild(c);
+            ownR = new THREE.WebGLRenderer({ canvas: c, antialias: false, powerPreference: 'high-performance' });
+        } catch (e) { console.warn('[CifrasStage] WebGL indisponível', e); ownR = false; }
+    }
+    return ownR || null;
+}
+
+async function buildStage(host) {
+    let R = null, saved = null;
+    // Aplica as configurações do palco no renderer emprestado (guardando as do skybox para devolver depois).
+    // Todas as cores do palco já são "de tela": sem conversão extra no final.
+    function adopt(r) {
+        if (R === r) return;
+        R = r;
+        saved = { pr: r.getPixelRatio(), cs: r.outputColorSpace, tm: r.toneMapping, ac: r.autoClear, ca: r.getClearAlpha(), cc: r.getClearColor(new THREE.Color()).clone() };
+        r.outputColorSpace = THREE.LinearSRGBColorSpace;
+        r.toneMapping = THREE.NoToneMapping;
+        r.autoClear = true;
+        r.setClearColor(0x000000, 1);
+        resize();
+    }
+    function giveBack() {
+        if (R && saved) {
+            try {
+                R.outputColorSpace = saved.cs; R.toneMapping = saved.tm; R.autoClear = saved.ac;
+                R.setClearColor(saved.cc, saved.ca); R.setPixelRatio(saved.pr);
+            } catch (e) { /* renderer já foi trocado/perdido */ }
+        }
+        R = null; saved = null;
+    }
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color().setRGB(0.004, 0.005, 0.016);
@@ -512,7 +409,8 @@ void main(){
         resize();
     }
     function resize() {
-        const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+        if (!R) return;
+        const w = R.domElement.clientWidth || innerWidth, h = R.domElement.clientHeight || innerHeight;
         if (!w || !h) return;
         const pr = Math.min(window.devicePixelRatio || 1, 1.5) * QUAL[q].scale;
         R.setPixelRatio(pr); R.setSize(w, h, false);
@@ -596,6 +494,9 @@ void main(){
         if (now - last < min - 1) return;
         const dtMs = now - last; last = now;
         const dt = Math.min(dtMs / 1000, 0.1);
+        const r = getRenderer(host);
+        if (!r) return;                                                // aguardando o skybox recuperar o contexto
+        adopt(r);
         G.update(now);
         update((now / 1000) * timeScale, dt);
         R.render(scene, cam);
@@ -609,14 +510,7 @@ void main(){
     applyQuality('epic');
     return {
         start() { if (running) return; running = true; last = performance.now(); avgMs = 16; frames = 0; resize(); intro(); if (!raf) raf = requestAnimationFrame(frame); },
-        stop() { running = false; cancelAnimationFrame(raf); raf = 0; },
-        // Libera a GPU e o contexto WebGL (o navegador limita a ~16 por página).
-        dispose() {
-            running = false; cancelAnimationFrame(raf); raf = 0; clearTimeout(introTimer);
-            removeEventListener('pointermove', onPtr); removeEventListener('deviceorientation', onTilt);
-            removeEventListener('resize', resize); removeEventListener('orientationchange', onOri);
-            try { R.dispose(); R.forceContextLoss(); } catch (e) { /* já perdido */ }
-        },
+        stop() { running = false; cancelAnimationFrame(raf); raf = 0; clearTimeout(introTimer); giveBack(); },
         intro, burst, resize,
         setQuality: applyQuality,
         setGain(v) { STAGE_GAIN = clamp(v, 0.2, 1.4); if (!tws.master || !tws.master.isPlaying()) master.value = STAGE_GAIN; },
@@ -635,21 +529,9 @@ function startStage() {
 
     const showTip = () => { dom.tip.textContent = LABEL[want]; dom.tip.classList.add('on'); clearTimeout(tipT); tipT = setTimeout(() => dom.tip.classList.remove('on'), 1400); };
     function classes() { BODY.classList.toggle('stage-soft', want === 'soft'); BODY.classList.toggle('stage-off', want === 'off'); }
-    function freshCanvas() {                       // após forceContextLoss o canvas antigo não serve mais
-        const host = $('#songStage'), old = host.querySelector('canvas');
-        if (old) old.remove();
-        const c = document.createElement('canvas');
-        host.appendChild(c);
-        return c;
-    }
-    let idleT = 0;
-    function scheduleRelease() {
-        clearTimeout(idleT);
-        idleT = setTimeout(() => { if (!active && ctl) { ctl.dispose(); ctl = null; building = null; } }, 15000);
-    }
     async function ensure() {
         if (ctl || want === 'off') return ctl;
-        if (!building) building = buildStage(freshCanvas()).then((c) => {
+        if (!building) building = buildStage(dom.host).then((c) => {
             if (c) c.onDowngrade = () => { if (want === 'epic') { want = 'soft'; classes(); c.setQuality('soft'); console.info('[CifrasStage] aparelho lento: modo Suave ativado automaticamente.'); } };
             ctl = c; if (!c) building = null; return c;
         });
@@ -658,12 +540,17 @@ function startStage() {
     async function sync() {
         classes();
         if (!active || want === 'off') {
-            if (ctl) { ctl.stop(); if (want === 'off' && active) { ctl.dispose(); ctl = null; building = null; } else scheduleRelease(); }
+            if (ctl) ctl.stop();                       // devolve o renderer ao skybox
+            const SB = window.CifrasSkybox;
+            if (SB && SB.release) SB.release();
+            dom.host.classList.remove('fb');
             return;
         }
-        clearTimeout(idleT);
         const c = await ensure();
         if (!c || !active) return;
+        const SB = window.CifrasSkybox;
+        const shared = !!(SB && SB.isReady && SB.isReady() && !SB.isFlat() && SB.borrow && SB.borrow());
+        dom.host.classList.toggle('fb', !shared);      // sem skybox: usa o #songStage com renderer próprio
         c.setQuality(want);
         c.start();
     }
@@ -695,5 +582,4 @@ function startStage() {
     window.CifrasStage = { setGain(v) { STAGE_GAIN = clamp(v, 0.2, 1.4); if (ctl) ctl.setGain(v); }, setQuality(v) { if (LABEL[v]) { want = v; store.set('cifras.stage', v); sync(); } }, getQuality: () => want, burst: () => ctl && ctl.burst() };
 }
 
-try { startLogoHalo(); } catch (e) { console.warn('[CifrasFX] halo da logo indisponível', e); }
 try { startStage(); } catch (e) { console.warn('[CifrasFX] palco indisponível', e); }

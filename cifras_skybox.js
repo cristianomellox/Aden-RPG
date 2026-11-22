@@ -330,7 +330,7 @@ function scheduleIdleRealign() {
 // ── Recuperação de contexto WebGL ─────────────────────────────────────
 // O navegador descarta o contexto MAIS ANTIGO quando a página abre WebGL demais (e o do skybox
 // é o primeiro). Sem tratamento, o céu some até recarregar. Aqui recriamos canvas + renderer.
-let _needRecover = false, _recovering = false, _recoverAt = 0;
+let _needRecover = false, _recovering = false, _recoverAt = 0, _lent = false;
 function hookContext(canvas) {
     canvas.addEventListener('webglcontextlost', (e) => {
         e.preventDefault();
@@ -345,7 +345,7 @@ function hookContext(canvas) {
 }
 function recoverGL() {
     if (!_sky || _flat || _recovering || !_needRecover) return;
-    if (_paused || document.hidden) return;                 // retoma em resume()/visibilitychange
+    if ((_paused && !_lent) || document.hidden) return;     // retoma em resume()/visibilitychange
     const now = performance.now();
     if (now - _recoverAt < 1000) return;                    // evita tentar a cada frame
     _recoverAt = now;
@@ -408,6 +408,10 @@ function loop(ts) {
         }
     } else {
         _sky.renderer.render(_sky.scene, _sky.camera);
+    }
+    if (_sky.fx && _sky.fx.afterRender) {
+        try { _sky.fx.afterRender(_sky.renderer); }
+        catch (e) { console.error('[CifrasSkybox] Erro no overlay (halo da logo), desativando:', e); _sky.fx.afterRender = null; }
     }
     _sky.raf = requestAnimationFrame(loop);
 }
@@ -531,7 +535,26 @@ function resume() {
     }
 }
 
-window.CifrasSkybox = { show, pause, resume, isReady: () => !!_sky, isFlat: () => _flat };
+// ── Empréstimo do renderer ────────────────────────────────────────────
+// O navegador só aguenta ~16 contextos WebGL por página (e derruba o mais antigo). Em vez de criar um
+// contexto novo, o palco da tela da música desenha neste mesmo renderer enquanto o skybox está pausado.
+function borrow() {
+    if (!_sky || _flat) return false;
+    _lent = true;
+    _sky.layer.style.display = 'block';          // mostra a camada mesmo fora da tela inicial
+    return true;
+}
+function release() {
+    _lent = false;
+    if (_sky && _sky.layer) _sky.layer.style.display = '';
+}
+function getRenderer() {
+    if (!_sky || _flat || !_sky.renderer) return null;
+    if (_sky.renderer.getContext().isContextLost()) { _needRecover = true; recoverGL(); return null; }
+    return _sky.renderer;
+}
+
+window.CifrasSkybox = { show, pause, resume, isReady: () => !!_sky, isFlat: () => _flat, borrow, release, getRenderer };
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', startSkybox);

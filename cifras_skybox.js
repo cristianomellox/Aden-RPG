@@ -327,6 +327,54 @@ function scheduleIdleRealign() {
     }, IDLE_MS_TO_REALIGN);
 }
 
+// ── Recuperação de contexto WebGL ─────────────────────────────────────
+// O navegador descarta o contexto MAIS ANTIGO quando a página abre WebGL demais (e o do skybox
+// é o primeiro). Sem tratamento, o céu some até recarregar. Aqui recriamos canvas + renderer.
+let _needRecover = false, _recovering = false, _recoverAt = 0;
+function hookContext(canvas) {
+    canvas.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        _needRecover = true;
+        console.warn('[CifrasSkybox] contexto WebGL perdido — recriando assim que possível.');
+        setTimeout(recoverGL, 250);
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+        _needRecover = false;
+        console.info('[CifrasSkybox] contexto WebGL restaurado pelo navegador.');
+    });
+}
+function recoverGL() {
+    if (!_sky || _flat || _recovering || !_needRecover) return;
+    if (_paused || document.hidden) return;                 // retoma em resume()/visibilitychange
+    const now = performance.now();
+    if (now - _recoverAt < 1000) return;                    // evita tentar a cada frame
+    _recoverAt = now;
+    const { cont } = _sky;
+    if (!cont.clientWidth || !cont.clientHeight) return;    // camada escondida
+    if (!_sky.renderer.getContext().isContextLost()) { _needRecover = false; return; }
+    _recovering = true;
+    try {
+        const old = _sky.canvas;
+        const nc = document.createElement('canvas');
+        nc.id = old.id; nc.className = old.className;
+        old.replaceWith(nc);
+        const r = new THREE.WebGLRenderer({ canvas: nc, antialias: true });
+        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+        r.setSize(cont.clientWidth, cont.clientHeight);
+        _sky.canvas = nc; _sky.renderer = r;
+        hookContext(nc);
+        _sky.pfx = null;
+        if (_sky.postfxMod) {
+            try { _sky.pfx = _sky.postfxMod.initPostFX({ scene: _sky.scene, camera: _sky.camera, renderer: r, cont }); }
+            catch (e) { console.error('[CifrasSkybox] Não consegui recriar o pós-processamento (segue sem):', e); }
+        }
+        _needRecover = false;
+        console.info('[CifrasSkybox] renderer recriado com sucesso.');
+    } catch (e) {
+        console.error('[CifrasSkybox] Falha ao recriar o renderer:', e);
+    } finally { _recovering = false; }
+}
+
 // ── Ciclo de vida ─────────────────────────────────────────────────────
 function loop(ts) {
     if (!_sky || !_sky.running || _paused) return;
@@ -344,6 +392,12 @@ function loop(ts) {
     }
     _sky.camera.updateMatrixWorld(true);
 
+    if (_sky.renderer.getContext().isContextLost()) {      // contexto descartado pelo navegador
+        _needRecover = true;
+        recoverGL();
+        _sky.raf = requestAnimationFrame(loop);
+        return;
+    }
     if (_sky.pfx) {
         try {
             _sky.pfx.render(_sky.scene, _sky.camera);
@@ -377,6 +431,7 @@ function startSkybox() {
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
     renderer.setSize(cont.clientWidth, cont.clientHeight);
+    hookContext(canvas);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(CAM_FOV, cont.clientWidth / Math.max(cont.clientHeight, 1), 0.1, 1000);
@@ -410,7 +465,7 @@ function startSkybox() {
         if (!w || !h) return;               // camada escondida (outra tela): não zera o renderer
         camera.aspect = w / Math.max(h, 1);
         camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+        _sky.renderer.setSize(w, h);
         if (_sky.pfx) { try { _sky.pfx.resize(w, h); } catch (e) { console.error('[CifrasSkybox] Erro no resize:', e); } }
     });
 
@@ -419,8 +474,12 @@ function startSkybox() {
     document.addEventListener('visibilitychange', () => {
         if (!_sky || _flat) return;
         _sky.running = !document.hidden;
-        if (_sky.running && !_paused) { _lastTs = performance.now(); _sky.raf = requestAnimationFrame(loop); }
-        else if (_sky.raf) cancelAnimationFrame(_sky.raf);
+        if (_sky.raf) { cancelAnimationFrame(_sky.raf); _sky.raf = 0; }
+        if (_sky.running && !_paused) {
+            _lastTs = performance.now();
+            if (_sky.renderer.getContext().isContextLost()) { _needRecover = true; recoverGL(); }
+            _sky.raf = requestAnimationFrame(loop);
+        }
     });
 
     _lastTs = performance.now();
@@ -442,7 +501,8 @@ function startSkybox() {
         mod.POSTFX_CONFIG.bloom.threshold = 0.60;
         mod.POSTFX_CONFIG.bloom.strength  = 0.64;
         mod.POSTFX_CONFIG.bloom.radius    = 0.40;
-        _sky.pfx = mod.initPostFX({ scene, camera, renderer, cont });
+        _sky.postfxMod = mod;
+        _sky.pfx = mod.initPostFX({ scene, camera, renderer: _sky.renderer, cont });
     }).catch((e) => {
         console.error('[CifrasSkybox] Falha ao carregar postfx.js — seguindo sem pós-processamento:', e);
     });
@@ -463,6 +523,7 @@ function resume() {
     if (!_paused) return;
     _paused = false;
     window.dispatchEvent(new Event('resize'));   // reajusta o tamanho depois de ficar escondido
+    if (_sky && !_flat && _sky.renderer.getContext().isContextLost()) { _needRecover = true; _recoverAt = 0; recoverGL(); }
     if (_sky && _sky.running) {
         _lastTs = performance.now();
         if (_sky.raf) cancelAnimationFrame(_sky.raf);

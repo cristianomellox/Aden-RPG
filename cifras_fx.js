@@ -7,7 +7,7 @@
 //
 //  2) PALCO ÉPICO da tela da música (atrás da letra e das cifras): um grande palco
 //     escuro com holofotes móveis, portal de luz com uma cruz em silhueta, círculo
-//     de runas no chão, neblina, brasas douradas e bloom.
+//     de runas no chão, neblina, brasas douradas (sem bloom).
 //     O palco REAGE À MÚSICA: lê as seções da cifra ([Refrão], [Ponte]…) e a posição
 //     da rolagem. Verso = luz calma e azulada; Refrão = holofotes abertos, dourado,
 //     onda de choque. Ao abrir outra música, "abre a cortina".
@@ -152,9 +152,11 @@ void main(){
 // ═══════════════════════════════════════════════════════════════════════
 // 2) PALCO ÉPICO DA TELA DA MÚSICA
 // ═══════════════════════════════════════════════════════════════════════
+// Brilho geral do palco (0.4 = bem discreto · 0.7 = padrão · 1.0 = forte). Pode ajustar ao vivo: CifrasStage.setGain(0.5)
+let STAGE_GAIN = 0.7;
 const QUAL = {
-    epic: { scale: MOBILE ? 0.75 : 1.0, bloom: true, beams: 10, parts: 900, bokeh: 40, haze: true, fps: 60 },
-    soft: { scale: 0.55, bloom: false, beams: 6, parts: 350, bokeh: 0, haze: false, fps: 30 },
+    epic: { scale: MOBILE ? 0.75 : 1.0, beams: 10, parts: 900, bokeh: 40, haze: true, fps: 60 },
+    soft: { scale: 0.55, beams: 6, parts: 350, bokeh: 0, haze: false, fps: 30 },
 };
 
 function injectStageDom() {
@@ -163,7 +165,7 @@ function injectStageDom() {
 #songStage,#songVeil{position:fixed;inset:0;pointer-events:none;display:none}
 #songStage{z-index:0;background:#02030a}
 #songVeil{z-index:1;background:
-  linear-gradient(to bottom,rgba(0,0,0,.34),rgba(0,0,0,.16) 28%,rgba(0,0,0,.16) 66%,rgba(0,0,0,.52)),
+  linear-gradient(to bottom,rgba(0,0,0,.40),rgba(0,0,0,.26) 28%,rgba(0,0,0,.26) 66%,rgba(0,0,0,.58)),
   linear-gradient(90deg,rgba(0,0,0,.18),rgba(0,0,0,.50) calc(50% - 400px),rgba(0,0,0,.50) calc(50% + 400px),rgba(0,0,0,.18))}
 #songStage canvas{width:100%;height:100%;display:block}
 body.onsong #songStage,body.onsong #songVeil{display:block}
@@ -227,10 +229,10 @@ void main(){
     vec2 p=vW.xy-vec2(0.,${PORTAL_Y}.);
     float r=length(p), a=atan(p.y,p.x);
     vec3 warm=mix(vec3(.55,.72,1.),vec3(1.,.78,.38),uWarm);
-    float en=.55+.55*uE+uBurst*.9;
-    float core=exp(-r*r*.020)*1.5;
-    float halo=exp(-r*.085)*.55;
-    float rays=pow(.5+.5*sin(a*16.+uT*.09+sin(a*3.-uT*.05)*1.6),4.)*exp(-r*.040)*smoothstep(1.,7.,r)*.9;
+    float en=.30+.38*uE+uBurst*.45;
+    float core=exp(-r*r*.028)*1.0;
+    float halo=exp(-r*.11)*.32;
+    float rays=pow(.5+.5*sin(a*16.+uT*.09+sin(a*3.-uT*.05)*1.6),4.)*exp(-r*.050)*smoothstep(1.,7.,r)*.65;
     float arches=0.;
     for(int i=0;i<3;i++){float Rr=9.5+float(i)*5.8; arches+=exp(-pow((r-Rr)*1.25,2.))*(.55-.12*float(i));}
     arches*=.45+.55*pow(.5+.5*sin(a*5.+uT*.25),2.);
@@ -239,7 +241,7 @@ void main(){
     float L=(core+halo)*(1.-.94*inCross);
     L+=rays*(1.-.8*inCross);
     L+=arches*.6;
-    L+=exp(-max(cr,0.)*14.)*.55*(core+.35);
+    L+=exp(-max(cr,0.)*14.)*.40*(core+.25);
     L*=en*uMaster;
     vec3 col=mix(warm,vec3(1.,.97,.9),clamp(core*.45,0.,1.));
     float fe=(1.-smoothstep(22.,44.,abs(p.x)))*(1.-smoothstep(14.,29.,abs(p.y)));
@@ -273,7 +275,7 @@ void main(){
     col+=dais*vec3(.020,.020,.040);
     // reflexo do portal (faixa central)
     float streak=exp(-xz.x*xz.x*.02)*(1.-smoothstep(-34.,8.,xz.y))*(.35+.65*uE);
-    col+=warm*streak*.10;
+    col+=warm*streak*.06;
     // grade de piso
     float gx=lineG(abs(fract(xz.x/3.+.5)-.5)*3.,.03), gz=lineG(abs(fract(xz.y/3.+.5)-.5)*3.,.03);
     col+=warm*(gx+gz)*.06*exp(-dist*.045)*(.5+uE);
@@ -377,7 +379,7 @@ void main(){
     float band=exp(-pow((vW.y-uY)*uK,2.));
     float a=smoothstep(.38,.95,f)*band*uA*uMaster*(.6+.7*uE);
     float ex=1.-smoothstep(30.,52.,abs(vW.x));
-    gl_FragColor=vec4(warm*a*ex*.22,1.);
+    gl_FragColor=vec4(warm*a*ex*.10,1.);
 }`,
         })));
         m.position.set(0, 6, z); m.renderOrder = 7; m.frustumCulled = false;
@@ -418,31 +420,20 @@ void main(){
         scene.add(pts);
         return pts;
     }
-    const embers = makeParticles(900, [-26, 26, 0, 24, -40, 16], 1, 3, 1.6, 0, 0.9);
-    const bokeh = makeParticles(40, [-12, 12, 0, 14, -4, 12], 1.2, 2.4, 9.0, 1, 0.35);
+    const embers = makeParticles(900, [-26, 26, 0, 24, -40, 16], 1, 3, 1.6, 0, 0.7);
+    const bokeh = makeParticles(40, [-12, 12, 0, 14, -4, 12], 1.2, 2.4, 9.0, 1, 0.22);
 
-    // ── Pós-processamento (bloom) — opcional ─────────────────────────
-    let composer = null, bloom = null;
-    try {
-        const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
-            import('three/addons/postprocessing/EffectComposer.js'),
-            import('three/addons/postprocessing/RenderPass.js'),
-            import('three/addons/postprocessing/UnrealBloomPass.js'),
-            import('three/addons/postprocessing/OutputPass.js'),
-        ]);
-        composer = new EffectComposer(R);
-        composer.addPass(new RenderPass(scene, cam));
-        bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.6, 0.2);
-        composer.addPass(bloom);
-        composer.addPass(new OutputPass());
-    } catch (e) { console.warn('[CifrasStage] bloom indisponível — seguindo sem ele', e); composer = null; bloom = null; }
+    // Sem pós-processamento de propósito: nada de bloom/blur de tela cheia (era isso que estourava a luz).
+    // O brilho vem só dos próprios shaders, com níveis controlados por STAGE_GAIN.
 
     // ── Estado ───────────────────────────────────────────────────────
     let q = 'epic', E = 0.35, Et = 0.35, P = 0, introK = { v: 0 }, raf = 0, last = 0, running = false;
     let tx = 0, ty = 0, sx = 0, sy = 0, readT = 0, avgMs = 16, frames = 0, onDowngrade = null;
     const timeScale = REDUCED ? 0.25 : 1;
-    addEventListener('pointermove', (e) => { tx = (e.clientX / innerWidth - 0.5) * 2; ty = (e.clientY / innerHeight - 0.5) * 2; }, { passive: true });
-    addEventListener('deviceorientation', (e) => { if (e.gamma != null && e.beta != null) { tx = clamp(e.gamma / 35, -1, 1); ty = clamp((e.beta - 50) / 35, -1, 1); } }, { passive: true });
+    const onPtr = (e) => { tx = (e.clientX / innerWidth - 0.5) * 2; ty = (e.clientY / innerHeight - 0.5) * 2; };
+    const onTilt = (e) => { if (e.gamma != null && e.beta != null) { tx = clamp(e.gamma / 35, -1, 1); ty = clamp((e.beta - 50) / 35, -1, 1); } };
+    addEventListener('pointermove', onPtr, { passive: true });
+    addEventListener('deviceorientation', onTilt, { passive: true });
 
     const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     function readSong() {
@@ -475,7 +466,7 @@ void main(){
     let introTimer = 0;
     function intro() {
         master.value = 0; introK.v = 0;
-        run('master', master, { value: 1 }, 2600, TWEEN.Easing.Cubic.Out);
+        run('master', master, { value: STAGE_GAIN }, 2600, TWEEN.Easing.Cubic.Out);
         run('introK', introK, { v: 1 }, 3800, TWEEN.Easing.Quartic.Out);
         clearTimeout(introTimer); introTimer = setTimeout(burst, 700);
     }
@@ -497,13 +488,13 @@ void main(){
         const pr = Math.min(window.devicePixelRatio || 1, 1.5) * QUAL[q].scale;
         R.setPixelRatio(pr); R.setSize(w, h, false);
         U.uPx.value = pr;
-        if (composer) { composer.setPixelRatio(pr); composer.setSize(w, h); }
         cam.aspect = w / h;
         cam.fov = cam.aspect < 1 ? 66 : 52;
         cam.updateProjectionMatrix();
     }
+    const onOri = () => setTimeout(resize, 250);
     addEventListener('resize', resize);
-    addEventListener('orientationchange', () => setTimeout(resize, 250));
+    addEventListener('orientationchange', onOri);
 
     const tmpT = new THREE.Vector3(), tmpD = new THREE.Vector3();
     function update(t, dt) {
@@ -537,7 +528,7 @@ void main(){
             b.g.lookAt(tmpT);
             b.mesh.scale.z = clamp(b.g.position.distanceTo(tmpT) * 1.1 / L0, 0.35, 3);
             const flick = 0.85 + 0.15 * Math.sin(t * 0.9 + b.ph * 3);
-            let I = (0.45 + 0.75 * E) * flick;
+            let I = (0.28 + 0.45 * E) * flick;
             if (b.sky) I *= 0.2 + 0.8 * b.sk;
             const col = b.mat.uniforms.uC.value.copy(b.calm).lerp(b.epic, warm);
             b.mat.uniforms.uI.value = I * M;
@@ -547,9 +538,9 @@ void main(){
                 const k = -b.g.position.y / tmpD.y;
                 pool[i].set(b.g.position.x + tmpD.x * k, b.g.position.z + tmpD.z * k, 0.5 + k * 0.075);
                 poolC[i].set(col.r, col.g, col.b);
-                poolI[i] = I * 0.55;
+                poolI[i] = I * 0.45;
             } else poolI[i] = 0;
-            flC[i * 3] = col.r * (0.5 + 0.7 * I); flC[i * 3 + 1] = col.g * (0.5 + 0.7 * I); flC[i * 3 + 2] = col.b * (0.5 + 0.7 * I);
+            flC[i * 3] = col.r * (0.35 + 0.45 * I); flC[i * 3 + 1] = col.g * (0.35 + 0.45 * I); flC[i * 3 + 2] = col.b * (0.35 + 0.45 * I);
         });
         flGeo.attributes.aC.needsUpdate = true;
         embers.material.uniforms.uSp.value = 0.8 + 1.6 * E;
@@ -563,7 +554,6 @@ void main(){
             lerp(15, 9, P) + (1 - k) * 4.5 + (REDUCED ? 0 : Math.sin(t * 0.11) * 0.5));
         cam.lookAt(-sx * 0.8, 7 + E * 0.8, -22);
         cam.rotation.z += Math.sin(t * 0.05) * 0.008;
-        if (bloom) bloom.strength = 0.55 + 0.55 * E + U.uBurst.value * 0.5;
     }
 
     function frame(now) {
@@ -579,7 +569,7 @@ void main(){
         const dt = Math.min(dtMs / 1000, 0.1);
         G.update(now);
         update((now / 1000) * timeScale, dt);
-        if (q === 'epic' && composer) composer.render(dt); else R.render(scene, cam);
+        R.render(scene, cam);
         // rebaixa a qualidade sozinho se o aparelho não acompanhar
         if (q === 'epic' && ++frames > 90) {
             avgMs = avgMs * 0.96 + Math.min(dtMs, 100) * 0.04;
@@ -591,8 +581,16 @@ void main(){
     return {
         start() { if (running) return; running = true; last = performance.now(); avgMs = 16; frames = 0; resize(); intro(); if (!raf) raf = requestAnimationFrame(frame); },
         stop() { running = false; cancelAnimationFrame(raf); raf = 0; },
+        // Libera a GPU e o contexto WebGL (o navegador limita a ~16 por página).
+        dispose() {
+            running = false; cancelAnimationFrame(raf); raf = 0; clearTimeout(introTimer);
+            removeEventListener('pointermove', onPtr); removeEventListener('deviceorientation', onTilt);
+            removeEventListener('resize', resize); removeEventListener('orientationchange', onOri);
+            try { R.dispose(); R.forceContextLoss(); } catch (e) { /* já perdido */ }
+        },
         intro, burst, resize,
         setQuality: applyQuality,
+        setGain(v) { STAGE_GAIN = clamp(v, 0.2, 1.4); if (!tws.master || !tws.master.isPlaying()) master.value = STAGE_GAIN; },
         set onDowngrade(fn) { onDowngrade = fn; },
     };
 }
@@ -608,17 +606,33 @@ function startStage() {
 
     const showTip = () => { dom.tip.textContent = LABEL[want]; dom.tip.classList.add('on'); clearTimeout(tipT); tipT = setTimeout(() => dom.tip.classList.remove('on'), 1400); };
     function classes() { BODY.classList.toggle('stage-soft', want === 'soft'); BODY.classList.toggle('stage-off', want === 'off'); }
+    function freshCanvas() {                       // após forceContextLoss o canvas antigo não serve mais
+        const host = $('#songStage'), old = host.querySelector('canvas');
+        if (old) old.remove();
+        const c = document.createElement('canvas');
+        host.appendChild(c);
+        return c;
+    }
+    let idleT = 0;
+    function scheduleRelease() {
+        clearTimeout(idleT);
+        idleT = setTimeout(() => { if (!active && ctl) { ctl.dispose(); ctl = null; building = null; } }, 15000);
+    }
     async function ensure() {
         if (ctl || want === 'off') return ctl;
-        if (!building) building = buildStage(dom.canvas).then((c) => {
+        if (!building) building = buildStage(freshCanvas()).then((c) => {
             if (c) c.onDowngrade = () => { if (want === 'epic') { want = 'soft'; classes(); c.setQuality('soft'); console.info('[CifrasStage] aparelho lento: modo Suave ativado automaticamente.'); } };
-            ctl = c; return c;
+            ctl = c; if (!c) building = null; return c;
         });
         return building;
     }
     async function sync() {
         classes();
-        if (!active || want === 'off') { if (ctl) ctl.stop(); return; }
+        if (!active || want === 'off') {
+            if (ctl) { ctl.stop(); if (want === 'off' && active) { ctl.dispose(); ctl = null; building = null; } else scheduleRelease(); }
+            return;
+        }
+        clearTimeout(idleT);
         const c = await ensure();
         if (!c || !active) return;
         c.setQuality(want);
@@ -649,7 +663,7 @@ function startStage() {
     classes();
     if (song.classList.contains('active')) { active = true; BODY.classList.add('onsong'); sync(); }
 
-    window.CifrasStage = { setQuality(v) { if (LABEL[v]) { want = v; store.set('cifras.stage', v); sync(); } }, getQuality: () => want, burst: () => ctl && ctl.burst() };
+    window.CifrasStage = { setGain(v) { STAGE_GAIN = clamp(v, 0.2, 1.4); if (ctl) ctl.setGain(v); }, setQuality(v) { if (LABEL[v]) { want = v; store.set('cifras.stage', v); sync(); } }, getQuality: () => want, burst: () => ctl && ctl.burst() };
 }
 
 try { startLogoHalo(); } catch (e) { console.warn('[CifrasFX] halo da logo indisponível', e); }

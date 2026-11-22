@@ -4,7 +4,7 @@
 // Entra na MESMA cena/câmera do panorama, então gira junto com o céu e passa pelo
 // mesmo pós-processamento (bloom do postfx.js).
 //
-//  • Holofotes volumétricos que varrem o céu (cones aditivos com borda suave)
+//  • Holofotes volumétricos presos no alto, que varrem o ambiente de cima para baixo (cones aditivos com borda suave)
 //  • Poeira de luz dourada subindo (Points)
 //  • Véu celestial: cortinas de luz dourado/violeta/ciano na parte alta do céu
 //  • Estrelas cadentes ocasionais (tween.js)
@@ -18,7 +18,7 @@ const CFG = {
     intensity: 1.0,          // multiplicador geral (0.5 = mais discreto, 1.5 = mais forte)
     beams: 12,               // quantidade de holofotes ao redor dos 360°
     radius: 420,             // distância da base dos holofotes até a câmera
-    rootElevDeg: -42,        // altura da base (negativo = abaixo do horizonte)
+    rootElevDeg: 42,         // altura da base dos holofotes (positivo = no alto, perto do teto; luz desce em leque)
     length: 760,
     rBottom: 3, rTop: 70,    // abertura do cone
     motes: 520,              // partículas de poeira de luz
@@ -171,7 +171,7 @@ export function initSkyFX({ scene, camera, renderer }) {
 
     // 1) Holofotes
     const beamGeo = new THREE.CylinderGeometry(CFG.rTop, CFG.rBottom, CFG.length, 32, 1, true);
-    beamGeo.translate(0, CFG.length / 2, 0);   // base na origem, cone abre para +Y
+    beamGeo.translate(0, CFG.length / 2, 0);   // base na origem, cone abre para +Y (o mesh é girado 180° para abrir para baixo)
     const glowTex = glowTexture();
     const beams = [];
     const elev = CFG.rootElevDeg * D2R;
@@ -342,7 +342,7 @@ export function initSkyFX({ scene, camera, renderer }) {
         const mt = REDUCED ? 0 : t;
         const breath = 0.75 + 0.25 * Math.sin(mt * 0.23);
         for (const b of beams) {
-            b.mesh.rotation.x = b.rx0 + Math.sin(mt * b.sx + b.ph) * b.ax;
+            b.mesh.rotation.x = Math.PI + b.rx0 + Math.sin(mt * b.sx + b.ph) * b.ax;   // π = cone aponta para baixo
             b.mesh.rotation.z = b.rz0 + Math.sin(mt * b.sz + b.ph * 1.7) * b.az;
             const pulse = 0.55 + 0.45 * Math.sin(mt * b.sp + b.ph * 2.1);
             b.mat.uniforms.uI.value = CFG.intensity * 0.34 * pulse * breath;

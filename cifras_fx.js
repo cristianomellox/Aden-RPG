@@ -44,26 +44,17 @@ const addMat = (o) => Object.assign({ transparent: true, depthTest: false, depth
 // ═══════════════════════════════════════════════════════════════════════
 // 1) HALO CELESTIAL DA LOGO
 // ═══════════════════════════════════════════════════════════════════════
+// Intensidade do halo da logo (1.5 era a versão anterior; 1.1 = ~25% mais discreto). Zere para desligar.
+const LOGO_INTENSITY = 1.1;
 function startLogoHalo() {
     const img = $('#home .logo');
     const home = $('#home');
     if (!img || !home) return;
 
-    const cv = document.createElement('canvas');
-    cv.setAttribute('aria-hidden', 'true');
-    // fixed: nunca gera rolagem; z-index -1 dentro do #home (que tem z-index): fica atrás da logo, dos cards e de tudo
-    cv.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:-1;opacity:0;transition:opacity .5s';
-    home.insertBefore(cv, home.firstChild);
-
-    let R;
-    try { R = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: false, powerPreference: 'low-power' }); }
-    catch (e) { cv.remove(); return; }
-    R.setClearColor(0x000000, 0);
     const scene = new THREE.Scene();
     const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const G = new TWEEN.Group();
     const U = { uT: { value: 0 }, uIn: { value: 0 }, uA: { value: 1 }, uLog: { value: new THREE.Vector2(1, 0.4) } };
-
     const mat = new THREE.ShaderMaterial({
         uniforms: U, transparent: true, premultipliedAlpha: true, depthTest: false, depthWrite: false,
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
@@ -98,22 +89,44 @@ void main(){
 
     vec3 col=gold*glow*.9+white*glow*.3+mix(gold,white,.5)*rays+blue*ring*.8+white*(tail*.5+comet)+white*st*.9;
     col*=edge*uIn;
-    col=min(col*1.5,vec3(1.));
+    col=min(col*${LOGO_INTENSITY.toFixed(2)},vec3(1.));
     float al=max(col.r,max(col.g,col.b))*.55;      // premultiplied: rgb <= alpha
     gl_FragColor=vec4(col*.55,al);
 }`,
     });
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
 
-    let curW = 0, curH = 0, wasOn = false, tw = null, last = '';
+    // O canvas/renderer são descartáveis: o navegador pode derrubar o contexto WebGL a qualquer momento
+    // (limite de ~16 por página), então criamos sob demanda e recriamos se for perdido.
+    let cv = null, R = null, curW = 0, curH = 0, lastKey = '', wasOn = false, tw = null;
+    let offSince = 0, lastTry = 0;
+    function create() {
+        const c = document.createElement('canvas');
+        c.setAttribute('aria-hidden', 'true');
+        // fixed: nunca gera rolagem; z-index -1 dentro do #home (que tem z-index): fica atrás da logo, dos cards e de tudo
+        c.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:-1;opacity:0;transition:opacity .5s';
+        let r;
+        try { r = new THREE.WebGLRenderer({ canvas: c, alpha: true, antialias: false, powerPreference: 'low-power' }); }
+        catch (e) { return false; }
+        r.setClearColor(0x000000, 0);
+        c.addEventListener('webglcontextlost', (e) => { e.preventDefault(); release(false); });
+        home.insertBefore(c, home.firstChild);
+        cv = c; R = r; curW = curH = 0; lastKey = '';
+        return true;
+    }
+    function release(force) {
+        if (R && force) { try { R.dispose(); R.forceContextLoss(); } catch (e) { /* já perdido */ } }
+        if (cv) cv.remove();
+        cv = null; R = null;
+    }
     function place() {
         const r = img.getBoundingClientRect();
         if (!r.width || !r.height) return false;
         const W = r.width * 1.9, H = r.height * 2.7;
         const L = r.left - (W - r.width) / 2, T = r.top - (H - r.height) / 2;
         const key = [L, T, W, H].map((v) => Math.round(v)).join(',');
-        if (key !== last) {
-            last = key;
+        if (key !== lastKey) {
+            lastKey = key;
             cv.style.left = L + 'px'; cv.style.top = T + 'px';
             cv.style.width = W + 'px'; cv.style.height = H + 'px';
             if (Math.abs(W - curW) > 1 || Math.abs(H - curH) > 1) {
@@ -132,21 +145,37 @@ void main(){
         tw = new TWEEN.Tween(U.uIn, G).to({ value: 1 }, 2600).easing(TWEEN.Easing.Cubic.Out).start();
     }
 
-    let raf = 0;
     function frame(now) {
-        raf = requestAnimationFrame(frame);
+        requestAnimationFrame(frame);
         const on = BODY.classList.contains('onhome') && !document.hidden && !BODY.classList.contains('needinstall');
         const hid = BODY.classList.contains('hud-hidden');
-        cv.style.opacity = on && !hid ? '1' : '0';
-        if (!on || hid) { wasOn = false; return; }
-        if (!wasOn) { wasOn = true; intro(); }
+        if (!on) {
+            wasOn = false;
+            if (cv) cv.style.opacity = '0';
+            // saiu da tela inicial há um tempo: devolve o contexto WebGL para o navegador
+            if (R && document.body.classList.contains('onhome') === false) {
+                if (!offSince) offSince = now;
+                else if (now - offSince > 8000) { release(true); offSince = 0; }
+            }
+            return;
+        }
+        offSince = 0;
+        if (hid) { if (cv) cv.style.opacity = '0'; return; }
+        if (!R || R.getContext().isContextLost()) {                    // (re)cria sob demanda
+            if (R) release(false);
+            if (now - lastTry < 800) return;
+            lastTry = now;
+            if (!create()) return;
+            wasOn = false;
+        }
         if (!place()) return;
+        cv.style.opacity = '1';
+        if (!wasOn) { wasOn = true; intro(); }
         G.update(now);
         U.uT.value = REDUCED ? 3 : now / 1000;
         R.render(scene, cam);
     }
-    raf = requestAnimationFrame(frame);
-    cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); cancelAnimationFrame(raf); cv.remove(); });
+    requestAnimationFrame(frame);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

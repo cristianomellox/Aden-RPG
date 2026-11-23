@@ -347,6 +347,7 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .espch{display:flex;align-items:center;gap:10px;margin:0 0 8px;color:var(--tx);font-weight:700}.espch input{width:auto;margin:0;accent-color:#1e63e9}
 /* encerrar setlist */
 .item.closed{filter:grayscale(1)}
+.item .cld{position:absolute;bottom:6px;right:8px;z-index:2;background:#000;color:#fff;border:1px solid #fff;border-radius:8px;padding:3px 8px;font:800 .66rem/1 system-ui,sans-serif;letter-spacing:.03em;font-variant-numeric:tabular-nums;pointer-events:none}
 .item .clb{position:absolute;top:6px;right:8px;background:#000;color:#fff;border:1px solid #fff;border-radius:8px;padding:3px 8px;font:800 .62rem/1 system-ui,sans-serif;letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
 #sclbn{margin:0 0 12px;padding:10px 12px;border:1px solid #777;border-radius:12px;color:#ddd;background:#111;font-size:.88rem;line-height:1.4}
 #sepoffst{margin:8px 0 0;font-size:.82rem;color:var(--mut);line-height:1.35;min-height:1em}
@@ -2013,6 +2014,9 @@ function loadS(){try{return JSON.parse(localStorage.getItem('cifras.sets'))||[]}
 function storeS(){try{localStorage.setItem('cifras.sets',JSON.stringify(sets))}catch(e){}}
 function tab(m){$('#mus').hidden=m;$('#sets').hidden=!m;$('#tbM').className='btn'+(m?' sec':'');$('#tbS').className='btn'+(m?'':' sec');if(m)renderSets()}
 $('#tbM').onclick=()=>tab(false);$('#tbS').onclick=()=>tab(true);
+/* contador regressivo da cópia cinza: 2d 23H 59M 59S (some o que está zerado à esquerda) */
+function cdFmt(ms){const t=Math.max(0,Math.floor(ms/1000)),d=Math.floor(t/86400),h=Math.floor(t%86400/3600),m=Math.floor(t%3600/60),q=t%60,z=n=>String(n).padStart(2,'0');
+  if(d)return d+'d '+z(h)+'H '+z(m)+'M '+z(q)+'S';if(h)return h+'H '+z(m)+'M '+z(q)+'S';if(m)return m+'M '+z(q)+'S';return q+'S'}
 function renderSets(){
   const b=$('#sitems');b.innerHTML='';if(!sets.length){const d=el('div','empty');d.textContent='Nenhuma setlist criada.';b.append(d)}
   [...sets].sort(cmpSet).forEach(x=>{
@@ -2027,6 +2031,7 @@ function renderSets(){
     if(x.esp){const p=el('span','espt');p.textContent='Evento Especial';tg.append(p)}
     if(x.closed){const p=el('span','clb');p.textContent='Setlist encerrada';tg.append(p)}else if(unseen&&unseen[x.id]){const p=el('span','nwt');p.textContent=unseen[x.id]==='n'?'NOVA':'ATUALIZADA';tg.append(p)}
     if(tg.childNodes.length)i.append(tg);
+    if(x.closed){const cd=el('span','cld');cd.dataset.end=(x.closedAt||0)+(CL_MS||3*864e5);cd.textContent=cdFmt(+cd.dataset.end-Date.now());i.append(cd)}
     i.onclick=()=>{if(unseen&&unseen[x.id]){delete unseen[x.id];saveUn();updSets()}unl=false;setOrig=null;dirty=false;curSet=x;x.ids=x.ids.filter(id=>songs.some(s=>s.id===id));show('set');renderSet()};b.append(i)});
 }
 /* setlists novas/atualizadas por outra pessoa: id -> 'n' (nova) | 'u' (atualizada). Fica salvo até a setlist ser aberta. */
@@ -3676,7 +3681,7 @@ function stUi(){
 
 
 /* ===== Encerrar setlist ===== */
-const CL_MS=3*864e5,clsd=id=>{const x=sets.find(z=>z.id===id);return !!(x&&x.closed)};
+var CL_MS=3*864e5;const clsd=id=>{const x=sets.find(z=>z.id===id);return !!(x&&x.closed)};
 function clExpire(){const n=sets.length;sets=sets.filter(x=>!x.closed||Date.now()-(x.closedAt||0)<CL_MS);if(sets.length!==n)storeS()}
 /* Storage: apaga vários arquivos de uma vez e confere o resultado (antes os erros eram engolidos em silêncio) */
 async function stList(prefix){
@@ -3717,6 +3722,9 @@ $('#sclose').onclick=async()=>{
     $('#md').hidden=true;
     modal('Não foi possível encerrar',/notfound/.test(e.message)?'Esta setlist não existe mais no servidor.':'Verifique a conexão e o código da banda e tente de novo.',[['OK',1]],'err')}};
 clExpire();
+setInterval(()=>{const l=document.querySelectorAll('.cld');if(!l.length)return;const n=Date.now();let ex=false;
+  l.forEach(e=>{const r=+e.dataset.end-n;if(r<=0)ex=true;else e.textContent=cdFmt(r)});
+  if(ex){clExpire();if($('#sets')&&!$('#sets').hidden)renderSets()}},1000);
 
 /* ===== Separador: preparar para uso offline (scripts no service worker + modelo no aparelho) ===== */
 async function sepPrepare(){

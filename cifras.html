@@ -3807,7 +3807,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)
   document.body.classList.toggle('needinstall',!isApp);
   async function tut(t,steps,intro,extra){const p=modal(t,'',[['Entendi',1]]);$('#mdx').innerHTML=(intro?'<p style="margin:0 0 10px">'+intro+'</p>':'')+'<ol style="text-align:left;padding-left:20px;margin:0;line-height:1.6">'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>'+(extra||'');await p}
   /* ---- instalar ---- */
-  addEventListener('appinstalled',()=>{$('#gate').innerHTML='<p>Aplicativo instalado! 🎉<br>Abra pelo ícone <b>Cifras PIBM</b> na tela inicial do seu aparelho.</p>'});
+  addEventListener('appinstalled',()=>{setFlag(true);$('#gate').innerHTML='<p>Aplicativo instalado! 🎉<br>Abra pelo ícone <b>Cifras PIBM</b> na tela inicial do seu aparelho.</p>'});
   async function diag(){
     const L=[],ok=(c,t)=>L.push((c?'✅ ':'❌ ')+t);
     ok(isSecureContext,'Conexão segura (HTTPS)');
@@ -3821,7 +3821,42 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(true)
     let reg=null;try{reg=await navigator.serviceWorker.getRegistration()}catch(e){}ok(!!reg,'Service worker registrado');
     return '<div style="margin-top:14px;text-align:left;font-size:.8rem;line-height:1.6;color:#aaa;border-top:1px solid #333;padding-top:10px"><b>Diagnóstico</b><br>'+L.join('<br>')+'</div>';
   }
+  /* ---- detectar app já instalado (acesso pelo navegador) ---- */
+  const KEY='cifras.inst',gateP=$('#gate p'),gateBtn=$('#gateBtn'),P0=gateP.innerHTML,B0=gateBtn.textContent;
+  const flag=()=>{try{return localStorage.getItem(KEY)==='1'}catch(e){return false}};
+  function setFlag(v){try{v?localStorage.setItem(KEY,'1'):localStorage.removeItem(KEY)}catch(e){}}
+  let installed=false;
+  function paint(){
+    if(isApp)return;
+    gateP.innerHTML=installed?'Bem-vindo(a) de volta! O aplicativo <b>Cifras PIBM</b> já está instalado neste aparelho. Toque no botão abaixo para abri-lo.':P0;
+    gateBtn.textContent=installed?'Abrir aplicativo':B0;
+  }
+  async function detect(){
+    if(isApp)return;
+    let r=null;
+    if(navigator.getInstalledRelatedApps){try{r=(await navigator.getInstalledRelatedApps()).some(a=>a.platform==='webapp')}catch(e){}}
+    /* sem resposta da API (ou manifest sem related_applications): usa o marcador salvo, desde que o navegador não esteja oferecendo instalar */
+    installed=r===true||(r!==true&&flag()&&!window.__dp);
+    if(r===true)setFlag(true);
+    paint();
+  }
+  if(isApp)setFlag(true);
+  addEventListener('beforeinstallprompt',()=>{installed=false;setFlag(false);paint()});
+  async function hintOpen(){
+    await tut('Abrir o aplicativo',['Procure o ícone <b>Cifras PIBM</b> na tela inicial, na gaveta de apps ou no menu iniciar e toque nele.','No Chrome, se aparecer, use também o menu (⋮) → <b>“Abrir no app”</b> ou o ícone de abrir app na barra de endereço.'],'O navegador não abriu o app automaticamente.');
+  }
+  function openApp(){
+    const u=new URL(location.pathname,location.origin);u.searchParams.set('abrir','1');
+    window.open(u.href,'_blank');
+    setTimeout(()=>{if(!document.hidden)hintOpen()},1500);
+  }
+  if(/[?&]abrir=1/.test(location.search)){
+    try{history.replaceState(null,'',location.pathname+location.hash)}catch(e){}
+    if(!isApp)setTimeout(hintOpen,700);
+  }
+  detect();setTimeout(detect,2500);
   async function install(){
+    if(installed&&!isApp)return openApp();
     const dp=window.__dp;if(dp){window.__dp=null;dp.prompt();try{await dp.userChoice}catch(e){}return}
     if(ios){
       if(iosSafari)return tut('Instalar na Tela de Início',['Toque em <b>Compartilhar</b> (o quadrado com a seta para cima) na barra do Safari.','Role para baixo e toque em <b>“Adicionar à Tela de Início”</b>.','Toque em <b>“Adicionar”</b> no canto superior direito.','Abra o app <b>Cifras PIBM</b> pelo novo ícone.'],'No iPhone/iPad a instalação é manual, pelo Safari:');

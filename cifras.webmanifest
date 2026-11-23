@@ -6,6 +6,9 @@
   "start_url": "/cifras.html?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "orientation": "portrait",
   "background_color": "#fbfbfb",
   "theme_color": "#000000",
@@ -37,6 +40,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://aden-rpg.pages.dev/cifras.webmanifest"
     }
   ]
 }

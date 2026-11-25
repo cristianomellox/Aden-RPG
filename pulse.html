@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pulse – simulador de vibração</title>
+<style>
+:root{--bg:#f5eef2;--fg:#2b1830;--mut:#7a6680;--card:#ffffff;--bd:#e4d3df;--ac:#c2185b;--ac2:#6a1b9a;--glow:rgba(194,24,91,.35);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#150b18;--fg:#f4e6f1;--mut:#a68aad;--card:#211226;--bd:#3a2342;--ac:#ff4d8d;--ac2:#b46cff;--glow:rgba(255,77,141,.4);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#150b18;--fg:#f4e6f1;--mut:#a68aad;--card:#211226;--bd:#3a2342;--ac:#ff4d8d;--ac2:#b46cff;--glow:rgba(255,77,141,.4);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:"Fraunces",Georgia,"Times New Roman",serif}
+body{min-height:100%;-webkit-tap-highlight-color:transparent}
+main{max-width:560px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:1.7rem;margin:0 0 2px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:.9rem;margin:0 0 14px;font-family:system-ui,sans-serif}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:14px;margin-bottom:12px;font-family:system-ui,sans-serif}
+.card h2{font-family:"Fraunces",Georgia,serif;font-size:1.05rem;margin:0 0 10px;font-weight:600}
+.stage{position:relative;display:grid;place-items:center;padding:6px 0}
+canvas{max-width:100%;touch-action:none}
+#orb{width:260px;height:260px;border-radius:50%}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.main-btn{flex:1;min-width:140px;padding:16px;border:0;border-radius:16px;font:600 1.05rem "Fraunces",Georgia,serif;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));cursor:pointer;box-shadow:0 6px 22px var(--glow)}
+.main-btn.on{background:var(--fg);color:var(--bg);box-shadow:none}
+.ghost{padding:12px 14px;border:1px solid var(--bd);background:transparent;color:var(--fg);border-radius:14px;font:500 .9rem system-ui,sans-serif;cursor:pointer}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.modes button{padding:11px 4px;border:1px solid var(--bd);background:transparent;color:var(--fg);border-radius:12px;font:500 .8rem system-ui,sans-serif;cursor:pointer}
+.modes button[aria-pressed="true"]{background:var(--ac);border-color:var(--ac);color:#fff}
+label{display:flex;justify-content:space-between;font-size:.85rem;color:var(--mut);margin:10px 0 4px}
+input[type=range]{width:100%;accent-color:var(--ac);height:28px}
+select{width:100%;padding:10px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit}
+.tog{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:.92rem}
+.tog input{width:22px;height:22px;accent-color:var(--ac)}
+#pad{width:100%;height:120px;border-radius:14px;border:1px dashed var(--bd);background:var(--bg)}
+#head{width:150px;height:150px}
+.note{font-size:.8rem;color:var(--mut);line-height:1.4;margin:8px 0 0}
+#dark{position:fixed;inset:0;background:#000;z-index:50;display:none;place-items:center;color:#333;font:.85rem system-ui}
+#dark.show{display:grid}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Pulse</h1>
+<p class="sub">Simulador de vibração com áudio binaural. Use fones de ouvido.</p>
+
+<div class="card stage">
+<canvas id="orb" width="520" height="520" aria-label="Visualização da intensidade"></canvas>
+</div>
+
+<div class="row" style="margin-bottom:12px">
+<button class="main-btn" id="go">Iniciar</button>
+<button class="ghost" id="stop" title="Parar tudo">Parar</button>
+<button class="ghost" id="blk" title="Tela preta">Tela preta</button>
+</div>
+
+<div class="card">
+<h2>Volume</h2>
+<label>Volume geral <span id="vV">80%</span></label>
+<input type="range" id="vol" min="0" max="100" value="80">
+<label>Volume do motor <span id="vM">50%</span></label>
+<input type="range" id="mvol" min="0" max="100" value="50">
+</div>
+
+<div class="card">
+<h2>Padrões</h2>
+<div class="modes" id="modes"></div>
+<div id="padWrap" style="display:none;margin-top:10px">
+<canvas id="pad" width="600" height="240"></canvas>
+<p class="note">Arraste: altura define a intensidade e a posição horizontal move o som entre os ouvidos.</p>
+</div>
+<label>Intensidade <span id="vI">60%</span></label>
+<input type="range" id="int" min="0" max="100" value="60">
+<label>Velocidade <span id="vS">50%</span></label>
+<input type="range" id="spd" min="0" max="100" value="50">
+</div>
+
+<div class="card">
+<h2>Áudio espacial 3D</h2>
+<div class="tog"><span>Som do motor</span><input type="checkbox" id="motor" checked></div>
+<div class="tog"><span>Respiração e sussurro (ASMR)</span><input type="checkbox" id="asmr" checked></div>
+<label>Trajetória do som</label>
+<select id="path">
+<option value="sweep">Vai e vem (orelha a orelha)</option>
+<option value="circle">Círculo ao redor da cabeça</option>
+<option value="near">Sussurro rente a uma orelha</option>
+<option value="rand">Aleatório</option>
+<option value="L">Fixo na esquerda</option>
+<option value="R">Fixo na direita</option>
+</select>
+<label>Velocidade do movimento <span id="vP">40%</span></label>
+<input type="range" id="pspd" min="0" max="100" value="40">
+<label>Proximidade <span id="vD">70%</span></label>
+<input type="range" id="dist" min="0" max="100" value="70">
+<label>Volume da respiração <span id="vB">50%</span></label>
+<input type="range" id="brt" min="0" max="100" value="50">
+<div class="row" style="justify-content:center;margin-top:10px"><canvas id="head" width="300" height="300" aria-label="Vista de cima da cabeça com a posição do som"></canvas></div>
+</div>
+
+<div class="card">
+<h2>Sessão</h2>
+<label>Temporizador com fade-out</label>
+<select id="tmr"><option value="0">Sem limite</option><option value="300">5 minutos</option><option value="600">10 minutos</option><option value="1200">20 minutos</option></select>
+<button class="ghost" id="vtest" style="margin-top:10px">Testar vibração</button>
+<p class="note" id="status">Vibração do aparelho: verificando…</p>
+</div>
+</main>
+<div id="dark">Toque para voltar</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var TAU=Math.PI*2;
+var S={vol:.8,mv:.5,on:false,mode:"wave",int:.6,spd:.5,path:"sweep",pspd:.4,dist:.7,brt:.5,motor:true,asmr:true,padV:0,padX:0,t:0,level:0,fade:1,left:0,px:0,pz:-1};
+var MODES=[
+["const","Constante"],["pulse","Pulso"],["wave","Onda"],["ramp","Crescente"],
+["heart","Batida"],["rand","Aleatório"],["storm","Tempestade"],["touch","Toque"]];
+var rnd={v:0,n:0,tgt:0};
+
+function lvl(t){
+ var f=.4+S.spd*3,m=S.mode,p;
+ switch(m){
+ case "const":return 1;
+ case "pulse":return (t*f%1)<.5?1:.05;
+ case "wave":return .5+.5*Math.sin(t*f*Math.PI-Math.PI/2);
+ case "ramp":return Math.pow((t*f*.25)%1,1.5);
+ case "heart":p=(t*f*.5)%1;return (p<.1||(p>.2&&p<.3))?1:.1;
+ case "rand":if(t>rnd.n){rnd.tgt=Math.random();rnd.n=t+.5/f+Math.random()*.4}rnd.v+=(rnd.tgt-rnd.v)*.12;return rnd.v;
+ case "storm":return Math.min(1,(.5+.5*Math.sin(t*f*1.6))*(.55+.45*Math.sin(t*f*7.1))+.15*Math.random());
+ case "touch":return S.padV;
+ }
+ return 0;
+}
+
+/* ---------- Áudio ---------- */
+var A=null;
+function buildAudio(){
+ var C=window.AudioContext||window.webkitAudioContext;
+ if(!C)return null;
+ var c=new C(),a={c:c};
+ a.master=c.createGain();a.master.gain.value=S.vol;
+ var comp=c.createDynamicsCompressor();a.master.connect(comp);comp.connect(c.destination);
+ function panner(){
+  var p=c.createPanner();p.panningModel="HRTF";p.distanceModel="inverse";
+  p.refDistance=.4;p.rolloffFactor=1;p.coneInnerAngle=360;return p;
+ }
+ /* motor */
+ a.mg=c.createGain();a.mg.gain.value=0;
+ var lp=c.createBiquadFilter();lp.type="lowpass";lp.frequency.value=520;lp.Q.value=2;
+ a.o1=c.createOscillator();a.o1.type="sawtooth";a.o1.frequency.value=70;
+ a.o2=c.createOscillator();a.o2.type="square";a.o2.frequency.value=141;
+ var g2=c.createGain();g2.gain.value=.4;
+ a.o1.connect(lp);a.o2.connect(g2);g2.connect(lp);lp.connect(a.mg);
+ a.pm=panner();a.mg.connect(a.pm);a.pm.connect(a.master);
+ a.o1.start();a.o2.start();
+ /* respiração / sussurro: ruído filtrado */
+ var len=c.sampleRate*2,buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);
+ for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+ a.ns=c.createBufferSource();a.ns.buffer=buf;a.ns.loop=true;
+ var bp=c.createBiquadFilter();bp.type="bandpass";bp.frequency.value=3200;bp.Q.value=.7;
+ var hp=c.createBiquadFilter();hp.type="highpass";hp.frequency.value=1200;
+ a.bg=c.createGain();a.bg.gain.value=0;
+ a.am=c.createOscillator();a.am.frequency.value=5.5;
+ var amg=c.createGain();amg.gain.value=.12;
+ a.am.connect(amg);amg.connect(a.bg.gain);a.am.start();
+ a.ns.connect(bp);bp.connect(hp);hp.connect(a.bg);
+ a.pb=panner();a.bg.connect(a.pb);a.pb.connect(a.master);
+ a.ns.start();a.bp=bp;
+ return a;
+}
+function setPos(p,x,y,z){
+ var t=A.c.currentTime;
+ if(p.positionX){p.positionX.setTargetAtTime(x,t,.03);p.positionY.setTargetAtTime(y,t,.03);p.positionZ.setTargetAtTime(z,t,.03)}
+ else p.setPosition(x,y,z);
+}
+function soundPos(t){
+ var r=1.6-S.dist*1.3,w=.15+S.pspd*1.6,x,z;
+ switch(S.path){
+ case "sweep":x=Math.sin(t*w*2)*r;z=-.25*r;break;
+ case "circle":x=Math.sin(t*w*2)*r;z=Math.cos(t*w*2)*r;break;
+ case "near":x=-(.25+.1*Math.sin(t*w*3));z=-.05;break;
+ case "rand":x=Math.sin(t*w*1.3)*r*Math.cos(t*w*.7);z=-r*.5*Math.abs(Math.sin(t*w*.9))-.1;break;
+ case "L":x=-r;z=-.1;break;
+ default:x=r;z=-.1;
+ }
+ if(S.mode==="touch")x=S.padX*r;
+ return [x,z];
+}
+function audioTick(t,level){
+ if(!A)return;
+ var c=A.c.currentTime,v=S.on?S.fade:0,pos=soundPos(t);
+ var k=S.int*level*v;
+ A.master.gain.setTargetAtTime(S.vol,c,.03);
+ A.mg.gain.setTargetAtTime(S.motor?k*1.4*S.mv:0,c,.04);
+ var f=55+level*70;A.o1.frequency.setTargetAtTime(f,c,.05);A.o2.frequency.setTargetAtTime(f*2.02,c,.05);
+ var breath=.5+.5*Math.sin(t*TAU/4.2-1.2);
+ A.bg.gain.setTargetAtTime(S.asmr&&S.on?S.brt*.5*(.25+.75*breath)*(.4+.6*(.3+S.int))*S.fade:0,c,.12);
+ A.bp.frequency.setTargetAtTime(2400+breath*2200,c,.1);
+ setPos(A.pb,pos[0],0,pos[1]);
+ setPos(A.pm,pos[0]*.35,-.1,-.5);
+ S.px=pos[0];S.pz=pos[1];
+}
+
+/* ---------- Háptico ---------- */
+var canVib=typeof navigator.vibrate==="function",vibT=0,vibWarned=false;
+$("status").textContent=canVib?"Vibração do aparelho disponível. Funciona em muitos celulares Android.":"Este navegador não oferece vibração (o Safari do iPhone não permite). O visual e o áudio continuam funcionando; aumente o volume do motor para sentir os graves no alto-falante.";
+setInterval(function(){
+ if(!canVib||!S.on)return;
+ var d=Math.round(Math.min(1,S.level*S.int*S.fade)*100);
+ var ok=navigator.vibrate(d<8?0:d);if(ok===false&&!vibWarned){vibWarned=true;$("status").textContent="O navegador bloqueou a vibração aqui. Abra o link direto no Chrome do Android, fora de pré-visualização, e toque em Testar vibração.";}
+},100);
+
+/* ---------- Visual ---------- */
+var oc=$("orb").getContext("2d"),hc=$("head").getContext("2d");
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function drawOrb(l,t){
+ var W=520,cx=W/2,ac=css("--ac"),a2=css("--ac2"),k=l*S.int*S.fade;
+ oc.clearRect(0,0,W,W);
+ var sh=S.on?(Math.random()-.5)*k*8:0;
+ for(var i=4;i>=0;i--){
+  var r=70+i*28+k*40*(1-i/6)+Math.sin(t*3+i)*3*(S.on?1:0);
+  oc.beginPath();oc.arc(cx+sh,cx,r,0,TAU);
+  oc.strokeStyle=i%2?a2:ac;oc.globalAlpha=(.1+.5*k)*(1-i/5.5)+.06;oc.lineWidth=3;oc.stroke();
+ }
+ var g=oc.createRadialGradient(cx+sh,cx,5,cx+sh,cx,90+k*50);
+ g.addColorStop(0,ac);g.addColorStop(1,a2);
+ oc.globalAlpha=.35+.65*(S.on?Math.max(k,.15):.25);
+ oc.fillStyle=g;oc.beginPath();oc.arc(cx+sh,cx,70+k*45,0,TAU);oc.fill();
+ oc.globalAlpha=1;oc.fillStyle="#fff";oc.font="600 44px Georgia,serif";oc.textAlign="center";
+ oc.fillText(S.on?Math.round(k*100)+"%":"pronto",cx,cx+14);
+}
+function drawHead(){
+ var W=300,c=W/2,ac=css("--ac"),mt=css("--mut"),bd=css("--bd");
+ hc.clearRect(0,0,W,W);
+ hc.strokeStyle=bd;hc.lineWidth=2;hc.setLineDash([5,6]);hc.beginPath();hc.arc(c,c,120,0,TAU);hc.stroke();hc.setLineDash([]);
+ hc.fillStyle=mt;hc.globalAlpha=.5;
+ hc.beginPath();hc.arc(c,c,34,0,TAU);hc.fill();
+ hc.beginPath();hc.arc(c-35,c,9,0,TAU);hc.fill();hc.beginPath();hc.arc(c+35,c,9,0,TAU);hc.fill();
+ hc.beginPath();hc.moveTo(c-8,c-32);hc.lineTo(c,c-46);hc.lineTo(c+8,c-32);hc.fill();
+ hc.globalAlpha=1;
+ var sx=c+S.px*75,sy=c+S.pz*75*-1*-1;
+ sy=c+S.pz*75;
+ sx=Math.max(20,Math.min(W-20,sx));sy=Math.max(20,Math.min(W-20,sy));
+ hc.fillStyle=ac;hc.globalAlpha=S.on?1:.4;hc.shadowColor=ac;hc.shadowBlur=18;
+ hc.beginPath();hc.arc(sx,sy,10,0,TAU);hc.fill();hc.shadowBlur=0;hc.globalAlpha=1;
+}
+
+/* ---------- Loop ---------- */
+var last=performance.now(),started=0,dur=0;
+function frame(now){
+ var dt=Math.min(.1,(now-last)/1000);last=now;
+ if(S.on){
+  S.t+=dt;
+  if(dur>0){var rem=dur-(now-started)/1000;if(rem<=0){stop();}else S.fade=Math.min(1,rem/10)}
+  S.level=lvl(S.t);
+ }else S.level+= (0-S.level)*.2;
+ audioTick(S.t,S.level);
+ drawOrb(S.level,S.t);drawHead();
+ requestAnimationFrame(frame);
+}
+function start(){
+ if(!A)A=buildAudio();
+ if(A&&A.c.state==="suspended")A.c.resume();
+ S.on=true;S.fade=1;started=performance.now();dur=+$("tmr").value;
+ $("go").textContent="Pausar";$("go").classList.add("on");
+}
+function stop(){
+ S.on=false;S.fade=1;$("go").textContent="Iniciar";$("go").classList.remove("on");
+ if(canVib)navigator.vibrate(0);
+}
+
+/* ---------- UI ---------- */
+var mb=$("modes");
+MODES.forEach(function(m){
+ var b=document.createElement("button");b.textContent=m[1];b.setAttribute("aria-pressed",m[0]===S.mode);
+ b.onclick=function(){S.mode=m[0];[].forEach.call(mb.children,function(x){x.setAttribute("aria-pressed","false")});b.setAttribute("aria-pressed","true");$("padWrap").style.display=m[0]==="touch"?"block":"none"};
+ mb.appendChild(b);
+});
+$("go").onclick=function(){S.on?stop():start()};
+$("stop").onclick=stop;
+function bind(id,key,lab){$(id).oninput=function(){S[key]=this.value/100;$(lab).textContent=this.value+"%"}}
+bind("int","int","vI");bind("vol","vol","vV");bind("mvol","mv","vM");bind("spd","spd","vS");bind("pspd","pspd","vP");bind("dist","dist","vD");bind("brt","brt","vB");
+$("motor").onchange=function(){S.motor=this.checked};
+$("asmr").onchange=function(){S.asmr=this.checked};
+$("path").onchange=function(){S.path=this.value};
+$("tmr").onchange=function(){dur=+this.value;started=performance.now()};
+$("blk").onclick=function(){$("dark").classList.add("show")};
+$("dark").onclick=function(){$("dark").classList.remove("show")};
+var pad=$("pad");
+function padMove(e){
+ var r=pad.getBoundingClientRect();
+ S.padX=Math.max(-1,Math.min(1,((e.clientX-r.left)/r.width)*2-1));
+ S.padV=Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));
+ var g=pad.getContext("2d");g.clearRect(0,0,600,240);
+ g.fillStyle=css("--ac");g.globalAlpha=.8;g.beginPath();g.arc((S.padX+1)/2*600,(1-S.padV)*240,16,0,TAU);g.fill();g.globalAlpha=1;
+}
+pad.addEventListener("pointerdown",function(e){pad.setPointerCapture(e.pointerId);padMove(e);if(!S.on)start()});
+pad.addEventListener("pointermove",function(e){if(e.buttons)padMove(e)});
+pad.addEventListener("pointerup",function(){S.padV=0;pad.getContext("2d").clearRect(0,0,600,240)});
+document.addEventListener("visibilitychange",function(){if(document.hidden&&canVib)navigator.vibrate(0)});
+$("vtest").onclick=function(){
+ var ok=canVib&&navigator.vibrate([300,120,300,120,600]);
+ $("status").textContent=ok?"Comando de vibração enviado. Se o aparelho não vibrou, confira se o modo silencioso ou a economia de energia não está bloqueando, e se a vibração por toque está ativa nas configurações do Android.":"O navegador recusou a vibração. No Android use o Chrome; no iPhone o Safari não oferece essa função.";
+};
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

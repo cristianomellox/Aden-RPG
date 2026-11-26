@@ -440,6 +440,10 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .prph{position:absolute;top:0;bottom:0;width:2px;background:#ff5252;z-index:4;pointer-events:none;display:none}
 .stc.mc small{z-index:1}
 #stCol.on{background:var(--gold);color:#000}
+.prh{flex:1;min-width:0;font:600 .6rem system-ui;color:#8a8a8a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prruler{height:26px;cursor:pointer}.prruler span{top:8px}
+.prmk{position:absolute;top:0;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #4cd964;margin-left:-7px;z-index:3;pointer-events:none}
+.prst{position:absolute;top:0;bottom:0;width:2px;background:#4cd964;z-index:3;pointer-events:none;margin-left:-1px;opacity:.9}
 /* ===== layout compacto (estilo FL Studio Mobile): muito espaço para as camadas, transporte fino e teclado baixo ===== */
 #sted .stwarn{display:none}
 #sted.wide:not([hidden]){grid-template-columns:minmax(0,1fr) 250px;grid-template-rows:auto minmax(0,1fr) auto auto}
@@ -457,11 +461,11 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 #sted .sttr .stb.wd{padding:0 10px}
 #sted .sttm{font-size:.9rem;min-width:64px}#sted .stlv{width:28px}
 #sted.kbo #stMt{display:none}
-#sted .strow{height:46px}#sted .stc{top:3px;height:40px}
+#sted .strow{height:46px;gap:0;padding:0;align-items:stretch}#sted .stln{align-self:stretch;height:auto}#sted .strow.sel{background:#17130a;box-shadow:inset 0 0 0 1px rgba(212,175,55,.55)}#sted .strow.sel .strh{background:#211a08}#sted .strow.sel .strh b{color:#ffd966}#sted .strh b{cursor:pointer;text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}#sted .stc{top:3px;height:40px}
 #sted .strh{padding:3px 6px;gap:2px}#sted .strh .ms button{height:22px;font-size:.62rem}
 #sted .strul{height:22px}
 #sted .kbbar{padding:3px 6px;gap:4px}#sted .kbbar .stb{height:30px;min-width:30px}#sted .kbi{height:30px}
-#kbRail{height:8px;margin:0 6px 3px;border-radius:4px}#kbRail i{border-radius:4px}
+#kbRail{height:22px;margin:0 6px 4px;border-radius:8px;background:#141414;border:1px solid #2a2a2a;overflow:hidden;display:flex;align-items:center;justify-content:center}#kbRail i{border-radius:7px;background:rgba(212,175,55,.28);border:1px solid var(--gold);box-sizing:border-box;opacity:1}#kbRail em{position:relative;z-index:1;font:600 .55rem system-ui;color:#8a8a8a;font-style:normal;pointer-events:none;white-space:nowrap}
 .kw small{bottom:3px;font-size:.55rem}
 .kbk small{position:absolute;bottom:2px;left:0;right:0;text-align:center;color:#c9c9c9;font:700 .45rem system-ui;pointer-events:none;white-space:nowrap;overflow:hidden}
 .prkr{font-size:.5rem;padding:5px 2px}
@@ -1741,13 +1745,13 @@ const F=window.CifrasForge={
         <button class="stb" id="kbBpm" type="button" aria-label="BPM e compasso">100 · 4/4</button>
         <button class="stb rec" id="kbRec" type="button" aria-label="Gravar o instrumento">●</button>
       </div>
-      <div id="kbRail"><i></i></div>
+      <div id="kbRail"><i></i><em>arraste: rolar · dois dedos: zoom</em></div>
       <div id="kbKeys"><div id="kbIn2"></div></div>
     </div>
     <button class="pnt h" id="stKbT" type="button"></button>
     <div id="stPr" hidden>
       <div class="prhd">
-        <button class="stb" id="prX" type="button" aria-label="Concluir"></button><b id="prT">Notas</b>
+        <button class="stb" id="prX" type="button" aria-label="Concluir"></button><b id="prT">Notas</b><span class="prh">Toque na régua para escolher onde começa a tocar</span>
         <button class="stb" id="prPlay" type="button" aria-label="Tocar"></button>
         <button class="stchip" id="prG" type="button">Grade 1/16</button>
         <button class="stchip" id="prEr" type="button">Apagar</button>
@@ -4870,14 +4874,18 @@ function applyRemote(r,doMerge){const d=r.data||{},rem={v:2,tracks:(d.tracks||[]
 async function syncAssets(){if(!S.p)return;const ps=[...new Set(S.p.tracks.flatMap(t=>t.clips.map(k=>k.s)))].filter(s=>!S.bufs.has(s));
   for(const s of ps){try{const b=await loadBuf(s);if(!S.p)return;S.bufs.set(s,b);S.pk.set(s,peaks(b))}catch(e){}}
   if(ps.length&&S.p)render();await syncInsts();kbUpdate()}
-function pollStart(){clearInterval(S.poll);S.poll=setInterval(pollTick,7000)}
-async function pollTick(){if(!S.p||S.view!=='ed'||document.hidden||S.pollBusy||S.dragK||S.mrec||S.rec||!navigator.onLine)return;if(!S.p.pub&&isOwner())return;
-  S.pollBusy=true;const id=S.p.id;
+const POLL0=40000,POLLMAX=300000;   /* 40 s; sem novidade soma +40 s (80, 120, …) até 5 min; qualquer novidade volta a 40 s */
+function pollStart(){clearTimeout(S.poll);S.pollMs=POLL0;S.poll=setTimeout(pollTick,S.pollMs)}
+function pollWait(changed){if(!S.p||(!S.p.pub&&isOwner()))return;S.pollMs=changed?POLL0:Math.min((S.pollMs||POLL0)+POLL0,POLLMAX);clearTimeout(S.poll);S.poll=setTimeout(pollTick,S.pollMs)}
+async function pollTick(){if(!S.p||S.view!=='ed')return;if(!S.p.pub&&isOwner())return;
+  if(document.hidden||S.pollBusy||S.dragK||S.mrec||S.rec||!navigator.onLine){clearTimeout(S.poll);S.poll=setTimeout(pollTick,S.pollMs||POLL0);return}   /* ocupado: não consulta; tenta no mesmo intervalo */
+  S.pollBusy=true;const id=S.p.id;let changed=false;
   try{const v=await rpc('cifras_studio_rev',{p_code:memCode,p_id:id,p_owner:cfg().name});if(!S.p||S.p.id!==id)return;S.p.pub=!!v.pub;updCol();
-    if(!v.pub&&!isOwner()){clearInterval(S.poll);await smodal('Projeto privado','O dono desativou o modo colaborativo. Suas últimas edições salvas continuam no projeto dele.',[['OK',1]]);closeEd();return}
-    if(v.rev!==S.p.rev){if(S.dirty||S.saving){saveNow()}
+    if(!v.pub&&!isOwner()){clearTimeout(S.poll);await smodal('Projeto privado','O dono desativou o modo colaborativo. Suas últimas edições salvas continuam no projeto dele.',[['OK',1]]);closeEd();return}
+    if(v.rev!==S.p.rev){changed=true;if(S.dirty||S.saving){saveNow()}
       else{const r=await rpc('cifras_studio_get2',{p_code:memCode,p_id:id,p_owner:cfg().name});if(!S.p||S.p.id!==id||S.dirty)return;applyRemote({data:r.data,rev:r.rev,name:r.name},false);S.p.by=r.by;if(r.by)setSv('Atualizado por '+r.by)}}}
-  catch(e){if(/forbidden|42501|notfound/.test(e.message)){clearInterval(S.poll);fail(e);closeEd()}}finally{S.pollBusy=false}}
+  catch(e){if(/forbidden|42501|notfound/.test(e.message)){clearTimeout(S.poll);fail(e);closeEd()}}
+  finally{S.pollBusy=false;if(S.p&&S.p.id===id)pollWait(changed)}}
 function updCol(){const b=$('#stCol');if(!S.p||!b)return;b.classList.toggle('on',!!S.p.pub);b.title=S.p.pub?'Projeto colaborativo':'Colaboração';
   $('#stWm').textContent=S.p.pub?(isOwner()?'Público: a banda pode editar com você · expira em 7 dias':'Projeto de '+S.p.owner+' · colaborativo · expira em 7 dias'):'Fica disponível por 7 dias — exporte o mix antes de expirar.'}
 function colSheet(){const o=isOwner(),n=[];
@@ -4885,7 +4893,7 @@ function colSheet(){const o=isOwner(),n=[];
       if(!await online())return;const v=!S.p.pub;
       if(v&&await smodal('Tornar público?','Qualquer pessoa da banda com o código poderá ver este projeto na lista “Colaborativos” e editar camadas, clipes e notas até ele expirar. Só você pode renomear, excluir e desligar o modo público.',[['Cancelar',0,'sec'],['Tornar público',1]])!==1)return;
       if(!v&&await smodal('Tirar do público?','Os colaboradores deixam de ver e de editar o projeto. O que eles já salvaram continua nele.',[['Cancelar',0,'sec'],['Tirar do público',1]])!==1)return;
-      try{S.dirty=true;await saveNow();await rpc('cifras_studio_pub',{p_code:memCode,p_id:S.p.id,p_owner:cfg().name,p_pub:v});S.p.pub=v;updCol();if(v)pollStart();else clearInterval(S.poll);draw()}catch(e){fail(e)}}))};draw();
+      try{S.dirty=true;await saveNow();await rpc('cifras_studio_pub',{p_code:memCode,p_id:S.p.id,p_owner:cfg().name,p_pub:v});S.p.pub=v;updCol();if(v)pollStart();else clearTimeout(S.poll);draw()}catch(e){fail(e)}}))};draw();
     n.push(sub('Ligue para outras pessoas da banda editarem este projeto junto com você, ao mesmo tempo. As edições aparecem para todos em poucos segundos; se duas pessoas mexerem no mesmo clipe, vale a edição de quem salvou por último.'),r)}
   else n.push(sub('Este projeto é de '+S.p.owner+' e está aberto para colaboração. Você pode gravar, importar, tocar e editar camadas, clipes e notas. Só o dono renomeia, exclui ou desliga o modo público.'));
   if(S.p.by)n.push(sub('Última edição de outra pessoa: '+S.p.by));
@@ -4932,12 +4940,12 @@ async function openProject(id){
 /* ---------------- editor ---------------- */
 function startEd(p,created){S.p=p;S.created=created;S.bpm=p.bpm||100;S.sig=p.sig||[4,4];S.rot=rdRot();S.h={u:[],r:[]};S.gc=false;S.pos=0;S.sel={t:p.tracks[0]?p.tracks[0].id:null,c:null};S.tab='mix';S.col=false;S.dirty=false;S.mrec=null;S.pr=null;$('#stPr').hidden=true;
   setView('ed');frame();upHist();mtLbl();$('#stName').value=p.name;$('#stName').readOnly=!isOwner();setSv('Salvo ✓');updCol();cdTick();render();panel();upBtn();
-  kbOpen(S.kb.open);kbUpdate();clearInterval(S.cdi);S.cdi=setInterval(cdTick,20000);clearInterval(S.poll);if(p.pub||!isOwner())pollStart();scrollTo(0,0);
+  kbOpen(S.kb.open);kbUpdate();clearInterval(S.cdi);S.cdi=setInterval(cdTick,20000);clearTimeout(S.poll);if(p.pub||!isOwner())pollStart();scrollTo(0,0);
   if(p.tracks.some(t=>t.ty==='i'))wk().then(()=>syncInsts())}
 function cdTick(){if(S.view!=='ed')return;const ms=left(),c=$('#stCd');c.textContent='⏳ '+cdTxt(ms);c.classList.toggle('low',ms<DAY);
   if(ms<=0){smodal('Projeto expirado','Este projeto passou dos 7 dias e foi removido.',[['OK',1]],'err');closeEd()}}
 async function closeEd(silent){
-  clearInterval(S.cdi);clearInterval(S.poll);S.poll=null;if(S.rec){S.rec.discard=true;stopRec()}pause();kbAllOff();S.pr=null;$('#stPr').hidden=true;if(S.dirty)await saveNow();
+  clearInterval(S.cdi);clearTimeout(S.poll);S.poll=null;if(S.rec){S.rec.discard=true;stopRec()}pause();kbAllOff();S.pr=null;$('#stPr').hidden=true;if(S.dirty)await saveNow();
   if(S.gc&&S.p){try{await rpc('cifras_studio_gc',{p_code:memCode,p_id:S.p.id,p_owner:cfg().name})}catch(e){}}
   S.p=null;S.bufs.clear();S.pk.clear();rigsClear();S.sel={t:null,c:null};$('#stct').innerHTML='';
   if(S.ctx&&S.ctx.state==='running')S.ctx.suspend().catch(()=>{});
@@ -4958,7 +4966,7 @@ function render(){const p=S.p;if(!p)return;const ct=$('#stct'),W=total()*S.pps;c
     m.textContent='M';s.textContent='S';m.type=s.type='button';
     m.onclick=e=>{e.stopPropagation();mut(()=>{t.mute=t.mute?0:1});m.classList.toggle('on',!!t.mute);liveApply();scheduleSave();if(S.tab==='mix')panel()};
     s.onclick=e=>{e.stopPropagation();mut(()=>{t.solo=t.solo?0:1});s.classList.toggle('on',!!t.solo);liveApply();scheduleSave();if(S.tab==='mix')panel()};
-    ms.append(m,s);h.append(nm,ms);h.onclick=()=>{selTrack(t.id);kbUpdate()};row.append(h);
+    ms.append(m,s);h.append(nm,ms);nm.onclick=e=>{e.stopPropagation();selTrack(t.id);kbUpdate();layerSheet(t)};h.onclick=()=>{selTrack(t.id);kbUpdate()};row.append(h);
     const ln=el('div','stln');if(bw>=14){ln.style.backgroundImage='linear-gradient(90deg,#262626 1px,transparent 1px)';ln.style.backgroundSize=bw+'px 100%'}
     let lt=0;ln.onclick=e=>{if(e.target!==ln)return;const now=performance.now(),dbl=now-lt<350;lt=now;seek(ctT(e));selTrack(t.id);kbUpdate();
       if(dbl&&t.ty==='i')newMc(t,ctT(e))};
@@ -5054,6 +5062,21 @@ function stopMrec(){const R=S.mrec;if(!R)return;const pos=curPos();S.mrec=null;
   mut(()=>{t.mc=t.mc||[];t.mc.push(k)});S.sel={t:t.id,c:k.id};S.tab='clip';render();panel();scheduleSave(true)}
 
 /* ---------------- adicionar camada / instrumento ---------------- */
+async function removeTrack(t){if(await smodal('Remover camada?','Os áudios e notas dela saem do projeto (dá para desfazer enquanto o projeto estiver aberto).',[['Cancelar',0,'sec'],['Remover',1]])!==1)return;
+  pause();kbAllOff();mut(()=>{S.p.tracks.splice(S.p.tracks.indexOf(t),1)});S.sel={t:null,c:null};S.gc=true;render();panel();kbUpdate();scheduleSave(true)}
+/* menu da camada: toque no NOME da camada (não depende do painel lateral estar aberto) */
+function layerSheet(t){
+  const nm=el('input','stnm');nm.value=t.name;nm.maxLength=24;nm.setAttribute('aria-label','Nome da camada');
+  nm.onchange=()=>{const v=nm.value.trim();if(!v){nm.value=t.name;return}mut(()=>{t.name=v});render();kbUpdate();panel();scheduleSave()};
+  const vol=sl('Volume',0,1.2,.01,t.vol==null?.85:t.vol,v=>Math.round(v*100)+'%',(v,e)=>{t.vol=v;liveApply();if(e)scheduleSave()},.85),
+        pn=sl('Pan',-1,1,.05,t.pan||0,v=>v===0?'C':(v<0?'E ':'D ')+Math.round(Math.abs(v)*100),(v,e)=>{t.pan=v;liveApply();if(e)scheduleSave()},0);
+  const r=el('div','stchips'),mb=btn('Mudo','stchip'+(t.mute?' on red':''),()=>{mut(()=>{t.mute=t.mute?0:1});mb.classList.toggle('on',!!t.mute);mb.classList.toggle('red',!!t.mute);liveApply();scheduleSave();render()}),
+        sb=btn('Solo','stchip'+(t.solo?' on':''),()=>{mut(()=>{t.solo=t.solo?0:1});sb.classList.toggle('on',!!t.solo);liveApply();scheduleSave();render()});
+  r.append(mb,sb);
+  if(t.ty==='i')r.append(btn('Trocar instrumento','stchip',()=>{closeSheet();instPick(t)}));
+  r.append(btn('Efeitos e mixer','stchip',()=>{closeSheet();S.pnHide=false;prefSet('pn','0');S.tab='fx';S.col=false;pnBtn();panel()}),
+           btn('Remover camada','stchip red',()=>{closeSheet();removeTrack(t)}));
+  sheet('Camada',scrollBox(nm,vol,pn,r))}
 const isEmpty=t=>!!t&&t.ty!=='i'&&!t.clips.length;
 const tbtn=(txt,cls,fn)=>{const b=btn('',cls,fn);b.textContent=txt;return b};   /* texto vindo de arquivo/colaborador: nunca como HTML */
 const sub=txt=>{const p=el('p','sub');p.style.cssText='margin:0;font-size:.74rem';p.textContent=txt;return p};
@@ -5237,22 +5260,24 @@ function kbInit(){
   const velAt=(x,y)=>S.kb.vs?Math.round(40+clamp((loc(x,y).y-lyOf(K))/Math.max(1,K.offsetHeight),0,1)*87):100;
   const pts=()=>[...P.values()],dist=()=>{const a=pts();return Math.abs(loc(a[0].x,a[0].y).x-loc(a[1].x,a[1].y).x)},cen=()=>{const a=pts();return(loc(a[0].x,a[0].y).x+loc(a[1].x,a[1].y).x)/2-lxOf(K)};
   const on=(p,k,x,y)=>{p.k=k;kbDown(k,velAt(x,y))},off=p=>{if(p.k!=null){kbUp(p.k);p.k=null}};
+  /* TECLAS: só tocam (acordes e deslizar entre teclas). Nenhum gesto de zoom aqui. */
   K.addEventListener('pointerdown',e=>{e.preventDefault();if(e.pointerType==='mouse'&&e.button)return;try{K.setPointerCapture(e.pointerId)}catch(x){}ensure();
-    const p={x:e.clientX,y:e.clientY,k:null};P.set(e.pointerId,p);
-    if(P.size===2)pz={d:Math.max(24,dist()),kw:S.kb.kw,sl:K.scrollLeft,c:cen(),on:false};else if(P.size>2)pz=null;
-    if(lock||(pz&&pz.on))return;const k=keyAt(e.clientX,e.clientY);if(k!=null)on(p,k,e.clientX,e.clientY)});
-  K.addEventListener('pointermove',e=>{const p=P.get(e.pointerId);if(!p)return;p.x=e.clientX;p.y=e.clientY;
-    if(P.size===2&&pz){const d=dist();
-      if(!pz.on&&Math.abs(d-pz.d)>18){pz.on=true;P.forEach(off)}   /* dedos se afastando/aproximando: é zoom, não acorde */
-      if(pz.on){const kw=clamp(pz.kw*d/pz.d,26,110),r=kw/pz.kw,cx=cen();S.kb.kw=kw;kbLayout();kbScroll((pz.sl+pz.c)*r-cx);return}}
-    if(lock||(pz&&pz.on))return;const k=keyAt(e.clientX,e.clientY);if(k!==p.k){off(p);if(k!=null)on(p,k,e.clientX,e.clientY)}});
-  const up=e=>{const p=P.get(e.pointerId);if(!p)return;off(p);P.delete(e.pointerId);if(pz&&pz.on)lock=true;if(P.size<2)pz=null;if(!P.size){lock=false;prefSet('kw',String(Math.round(S.kb.kw)))}};
+    const p={x:e.clientX,y:e.clientY,k:null};P.set(e.pointerId,p);const k=keyAt(e.clientX,e.clientY);if(k!=null)on(p,k,e.clientX,e.clientY)});
+  K.addEventListener('pointermove',e=>{const p=P.get(e.pointerId);if(!p)return;const k=keyAt(e.clientX,e.clientY);if(k!==p.k){off(p);if(k!=null)on(p,k,e.clientX,e.clientY)}});
+  const up=e=>{const p=P.get(e.pointerId);if(!p)return;off(p);P.delete(e.pointerId)};
   K.addEventListener('pointerup',up);K.addEventListener('pointercancel',up);
-  K.addEventListener('wheel',e=>{e.preventDefault();if(e.ctrlKey){const nk=clamp(S.kb.kw*(e.deltaY<0?1.1:.9),26,110),q=nk/S.kb.kw,cx=loc(e.clientX,e.clientY).x-lxOf(K);S.kb.kw=nk;kbLayout();kbScroll((K.scrollLeft+cx)*q-cx)}
-    else kbScroll(K.scrollLeft+(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY))},{passive:false});
-  /* trilho: arrastar rola o teclado */
+  K.addEventListener('wheel',e=>{e.preventDefault();kbScroll(K.scrollLeft+(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY))},{passive:false});
+  /* FAIXA PRETA acima das teclas: um dedo arrasta (rola o teclado); dois dedos afastando/aproximando dão zoom */
   const rx=e=>{const q=(loc(e.clientX,e.clientY).x-lxOf(R))/Math.max(1,R.offsetWidth);kbScroll(q*S.kb.tw-K.clientWidth/2)};
-  R.addEventListener('pointerdown',e=>{e.preventDefault();try{R.setPointerCapture(e.pointerId)}catch(x){}rx(e);R.onpointermove=rx});R.addEventListener('pointerup',()=>{R.onpointermove=null});R.addEventListener('pointercancel',()=>{R.onpointermove=null});
+  const RP=new Map();let rz=null,rlock=false;const rd=()=>{const a=[...RP.values()];return Math.abs(loc(a[0].x,a[0].y).x-loc(a[1].x,a[1].y).x)};
+  R.addEventListener('pointerdown',e=>{e.preventDefault();try{R.setPointerCapture(e.pointerId)}catch(x){}RP.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(RP.size===2)rz={d:Math.max(24,rd()),kw:S.kb.kw,sl:K.scrollLeft};else if(RP.size===1&&!rlock)rx(e)});
+  R.addEventListener('pointermove',e=>{const p=RP.get(e.pointerId);if(!p)return;p.x=e.clientX;p.y=e.clientY;
+    if(RP.size>=2&&rz){const cx=K.clientWidth/2,kw=clamp(rz.kw*rd()/rz.d,26,110),r=kw/rz.kw;S.kb.kw=kw;kbLayout();kbScroll((rz.sl+cx)*r-cx);return}
+    if(RP.size===1&&!rlock)rx(e)});
+  const rup=e=>{if(!RP.has(e.pointerId))return;RP.delete(e.pointerId);if(rz)rlock=true;if(RP.size<2)rz=null;if(!RP.size){rlock=false;prefSet('kw',String(Math.round(S.kb.kw)))}};
+  R.addEventListener('pointerup',rup);R.addEventListener('pointercancel',rup);
+  R.addEventListener('wheel',e=>{e.preventDefault();const cx=K.clientWidth/2,nk=clamp(S.kb.kw*(e.deltaY<0?1.1:.9),26,110),q=nk/S.kb.kw;S.kb.kw=nk;kbLayout();kbScroll((K.scrollLeft+cx)*q-cx)},{passive:false});
   $('#kbOm').onclick=()=>kbScroll(K.scrollLeft-7*S.kb.kw);$('#kbOp').onclick=()=>kbScroll(K.scrollLeft+7*S.kb.kw);
   $('#kbInst').onclick=()=>instPick(liveT());
   $('#kbRec').onclick=()=>{if(S.mrec){stopMrec();return}const t=liveT();if(!t){instPick(null);return}startMrec(t)};
@@ -5275,9 +5300,9 @@ function kbOpen(on){S.kb.open=on===undefined?!S.kb.open:!!on;prefSet('kb',S.kb.o
 
 
 /* ---------------- piano roll (editar as notas de um clipe MIDI) ---------------- */
-const PLO=24,PHI=108,PKW=44,PRH=22,GR=[[1,'1/4'],[.5,'1/8'],[.25,'1/16'],[.125,'1/32']];
+const PLO=24,PHI=108,PKW=44,PRH=26,GR=[[1,'1/4'],[.5,'1/8'],[.25,'1/16'],[.125,'1/32']];
 const prClip=()=>{const t=S.p&&S.pr&&S.p.tracks.find(x=>x.id===S.pr.tid),k=t&&(t.mc||[]).find(c=>c.id===S.pr.cid);return k?{t,k}:null};
-function prOpen(t,k){S.pr={tid:t.id,cid:k.id,rh:20,sel:null,er:false,vel:100};$('#stPr').hidden=false;prHead();prVel();prRender(true)}
+function prOpen(t,k){S.pr={tid:t.id,cid:k.id,rh:20,sel:null,er:false,vel:100,at:0};$('#stPr').hidden=false;prHead();prVel();prRender(true)}
 function prClose(){if(S.playing&&!S.mrec)pause();kbAllOff();S.pr=null;$('#stPr').hidden=true;if(S.p){render();panel();scheduleSave()}}
 function prHead(){const C=prClip();if(!C)return;$('#prT').textContent=String(C.t.name);const g=GR.find(x=>x[0]===S.prp.g)||GR[2];$('#prG').textContent='Grade '+g[1];$('#prEr').classList.toggle('on',S.pr.er);$('#prEr').textContent=S.pr.er?'Apagando':'Apagar'}
 function prFit(k){let e=0;k.n.forEach(n=>{e=Math.max(e,n[0]+n[1])});const bq=barQ();if(e>k.l+1e-6)k.l=r3(Math.ceil(e/bq-1e-6)*bq)}
@@ -5290,16 +5315,19 @@ function mkNote(k,n){const d=el('div','prn'),ppb=S.prp.ppb,rh=S.pr.rh,v=n[3]/127
   if(S.pr.sel===n)d.classList.add('sel');const rs=el('div','rs');d.append(rs);d.onclick=e=>e.stopPropagation();d.onpointerdown=e=>prNoteDown(e,k,n,d,e.target===rs);return d}
 function prRender(first){const C=prClip();if(!C){prClose();return}const k=C.k,rh=S.pr.rh,ppb=S.prp.ppb,bq=barQ(),W=Math.min(6000,Math.ceil((k.l+bq)*ppb)),H=(PHI-PLO+1)*rh,sc=$('#prsc'),ct=$('#prct'),sx=sc.scrollLeft,sy=sc.scrollTop;
   ct.innerHTML='';ct.style.width=(PKW+W)+'px';
-  const ru=el('div','prruler');ru.style.width=(PKW+W)+'px';
+  const ru=el('div','prruler');ru.style.width=(PKW+W)+'px';ru.title='Toque na régua para escolher onde começa a tocar';
+  ru.onclick=e=>{const sc=$('#prsc'),x=loc(e.clientX,e.clientY).x-lxOf(sc)+sc.scrollLeft-PKW,g=S.prp.g;if(x<0)return;S.pr.at=clamp(r3(Math.round(x/S.prp.ppb/g)*g),0,k.l);prMark();if(S.playing){S.pos=mS(k)+q2s(S.pr.at);play()}};
+  const mk=el('div','prmk');mk.id='prmk';ru.append(mk);
   for(let a=Math.ceil(k.b/bq-1e-6)*bq;a<=k.b+k.l+bq+1e-6;a+=bq){const s=el('span');s.style.left=(PKW+(a-k.b)*ppb)+'px';s.textContent=String(Math.round(a/bq)+1);ru.append(s)}
   const body=el('div','prbody'),keys=el('div','prkeys'),gr=el('div','prgrid');gr.style.cssText='width:'+W+'px;height:'+H+'px';
   for(let n=PHI;n>=PLO;n--){const r=el('div','prkr'+(BLK.includes(n%12)?' b':''));r.style.height=rh+'px';r.dataset.k=n;r.textContent=nn(n,BLK.includes(n%12));keys.append(r)}
   keys.onclick=e=>{const r=e.target.closest('.prkr');if(r)kbPreview(+r.dataset.k,100,350)};
   const cv=el('canvas');cv.width=W;cv.height=H;prGrid(cv,k,W,H);gr.append(cv);k.n.forEach(n=>gr.append(mkNote(k,n)));
-  const ph=el('div','prph');ph.id='prph';gr.append(ph);gr.onclick=e=>prTap(e);
+  const st=el('div','prst');st.id='prst';gr.append(st);const ph=el('div','prph');ph.id='prph';gr.append(ph);gr.onclick=e=>prTap(e);
   body.append(keys,gr);ct.append(ru,body);
   if(first){let m=60;if(k.n.length){const a=k.n.map(n=>n[2]).sort((x,y)=>x-y);m=a[a.length>>1]}sc.scrollLeft=0;sc.scrollTop=Math.max(0,(PHI-m)*rh-sc.clientHeight/2+PRH)}else{sc.scrollLeft=sx;sc.scrollTop=sy}
-  prPh()}
+  prMark();prPh()}
+function prMark(){const m=$('#prmk'),s=$('#prst');if(!m||!S.pr)return;const x=(S.pr.at||0)*S.prp.ppb;m.style.left=(PKW+x)+'px';s.style.left=x+'px'}
 function prPh(){const ph=$('#prph');if(!ph||!S.pr)return;const C=prClip();if(!C)return;const q=s2q(S.pos-mS(C.k));ph.style.display=q<0?'none':'block';ph.style.left=q*S.prp.ppb+'px'}
 function prVel(){const h=$('#prVel');h.innerHTML='';const n=S.pr.sel,v=n?n[3]:S.pr.vel;
   h.append(sl(n?'Velocidade da nota':'Velocidade nova',1,127,1,v,x=>String(x),(x,e)=>{if(S.pr.sel)S.pr.sel[3]=x;else S.pr.vel=x;if(e){scheduleSave();prRender()}},100))}
@@ -5320,7 +5348,7 @@ function prNoteDown(e,k,n,d,rsz){e.preventDefault();e.stopPropagation();
 function prInit(){pan($('#prsc'),'xy');
   $('#prX').innerHTML=ic('check');$('#prPlay').innerHTML=ic('play');$('#prDel').innerHTML=ic('trash');$('#prZo').innerHTML=ic('minus');$('#prZi').innerHTML=ic('plus');
   $('#prX').onclick=prClose;
-  $('#prPlay').onclick=()=>{const C=prClip();if(!C)return;if(S.playing){pause();return}S.pos=mS(C.k);play()};
+  $('#prPlay').onclick=()=>{const C=prClip();if(!C)return;if(S.playing){pause();return}S.pos=mS(C.k)+q2s(S.pr.at||0);play()};
   $('#prG').onclick=()=>{const i=GR.findIndex(x=>x[0]===S.prp.g);S.prp.g=GR[(i+1)%GR.length][0];prefSet('prg',String(S.prp.g));prHead();prRender()};
   $('#prEr').onclick=()=>{S.pr.er=!S.pr.er;prHead()};
   $('#prQ').onclick=()=>{const C=prClip();if(!C)return;const g=S.prp.g;mut(()=>{C.k.n.forEach(n=>{n[0]=r3(Math.max(0,Math.round(n[0]/g)*g));n[1]=r3(Math.max(g,Math.round(n[1]/g)*g))});prFit(C.k)});scheduleSave();prRender();restart()};

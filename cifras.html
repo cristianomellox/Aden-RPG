@@ -400,11 +400,6 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .stshc{background:#111;border:1px solid var(--gold);border-radius:18px;width:min(94%,520px);max-height:94%;padding:16px;display:flex;flex-direction:column;gap:12px}.sth{font:800 1.05rem system-ui;color:var(--gold)}
 .btn.stbig{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px}.stbig svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 /* ===== DAW: teclado virtual, piano roll, colaboração ===== */
-#sted.wide:not([hidden]){grid-template-rows:auto auto auto minmax(0,1fr) auto}
-#sted.wide #stpn{grid-row:1/6}
-#sted.wide #stkb{grid-column:1;grid-row:5}
-#sted.short .stwarn{display:none}
-#sted.kbo:not(.wide) #stpn{max-height:28%}
 #stkb{flex:none;background:#0b0b0b;border-top:1px solid var(--gold);position:relative;touch-action:none;padding-bottom:env(safe-area-inset-bottom,0px)}
 #stkb[hidden]{display:none}
 .kbbar{display:flex;align-items:center;gap:5px;padding:4px 6px;overflow:hidden}
@@ -445,6 +440,32 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .prph{position:absolute;top:0;bottom:0;width:2px;background:#ff5252;z-index:4;pointer-events:none;display:none}
 .stc.mc small{z-index:1}
 #stCol.on{background:var(--gold);color:#000}
+/* ===== layout compacto (estilo FL Studio Mobile): muito espaço para as camadas, transporte fino e teclado baixo ===== */
+#sted .stwarn{display:none}
+#sted.wide:not([hidden]){grid-template-columns:minmax(0,1fr) 250px;grid-template-rows:auto minmax(0,1fr) auto auto}
+#sted.wide.nopn:not([hidden]){grid-template-columns:minmax(0,1fr)}
+#sted.wide .sthd{grid-column:1;grid-row:1}#sted.wide #stsc{grid-column:1;grid-row:2}#sted.wide .sttr{grid-column:1;grid-row:3}#sted.wide #stkb{grid-column:1;grid-row:4}#sted.wide #stpn{grid-column:2;grid-row:1/5}
+#sted.kbo:not(.wide) #stpn{max-height:26%}
+#sted .sthd{gap:4px;padding:3px 8px}
+#sted .sthd .ib,#sted .sthd .stb{width:32px;min-width:32px;height:32px;border-radius:9px}
+#sted .stb svg,#sted .sthd .ib svg{width:18px;height:18px}
+#stName{font-size:.9rem;padding:3px 4px}
+#sted .stcd{padding:4px 7px;font-size:.64rem}
+#stSv{font:600 .58rem system-ui;color:#e8cf7a;white-space:nowrap;opacity:.85}
+#sted .sttr{flex-wrap:nowrap;overflow:hidden;gap:4px;padding:3px 6px;border-top:1px solid var(--ln);border-bottom:0;background:#0b0b0b}
+#sted .sttr .stb{min-width:32px;height:32px;border-radius:9px;font-size:.7rem}
+#sted .sttr .stb.wd{padding:0 10px}
+#sted .sttm{font-size:.9rem;min-width:64px}#sted .stlv{width:28px}
+#sted.kbo #stMt{display:none}
+#sted .strow{height:46px}#sted .stc{top:3px;height:40px}
+#sted .strh{padding:3px 6px;gap:2px}#sted .strh .ms button{height:22px;font-size:.62rem}
+#sted .strul{height:22px}
+#sted .kbbar{padding:3px 6px;gap:4px}#sted .kbbar .stb{height:30px;min-width:30px}#sted .kbi{height:30px}
+#kbRail{height:8px;margin:0 6px 3px;border-radius:4px}#kbRail i{border-radius:4px}
+.kw small{bottom:3px;font-size:.55rem}
+.kbk small{position:absolute;bottom:2px;left:0;right:0;text-align:center;color:#c9c9c9;font:700 .45rem system-ui;pointer-events:none;white-space:nowrap;overflow:hidden}
+.prkr{font-size:.5rem;padding:5px 2px}
+
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","@tweenjs/tween.js":"https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.3/dist/tween.esm.js"}}</script>
 <script type="module" src="/cifras_skybox.js"></script>
@@ -1704,16 +1725,16 @@ const F=window.CifrasForge={
     <div id="stlist"></div>
   </div>
   <div id="sted" hidden>
-    <div class="sthd"><button class="ib" id="stBack" type="button" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><input id="stName" maxlength="40" aria-label="Nome do projeto"><span class="stcd" id="stCd"></span><button class="stb" id="stCol" type="button" aria-label="Colaboração"></button><button class="stb" id="stRot" type="button" aria-label="Girar tela"></button><button class="stb" id="stExp" type="button" aria-label="Exportar"></button></div>
-    <div class="stwarn"><span id="stWm"></span><span id="stSv"></span></div>
-    <div class="sttr"><button class="stb" id="stRw" type="button" aria-label="Início"></button><button class="stb" id="stPlay" type="button" aria-label="Tocar/Pausar"></button><button class="stb rec" id="stRec" type="button" aria-label="Gravar"></button><div class="sttm" id="stTm">0:00.0</div><div class="stlv" id="stLv"><i></i></div><button class="stb" id="stUn" type="button" aria-label="Desfazer"></button><button class="stb" id="stRe" type="button" aria-label="Refazer"></button><button class="stb" id="stMt" type="button" aria-label="Metrônomo">♩ 100</button><button class="stb" id="stZo" type="button" aria-label="Diminuir zoom"></button><button class="stb" id="stZi" type="button" aria-label="Aumentar zoom"></button><button class="stb" id="stMg" type="button" aria-label="Ímã (alinhar)"></button><button class="stb wd" id="stAddB" type="button"></button></div>
+    <div class="sthd"><button class="ib" id="stBack" type="button" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><input id="stName" maxlength="40" aria-label="Nome do projeto"><span class="stcd" id="stCd"></span><span id="stSv"></span><button class="stb" id="stCol" type="button" aria-label="Colaboração"></button><button class="stb" id="stRot" type="button" aria-label="Girar tela"></button><button class="stb" id="stExp" type="button" aria-label="Exportar"></button></div>
+    <div class="stwarn"><span id="stWm"></span></div>
     <div id="stsc"><div id="stct"></div></div>
+    <div class="sttr"><button class="stb" id="stRw" type="button" aria-label="Início"></button><button class="stb" id="stPlay" type="button" aria-label="Tocar/Pausar"></button><button class="stb rec" id="stRec" type="button" aria-label="Gravar"></button><div class="sttm" id="stTm">0:00.0</div><div class="stlv" id="stLv"><i></i></div><button class="stb" id="stUn" type="button" aria-label="Desfazer"></button><button class="stb" id="stRe" type="button" aria-label="Refazer"></button><button class="stb" id="stMt" type="button" aria-label="Metrônomo">♩ 100</button><button class="stb" id="stZo" type="button" aria-label="Diminuir zoom"></button><button class="stb" id="stZi" type="button" aria-label="Aumentar zoom"></button><button class="stb" id="stMg" type="button" aria-label="Ímã (alinhar)"></button><button class="stb wd" id="stAddB" type="button"></button></div>
     <div id="stpn"></div>
     <button class="pnt v" id="stPnT" type="button"></button>
     <div id="stkb" hidden>
       <div class="kbbar">
         <button class="kbi" id="kbInst" type="button" aria-label="Escolher instrumento"><span id="kbIn">Escolher instrumento</span></button>
-        <button class="stb" id="kbOm" type="button" aria-label="Oitava abaixo">◂</button><span class="kboc" id="kbOc">C3–C5</span><button class="stb" id="kbOp" type="button" aria-label="Oitava acima">▸</button>
+        <button class="stb" id="kbOm" type="button" aria-label="Oitava abaixo">◂</button><button class="stb" id="kbNn" type="button" aria-label="Nomes das notas: letras ou Dó Ré Mi">C</button><span class="kboc" id="kbOc">C3–C5</span><button class="stb" id="kbOp" type="button" aria-label="Oitava acima">▸</button>
         <button class="stb" id="kbVs" type="button" aria-label="Velocidade pelo toque">Vel</button>
         <button class="stb" id="kbQ" type="button" aria-label="Quantizar ao gravar">Q off</button>
         <button class="stb" id="kbMt" type="button" aria-label="Metrônomo ligado/desligado">♩</button>
@@ -4568,7 +4589,7 @@ if(typeof module!=='undefined')module.exports=root.DawEngine;
    (cifras_studio) e as camadas comprimidas em e/<projeto>/ — tudo some em 7 dias. ===== */
 (function(){
 'use strict';
-const AC=window.AudioContext||window.webkitAudioContext,LAT_K='cifras.st.lat',DAY=864e5,WEEK=7*DAY,CAP=1500,MAXLAY=8,MAXSEC=480,HW=86,RH=58,CN='cifras-studio-v1';
+const AC=window.AudioContext||window.webkitAudioContext,LAT_K='cifras.st.lat',DAY=864e5,WEEK=7*DAY,CAP=1500,MAXLAY=8,MAXSEC=480,HW=86,RH=46,CN='cifras-studio-v1';
 const DE=window.DawEngine;
 const COL=['#d4af37','#4fc3f7','#81c784','#ef5350','#ba68c8','#ffb74d','#4db6ac','#f06292'];
 const KIND={voz:['Voz','voz'],gtr:['Guitarra','gtr_crunch'],baixo:['Baixo','baixo'],violao:['Violão','violao'],outro:['Outro','limpo']};
@@ -4576,7 +4597,7 @@ const FXD={eqL:0,eqM:0,eqH:0,comp:0,drive:0,cab:1,cho:0,dly:0,rev:0};
 const PRE={limpo:['Limpo',{}],voz:['Voz',{eqL:-2,eqH:3,comp:.45,rev:.22}],voz_amb:['Voz ambiente',{eqH:2,comp:.4,cho:.15,dly:.18,rev:.45}],violao:['Violão',{eqL:-1,eqH:2,comp:.3,cho:.15,rev:.2}],gtr_clean:['Guitarra limpa',{eqM:1,comp:.25,cho:.4,rev:.25}],gtr_crunch:['Guitarra crunch',{drive:.45,eqM:2,comp:.25,rev:.15}],gtr_lead:['Guitarra solo',{drive:.8,eqM:3,dly:.3,rev:.3}],baixo:['Baixo',{eqL:3,eqH:-2,comp:.6,drive:.1}],baixo_drv:['Baixo drive',{eqL:2,comp:.6,drive:.4}]};
 const IC={play:'<path d="M7 4l13 8-13 8z" fill="currentColor"/>',pause:'<path d="M8 4v16M16 4v16"/>',rec:'<circle cx="12" cy="12" r="6" fill="currentColor"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/>',rew:'<path d="M6 5v14M19 5L9 12l10 7z"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',exp:'<path d="M12 3v12M7 10l5 5 5-5M5 20h14"/>',mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>',file:'<path d="M6 3h8l5 5v13H6zM14 3v5h5"/>',mag:'<path d="M6 4v8a6 6 0 0012 0V4M6 8h4M14 8h4"/>',undo:'<path d="M9 7L4 12l5 5M4 12h10a6 6 0 010 12" transform="translate(0 -4)"/>',redo:'<path d="M15 7l5 5-5 5M20 12H10a6 6 0 000 12" transform="translate(0 -4)"/>',rot:'<path d="M20 12a8 8 0 11-3-6.2M20 4v5h-5"/>',trash:'<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',keys:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M13 5v14M18 5v14"/>',users:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0112 0M16 5a3 3 0 010 6M18 14a5 5 0 013 6"/>',check:'<path d="M5 12l5 5 9-10"/>'};
 const ic=n=>'<svg viewBox="0 0 24 24">'+IC[n]+'</svg>';
-const S={rot:'L',k:'N',h:{u:[],r:[]},bpm:100,mt:false,ci:true,gc:false,view:'list',p:null,bufs:new Map(),pk:new Map(),sel:{t:null,c:null},pps:60,snap:true,pos:0,playing:false,tab:'mix',col:false,ctx:null,created:0,dirty:false,list:[],pubList:[],run:null,rec:null,sig:[4,4],clv:.8,hp:'',quiet:false,ins:new Map(),insK:new Map(),sf:new Map(),rig:new Map(),wk:false,mrec:null,pr:null,prp:{ppb:64,g:.25,len:.25},kb:{open:false,kw:46,q:0,vs:0,el:{},dn:{},tw:0,inited:false}};
+const S={rot:'L',k:'N',h:{u:[],r:[]},bpm:100,mt:false,ci:true,gc:false,view:'list',p:null,bufs:new Map(),pk:new Map(),sel:{t:null,c:null},pps:60,snap:true,pos:0,playing:false,tab:'mix',col:false,ctx:null,created:0,dirty:false,list:[],pubList:[],run:null,rec:null,sig:[4,4],clv:.8,hp:'',quiet:false,ins:new Map(),insK:new Map(),sf:new Map(),rig:new Map(),wk:false,mrec:null,pr:null,prp:{ppb:64,g:.25,len:.25},kb:{open:false,kw:46,q:0,vs:0,nn:0,el:{},dn:{},tw:0,inited:false}};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const fmt=s=>{s=Math.max(0,s);const m=Math.floor(s/60);return m+':'+String(Math.floor(s%60)).padStart(2,'0')+'.'+Math.floor(s*10%10)};
 const fmtS=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
@@ -4645,7 +4666,7 @@ function metroRun(c,w0,from,cnt){stopMetro();const sp=spb(),M={};S.met=M;
   const pump=()=>{if(S.met!==M)return;while(w0+(b*sp-from)<c.currentTime+.2){click(c,w0+(b*sp-from),accent(b));b++}};pump();M.iv=setInterval(pump,40)}
 const mtLbl=()=>{const t=S.bpm+' · '+S.sig[0]+'/'+S.sig[1],b=$('#stMt');if(b){b.textContent='♩ '+t;b.classList.toggle('on',S.mt)}const k=$('#kbBpm');if(k)k.textContent=t;const m=$('#kbMt');if(m)m.classList.toggle('on',S.mt)};
 const prefSet=(k,v)=>{try{localStorage.setItem('cifras.st.'+k,v)}catch(e){}};
-function toggleMt(){S.mt=!S.mt;prefSet('mt',S.mt?'1':'0');mtLbl();restart()}
+function toggleMt(){S.mt=!S.mt;prefSet('mt',S.mt?'1':'0');mtLbl();if(S.mt&&!S.playing){const c=ensure();click(c,c.currentTime+.03,2)}restart()}
 function metroSheet(){let taps=[];
   const bp=sl('Andamento (BPM)',40,240,1,S.bpm,v=>v+' bpm',(v,e)=>{S.bpm=v;mtLbl();if(e){S.p.bpm=v;scheduleSave();render();restart()}},100);
   const sg=el('div','stchips'),dsg=()=>{sg.innerHTML='';SIGS.forEach(s=>sg.append(btn(s[0]+'/'+s[1],'stchip'+(s[0]===S.sig[0]&&s[1]===S.sig[1]?' on':''),()=>{S.sig=[s[0],s[1]];S.p.sig=S.sig;mtLbl();scheduleSave();render();dsg();restart()})))};dsg();
@@ -4673,7 +4694,7 @@ const dec=(c,ab)=>new Promise((ok,no)=>{const f=()=>no(new Error('decode'));try{
 function ir(c,sec){const n=Math.floor(c.sampleRate*sec),b=c.createBuffer(2,n,c.sampleRate);
   for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let y=0;for(let i=0;i<n;i++){const x=(Math.random()*2-1)*Math.pow(1-i/n,2.6);y+=.55*(x-y);d[i]=y}}return b}
 const biq=(c,t,f,q)=>{const b=c.createBiquadFilter();b.type=t;b.frequency.value=f;if(q)b.Q.value=q;return b};
-const sv=(p,v,live)=>live?p.setTargetAtTime(v,p.context.currentTime,.015):(p.value=v);
+const sv=(p,v,live)=>live&&S.ctx?p.setTargetAtTime(v,S.ctx.currentTime,.015):(p.value=v);
 function curve(k){const n=2048,a=new Float32Array(n),t=Math.tanh(k);for(let i=0;i<n;i++){const x=i/(n-1)*2-1;a[i]=Math.tanh(k*x)/t}return a}
 /* cadeia de um canal: EQ 3 bandas > compressor > amp/distorção (+caixa) > chorus > delay > (send reverb) > pan > volume */
 function mkChain(c,rev,dest){
@@ -4992,7 +5013,7 @@ const mbuf=new Uint8Array(1024);
 function meter(){const an=S.rec&&S.rec.an?S.rec.an:S.an;let pk=0;if(an&&(S.playing||S.rec)){an.getByteTimeDomainData(mbuf);for(let i=0;i<mbuf.length;i++){const v=Math.abs(mbuf[i]-128)/128;if(v>pk)pk=v}}$('#stLv').firstElementChild.style.width=Math.min(100,pk*120)+'%'}
 function loop(){cancelAnimationFrame(S.raf);const f=()=>{if(!S.playing&&!S.rec){meter();return}
     S.pos=curPos();updPh();follow();meter();prPh();if(S.rec){$('#stTm').textContent=fmt(S.pos);if(Date.now()-S.rec.t0>MAXSEC*1000){stopRec()}}
-    else if(!S.mrec&&S.pos>=endOf()+.1)pause(true);S.raf=requestAnimationFrame(f)};S.raf=requestAnimationFrame(f)}
+    else if(!S.mrec&&!S.mt&&S.pos>=endOf()+.1)pause(true);if(S.run&&S.ctx.currentTime<S.run.t0-.001)$('#stTm').textContent='▸ '+Math.max(1,Math.ceil((S.run.t0-S.ctx.currentTime)/spb()));S.raf=requestAnimationFrame(f)};S.raf=requestAnimationFrame(f)}
 function zoom(v,a){const sc=$('#stsc');if(a==null)a=sc.clientWidth/2;const t=(sc.scrollLeft+a-HW)/S.pps;S.pps=clamp(v,8,160);
   cancelAnimationFrame(S.zr);S.zr=requestAnimationFrame(()=>{render();sc.scrollLeft=Math.max(0,t*S.pps+HW-a)})}
 
@@ -5104,7 +5125,7 @@ function presetSheet(sf,fname,pick){
   q.oninput=draw;draw();const info=el('div','sub');info.style.margin='0';info.textContent=sf.presets.length+' sons em '+fname;
   sheet('Escolha o som',info,q,wrap)}
 function sampleSheet(f,go){let root=60,lp=0;
-  const sr=sl('Nota original',24,96,1,root,v=>DE.midiName(v),v=>{root=v},60),ch=el('div','stchips'),dr=()=>{ch.innerHTML='';ch.append(btn('Sustentar enquanto a tecla estiver pressionada: '+(lp?'sim':'não'),'stchip'+(lp?' on':''),()=>{lp=lp?0:1;dr()}))};dr();
+  const sr=sl('Nota original',24,96,1,root,v=>nn(v),v=>{root=v},60),ch=el('div','stchips'),dr=()=>{ch.innerHTML='';ch.append(btn('Sustentar enquanto a tecla estiver pressionada: '+(lp?'sim':'não'),'stchip'+(lp?' on':''),()=>{lp=lp?0:1;dr()}))};dr();
   sheet('Instrumento a partir de um áudio',scrollBox(sub('Diga em que nota o áudio foi gravado (ex.: C4 = dó central). O teclado toca as outras notas mudando a velocidade do áudio.'),sr,ch,btn('Usar','btn',()=>{closeSheet();go(root,lp)})))}
 
 const extOf=(b,n)=>{const t=(b.type||'').toLowerCase();if(/mp4|m4a/.test(t))return'm4a';if(/mpeg|mp3/.test(t))return'mp3';if(/webm/.test(t)&&!/video/.test(t))return'webm';if(/ogg/.test(t))return'ogg';const m=(n||'').match(/\.(mp3|m4a|ogg|webm)$/i);return m?m[1].toLowerCase():null};
@@ -5149,7 +5170,7 @@ function panel(){const P=$('#stpn');if(!S.p){P.innerHTML='';return}const keep=P.
     if(d.k==='sf'&&d.s)r.append(btn('Trocar som do SoundFont','stchip',async()=>{const bz=busy('Lendo o SoundFont…');let sf;try{sf=await getSf(d.s)}catch(e){bz.close();return fail(e)}bz.close();
       presetSheet(sf,String(d.n0||d.n||'SoundFont'),pi=>{const p=sf.presets.find(x=>x.i===pi);useInst({...d,pi,pn:p.n.slice(0,24)},t)})}));
     B.append(r);
-    if(d.k==='smp')B.append(sl('Nota original',24,96,1,d.root==null?60:d.root,v=>DE.midiName(v),(v,e)=>{if(e){mut(()=>{t.ins={...t.ins,root:v}});scheduleSave();syncInsts()}},60));
+    if(d.k==='smp')B.append(sl('Nota original',24,96,1,d.root==null?60:d.root,v=>nn(v),(v,e)=>{if(e){mut(()=>{t.ins={...t.ins,root:v}});scheduleSave();syncInsts()}},60));
     const h=el('p','sub');h.style.cssText='margin:6px 0 0;font-size:.74rem';h.textContent='O som passa pelos mesmos efeitos da aba Efeitos. Toque duas vezes na linha da camada para criar um clipe e escrever notas no piano roll, ou use o teclado e o botão de gravar.';B.append(h)}
   else if(S.tab==='fx'){
     t.fx=t.fx||{};const f={...FXD,...t.fx},pc=el('div','stchips');
@@ -5181,13 +5202,16 @@ const selC=()=>{const t=selT();return t&&(t.clips.find(k=>k.id===S.sel.c)||(t.mc
 
 /* ---------------- teclado virtual (embaixo, retrátil; dois dedos esticam as teclas) ---------------- */
 const KLO=24,KHI=108,BLK=[1,3,6,8,10],QL=['Q off','Q 1/8','Q 1/16','Q 1/32'];
+const SOL=['Dó','Dó♯','Ré','Ré♯','Mi','Fá','Fá♯','Sol','Sol♯','Lá','Lá♯','Si'],LET=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const nn=(k,short)=>(S.kb.nn?SOL:LET)[k%12]+(short?'':Math.floor(k/12)-1);
+function kbLabels(){for(let k=KLO;k<=KHI;k++){const d=S.kb.el[k];if(d&&d.firstChild)d.firstChild.textContent=nn(k,BLK.includes(k%12))}}
 const lyOf=n=>{let y=0;while(n&&n.id!=='sted'){y+=n.offsetTop;n=n.offsetParent}return y};
 const liveT=()=>{const t=selT();return t&&t.ty==='i'?t:null};
 const wIdx=k=>{let n=0;for(let i=KLO;i<k;i++)if(!BLK.includes(i%12))n++;return n};
 function kbBuild(){const I=$('#kbIn2');if(!I||I.firstChild)return;S.kb.el={};const bl=[];
   for(let k=KLO;k<=KHI;k++){const d=el('div',BLK.includes(k%12)?'kbk':'kw');d.dataset.k=k;S.kb.el[k]=d;
-    if(k%12===0){const s=el('small');s.textContent='C'+(Math.floor(k/12)-1);d.append(s)}(d.className==='kbk'?bl:{push:x=>I.append(x)}).push(d)}
-  bl.forEach(b=>I.append(b));kbLayout()}
+    d.append(el('small'));(d.className==='kbk'?bl:{push:x=>I.append(x)}).push(d)}
+  bl.forEach(b=>I.append(b));kbLabels();kbLayout()}
 function kbLayout(){const kw=S.kb.kw;let wi=0;for(let k=KLO;k<=KHI;k++){const d=S.kb.el[k];if(!d)continue;
   if(BLK.includes(k%12)){d.style.left=(wi*kw-kw*.3)+'px';d.style.width=kw*.6+'px'}else{d.style.left=wi*kw+'px';d.style.width=kw+'px';wi++}}
   S.kb.tw=wi*kw;$('#kbIn2').style.width=S.kb.tw+'px';kbRail()}
@@ -5196,7 +5220,7 @@ function kbRail(){const K=$('#kbKeys'),R=$('#kbRail'),tw=S.kb.tw||1;if(!K||!R)re
   i.style.left=(K.scrollLeft/tw*100)+'%';i.style.width=Math.min(100,K.clientWidth/tw*100)+'%';
   const w0=Math.floor(K.scrollLeft/S.kb.kw),w1=Math.floor((K.scrollLeft+K.clientWidth)/S.kb.kw);let a=null,b=null,n=0;
   for(let k=KLO;k<=KHI;k++)if(!BLK.includes(k%12)){if(n===w0)a=k;if(n===w1){b=k;break}n++}
-  $('#kbOc').textContent=DE.midiName(a==null?KLO:a)+'–'+DE.midiName(b==null?KHI:b)}
+  $('#kbOc').textContent=nn(a==null?KLO:a)+'–'+nn(b==null?KHI:b)}
 let kbHintT=0;
 function kbHint(msg){const t=Date.now();if(t-kbHintT<2500)return;kbHintT=t;if(msg){const l=$('#kbIn');l.textContent=msg;setTimeout(kbUpdate,1500);return}instPick(null)}
 function kbDown(k,v){const t=liveT();S.kb.el[k]&&S.kb.el[k].classList.add('on');
@@ -5234,15 +5258,16 @@ function kbInit(){
   $('#kbRec').onclick=()=>{if(S.mrec){stopMrec();return}const t=liveT();if(!t){instPick(null);return}startMrec(t)};
   $('#kbMt').onclick=toggleMt;$('#kbBpm').onclick=metroSheet;
   $('#kbQ').onclick=()=>{S.kb.q=(S.kb.q+1)%4;prefSet('kq',String(S.kb.q));kbUpdate()};
+  $('#kbNn').onclick=()=>{S.kb.nn=S.kb.nn?0:1;prefSet('kn',String(S.kb.nn));kbLabels();kbRail();kbUpdate();if(S.pr)prRender()};
   $('#kbVs').onclick=()=>{S.kb.vs=S.kb.vs?0:1;prefSet('kv',String(S.kb.vs));kbUpdate()};
   $('#stKbT').onclick=()=>kbOpen();
   addEventListener('blur',kbAllOff)}
 function kbUpdate(){const t=liveT();$('#kbIn').textContent=t?String(t.ins&&(t.ins.pn||t.ins.n)||'Instrumento'):'Escolher instrumento';
-  $('#kbInst').classList.toggle('warn',!t);$('#kbRec').classList.toggle('on',!!S.mrec);$('#kbQ').textContent=QL[S.kb.q];$('#kbQ').classList.toggle('on',S.kb.q>0);$('#kbVs').classList.toggle('on',!!S.kb.vs);mtLbl()}
-function kbSize(){const r=$('#sted'),h=clamp(Math.round(r.offsetHeight*.27),76,150);$('#stkb').style.setProperty('--kbh',h+'px');r.classList.toggle('short',r.offsetHeight<430)}
+  $('#kbInst').classList.toggle('warn',!t);$('#kbRec').classList.toggle('on',!!S.mrec);$('#kbNn').textContent=S.kb.nn?'Dó':'C';$('#kbQ').textContent=QL[S.kb.q];$('#kbQ').classList.toggle('on',S.kb.q>0);$('#kbVs').classList.toggle('on',!!S.kb.vs);mtLbl()}
+function kbSize(){const r=$('#sted'),h=clamp(Math.round(r.offsetHeight*.17),58,96);$('#stkb').style.setProperty('--kbh',h+'px');r.classList.toggle('short',r.offsetHeight<430)}
 function kbBtn(){const b=$('#stKbT'),r=$('#sted'),P=$('#stpn');if(!b)return;const w=r.classList.contains('wide')&&!S.pnHide?P.offsetWidth:0;
   b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="'+(S.kb.open?'6 9 12 15 18 9':'18 15 12 9 6 15')+'"/></svg>';b.title=S.kb.open?'Esconder o teclado':'Mostrar o teclado';b.setAttribute('aria-label',b.title);b.setAttribute('aria-expanded',String(S.kb.open));
-  b.style.left=((r.offsetWidth-w)/2)+'px';b.style.bottom=(S.kb.open?$('#stkb').offsetHeight:0)+'px'}
+  b.style.left=((r.offsetWidth-w)/2)+'px';b.style.bottom=((S.kb.open?$('#stkb').offsetHeight:0)+($('#sted .sttr')?$('#sted .sttr').offsetHeight:0))+'px'}
 function kbOpen(on){S.kb.open=on===undefined?!S.kb.open:!!on;prefSet('kb',S.kb.open?'1':'0');if(!S.kb.open)kbAllOff();
   $('#stkb').hidden=!S.kb.open;$('#sted').classList.toggle('kbo',S.kb.open);kbSize();
   if(S.kb.open){kbUpdate();if(!S.kb.inited){S.kb.inited=1;kbScroll(wIdx(48)*S.kb.kw)}else kbRail()}
@@ -5268,7 +5293,7 @@ function prRender(first){const C=prClip();if(!C){prClose();return}const k=C.k,rh
   const ru=el('div','prruler');ru.style.width=(PKW+W)+'px';
   for(let a=Math.ceil(k.b/bq-1e-6)*bq;a<=k.b+k.l+bq+1e-6;a+=bq){const s=el('span');s.style.left=(PKW+(a-k.b)*ppb)+'px';s.textContent=String(Math.round(a/bq)+1);ru.append(s)}
   const body=el('div','prbody'),keys=el('div','prkeys'),gr=el('div','prgrid');gr.style.cssText='width:'+W+'px;height:'+H+'px';
-  for(let n=PHI;n>=PLO;n--){const r=el('div','prkr'+(BLK.includes(n%12)?' b':''));r.style.height=rh+'px';r.dataset.k=n;if(n%12===0)r.textContent=DE.midiName(n);keys.append(r)}
+  for(let n=PHI;n>=PLO;n--){const r=el('div','prkr'+(BLK.includes(n%12)?' b':''));r.style.height=rh+'px';r.dataset.k=n;r.textContent=nn(n,BLK.includes(n%12));keys.append(r)}
   keys.onclick=e=>{const r=e.target.closest('.prkr');if(r)kbPreview(+r.dataset.k,100,350)};
   const cv=el('canvas');cv.width=W;cv.height=H;prGrid(cv,k,W,H);gr.append(cv);k.n.forEach(n=>gr.append(mkNote(k,n)));
   const ph=el('div','prph');ph.id='prph';gr.append(ph);gr.onclick=e=>prTap(e);
@@ -5322,7 +5347,7 @@ function exportSheet(){if(S.rec)return;if(!S.p.tracks.some(t=>t.clips.length||(t
 
 /* ---------------- ligações ---------------- */
 function init(){
-  try{S.mt=localStorage.getItem('cifras.st.mt')==='1';S.ci=localStorage.getItem('cifras.st.ci')!=='0';S.pnHide=localStorage.getItem('cifras.st.pn')==='1';S.hp=localStorage.getItem('cifras.st.hp')||'';S.clv=clamp(+localStorage.getItem('cifras.st.clv')||.8,.1,1);S.kb.open=localStorage.getItem('cifras.st.kb')==='1';S.kb.kw=clamp(+localStorage.getItem('cifras.st.kw')||46,26,110);S.kb.q=clamp(+localStorage.getItem('cifras.st.kq')||0,0,3);S.kb.vs=localStorage.getItem('cifras.st.kv')==='1'?1:0;S.prp.g=[1,.5,.25,.125].includes(+localStorage.getItem('cifras.st.prg'))?+localStorage.getItem('cifras.st.prg'):.25}catch(e){}
+  try{S.mt=localStorage.getItem('cifras.st.mt')==='1';S.ci=localStorage.getItem('cifras.st.ci')!=='0';S.pnHide=(v=>v===null?Math.max(innerWidth,innerHeight)<1100:v==='1')(localStorage.getItem('cifras.st.pn'));S.kb.nn=localStorage.getItem('cifras.st.kn')==='1'?1:0;S.hp=localStorage.getItem('cifras.st.hp')||'';S.clv=clamp(+localStorage.getItem('cifras.st.clv')||.8,.1,1);S.kb.open=localStorage.getItem('cifras.st.kb')==='1';S.kb.kw=clamp(+localStorage.getItem('cifras.st.kw')||46,26,110);S.kb.q=clamp(+localStorage.getItem('cifras.st.kq')||0,0,3);S.kb.vs=localStorage.getItem('cifras.st.kv')==='1'?1:0;S.prp.g=[1,.5,.25,.125].includes(+localStorage.getItem('cifras.st.prg'))?+localStorage.getItem('cifras.st.prg'):.25}catch(e){}
   $('#stRw').innerHTML=ic('rew');$('#stRec').innerHTML=ic('rec');$('#stZo').innerHTML=ic('minus');$('#stZi').innerHTML=ic('plus');$('#stMg').innerHTML=ic('mag');$('#stExp').innerHTML=ic('exp');$('#stAddB').innerHTML=ic('plus')+'<span>Camada</span>';
   $('#stCol').innerHTML=ic('users');$('#stCol').onclick=()=>{if(S.p)colSheet()};kbInit();prInit();$('#stUn').innerHTML=ic('undo');$('#stRe').innerHTML=ic('redo');$('#stRot').innerHTML=ic('rot');
   $('#stBack').onclick=()=>closeEd();$('#stNew').onclick=newProject;

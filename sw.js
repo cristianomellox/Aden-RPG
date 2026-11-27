@@ -1,12 +1,12 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v69'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v70'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 // Caches da página de cifras (modelo do separador, scripts onnxruntime, áudios baixados). Nomes começam com 'cifras-'.
 // NUNCA apagar no activate: antes cada nova versão do SW apagava tudo isso e o separador/áudios deixavam de funcionar offline.
 const CACHE_CIFRAS_LIB = 'cifras-scripts-v1';
-const isCifrasCache = key => key.startsWith('cifras-');
+const isCifrasCache = key => key.startsWith('cifras-') || key.startsWith('emaus-');
 
 const ASSET_PREFIX = '/assets/';
 const CLOUDINARY_HOST = 'res.cloudinary.com';
@@ -39,6 +39,10 @@ async function cachePageNormalized(cache, key, response) {
     }));
 }
 
+// Página do Emaús (app do grupo da igreja): mesma lógica das cifras — rede primeiro, cópia salva offline.
+const EMAUS_PAGE = '/emaus.html';
+const isEmausPath = p => p === '/emaus' || p === '/emaus.html';
+
 // Demais arquivos essenciais de UI que continuam existindo no repositório (não são zipados).
 const ASSETS_TO_PRECACHE = [
     '/assets/pibm.png',
@@ -56,6 +60,14 @@ const ASSETS_TO_PRECACHE = [
     '/assets/notification-icon-192.png',
     '/assets/badge-icon.png',
     '/cifras.webmanifest',
+    '/emaus.webmanifest',
+    '/emaus_skybox.js',
+    '/assets/emauslogo.png',
+    '/assets/emaussky.png',
+    '/assets/emaus-icon-192.png',
+    '/assets/emaus-icon-512.png',
+    '/assets/emaus-notification-icon-192.png',
+    '/assets/emaus-badge-icon.png',
     '/assets/cifras-icon-192.png',
     '/assets/cifras-icon-512.png',
     '/assets/cifras-notification-icon-192.png',
@@ -163,6 +175,14 @@ self.addEventListener('install', event => {
                 console.warn('⚠️ [SW] Falha ao precachear cifras.html:', err);
             }
 
+            // 3b) Página do Emaús (não crítica).
+            try {
+                const r = await fetch(EMAUS_PAGE, { cache: 'reload' });
+                if (r.ok) await cachePageNormalized(cache, EMAUS_PAGE, r);
+            } catch (err) {
+                console.warn('⚠️ [SW] Falha ao precachear emaus.html:', err);
+            }
+
             console.log('🔥 [SW] Precache concluído.');
         })().catch(err => {
             console.error('🚨 [SW] Instalação CANCELADA — asset crítico não pôde ser cacheado:', err);
@@ -233,6 +253,22 @@ self.addEventListener('fetch', event => {
                 return (await c.match(CIFRAS_PAGE)) || await showOfflinePage();
             }
 
+            // Emaús: rede primeiro (sempre atualiza o cache); sem rede, abre a cópia salva.
+            if (isEmausPath(url.pathname)) {
+                try {
+                    const response = await fetch(request);
+                    if (response.ok) {
+                        const c = await caches.open(CACHE_NAME);
+                        await cachePageNormalized(c, EMAUS_PAGE, response.clone());
+                    }
+                    if (response.status < 500) return response;
+                } catch (err) {
+                    console.warn('📡 [SW] Emaús offline, usando cache.', err);
+                }
+                const c = await caches.open(CACHE_NAME);
+                return (await c.match(EMAUS_PAGE)) || await showOfflinePage();
+            }
+
             try {
                 const response = await fetch(request);
                 // Servidor respondeu, mas com erro (ex: 500/502/503) — trata
@@ -251,7 +287,7 @@ self.addEventListener('fetch', event => {
     }
 
     // Skybox das cifras: JS próprio (rede primeiro, cache offline) e three.js do CDN (cache primeiro)
-    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/postfx.js' || url.pathname === '/demucs-core.js')) {
+    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/emaus_skybox.js' || url.pathname === '/postfx.js' || url.pathname === '/demucs-core.js')) {
         event.respondWith(fetch(request).then(r => {
             if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
             return r;
@@ -344,8 +380,8 @@ self.addEventListener('push', event => {
 
     const options = {
         body: payload.body,
-        icon: payload.icon || (payload.app === 'cifras' ? '/assets/cifras-notification-icon-192.png' : '/assets/notification-icon-192.png'),
-        badge: payload.app === 'cifras' ? '/assets/cifras-badge-icon.png' : '/assets/badge-icon.png',
+        icon: payload.icon || (payload.app === 'emaus' ? '/assets/emaus-notification-icon-192.png' : payload.app === 'cifras' ? '/assets/cifras-notification-icon-192.png' : '/assets/notification-icon-192.png'),
+        badge: payload.app === 'emaus' ? '/assets/emaus-badge-icon.png' : payload.app === 'cifras' ? '/assets/cifras-badge-icon.png' : '/assets/badge-icon.png',
         data: { url: payload.url || '/index.html' },
         vibrate: [200, 100, 200],
         silent: false,
@@ -373,7 +409,7 @@ self.addEventListener('notificationclick', event => {
                     return client.focus();
                 }
                 if (targetPath.length > 1 && norm(client.url).endsWith(targetPath) && 'focus' in client) {
-                    if (targetUrl.includes('#')) client.postMessage({ type: 'cifras-nav', url: targetUrl });
+                    if (targetUrl.includes('#')) client.postMessage({ type: targetPath.endsWith('/emaus') ? 'emaus-nav' : 'cifras-nav', url: targetUrl });
                     return client.focus();
                 }
             }

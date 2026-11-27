@@ -440,6 +440,9 @@ body.hud-hidden .bell{opacity:0;visibility:hidden;pointer-events:none}
 .prph{position:absolute;top:0;bottom:0;width:2px;background:#ff5252;z-index:4;pointer-events:none;display:none}
 .stc.mc small{z-index:1}
 #stCol.on{background:var(--gold);color:#000}
+.prsel{position:absolute;border:1px solid #6ec6ff;background:rgba(110,198,255,.2);z-index:6;pointer-events:none}
+.prn.pre{outline:2px solid #6ec6ff}
+.prn.bad{background:#b3261e!important;border-color:#ff8a80!important}
 .prh{flex:1;min-width:0;font:600 .6rem system-ui;color:#8a8a8a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prruler{height:26px;cursor:pointer}.prruler span{top:8px}
 .prmk{position:absolute;top:0;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #4cd964;margin-left:-7px;z-index:3;pointer-events:none}
@@ -1652,7 +1655,7 @@ const F=window.CifrasForge={
   <details open><summary>Visão geral</summary><div class="tx">Esta ferramenta guarda <b>letras, cifras e partituras</b> da banda. <b>Todos</b> podem ver as músicas e executar as setlists. <b>Adicionar e editar</b> exige o <b>código da banda</b>, que é pedido <b>uma vez por sessão</b> (vale por 30 minutos e é esquecido ao fechar a página ou o app). Funciona sem internet: o que já foi carregado fica salvo no aparelho.</div></details>
   <details><summary>Tela inicial</summary><div class="tx"><ul><li><b>Setlist &amp; Playlist:</b> abre as setlists (aba padrão) e as músicas.</li><li><b>Adicionar:</b> cria uma música nova (pede o código).</li><li><b>Afinador:</b> afina violão, guitarra e baixo pelo microfone.</li><li><b>Tutorial:</b> esta tela.</li><li>A imagem de fundo gira sozinha. Arraste o dedo fora dos botões para olhar ao redor.</li><li>O botão com seta no topo esconde a interface para você ver só o fundo. Toque de novo para mostrar.</li></ul></div></details>
   <details><summary>Avisos e notificações</summary><div class="tx"><ul><li>Instale o app e toque em <b>Ativar notificações</b> na tela inicial para receber avisos de músicas, setlists e outros recados.</li><li>O <b>sino</b> (canto superior direito) mostra os avisos; o número vermelho indica os que você ainda não viu.</li><li>Para publicar um aviso, abra o sino e toque em <b>Criar aviso</b> (pede o código da banda).</li></ul></div></details>
-  <details><summary>Estúdio (Beta)</summary><div class="tx"><ul><li><b>Camada vazia e instrumentos:</b> em <b>+ Camada</b> você pode criar uma camada vazia ou <b>Adicionar instrumento</b>: sons internos ou um arquivo <b>.sf2</b> (SoundFont, até 15 MB) ou <b>.wav</b>. O <b>teclado</b> fica embaixo: a setinha o esconde/mostra, e <b>dois dedos afastando</b> aumentam a largura das teclas. O botão ● do teclado grava só o instrumento da camada selecionada.</li><li><b>Metrônomo e compasso:</b> o botão com BPM abre o ajuste de andamento e compasso (4/4, 3/4, 6/8…). O clique não entra no mix nem na gravação do teclado. Na gravação por microfone, use fones.</li><li><b>Piano roll:</b> toque duas vezes na linha de uma camada de instrumento (ou num clipe MIDI) para editar as notas: toque para criar, arraste para mover, puxe a ponta para alongar. Pince com dois dedos para ampliar/reduzir (a abertura na horizontal muda o tempo; na vertical, a altura das notas) e arraste o dedo na régua para escolher onde começa a tocar.</li><li><b>Colaborar:</b> o dono toca no ícone de pessoas e liga <b>Projeto público</b>; a banda vê o projeto em “Colaborativos” e edita junto. Só o dono renomeia, exclui e desliga.</li><li>Toque em <b>Estúdio</b> (pede o código) e crie um projeto. <b>Cada projeto fica disponível por 7 dias</b> para editar — o contador aparece no topo. <b>Exporte o mix (WAV ou MP3) antes de acabar</b>; depois tudo é apagado automaticamente.</li><li><b>+ Camada</b>: grave pelo microfone (use fones) ou importe um áudio. Escolha o tipo (voz, guitarra, baixo…) para já vir com efeitos prontos.</li><li><b>Arrastar</b> o clipe move no tempo (ou muda de camada, arrastando para cima/baixo). As <b>barras brancas</b> nas pontas cortam. <b>Dividir</b> e <b>Cortar início/fim aqui</b> usam a linha vermelha (toque na régua para posicionar). Aperte com dois dedos para dar zoom.</li><li>Use <b>↶ ↷</b> para desfazer/refazer e <b>♩</b> para o metrônomo (andamento, contagem antes de gravar, ímã nas batidas). O editor abre em tela cheia e <b>gira sozinho para paisagem</b>; o botão de girar no topo troca o lado.</li><li><b>Mix</b>: volume, pan, mudo e solo. <b>Efeitos</b>: presets e ajustes de graves/médios/agudos, compressor, amp/distorção, chorus, delay e reverb. <b>Clipe</b>: ajuste fino de atraso (−400 a +400 ms) para alinhar a gravação com a base.</li><li>Limites: até 8 camadas, 8 min por camada e 5 projetos ativos por pessoa.</li></ul></div></details>
+  <details><summary>Estúdio (Beta)</summary><div class="tx"><ul><li><b>Camada vazia e instrumentos:</b> em <b>+ Camada</b> você pode criar uma camada vazia ou <b>Adicionar instrumento</b>: sons internos ou um arquivo <b>.sf2</b> (SoundFont, até 15 MB) ou <b>.wav</b>. O <b>teclado</b> fica embaixo: a setinha o esconde/mostra, e <b>dois dedos afastando</b> aumentam a largura das teclas. O botão ● do teclado grava só o instrumento da camada selecionada.</li><li><b>Metrônomo e compasso:</b> o botão com BPM abre o ajuste de andamento e compasso (4/4, 3/4, 6/8…). O clique não entra no mix nem na gravação do teclado. Na gravação por microfone, use fones.</li><li><b>Piano roll:</b> toque duas vezes na linha de uma camada de instrumento (ou num clipe MIDI) para editar as notas: toque para criar, arraste para mover, puxe a ponta para alongar. Pince com dois dedos para ampliar/reduzir (a abertura na horizontal muda o tempo; na vertical, a altura das notas) arraste o dedo na régua para escolher onde começa a tocar e, para selecionar várias notas, segure o dedo numa área vazia e arraste (ou ligue <b>Selecionar</b>): dá para mover e apagar em grupo. Uma nota não pode ficar dentro de outra da mesma altura. Ao tocar, a tela acompanha o cursor.</li><li><b>Colaborar:</b> o dono toca no ícone de pessoas e liga <b>Projeto público</b>; a banda vê o projeto em “Colaborativos” e edita junto. Só o dono renomeia, exclui e desliga.</li><li>Toque em <b>Estúdio</b> (pede o código) e crie um projeto. <b>Cada projeto fica disponível por 7 dias</b> para editar — o contador aparece no topo. <b>Exporte o mix (WAV ou MP3) antes de acabar</b>; depois tudo é apagado automaticamente.</li><li><b>+ Camada</b>: grave pelo microfone (use fones) ou importe um áudio. Escolha o tipo (voz, guitarra, baixo…) para já vir com efeitos prontos.</li><li><b>Arrastar</b> o clipe move no tempo (ou muda de camada, arrastando para cima/baixo). As <b>barras brancas</b> nas pontas cortam. <b>Dividir</b> e <b>Cortar início/fim aqui</b> usam a linha vermelha (toque na régua para posicionar). Aperte com dois dedos para dar zoom.</li><li>Use <b>↶ ↷</b> para desfazer/refazer e <b>♩</b> para o metrônomo (andamento, contagem antes de gravar, ímã nas batidas). O editor abre em tela cheia e <b>gira sozinho para paisagem</b>; o botão de girar no topo troca o lado.</li><li><b>Mix</b>: volume, pan, mudo e solo. <b>Efeitos</b>: presets e ajustes de graves/médios/agudos, compressor, amp/distorção, chorus, delay e reverb. <b>Clipe</b>: ajuste fino de atraso (−400 a +400 ms) para alinhar a gravação com a base.</li><li>Limites: até 8 camadas, 8 min por camada e 5 projetos ativos por pessoa.</li></ul></div></details>
   <details><summary>Afinador</summary><div class="tx"><ul><li>Toque em <b>Ativar microfone</b> e permita o acesso. Escolha <b>Violão / Guitarra</b>, <b>Baixo 4</b>, <b>Baixo 5</b> ou <b>Cromático</b>.</li><li>Toque uma corda: o app detecta a nota sozinho (<b>Auto</b>) e o <b>ponteiro deve ficar no meio</b>. Azul = grave (aperte), vermelho = agudo (afrouxe), verde = afinado.</li><li>Toque numa corda (E, A, D…) para fixá-la; toque de novo ou em <b>Auto</b> para soltar.</li><li><b>Dica:</b> uma corda por vez, solta, microfone perto e sem barulho ao redor. No baixo, aguarde 1–2 s.</li></ul></div></details>
   <details><summary>Playlist e busca</summary><div class="tx"><ul><li>A aba <b>Músicas</b> lista tudo em ordem alfabética. Toque numa música para abri-la.</li><li>O campo de <b>busca</b> entende título incompleto, sem acento e com pequenos erros de digitação. Sem resultado, aparece "Nenhum resultado".</li><li>A linha abaixo da busca mostra se está tudo sincronizado ou se há alterações aguardando envio.</li></ul></div></details>
   <details><summary>Tela da música: botões do rodapé</summary><div class="tx"><ul>
@@ -1751,9 +1754,10 @@ const F=window.CifrasForge={
     <button class="pnt h" id="stKbT" type="button"></button>
     <div id="stPr" hidden>
       <div class="prhd">
-        <button class="stb" id="prX" type="button" aria-label="Concluir"></button><b id="prT">Notas</b><span class="prh">Arraste na régua para escolher onde começa · pince com dois dedos para o zoom</span>
+        <button class="stb" id="prX" type="button" aria-label="Concluir"></button><b id="prT">Notas</b><span class="prh">Régua: onde começa · segure e arraste: selecionar · dois dedos: zoom</span>
         <button class="stb" id="prPlay" type="button" aria-label="Tocar"></button>
         <button class="stchip" id="prG" type="button">Grade 1/16</button>
+        <button class="stchip" id="prSel" type="button">Selecionar</button>
         <button class="stchip" id="prEr" type="button">Apagar</button>
         <button class="stchip" id="prQ" type="button">Quantizar</button>
         <button class="stb" id="prDel" type="button" aria-label="Apagar nota selecionada"></button>
@@ -4631,7 +4635,7 @@ function frame(){const r=$('#sted'),w=innerWidth,h=innerHeight,N=matchMedia('(or
 /* rolagem com o dedo própria (o scroll nativo não acompanha a tela girada) */
 function pan(elm,axes){let d=null,mom=0,sw=0;
   elm.addEventListener('click',e=>{if(sw){e.stopPropagation();e.preventDefault();sw=0}},true);
-  elm.addEventListener('pointerdown',e=>{if(e.target.closest('.stc,.strul,.trk,.prn,.prruler')||(e.pointerType==='mouse'&&e.button))return;cancelAnimationFrame(mom);sw=0;d={id:e.pointerId,x:e.clientX,y:e.clientY,drag:false,vx:0,vy:0}});
+  elm.addEventListener('pointerdown',e=>{if((elm.__skip&&elm.__skip(e))||e.target.closest('.stc,.strul,.trk,.prn,.prruler')||(e.pointerType==='mouse'&&e.button))return;cancelAnimationFrame(mom);sw=0;d={id:e.pointerId,x:e.clientX,y:e.clientY,drag:false,vx:0,vy:0}});
   elm.addEventListener('pointermove',e=>{if(!d||e.pointerId!==d.id||elm.__np)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(!d.drag&&Math.hypot(dx,dy)<8)return;
     if(!d.drag){d.drag=true;sw=1;try{elm.setPointerCapture(e.pointerId)}catch(x){}}
     const q=dl(dx,dy);if(axes!=='y')elm.scrollLeft-=q.x;elm.scrollTop-=q.y;d.vx=q.x;d.vy=q.y;d.x=e.clientX;d.y=e.clientY});
@@ -5020,7 +5024,7 @@ function follow(){const sc=$('#stsc'),x=HW+S.pos*S.pps;if(x>sc.scrollLeft+sc.cli
 const mbuf=new Uint8Array(1024);
 function meter(){const an=S.rec&&S.rec.an?S.rec.an:S.an;let pk=0;if(an&&(S.playing||S.rec)){an.getByteTimeDomainData(mbuf);for(let i=0;i<mbuf.length;i++){const v=Math.abs(mbuf[i]-128)/128;if(v>pk)pk=v}}$('#stLv').firstElementChild.style.width=Math.min(100,pk*120)+'%'}
 function loop(){cancelAnimationFrame(S.raf);const f=()=>{if(!S.playing&&!S.rec){meter();return}
-    S.pos=curPos();updPh();follow();meter();prPh();if(S.rec){$('#stTm').textContent=fmt(S.pos);if(Date.now()-S.rec.t0>MAXSEC*1000){stopRec()}}
+    S.pos=curPos();updPh();follow();meter();prPh();prFollow();if(S.rec){$('#stTm').textContent=fmt(S.pos);if(Date.now()-S.rec.t0>MAXSEC*1000){stopRec()}}
     else if(!S.mrec&&!S.mt&&S.pos>=endOf()+.1)pause(true);if(S.run&&S.ctx.currentTime<S.run.t0-.001)$('#stTm').textContent='▸ '+Math.max(1,Math.ceil((S.run.t0-S.ctx.currentTime)/spb()));S.raf=requestAnimationFrame(f)};S.raf=requestAnimationFrame(f)}
 function zoom(v,a){const sc=$('#stsc');if(a==null)a=sc.clientWidth/2;const t=(sc.scrollLeft+a-HW)/S.pps;S.pps=clamp(v,8,160);
   cancelAnimationFrame(S.zr);S.zr=requestAnimationFrame(()=>{render();sc.scrollLeft=Math.max(0,t*S.pps+HW-a)})}
@@ -5302,9 +5306,9 @@ function kbOpen(on){S.kb.open=on===undefined?!S.kb.open:!!on;prefSet('kb',S.kb.o
 /* ---------------- piano roll (editar as notas de um clipe MIDI) ---------------- */
 const PLO=24,PHI=108,PKW=44,PRH=26,GR=[[1,'1/4'],[.5,'1/8'],[.25,'1/16'],[.125,'1/32']];
 const prClip=()=>{const t=S.p&&S.pr&&S.p.tracks.find(x=>x.id===S.pr.tid),k=t&&(t.mc||[]).find(c=>c.id===S.pr.cid);return k?{t,k}:null};
-function prOpen(t,k){S.pr={tid:t.id,cid:k.id,sel:null,er:false,vel:100,at:0};$('#stPr').hidden=false;prHead();prVel();prRender(true)}
+function prOpen(t,k){S.pr={tid:t.id,cid:k.id,sel:null,sels:[],selmode:false,er:false,vel:100,at:0,lastUser:0};$('#stPr').hidden=false;prHead();prVel();prRender(true)}
 function prClose(){if(S.playing&&!S.mrec)pause();kbAllOff();S.pr=null;$('#stPr').hidden=true;if(S.p){render();panel();scheduleSave()}}
-function prHead(){const C=prClip();if(!C)return;$('#prT').textContent=String(C.t.name);const g=GR.find(x=>x[0]===S.prp.g)||GR[2];$('#prG').textContent='Grade '+g[1];$('#prEr').classList.toggle('on',S.pr.er);$('#prEr').textContent=S.pr.er?'Apagando':'Apagar'}
+function prHead(){const C=prClip();if(!C)return;$('#prT').textContent=String(C.t.name);const g=GR.find(x=>x[0]===S.prp.g)||GR[2];$('#prG').textContent='Grade '+g[1];$('#prEr').classList.toggle('on',S.pr.er);$('#prEr').textContent=S.pr.er?'Apagando':'Apagar';$('#prSel').classList.toggle('on',S.pr.selmode);$('#prSel').textContent=S.pr.selmode?'Selecionando':'Selecionar'}
 function prFit(k){let e=0;k.n.forEach(n=>{e=Math.max(e,n[0]+n[1])});const bq=barQ();if(e>k.l+1e-6)k.l=r3(Math.ceil(e/bq-1e-6)*bq)}
 function prGrid(cv,k,W,H){const x=cv.getContext('2d'),rh=S.prp.rh,ppb=S.prp.ppb,bq=barQ(),beat=4/S.sig[1],g=S.prp.g;
   for(let n=PHI;n>=PLO;n--){const y=(PHI-n)*rh;x.fillStyle=BLK.includes(n%12)?'#0b0b0b':'#141414';x.fillRect(0,y,W,rh);x.fillStyle=n%12===0?'#2c2c2c':'#1b1b1b';x.fillRect(0,y+rh-1,W,1)}
@@ -5312,13 +5316,13 @@ function prGrid(cv,k,W,H){const x=cv.getContext('2d'),rh=S.prp.rh,ppb=S.prp.ppb,
   x.fillStyle='rgba(0,0,0,.5)';x.fillRect(Math.round(k.l*ppb),0,W,H)}
 function mkNote(k,n){const d=el('div','prn'),ppb=S.prp.ppb,rh=S.prp.rh,v=n[3]/127;
   d.style.cssText='left:'+n[0]*ppb+'px;top:'+(PHI-n[2])*rh+'px;width:'+Math.max(6,n[1]*ppb-1)+'px;height:'+(rh-1)+'px;background:hsl(45,'+Math.round(45+v*50)+'%,'+Math.round(32+v*24)+'%)';
-  if(S.pr.sel===n)d.classList.add('sel');const rs=el('div','rs');d.append(rs);d.onclick=e=>e.stopPropagation();d.onpointerdown=e=>prNoteDown(e,k,n,d,e.target===rs);return d}
-function prRender(first){const C=prClip();if(!C){prClose();return}const k=C.k,rh=S.prp.rh,ppb=S.prp.ppb,bq=barQ(),W=Math.min(6000,Math.ceil((k.l+bq)*ppb)),H=(PHI-PLO+1)*rh,sc=$('#prsc'),ct=$('#prct'),sx=sc.scrollLeft,sy=sc.scrollTop;
+  d._n=n;if(S.pr.sels.includes(n))d.classList.add('sel');const rs=el('div','rs');d.append(rs);d.onclick=e=>e.stopPropagation();d.onpointerdown=e=>prNoteDown(e,k,n,d,e.target===rs);return d}
+function prRender(first){const C=prClip();if(!C){prClose();return}const k=C.k;S.pr.sels=S.pr.sels.filter(n=>k.n.includes(n));S.pr.sel=S.pr.sels.length===1?S.pr.sels[0]:null;const rh=S.prp.rh,ppb=S.prp.ppb,bq=barQ(),W=Math.min(6000,Math.ceil((k.l+bq)*ppb)),H=(PHI-PLO+1)*rh,sc=$('#prsc'),ct=$('#prct'),sx=sc.scrollLeft,sy=sc.scrollTop;
   ct.innerHTML='';ct.style.width=(PKW+W)+'px';
   const ru=el('div','prruler');ru.style.width=(PKW+W)+'px';ru.title='Arraste na régua para escolher onde começa a tocar';
-  ru.onpointerdown=e=>{if(e.pointerType==='mouse'&&e.button)return;e.preventDefault();e.stopPropagation();const sc=$('#prsc');let last=e,down=true,raf=0;try{ru.setPointerCapture(e.pointerId)}catch(x){}
+  ru.onpointerdown=e=>{if(e.pointerType==='mouse'&&e.button)return;e.preventDefault();e.stopPropagation();S.pr.lastUser=performance.now();const sc=$('#prsc');let last=e,down=true,raf=0;try{ru.setPointerCapture(e.pointerId)}catch(x){}
     const put=ev=>{const x=loc(ev.clientX,ev.clientY).x-lxOf(sc)+sc.scrollLeft-PKW,g=S.prp.g;S.pr.at=clamp(r3(Math.round(x/S.prp.ppb/g)*g),0,k.l);prMark()};
-    const tick=()=>{if(!down)return;const lx=loc(last.clientX,last.clientY).x-lxOf(sc);if(lx>sc.clientWidth-44)sc.scrollLeft+=Math.min(22,(lx-(sc.clientWidth-44))/2+4);else if(lx<PKW+30)sc.scrollLeft-=Math.min(22,(PKW+30-lx)/2+4);put(last);raf=requestAnimationFrame(tick)};
+    const tick=()=>{if(!down)return;S.pr.lastUser=performance.now();const lx=loc(last.clientX,last.clientY).x-lxOf(sc);if(lx>sc.clientWidth-44)sc.scrollLeft+=Math.min(22,(lx-(sc.clientWidth-44))/2+4);else if(lx<PKW+30)sc.scrollLeft-=Math.min(22,(PKW+30-lx)/2+4);put(last);raf=requestAnimationFrame(tick)};
     put(e);ru.onpointermove=ev=>{if(ev.pointerId===e.pointerId)last=ev};raf=requestAnimationFrame(tick);
     const end=ev=>{if(ev.pointerId!==e.pointerId||!down)return;down=false;cancelAnimationFrame(raf);ru.onpointermove=ru.onpointerup=ru.onpointercancel=null;if(S.playing){S.pos=mS(k)+q2s(S.pr.at);play()}};ru.onpointerup=end;ru.onpointercancel=end};
   const mk=el('div','prmk');mk.id='prmk';ru.append(mk);
@@ -5333,26 +5337,74 @@ function prRender(first){const C=prClip();if(!C){prClose();return}const k=C.k,rh
   prMark();prPh()}
 function prMark(){const m=$('#prmk'),s=$('#prst');if(!m||!S.pr)return;const x=(S.pr.at||0)*S.prp.ppb;m.style.left=(PKW+x)+'px';s.style.left=x+'px'}
 function prPh(){const ph=$('#prph');if(!ph||!S.pr)return;const C=prClip();if(!C)return;const q=s2q(S.pos-mS(C.k));ph.style.display=q<0?'none':'block';ph.style.left=q*S.prp.ppb+'px'}
-function prVel(){const h=$('#prVel');h.innerHTML='';const n=S.pr.sel,v=n?n[3]:S.pr.vel;
-  h.append(sl(n?'Velocidade da nota':'Velocidade nova',1,127,1,v,x=>String(x),(x,e)=>{if(S.pr.sel)S.pr.sel[3]=x;else S.pr.vel=x;if(e){scheduleSave();prRender()}},100))}
-function prTap(e){const C=prClip();if(!C||S.pr.er)return;const k=C.k,sc=$('#prsc'),p=loc(e.clientX,e.clientY),x=p.x-lxOf(sc)+sc.scrollLeft-PKW,y=p.y-lyOf(sc)+sc.scrollTop-PRH;
+/* ----- seleção, sobreposição e edição das notas ----- */
+function prSelect(arr){S.pr.sels=arr.slice();S.pr.sel=arr.length===1?arr[0]:null;prMarkSel()}
+function prMarkSel(){const ct=$('#prct');if(!ct||!S.pr)return;ct.querySelectorAll('.prn').forEach(d=>d.classList.toggle('sel',S.pr.sels.includes(d._n)))}
+/* uma nota não pode ficar dentro de outra: mesma altura + tempos que se cruzam. Só olha as notas de "mv" contra todas as outras. */
+function prOverlap(k,mv){const E=1e-6;for(const a of mv)for(const b of k.n){if(b===a||b[2]!==a[2])continue;if(a[0]<b[0]+b[1]-E&&b[0]<a[0]+a[1]-E)return true}return false}
+const prWarn=m=>smodal('Notas sobrepostas',m||'Uma nota não pode ficar dentro de outra na mesma altura. A alteração foi desfeita.',[['OK',1]],'err');
+function prVel(){const h=$('#prVel');h.innerHTML='';const ss=S.pr.sels,v=ss.length?ss[0][3]:S.pr.vel,
+    lab=ss.length>1?'Velocidade ('+ss.length+' notas)':ss.length?'Velocidade da nota':'Velocidade nova';
+  h.append(sl(lab,1,127,1,v,x=>String(x),(x,e)=>{if(ss.length)ss.forEach(q=>{q[3]=x});else S.pr.vel=x;if(e){scheduleSave();prRender()}},100))}
+function prTap(e){const C=prClip();if(!C)return;if(performance.now()-(S.pr.nocl||0)<450)return;
+  if(S.pr.selmode||S.pr.sels.length>1){if(S.pr.sels.length){prSelect([]);prVel()}return}   /* com grupo selecionado (ou no modo seleção) o toque no vazio só limpa a seleção */
+  if(S.pr.er)return;const k=C.k,sc=$('#prsc'),p=loc(e.clientX,e.clientY),x=p.x-lxOf(sc)+sc.scrollLeft-PKW,y=p.y-lyOf(sc)+sc.scrollTop-PRH;
   if(x<0||y<0)return;if(k.n.length>=1500){fail(new Error('notes'));return}
   const g=S.prp.g,q=Math.floor(x/S.prp.ppb/g+1e-6)*g,key=PHI-Math.floor(y/S.prp.rh);if(key<PLO||key>PHI)return;
-  const pre=J(),n=[r3(q),r3(S.prp.len),key,S.pr.vel];k.n.push(n);S.pr.sel=n;prFit(k);pushH(pre);scheduleSave();kbPreview(key,n[3],250);prRender();prVel();restart()}
-function prNoteDown(e,k,n,d,rsz){e.preventDefault();e.stopPropagation();
-  if(S.pr.er){const pre=J();k.n.splice(k.n.indexOf(n),1);S.pr.sel=null;pushH(pre);scheduleSave();prRender();restart();return}
-  S.pr.sel=n;kbPreview(n[2],n[3],250);$('#prct').querySelectorAll('.prn').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');prVel();
-  const pre=J(),x0=e.clientX,y0=e.clientY,s0=n[0],d0=n[1],k0=n[2],ppb=S.prp.ppb,rh=S.prp.rh,g=S.prp.g;let moved=false;
+  if(k.n.some(b=>b[2]===key&&b[0]<q+1e-6&&b[0]+b[1]>q+1e-6)){prWarn('Já existe uma nota nesta altura e posição.');return}
+  let len=S.prp.len;const nx=k.n.reduce((m,b)=>b[2]===key&&b[0]>=q-1e-6?Math.min(m,b[0]):m,1e9);
+  if(nx-q<len-1e-6)len=nx-q;                                   /* cabe só encurtada: encurta */
+  if(len<g-1e-6){prWarn('Não há espaço para uma nota aqui: a próxima nota da mesma altura começa logo em seguida.');return}
+  const pre=J(),n=[r3(q),r3(len),key,S.pr.vel];k.n.push(n);prSelect([n]);prFit(k);pushH(pre);scheduleSave();kbPreview(key,n[3],250);prRender();prVel();restart()}
+function prNoteDown(e,k,n,d,rsz){e.preventDefault();e.stopPropagation();S.pr.lastUser=performance.now();
+  if(S.pr.er){const pre=J();k.n.splice(k.n.indexOf(n),1);S.pr.sels=S.pr.sels.filter(q=>q!==n);S.pr.sel=null;pushH(pre);scheduleSave();prRender();prVel();restart();return}
+  if(S.pr.selmode){const i=S.pr.sels.indexOf(n),a=S.pr.sels.slice();if(i>=0)a.splice(i,1);else a.push(n);prSelect(a);prVel();return}   /* modo seleção: toque na nota liga/desliga */
+  const multi=S.pr.sels.length>1&&S.pr.sels.includes(n);
+  if(!multi){prSelect([n]);prVel()}kbPreview(n[2],n[3],250);
+  const G=multi?S.pr.sels.slice():[n],O=G.map(q=>[q[0],q[1],q[2]]),els=[...$('#prct').querySelectorAll('.prn')].filter(x=>G.includes(x._n)),
+    pre=J(),x0=e.clientX,y0=e.clientY,i0=G.indexOf(n),ppb=S.prp.ppb,rh=S.prp.rh,g=S.prp.g;let moved=false,bad=false;
+  const minS=Math.min(...O.map(o=>o[0])),minK=Math.min(...O.map(o=>o[2])),maxK=Math.max(...O.map(o=>o[2]));
   try{d.setPointerCapture(e.pointerId)}catch(x){}
   d.onpointermove=ev=>{const q=dl(ev.clientX-x0,ev.clientY-y0);if(!moved&&Math.abs(q.x)<5&&Math.abs(q.y)<5)return;moved=true;
-    if(rsz)n[1]=r3(Math.max(g,Math.round((d0+q.x/ppb)/g)*g));
-    else{n[0]=r3(Math.max(0,Math.round((s0+q.x/ppb)/g)*g));const nk=clamp(k0-Math.round(q.y/rh),PLO,PHI);if(nk!==n[2]){n[2]=nk;kbPreview(nk,n[3],200)}}
-    d.style.left=n[0]*ppb+'px';d.style.top=(PHI-n[2])*rh+'px';d.style.width=Math.max(6,n[1]*ppb-1)+'px'};
-  d.onpointerup=d.onpointercancel=()=>{d.onpointermove=d.onpointerup=d.onpointercancel=null;if(moved){S.prp.len=n[1];prFit(k);pushH(pre);scheduleSave();prRender();restart()}}}
-function prApplyZoom(ppb,rh,gx,gy,cx,cy){const sc=$('#prsc');if(!sc||!S.pr)return;S.prp.ppb=clamp(ppb,16,240);S.prp.rh=clamp(rh,12,44);prRender();
+    if(rsz){const dd=Math.round(q.x/ppb/g)*g;G.forEach((m,i)=>{m[1]=r3(Math.max(g,O[i][1]+dd))})}
+    else{const dt=Math.max(-minS,Math.round((O[i0][0]+q.x/ppb)/g)*g-O[i0][0]),dk=clamp(-Math.round(q.y/rh),PLO-minK,PHI-maxK);
+      G.forEach((m,i)=>{m[0]=r3(O[i][0]+dt);m[2]=O[i][2]+dk});if(n[2]!==O[i0][2]&&n[2]!==d._lk){d._lk=n[2];kbPreview(n[2],n[3],200)}}
+    els.forEach(x=>{const m=x._n;x.style.left=m[0]*ppb+'px';x.style.top=(PHI-m[2])*rh+'px';x.style.width=Math.max(6,m[1]*ppb-1)+'px'});
+    bad=prOverlap(k,G);els.forEach(x=>x.classList.toggle('bad',bad))};
+  d.onpointerup=d.onpointercancel=()=>{d.onpointermove=d.onpointerup=d.onpointercancel=null;if(!moved)return;
+    if(prOverlap(k,G)){G.forEach((m,i)=>{m[0]=O[i][0];m[1]=O[i][1];m[2]=O[i][2]});prRender();prWarn();return}   /* impede: desfaz e avisa */
+    S.prp.len=n[1];prFit(k);pushH(pre);scheduleSave();prRender();restart()}}
+/* seleção por retângulo: segurar ~0,3 s numa área vazia e arrastar (ou ligar "Selecionar" e arrastar direto) */
+function prSelInit(sc){let h=null;
+  sc.__skip=e=>!!(S.pr&&S.pr.selmode&&e.target.closest('.prgrid')&&!e.target.closest('.prn'));
+  const gpt=ev=>{const p=loc(ev.clientX,ev.clientY);return{x:p.x-lxOf(sc)+sc.scrollLeft-PKW,y:p.y-lyOf(sc)+sc.scrollTop-PRH}};
+  const hits=b=>{const C=prClip();if(!C)return[];const ppb=S.prp.ppb,rh=S.prp.rh;return C.k.n.filter(n=>{const x0=n[0]*ppb,x1=x0+Math.max(6,n[1]*ppb),y0=(PHI-n[2])*rh,y1=y0+rh;return x0<b.x1&&x1>b.x0&&y0<b.y1&&y1>b.y0})};
+  const mark=b=>{const hs=hits(b);$('#prct').querySelectorAll('.prn').forEach(d=>d.classList.toggle('pre',hs.includes(d._n)))};
+  sc.addEventListener('pointerdown',e=>{if(!S.pr)return;S.pr.lastUser=performance.now();if(e.pointerType==='mouse'&&e.button)return;
+    if(h&&e.pointerId!==h.id){if(!h.on){clearTimeout(h.t);h=null}return}                       /* segundo dedo: é pinça, cancela a espera */
+    if(!e.target.closest('.prgrid')||e.target.closest('.prn'))return;
+    const st=h={id:e.pointerId,x:e.clientX,y:e.clientY,on:false,t:0,last:e,a:gpt(e),box:null,raf:0};
+    const begin=()=>{if(h!==st||st.on)return;st.on=true;sc.__np=true;try{sc.setPointerCapture(st.id)}catch(x){}navigator.vibrate&&navigator.vibrate(18);
+      st.box=el('div','prsel');$('.prgrid').append(st.box);
+      const tick=()=>{if(h!==st||!st.on)return;const q=loc(st.last.clientX,st.last.clientY),lx=q.x-lxOf(sc),ly=q.y-lyOf(sc);
+        if(lx>sc.clientWidth-40)sc.scrollLeft+=Math.min(20,(lx-(sc.clientWidth-40))/2+3);else if(lx<PKW+30)sc.scrollLeft-=Math.min(20,(PKW+30-lx)/2+3);
+        if(ly>sc.clientHeight-40)sc.scrollTop+=Math.min(20,(ly-(sc.clientHeight-40))/2+3);else if(ly<PRH+30)sc.scrollTop-=Math.min(20,(PRH+30-ly)/2+3);
+        const c=gpt(st.last),b={x0:Math.min(st.a.x,c.x),y0:Math.min(st.a.y,c.y),x1:Math.max(st.a.x,c.x),y1:Math.max(st.a.y,c.y)};st.b=b;
+        st.box.style.cssText='left:'+b.x0+'px;top:'+b.y0+'px;width:'+(b.x1-b.x0)+'px;height:'+(b.y1-b.y0)+'px';mark(b);st.raf=requestAnimationFrame(tick)};tick()};
+    if(S.pr.selmode)begin();else st.t=setTimeout(begin,320)},true);
+  sc.addEventListener('pointermove',e=>{if(!h||e.pointerId!==h.id)return;h.last=e;S.pr&&(S.pr.lastUser=performance.now());
+    if(!h.on&&Math.hypot(e.clientX-h.x,e.clientY-h.y)>8){clearTimeout(h.t);h=null}},true);   /* mexeu antes do tempo: é rolagem, não seleção */
+  const end=e=>{if(!h||e.pointerId!==h.id)return;const st=h;h=null;clearTimeout(st.t);if(!st.on)return;cancelAnimationFrame(st.raf);sc.__np=false;
+    const b=st.b;st.box&&st.box.remove();$('#prct').querySelectorAll('.prn.pre').forEach(d=>d.classList.remove('pre'));
+    if(S.pr){S.pr.nocl=performance.now();const sel=b&&(b.x1-b.x0>6||b.y1-b.y0>6)?hits(b):[];prSelect(sel);prVel()}};
+  sc.addEventListener('pointerup',end,true);sc.addEventListener('pointercancel',end,true)}
+/* acompanha o cursor durante o play, como na linha do tempo (pausa enquanto você mexe na tela) */
+function prFollow(){if(!S.pr||!S.playing)return;const sc=$('#prsc'),C=prClip();if(!sc||!C||performance.now()-(S.pr.lastUser||0)<2200)return;
+  const q=s2q(S.pos-mS(C.k));if(q<0)return;const x=PKW+q*S.prp.ppb;if(x>sc.scrollLeft+sc.clientWidth-30||x<sc.scrollLeft+PKW)sc.scrollLeft=Math.max(0,x-PKW-20)}
+function prApplyZoom(ppb,rh,gx,gy,cx,cy){const sc=$('#prsc');if(!sc||!S.pr)return;S.pr.lastUser=performance.now();S.prp.ppb=clamp(ppb,16,240);S.prp.rh=clamp(rh,12,44);prRender();
   sc.scrollLeft=Math.max(0,gx*S.prp.ppb+PKW-cx);sc.scrollTop=Math.max(0,gy*S.prp.rh+PRH-cy)}
 function prZoomBtn(f){const sc=$('#prsc'),cx=sc.clientWidth/2,cy=sc.clientHeight/2;prApplyZoom(S.prp.ppb*f,S.prp.rh*f,(sc.scrollLeft+cx-PKW)/S.prp.ppb,(sc.scrollTop+cy-PRH)/S.prp.rh,cx,cy)}
-function prInit(){const sc0=$('#prsc');pan(sc0,'xy');
+function prInit(){const sc0=$('#prsc');pan(sc0,'xy');prSelInit(sc0);sc0.addEventListener('wheel',()=>{S.pr&&(S.pr.lastUser=performance.now())},{passive:true,capture:true});
   let pz=null,raf=0;const tp=e=>{const a=loc(e.touches[0].clientX,e.touches[0].clientY),b=loc(e.touches[1].clientX,e.touches[1].clientY);return{dx:Math.abs(a.x-b.x),dy:Math.abs(a.y-b.y),cx:(a.x+b.x)/2-lxOf(sc0),cy:(a.y+b.y)/2-lyOf(sc0)}};
   /* Os eventos de toque ficam sempre no elemento onde o dedo pousou. Como o zoom redesenha a grade (e esse elemento sai do DOM),
      os ouvintes ficam nos próprios elementos tocados — senão o celular para de enviar o movimento no meio da pinça. */
@@ -5368,11 +5420,18 @@ function prInit(){const sc0=$('#prsc');pan(sc0,'xy');
 
   $('#prX').innerHTML=ic('check');$('#prPlay').innerHTML=ic('play');$('#prDel').innerHTML=ic('trash');$('#prZo').innerHTML=ic('minus');$('#prZi').innerHTML=ic('plus');
   $('#prX').onclick=prClose;
-  $('#prPlay').onclick=()=>{const C=prClip();if(!C)return;if(S.playing){pause();return}S.pos=mS(C.k)+q2s(S.pr.at||0);play()};
+  $('#prPlay').onclick=()=>{const C=prClip();if(!C)return;if(S.playing){pause();return}S.pr.lastUser=0;S.pos=mS(C.k)+q2s(S.pr.at||0);play()};
   $('#prG').onclick=()=>{const i=GR.findIndex(x=>x[0]===S.prp.g);S.prp.g=GR[(i+1)%GR.length][0];prefSet('prg',String(S.prp.g));prHead();prRender()};
-  $('#prEr').onclick=()=>{S.pr.er=!S.pr.er;prHead()};
-  $('#prQ').onclick=()=>{const C=prClip();if(!C)return;const g=S.prp.g;mut(()=>{C.k.n.forEach(n=>{n[0]=r3(Math.max(0,Math.round(n[0]/g)*g));n[1]=r3(Math.max(g,Math.round(n[1]/g)*g))});prFit(C.k)});scheduleSave();prRender();restart()};
-  $('#prDel').onclick=()=>{const C=prClip();if(!C||!S.pr.sel)return;mut(()=>{C.k.n.splice(C.k.n.indexOf(S.pr.sel),1)});S.pr.sel=null;scheduleSave();prRender();prVel();restart()};
+  $('#prSel').onclick=()=>{S.pr.selmode=!S.pr.selmode;if(S.pr.selmode)S.pr.er=false;prHead()};
+  $('#prEr').onclick=()=>{S.pr.er=!S.pr.er;if(S.pr.er){S.pr.selmode=false;prSelect([]);prVel()}prHead()};
+  $('#prQ').onclick=()=>{const C=prClip();if(!C)return;const k=C.k,g=S.prp.g,T=S.pr.sels.length?S.pr.sels:k.n,pre=J(),bk=T.map(n=>[n[0],n[1]]),had=prOverlap(k,T);   /* com seleção, quantiza só as selecionadas */
+    T.forEach(n=>{n[0]=r3(Math.max(0,Math.round(n[0]/g)*g));n[1]=r3(Math.max(g,Math.round(n[1]/g)*g))});
+    if(!had&&prOverlap(k,T)){T.forEach((n,i)=>{n[0]=bk[i][0];n[1]=bk[i][1]});prWarn('Quantizar deixaria notas da mesma altura sobrepostas. Nada foi alterado.');return}
+    prFit(k);pushH(pre);scheduleSave();prRender();restart()};
+  $('#prDel').onclick=()=>{const C=prClip();if(!C||!S.pr.sels.length)return;const pre=J();S.pr.sels.forEach(q=>{const i=C.k.n.indexOf(q);if(i>=0)C.k.n.splice(i,1)});prSelect([]);pushH(pre);scheduleSave();prRender();prVel();restart()};
+  document.addEventListener('keydown',e=>{if(!S.pr||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName||''))return;const C=prClip();if(!C)return;
+    if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();$('#prDel').click()}
+    else if((e.ctrlKey||e.metaKey)&&e.code==='KeyA'){e.preventDefault();prSelect(C.k.n);prVel()}});
   $('#prZo').onclick=()=>prZoomBtn(1/1.25);$('#prZi').onclick=()=>prZoomBtn(1.25)}
 
 

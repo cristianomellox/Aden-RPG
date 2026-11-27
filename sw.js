@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v72'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v73'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 // Caches da página de cifras (modelo do separador, scripts onnxruntime, áudios baixados). Nomes começam com 'cifras-'.

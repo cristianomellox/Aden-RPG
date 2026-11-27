@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v70'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v71'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 // Caches da página de cifras (modelo do separador, scripts onnxruntime, áudios baixados). Nomes começam com 'cifras-'.
@@ -62,6 +62,7 @@ const ASSETS_TO_PRECACHE = [
     '/cifras.webmanifest',
     '/emaus.webmanifest',
     '/emaus_skybox.js',
+    '/emaus_skyfx.js',
     '/assets/emauslogo.png',
     '/assets/emaussky.png',
     '/assets/emaus-icon-192.png',
@@ -287,7 +288,7 @@ self.addEventListener('fetch', event => {
     }
 
     // Skybox das cifras: JS próprio (rede primeiro, cache offline) e three.js do CDN (cache primeiro)
-    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/emaus_skybox.js' || url.pathname === '/postfx.js' || url.pathname === '/demucs-core.js')) {
+    if (url.origin === self.location.origin && (url.pathname === '/cifras_skybox.js' || url.pathname === '/emaus_skybox.js' || url.pathname === '/emaus_skyfx.js' || url.pathname === '/postfx.js' || url.pathname === '/demucs-core.js')) {
         event.respondWith(fetch(request).then(r => {
             if (r && r.status === 200) { const c = r.clone(); caches.open(CACHE_NAME).then(ch => ch.put(request, c)); }
             return r;

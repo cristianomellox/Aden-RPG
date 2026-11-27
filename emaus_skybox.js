@@ -1,5 +1,5 @@
 // Skybox 360° da tela inicial do Emaús — adaptado do skybox das cifras.
-// Imagem: /assets/emaussky.png. SOMENTE o pós-processamento do postfx.js (sem holofotes/poeira/halo).
+// Imagem: /assets/emaussky.png. Céu só com o pós-processamento do postfx.js; o halo da logo vem de emaus_skyfx.js.
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 // postfx.js é importado dinamicamente (ver startSkybox), igual ao skybox da guilda:
@@ -490,6 +490,14 @@ function startSkybox() {
     flushPending();
     console.log('[EmausSkybox] inicializado — arraste a tela (com a interface recolhida) para girar.');
 
+
+    // Halo celestial da logo (só ele; sem holofotes/poeira/véu) — best effort.
+    import('./emaus_skyfx.js').then((mod) => {
+        if (!_sky || _flat) return;
+        _sky.fx = mod.initSkyFX({ scene, camera, renderer });
+    }).catch((e) => {
+        console.warn('[EmausSkybox] Falha ao carregar emaus_skyfx.js — seguindo sem o halo da logo:', e);
+    });
 
     // Pós-processamento (mesmo grading do skybox da guilda) — best effort.
     import('./postfx.js').then((mod) => {

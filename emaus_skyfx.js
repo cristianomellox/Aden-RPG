@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 
-const CFG = { logoHalo: 1.7 };
+const CFG = { logoHalo: 1.5 };
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const HALO_FS = `

@@ -44,7 +44,7 @@ const MAX_CACHED  = 6;                          // texturas mantidas na GPU (as 
 const MAX_DPR     = 2;
 
 // Elementos em que arrastar NÃO deve girar a câmera (botões, painéis que rolam, modais…)
-const NO_DRAG = 'button, a, input, label, select, textarea, #md, #cp, #bar, #secp, #ft, #auth, .screen:not(#home)';
+const NO_DRAG = 'button, a, input, label, select, textarea, #md, #cp, #bar, #secp, #ft, #auth, .pg, .ov, .screen:not(#home)';
 
 let _sky = null;               // { scene, camera, renderer, canvas, cont, layer, running, raf, pfx, meshA, meshB }
 let _flat = false;             // true quando o WebGL não está disponível

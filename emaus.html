@@ -103,6 +103,91 @@ input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,90,.16)}
 #auth .btn{width:100%;margin-top:6px}
 #auth small{display:block;margin-top:14px;color:var(--mut);line-height:1.5;font-size:.8rem}
 
+
+/* ===== telas internas (Membros / Perfil) ===== */
+body:not(.onhome) #ft,body:not(.onhome) .hud-toggle-btn,body:not(.onhome) #vig{display:none}
+body:not(.onhome) #emausSkyLayer{display:none!important}
+.pg{position:fixed;inset:0;z-index:4;display:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:radial-gradient(ellipse at 50% -10%,#2b1e11 0%,#0b0a12 46%,#050508 100%)}
+.pg.open{display:block;animation:pgin .32s cubic-bezier(.22,1,.36,1)}
+@keyframes pgin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.bk{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:12px;z-index:12;width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;background:rgba(6,6,11,.74);border:1px solid var(--ln);color:var(--gold2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.bk.r{left:auto;right:12px}.bk svg{width:20px;height:20px;stroke-width:2.3}
+.bk:active{transform:scale(.92)}
+/* membros */
+.mh{padding:calc(env(safe-area-inset-top,0px) + 20px) 64px 4px;text-align:center}
+.mt{font-family:var(--serif);font-size:1.6rem;font-weight:700;color:var(--gold2);letter-spacing:.08em;text-shadow:0 2px 14px rgba(217,180,90,.25)}
+.ms{margin-top:3px;color:var(--mut);font-size:.74rem;letter-spacing:.2em;text-transform:uppercase}
+.orn{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px auto 0;max-width:220px;color:var(--gold)}
+.orn::before,.orn::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
+.orn::after{transform:scaleX(-1)}.orn svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.srch{display:flex;align-items:center;gap:10px;margin:16px auto 18px;max-width:calc(560px - 32px);width:calc(100% - 32px);padding:0 14px;border-radius:14px;border:1px solid var(--ln);background:rgba(14,13,22,.82)}
+.srch svg{width:18px;height:18px;color:var(--gold);flex:none}
+.srch input{border:0;background:none;padding:13px 0;box-shadow:none!important}
+.mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:560px;margin:0 auto;padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
+@media(min-width:640px){.mgrid{grid-template-columns:repeat(3,minmax(0,1fr));max-width:640px}}
+.mc{position:relative;display:flex;flex-direction:column;align-items:center;gap:9px;padding:20px 10px 14px;border-radius:20px;border:1px solid var(--ln);background:linear-gradient(160deg,rgba(36,30,50,.74),rgba(10,10,16,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 24px rgba(0,0,0,.45);text-align:center;opacity:0;animation:mcin .5s cubic-bezier(.22,1,.36,1) forwards;animation-delay:calc(var(--i,0)*40ms);transition:transform .15s,border-color .2s}
+.mc::before{content:"";position:absolute;left:20%;right:20%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(240,213,138,.7),transparent)}
+.mc:active{transform:scale(.97);border-color:var(--gold)}
+@media(hover:hover){.mc:hover{border-color:rgba(240,213,138,.6)}}
+@keyframes mcin{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+.mav,.pav{border-radius:50%;padding:3px;background:conic-gradient(from 200deg,#f0d58a,#a97c2c,#f0d58a,#7a5a1a,#f0d58a);box-shadow:0 0 20px rgba(217,180,90,.28),0 6px 16px rgba(0,0,0,.6)}
+.mav{width:88px;height:88px}.pav{width:100%;height:100%}
+.mav>*,.pav>*{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;border:2px solid #0b0a12}
+.ini{display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#4a3715,#1a1208);color:var(--gold2);font-family:var(--serif);font-weight:700;font-size:2rem}
+.mn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);font-weight:700;font-size:1.03rem;color:#f6f0df}
+.mp{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;background:rgba(217,180,90,.12);border:1px solid var(--ln);color:var(--gold2);font-size:.78rem;font-weight:600}
+.mp svg{width:12px;height:12px;fill:currentColor;stroke:none}
+.vc{position:absolute;top:9px;right:9px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#1a1405;font-size:.62rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.mload{grid-column:1/-1;padding:40px 0}.mempty{grid-column:1/-1;text-align:center;color:var(--mut);padding:30px 10px;line-height:1.5}
+/* perfil (mesma ideia da tela "Eu" das tavernas) */
+#pfIn{display:flow-root;position:relative;z-index:0;max-width:480px;margin:0 auto;padding-bottom:calc(34px + env(safe-area-inset-bottom,0px))}
+#pfCover{position:absolute;top:0;left:0;width:100%;aspect-ratio:1/1;background:#0b0a12 center top/cover no-repeat;z-index:-1;overflow:hidden}
+#pfFade{position:absolute;top:0;left:0;width:100%;aspect-ratio:1/1;z-index:-1;pointer-events:none;background:linear-gradient(to bottom,rgba(0,0,0,.38),transparent 20%,transparent 42%,rgba(5,5,8,.72) 70%,#050508 97%)}
+.cover-slide{position:absolute;inset:0;background-size:cover;background-position:center top;will-change:transform}
+#pfHero{margin-top:min(60vw,290px);display:flex;flex-direction:column;align-items:center;padding:0 16px}
+#pfAvWrap{position:relative;width:126px;height:126px;cursor:pointer}
+#pfCam{position:absolute;right:2px;bottom:4px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#ecca78,#c89f48);color:#1a1405;border:2px solid #0b0a12;box-shadow:0 3px 10px rgba(0,0,0,.6)}
+#pfCam svg{width:17px;height:17px;stroke-width:2.2}
+#pfName{margin-top:13px;max-width:100%;text-align:center;font-family:var(--serif);font-size:1.65rem;font-weight:700;color:#fff;letter-spacing:.03em;text-shadow:0 2px 12px #000;overflow-wrap:anywhere}
+#pfSub{margin-top:3px;color:var(--gold);font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;text-shadow:0 1px 6px #000}
+.pfcards{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:24px 16px 0}
+.pc{flex:1 1 150px;max-width:230px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 8px 16px;border-radius:20px;border:1px solid var(--ln);background:linear-gradient(160deg,rgba(36,30,50,.76),rgba(10,10,16,.88));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 24px rgba(0,0,0,.5);transition:transform .15s,border-color .2s}
+.pc:active{transform:scale(.97);border-color:var(--gold)}
+.pc .ic3{flex:none;width:88px;height:88px}
+.pcn{font-family:var(--serif);font-weight:700;font-size:1.02rem;color:#f6f0df}
+.pcv{font-family:var(--serif);font-weight:700;font-size:1.55rem;color:var(--gold2);line-height:1.15}
+.pcv.sm{font-size:.8rem;font-family:system-ui,sans-serif;font-weight:500;color:var(--mut);letter-spacing:.04em}
+/* overlays */
+.ov{position:fixed;inset:0;z-index:350;display:none;flex-direction:column;background:rgba(3,3,6,.94)}
+.ov.open{display:flex}
+#phm{z-index:340;background:#050508}#crm{z-index:370;align-items:center;justify-content:center;padding:16px}#pwm{z-index:360;align-items:center;justify-content:center;padding:16px;overflow-y:auto}#fsv{z-index:380;background:#000}
+.phin{width:100%;max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 28px;overflow-y:auto}
+.pht{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.pht span{font-family:var(--serif);font-size:1.2rem;font-weight:700;color:var(--gold2)}
+.pht button{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:rgba(14,13,22,.9);border:1px solid var(--ln);color:var(--gold2);padding:0}
+.pht svg{width:18px;height:18px;stroke-width:2.4}
+.phh{color:var(--mut);font-size:.84rem;line-height:1.5;margin:0 0 16px}
+.phgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.phc{position:relative;aspect-ratio:1/1;border-radius:14px;overflow:hidden;border:1.5px solid var(--ln);background:#0b0a12;padding:0}
+.phc img{width:100%;height:100%;object-fit:cover;display:block}
+.phc.add{display:grid;place-items:center;border:2px dashed var(--ln);color:var(--gold)}.phc.add svg{width:34px;height:34px;stroke-width:2.2}
+.phb{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--serif);font-size:.66rem;letter-spacing:.06em;color:var(--gold2);background:linear-gradient(to top,rgba(0,0,0,.85),transparent);padding:14px 0 4px;pointer-events:none}
+.pha{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;padding:18px 5px 5px;background:linear-gradient(to top,rgba(0,0,0,.88),transparent)}
+.pha button{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;padding:0;background:rgba(10,10,16,.88);border:1px solid var(--ln);color:var(--gold2)}
+.pha button.del{color:#ff9a9a;border-color:rgba(200,60,60,.6)}.pha svg{width:15px;height:15px;stroke-width:2.1}
+.phs{grid-column:1/-1;text-align:center;color:var(--mut);padding:22px 0}
+.cwrap{width:100%;max-width:320px;height:320px;background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--ln)}
+.cwrap img{display:block;max-width:100%}
+.cbtns{display:flex;gap:10px;margin-top:16px;width:100%;max-width:320px}.cbtns .btn{flex:1}
+.pwb{width:100%;max-width:380px}
+#pwerr{min-height:1.3em;margin:10px 0 2px;color:#ef8a8a;font-size:.88rem;text-align:left;line-height:1.4}
+#fsv .top{display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 8px;color:#fff;position:relative;z-index:2}
+#fsv .top button{width:38px;height:38px;border-radius:50%;background:rgba(30,30,34,.8);border:1px solid rgba(255,255,255,.2);display:grid;place-items:center;padding:0}
+#fsStage{flex:1;min-height:0;position:relative;overflow:hidden;touch-action:none;display:flex;align-items:center;justify-content:center}
+#fsImg{max-width:100%;max-height:100%;user-select:none;-webkit-user-drag:none;will-change:transform;transform-origin:center}
+.fsn{position:absolute;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;background:rgba(30,30,34,.7);border:1px solid rgba(255,255,255,.2);display:none;place-items:center;padding:0;z-index:2}
+@media(hover:hover){.fsn{display:grid}}.fsn.l{left:12px}.fsn.r{right:12px}
+
 @media (max-height:640px){.logo{max-height:20dvh}#hello{margin-bottom:8px}.cards{gap:8px}.card{padding:6px}}
 @media (min-width:700px){.logo{max-height:28dvh}}
 </style>
@@ -112,7 +197,6 @@ input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,90,.16)}
 <!-- ÍCONES 3D dos cards (three.js). O SVG de cada card fica como reserva se não houver WebGL. -->
 <script type="module">
 (async()=>{
-const nodes=[...document.querySelectorAll('.ic3[data-i3]')];if(!nodes.length)return;
 let T,RE=null;
 try{T=await import('three')}catch(e){return}
 try{RE=(await import('three/addons/environments/RoomEnvironment.js')).RoomEnvironment}catch(e){}
@@ -159,6 +243,11 @@ ranking(){ /* troféu */
   [-1,1].forEach(s=>g.add(me(new T.TorusGeometry(.22,.05,12,28),GOLD,s*.68,.38,0,0,0,s>0?-Math.PI/2:Math.PI/2)));
   const st=me(star(.3,.13,.07),mat(0xffe08a,.6,.3,{emissive:0xffb830,emissiveIntensity:.5}),0,1.12,0);g.add(st);g.position.y=-.05;
   return{g,fit:.82,tick(t){g.rotation.y=t*.7;st.rotation.y=-t*2.2;st.position.y=1.1+Math.sin(t*2)*.05}}},
+senha(){ /* cadeado */
+  const g=new T.Group();g.add(me(BX(1.08,.84,.5),GOLD,0,-.32,0));
+  const sh=new T.Group();sh.add(me(new T.TorusGeometry(.34,.085,14,32,Math.PI),GOLD,0,0,0),me(CY(.085,.085,.3,14),GOLD,-.34,-.15,0),me(CY(.085,.085,.3,14),GOLD,.34,-.15,0));sh.position.y=.1;g.add(sh);
+  g.add(me(CY(.1,.1,.06,18),DARK,0,-.26,.26,Math.PI/2),me(BX(.075,.26,.06),DARK,0,-.42,.26));
+  return{g,fit:.95,tick(t){g.rotation.y=Math.sin(t*.8)*.5;g.rotation.x=-.08;sh.position.y=.1+Math.max(0,Math.sin(t*1.4))*.09}}},
 perfil(){ /* busto dentro de anel */
   const g=new T.Group();const ring=me(new T.TorusGeometry(.95,.055,16,60),GOLD);g.add(ring);
   const head=me(new T.SphereGeometry(.29,30,22),PEARL,0,.28,0),body=me(new T.SphereGeometry(.62,32,20,0,Math.PI*2,0,Math.PI/2),PEARL,0,-.62,0);body.scale.set(1,.85,.6);g.add(head,body);
@@ -166,24 +255,28 @@ perfil(){ /* busto dentro de anel */
   return{g,fit:.95,tick(t){g.rotation.y=Math.sin(t*.8)*.5;dot.position.set(Math.cos(t*1.6)*.95,Math.sin(t*1.6)*.95,0);head.position.y=.28+Math.sin(t*1.6)*.015}}}
 };
 
-/* ===== monta cada card ===== */
-const items=[];
-nodes.forEach(n=>{const k=n.dataset.i3;if(!BUILD[k])return;
-  try{const o=BUILD[k]();const sc=new T.Scene();if(env)sc.environment=env;
-    sc.add(new T.AmbientLight(0xffffff,(env?0.4:1.1)));const dl=new T.DirectionalLight(0xfff0d0,(env?2.2:2.6));dl.position.set(2,3,4);sc.add(dl);const rim=new T.PointLight(0xd9b45a,18,12);rim.position.set(-3,1.2,-1.5);sc.add(rim);
-    sc.add(glow());o.g.scale.setScalar(o.fit);sc.add(o.g);
-    const cam=new T.PerspectiveCamera(30,1,.1,50);cam.position.set(0,0,4.5);
-    const cv=document.createElement('canvas');cv.width=cv.height=S;cv.setAttribute('aria-hidden','true');
-    items.push({n,cv,x:cv.getContext('2d'),sc,cam,o,ph:Math.random()*5,on:false})}catch(e){console.warn('Ícone 3D',k,e)}});
-if(!items.length)return;
+/* ===== monta cada ícone (também os criados depois, ex.: tela de perfil) ===== */
+const items=[],seen=new WeakSet();
 function draw(it,t){it.o.tick(RED?1.5:t+it.ph);R.render(it.sc,it.cam);it.x.clearRect(0,0,S,S);it.x.drawImage(R.domElement,0,0);
   if(!it.on){it.on=true;it.n.textContent='';it.n.append(it.cv)}}
-items.forEach(it=>draw(it,performance.now()/1000));
-if(RED)return;
+function scan(root){
+  (root||document).querySelectorAll('.ic3[data-i3]').forEach(n=>{
+    const k=n.dataset.i3;if(seen.has(n)||!BUILD[k])return;seen.add(n);
+    try{const o=BUILD[k]();const sc=new T.Scene();if(env)sc.environment=env;
+      sc.add(new T.AmbientLight(0xffffff,(env?0.4:1.1)));const dl=new T.DirectionalLight(0xfff0d0,(env?2.2:2.6));dl.position.set(2,3,4);sc.add(dl);const rim=new T.PointLight(0xd9b45a,18,12);rim.position.set(-3,1.2,-1.5);sc.add(rim);
+      sc.add(glow());o.g.scale.setScalar(o.fit);sc.add(o.g);
+      const cam=new T.PerspectiveCamera(30,1,.1,50);cam.position.set(0,0,4.5);
+      const cv=document.createElement('canvas');cv.width=cv.height=S;cv.setAttribute('aria-hidden','true');
+      items.push({n,cv,x:cv.getContext('2d'),sc,cam,o,ph:Math.random()*5,on:false})}catch(e){console.warn('Ícone 3D',k,e)}});
+}
+const vis=it=>it.n.isConnected&&it.n.offsetParent!==null;
 let last=0;
 (function frame(now){requestAnimationFrame(frame);
   if(document.hidden||BODY.classList.contains('hud-hidden')||BODY.classList.contains('needinstall')||BODY.classList.contains('needlogin'))return;
-  if(now-last<32)return;last=now;const t=now/1000;items.forEach(it=>draw(it,t))})(0);
+  if(now-last<32)return;last=now;const t=now/1000;
+  items.forEach(it=>{if(!vis(it))return;if(RED&&it.on)return;draw(it,t)})})(0);
+const pend=(window.EmausIcons&&window.EmausIcons.q)||[];
+window.EmausIcons={scan};scan();pend.forEach(x=>scan(x));
 })();
 </script>
 
@@ -325,13 +418,62 @@ raf=requestAnimationFrame(frame);
   <div class="ct">Entrar no Emaús</div>
   <div class="ap" id="ap">Digite seu nome e sua senha. Se você já tem conta, a senha já basta para reconhecer você, em qualquer aparelho.</div>
   <label for="an">Seu nome</label>
-  <input id="an" maxlength="60" placeholder="Nome e sobrenome" autocomplete="name" autocapitalize="words" enterkeyhint="next">
+  <input id="an" placeholder="Nome e sobrenome" autocomplete="name" autocapitalize="words" enterkeyhint="next">
   <label for="apw">Senha</label>
   <div class="pw"><input id="apw" type="password" maxlength="72" placeholder="Mínimo de 6 caracteres" autocomplete="current-password" enterkeyhint="go"><button type="button" id="aeye" aria-label="Mostrar senha"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div id="aerr" role="alert"></div>
   <button class="btn" id="ago">Entrar</button>
   <small>Primeira vez aqui? Digite seu nome e crie uma senha: ela será a sua chave de acesso. Guarde-a bem; se esquecer, fale com o responsável.</small>
 </div></div>
+
+
+<!-- MEMBROS -->
+<section class="pg" id="membros">
+  <button class="bk" data-back aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg></button>
+  <div class="mh"><div class="mt">Membros</div><div class="ms" id="mcount">Nossa comunidade</div><div class="orn"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 9l-5 4.4L17.6 20 12 16.5 6.4 20 8 13.4 3 9l6.6-.4z"/></svg></div></div>
+  <label class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="msearch" type="search" placeholder="Buscar membro" autocomplete="off" aria-label="Buscar membro"></label>
+  <div class="mgrid" id="mgrid"></div>
+</section>
+
+<!-- PERFIL -->
+<section class="pg" id="perfil">
+  <button class="bk" data-back aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg></button>
+  <button class="bk r" id="pfPhotos" aria-label="Fotos do perfil" hidden><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/></svg></button>
+  <div id="pfIn">
+    <div id="pfCover"></div><div id="pfFade"></div>
+    <div id="pfHero">
+      <div id="pfAvWrap"><div class="pav" id="pfAv"></div><div id="pfCam" hidden><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div></div>
+      <div id="pfName"></div><div id="pfSub">Membro do Emaús</div>
+    </div>
+    <div class="pfcards">
+      <button class="pc" id="pcPts"><span class="ic3" data-i3="ranking"><svg viewBox="0 0 64 64"><path d="M20 8h24v16a12 12 0 01-24 0zM20 14H10v4a8 8 0 008 8M44 14h10v4a8 8 0 01-8 8M32 36v10M22 56h20M26 46h12v10H26z"/></svg></span><span class="pcn">Pontos</span><span class="pcv" id="pfPts">0</span></button>
+      <button class="pc" id="pcPass" hidden><span class="ic3" data-i3="senha"><svg viewBox="0 0 64 64"><rect x="12" y="28" width="40" height="28" rx="5"/><path d="M20 28v-8a12 12 0 0124 0v8M32 38v8"/></svg></span><span class="pcn">Trocar Senha</span><span class="pcv sm">Alterar meu acesso</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- Fotos do perfil -->
+<div class="ov" id="phm"><div class="phin">
+  <div class="pht"><span id="phTitle">Fotos</span><button id="phClose" aria-label="Fechar"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+  <p class="phh" id="phHint"></p><div class="phgrid" id="phGrid"></div>
+</div></div>
+<!-- Recorte 1:1 -->
+<div class="ov" id="crm"><div class="ct" style="margin-bottom:12px" id="crTitle">Ajustar foto</div><div class="cwrap"><img id="crImg" alt=""></div>
+  <div class="cbtns"><button class="btn sec" id="crNo">Cancelar</button><button class="btn" id="crYes">Usar foto</button></div></div>
+<!-- Trocar senha -->
+<div class="ov" id="pwm"><div class="cbox pwb">
+  <div class="ct">Trocar senha</div>
+  <div class="ap" style="color:#d8d2c2;font-size:.9rem;line-height:1.5;margin-top:8px">Sua senha é a chave de acesso à sua conta em qualquer aparelho. Escolha uma que só você saiba.</div>
+  <label for="pw0">Senha atual</label><input id="pw0" type="password" autocomplete="current-password" maxlength="72">
+  <label for="pw1">Nova senha</label><input id="pw1" type="password" autocomplete="new-password" maxlength="72" placeholder="Mínimo de 6 caracteres">
+  <label for="pw2">Repita a nova senha</label><input id="pw2" type="password" autocomplete="new-password" maxlength="72">
+  <div id="pwerr" role="alert"></div>
+  <div class="row-btns"><button class="btn sec" id="pwNo">Cancelar</button><button class="btn" id="pwYes">Salvar</button></div>
+</div></div>
+<!-- Visualizador de foto -->
+<div class="ov" id="fsv"><div class="top"><span id="fsCt"></span><button id="fsClose" aria-label="Fechar"><svg viewBox="0 0 24 24" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+  <div id="fsStage"><img id="fsImg" alt="" draggable="false"><button class="fsn l" id="fsPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" width="20" height="20"><polyline points="15 18 9 12 15 6"/></svg></button><button class="fsn r" id="fsNext" aria-label="Próxima"><svg viewBox="0 0 24 24" width="20" height="20"><polyline points="9 18 15 12 9 6"/></svg></button></div></div>
+<input type="file" id="fIn" accept="image/*" hidden>
 
 <div id="md" hidden><div class="cbox"><div id="mdi"></div><div class="ct" id="mdt"></div><div id="mdx"></div><div id="mdbt" class="row-btns" style="justify-content:center"></div></div></div>
 
@@ -414,26 +556,52 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
   const nsup=()=>'Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window;
   const u8=b=>{const s=(b+'='.repeat((4-b.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(s),c=>c.charCodeAt(0))};
   const b64=buf=>buf?btoa(String.fromCharCode(...new Uint8Array(buf))):null;
+  /* Estado REAL da permissão: o Chrome/Android às vezes devolve Notification.permission desatualizado
+     (principalmente no app instalado). Por isso consultamos 3 fontes e basta uma dizer "granted". */
+  async function permState(){
+    if(!nsup())return 'denied';
+    let s=Notification.permission;if(s==='granted')return 'granted';
+    try{const q=await navigator.permissions.query({name:'notifications'});if(q.state==='granted')return 'granted';if(s==='default'&&q.state==='denied')s='denied'}catch(e){}
+    try{const reg=await navigator.serviceWorker.ready;const ps=await reg.pushManager.permissionState({userVisibleOnly:true});if(ps==='granted')return 'granted';if(s==='default'&&ps==='denied')s='denied'}catch(e){}
+    return s;
+  }
+  async function permDiag(){
+    let a='?',b='?',c='?';try{a=Notification.permission}catch(e){}
+    try{b=(await navigator.permissions.query({name:'notifications'})).state}catch(e){}
+    try{const reg=await navigator.serviceWorker.ready;c=await reg.pushManager.permissionState({userVisibleOnly:true})}catch(e){}
+    return 'Estado detectado: Notification='+a+' · permissions='+b+' · push='+c;
+  }
   async function subscribe(){
-    if(!nsup()||Notification.permission!=='granted')return;
+    if(!nsup()||(await permState())!=='granted')return;
     const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
     if(sub){const cur=sub.options&&sub.options.applicationServerKey;if(cur&&b64(cur)!==b64(u8(VAPID))){await sub.unsubscribe().catch(()=>{});sub=null}}
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(VAPID)});
     const s=sess()||{};
     await rpc('emaus_push_subscribe',{p_endpoint:sub.endpoint,p_p256dh:b64(sub.getKey('p256dh')),p_auth:b64(sub.getKey('auth')),p_device_type:ios?'ios':'web',p_member:s.id||null,p_token:s.token||null});
   }
-  let nmOpen=false,asked=false,lastPerm=nsup()?Notification.permission:'';
+  let nmOpen=false,asked=false,lastPerm='';
   function closeNotifModal(){if(nmOpen){nmOpen=false;$('#md').hidden=true}}
   async function blocked(){
-    nmOpen=true;const i='Parece que as notificações do Emaús estão bloqueadas. ';let p;
-    if(ios)p=tut('Notificações bloqueadas',['Abra o app <b>Ajustes</b> do iPhone.','Role até <b>Notificações</b> (ou procure “Emaús” na busca dos Ajustes).','Toque em <b>Emaús</b> e ative <b>Permitir Notificações</b>.'],i+'Para ativar:');
-    else if(/Android/i.test(UA))p=tut('Notificações bloqueadas',['Abra <b>Configurações</b> do celular → <b>Apps</b> → <b>Emaús</b> → <b>Notificações</b> e ative.','Se continuar bloqueado, o Chrome guarda a permissão por site: abra o <b>Chrome</b> → menu (⋮) → <b>Configurações</b> → <b>Configurações de site</b> → <b>Notificações</b>.','Procure <b>'+location.host+'</b> na lista e mude para <b>Permitir</b>.'],i+'Tente primeiro pelas Configurações do celular:');
-    else p=tut('Notificações bloqueadas',['Clique no cadeado ao lado do endereço (ou no menu ⋮ do app → <b>Informações do app</b>).','Abra <b>Configurações do site</b> → <b>Notificações</b> e escolha <b>Permitir</b>.'],i+'Para ativar:');
-    await p;nmOpen=false;
+    nmOpen=true;
+    const i='Parece que as notificações do Emaús estão bloqueadas. ';
+    const steps=ios?['Abra o app <b>Ajustes</b> do iPhone.','Role até <b>Notificações</b> (ou procure “Emaús” na busca dos Ajustes).','Toque em <b>Emaús</b> e ative <b>Permitir Notificações</b>.']
+      :/Android/i.test(UA)?['Abra <b>Configurações</b> do celular → <b>Apps</b> → <b>Emaús</b> → <b>Notificações</b> e ative.','<b>Importante:</b> o Chrome guarda uma permissão separada por site. Abra o <b>Chrome</b> → menu (⋮) → <b>Configurações</b> → <b>Configurações de site</b> → <b>Notificações</b>, procure <b>'+location.host+'</b> e deixe em <b>Permitir</b>.','As duas precisam estar permitidas. Depois toque em <b>“Já ativei”</b>.']
+      :['Clique no cadeado ao lado do endereço (ou no menu ⋮ do app → <b>Informações do app</b>).','Abra <b>Configurações do site</b> → <b>Notificações</b> e escolha <b>Permitir</b>.','Depois toque em <b>“Já ativei”</b>.'];
+    const p=modal('Notificações bloqueadas','',[['Já ativei',2],['Fechar',1,'sec']]);
+    $('#mdx').innerHTML='<p style="margin:0 0 10px">'+i+'Para ativar:</p><ol style="text-align:left;padding-left:20px;margin:0;line-height:1.6">'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
+    const v=await p;nmOpen=false;
+    if(v===2){
+      const st=await permState();
+      if(st==='granted'){await subscribe().catch(()=>{});ntRefresh();await modal('Notificações ativadas!','Pronto, você vai receber os avisos do Emaús.',[['Continuar',1]],'ok')}
+      else{const d=await permDiag();const q=modal('Ainda não detectamos','Se você acabou de ativar, feche o app por completo e abra de novo. Confira também se a permissão está liberada nos DOIS lugares (Configurações do celular e Chrome → Configurações de site).',[['Entendi',1]]);
+        $('#mdx').insertAdjacentHTML('beforeend','<div style="margin-top:12px;font-size:.74rem;color:#8d879a;line-height:1.5">'+d+'</div>');await q}
+    }
   }
-  function ntRefresh(){const b=$('#ntBtn');if(!isApp||!nsup()){b.hidden=true;return}const g=Notification.permission==='granted';b.hidden=g;if(g){closeNotifModal();if(sess())subscribe().catch(()=>{})}}
+  async function ntRefresh(){const b=$('#ntBtn');if(!isApp||!nsup()){b.hidden=true;return}const g=(await permState())==='granted';b.hidden=g;if(g){closeNotifModal();if(sess())subscribe().catch(()=>{})}}
   async function askNotif(){
-    if(Notification.permission==='denied')return blocked();
+    const cur=await permState();
+    if(cur==='granted'){await subscribe().catch(()=>{});return ntRefresh()}
+    if(cur==='denied')return blocked();
     let r;try{r=await Notification.requestPermission()}catch(e){r=Notification.permission}
     if(r==='granted'){await subscribe().catch(()=>{});ntRefresh()}else if(r==='denied')blocked();
   }
@@ -442,7 +610,7 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
      "default" -> explica e pede permissão; "denied" -> tutorial de como desbloquear. */
   async function offerNotif(){
     if(!isApp||!nsup()||asked||!sess())return;
-    const st=Notification.permission;if(st==='granted')return;
+    const st=await permState();lastPerm=st;if(st==='granted')return;
     asked=true;if(st==='denied')return blocked();
     nmOpen=true;
     const p=modal('Ativar notificações','',[['Agora não',0,'sec'],['Permitir',1]]);
@@ -450,11 +618,11 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
     const go=await p;nmOpen=false;if(go)askNotif();
   }
   /* Reage quando o usuário liga/desliga nas configurações e volta pro app */
-  function recheck(){
+  async function recheck(){
     if(!isApp||!nsup()||!sess())return;
-    const st=Notification.permission;
-    if(st==='granted')ntRefresh();
-    else{ntRefresh();if(lastPerm==='granted'){asked=false}offerNotif()}
+    const st=await permState();
+    if(st==='granted'){ntRefresh()}
+    else{ntRefresh();if(lastPerm==='granted')asked=false;offerNotif()}
     lastPerm=st;
   }
   try{if(isApp&&navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'notifications'}).then(s=>{s.onchange=recheck}).catch(()=>{})}catch(e){}
@@ -466,9 +634,13 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
   function askLogin(){return new Promise(res=>{
     const A=$('#auth');A.hidden=false;B.classList.add('needlogin');const ni=$('#an'),pi=$('#apw'),go=$('#ago');
     const done=s=>{A.hidden=true;B.classList.remove('needlogin');pi.value='';res(s)};
+    let lim=false;
+    const nameLimit=async()=>{if(lim)return;lim=true;await modal('Atenção','O nome deve ter no máximo 14 letras.',[['Entendi',1]]);lim=false;ni.focus()};
+    ni.addEventListener('input',()=>{const a=Array.from(ni.value);if(a.length>14){ni.value=a.slice(0,14).join('');nameLimit()}});
     async function enter(create){
       const name=ni.value.replace(/\s+/g,' ').trim(),pass=pi.value.trim();authMsg('');
       if(pass.length<6){authMsg('A senha precisa ter pelo menos 6 caracteres.');pi.focus();return}
+      if(Array.from(name).length>14){ni.value=Array.from(name).slice(0,14).join('');nameLimit();return}
       if(!create&&name.length<2){authMsg('Digite seu nome.');ni.focus();return}
       if(!navigator.onLine){authMsg('Sem internet. Conecte-se para entrar.');return}
       go.classList.add('busy');let r;
@@ -483,6 +655,7 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
           const mk=await modal('Primeiro acesso?','Não encontramos conta com essa senha. Se este é o seu primeiro acesso, vamos criar a conta de “'+name+'” com a senha digitada. Se você já tem conta, toque em Corrigir e confira a senha.',[['Corrigir',0,'sec'],['Criar conta',1]]);
           if(mk)enter(true);else pi.focus();return}
         case 'name_taken':authMsg('Já existe um membro com este nome. Se é você, confira a senha. Se é outra pessoa, acrescente seu sobrenome.');pi.focus();return;
+        case 'name_long':nameLimit();return;
         case 'name_invalid':authMsg('Digite seu nome completo para criar a conta.');ni.focus();return;
         case 'weak':authMsg('A senha precisa ter pelo menos 6 caracteres.');pi.focus();return;
         case 'throttled':authMsg('Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.');return;
@@ -510,13 +683,251 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
     if(s&&navigator.onLine){try{const r=await rpc('emaus_me',{p_id:s.id,p_token:s.token});
       if(r&&r.ok===false){LS.del('emaus.sess');s=null}else if(r&&r.ok&&r.name&&r.name!==s.name){s.name=r.name;saveSess(s)}}catch(e){}}
     if(!s){B.classList.add('needlogin');s=await askLogin()}
-    B.classList.remove('needlogin');hello(s.name);ntRefresh();ping(true);clearBadge();offerNotif();
+    B.classList.remove('needlogin');hello(s.name);ntRefresh();ping(true);clearBadge();window.__emausReady=true;if(window.Emaus&&window.Emaus.ready)window.Emaus.ready();offerNotif();
   }
   if(!isApp)B.classList.remove('needlogin');
   boot();
   document.addEventListener('visibilitychange',()=>{if(document.hidden||!isApp)return;clearBadge();recheck();if(Date.now()-lastPing>30*60*1000&&sess())ping(true)});
   addEventListener('online',()=>{if(isApp&&sess()&&!lastPing)ping(true)});
   if(isApp&&'serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='emaus-nav'){/* rotas das telas entram aqui quando existirem */}});
+})();
+</script>
+<script>
+/* ===== Telas internas: Membros e Perfil (rotas por #hash) ===== */
+(function(){
+const B=document.body,CLOUD='dbrghqhqy',PRESET='avatars_preset';
+const CRJS='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js',CRCSS='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css';
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isCl=u=>typeof u==='string'&&u.indexOf('https://res.cloudinary.com/'+CLOUD+'/')===0;
+const IC={star:'<svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 9l-5 4.4L17.6 20 12 16.5 6.4 20 8 13.4 3 9l6.6-.4z"/></svg>',
+  up:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/></svg>',
+  del:'<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>',
+  plus:'<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'};
+let ready=false,depth=0,P=null,MEM=[],memT=0;
+const me=()=>sess();
+const logged=()=>!!me()&&!B.classList.contains('needlogin')&&!B.classList.contains('needinstall');
+const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const thumb=(u,w)=>isCl(u)&&u.indexOf('/upload/')>0?u.replace('/upload/','/upload/c_fill,w_'+w+',h_'+w+',q_auto,f_auto/'):u;
+const avHTML=(name,url,w)=>{const l=esc(Array.from(String(name||'?'))[0]||'?').toUpperCase();
+  return url?`<img src="${esc(thumb(url,w||200))}" data-o="${esc(url)}" alt="" loading="lazy" onerror="if(this.dataset.o){var o=this.dataset.o;this.dataset.o='';this.src=o}else{this.outerHTML='<div class=\\'ini\\'>${l}</div>'}">`:`<div class="ini">${l}</div>`};
+const forbidden=e=>/42501|forbidden/i.test(String(e&&e.message||e));
+function relogin(){LS.del('emaus.sess');location.hash='';location.reload()}
+
+/* ---------- rotas ---------- */
+function parse(){const h=location.hash.replace(/^#/,'');if(h==='membros')return{s:'membros'};if(h==='perfil')return{s:'perfil',id:null};
+  const m=h.match(/^perfil-([0-9a-f-]{36})$/i);return m?{s:'perfil',id:m[1].toLowerCase()}:{s:'home'}}
+function show(n){['membros','perfil'].forEach(x=>$('#'+x).classList.toggle('open',x===n));B.classList.toggle('onhome',!n);if(n!=='perfil')stopCover($('#pfCover'))}
+function route(){
+  if(!ready||!logged()){show(null);return}
+  const r=parse();
+  if(r.s==='membros'){show('membros');openMembers()}
+  else if(r.s==='perfil'){show('perfil');openProfile(r.id||me().id)}
+  else show(null);
+}
+function go(h){depth++;location.hash=h}
+function back(){if(depth>0){depth--;history.back()}else{try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}route()}}
+addEventListener('hashchange',route);
+document.addEventListener('click',e=>{if(e.target.closest('[data-back]'))back()});
+document.querySelectorAll('.card[data-go]').forEach(c=>c.addEventListener('click',()=>{const g=c.dataset.go;if(g==='membros')go('membros');else if(g==='perfil')go('perfil')}));
+window.Emaus={ready(){ready=true;route()}};
+if(window.__emausReady)window.Emaus.ready();
+
+/* ---------- membros ---------- */
+async function openMembers(){
+  const g=$('#mgrid');if(MEM.length&&Date.now()-memT<60000){renderMembers();return}
+  if(!MEM.length)g.innerHTML='<div class="mload"><div class="spin"></div></div>';
+  try{const s=me();const r=await rpc('emaus_members_list',{p_id:s.id,p_token:s.token});MEM=Array.isArray(r)?r:[];memT=Date.now();renderMembers()}
+  catch(e){if(forbidden(e))return relogin();g.innerHTML='<div class="mempty">Não foi possível carregar os membros agora.<br>Verifique sua conexão e tente de novo.</div>'}
+}
+function renderMembers(){
+  const q=norm($('#msearch').value.trim()),g=$('#mgrid'),meId=me()&&me().id;
+  const list=MEM.filter(m=>!q||norm(m.name).includes(q));
+  $('#mcount').textContent=MEM.length===1?'1 membro':MEM.length+' membros';
+  if(!list.length){g.innerHTML='<div class="mempty">'+(q?'Nenhum membro encontrado.':'Ainda não há membros cadastrados.')+'</div>';return}
+  g.innerHTML=list.map((m,i)=>`<button class="mc" data-id="${esc(m.id)}" style="--i:${Math.min(i,14)}">${m.id===meId?'<span class="vc">Você</span>':''}<span class="mav">${avHTML(m.name,m.avatar_url)}</span><span class="mn">${esc(m.name)}</span><span class="mp">${IC.star}${Number(m.points)||0} pts</span></button>`).join('');
+}
+$('#mgrid').addEventListener('click',e=>{const c=e.target.closest('.mc');if(c)go('perfil-'+c.dataset.id)});
+$('#msearch').addEventListener('input',renderMembers);
+
+/* ---------- capa em slides (mesma lógica das tavernas) ---------- */
+function coverList(avatar,photos){const l=[];if(avatar)l.push(avatar);(photos||[]).forEach(u=>{if(u&&!l.includes(u))l.push(u)});return l.slice(0,3)}
+function stopCover(el){if(el&&el._t){clearInterval(el._t);el._t=null}}
+function startCover(el,list){
+  if(!el)return;stopCover(el);list=(list||[]).filter(Boolean);
+  if(!list.length){el.innerHTML='';el.style.backgroundImage="url('/assets/emaussky.png')";return}
+  if(list.length===1){el.innerHTML='';el.style.backgroundImage=`url('${list[0]}')`;return}
+  el.style.backgroundImage='';
+  el.innerHTML=`<div class="cover-slide cover-slide-a" style="background-image:url('${list[0]}');display:block"></div><div class="cover-slide cover-slide-b" style="display:none"></div>`;
+  let idx=0,aAct=true;const D=['left','right','up','down'];
+  const off=d=>d==='left'?['translate3d(100%,0,0)','translate3d(-100%,0,0)']:d==='right'?['translate3d(-100%,0,0)','translate3d(100%,0,0)']:d==='up'?['translate3d(0,100%,0)','translate3d(0,-100%,0)']:['translate3d(0,-100%,0)','translate3d(0,100%,0)'];
+  el._t=setInterval(()=>{
+    const A=el.querySelector('.cover-slide-a'),Bb=el.querySelector('.cover-slide-b');if(!A||!Bb||document.hidden)return;
+    const out=aAct?A:Bb,inn=aAct?Bb:A;
+    if(list.length===2)idx=idx?0:1;else{let n;do{n=Math.floor(Math.random()*list.length)}while(n===idx);idx=n}
+    const [from,to]=off(D[Math.floor(Math.random()*4)]);
+    inn.style.backgroundImage=`url('${list[idx]}')`;inn.style.transition='none';inn.style.transform=from;inn.style.display='block';void inn.offsetWidth;
+    inn.style.transition=out.style.transition='transform 4s cubic-bezier(.22,1,.36,1)';inn.style.transform='translate3d(0,0,0)';out.style.transform=to;
+    setTimeout(()=>{out.style.display='none';out.style.transition='none';out.style.transform='translate3d(0,0,0)'},4020);aAct=!aAct;
+  },8000);
+}
+
+/* ---------- perfil ---------- */
+async function openProfile(id){
+  const s=me();$('#perfil').scrollTop=0;
+  if(!P||P.id!==id){P=null;paint(null)}
+  try{
+    const r=await rpc('emaus_profile_get',{p_id:s.id,p_token:s.token,p_target:id});
+    const cur=parse();if(cur.s!=='perfil'||(cur.id||s.id)!==id)return;
+    if(!r||!r.ok){await modal('Perfil não encontrado','Este membro não está mais disponível.',[['Voltar',1]]);return back()}
+    P=r;paint(P);if(P.is_me&&!window.__cleaned){window.__cleaned=true;callClean()}
+  }catch(e){if(forbidden(e))return relogin();if(!P){await modal('Sem conexão','Não foi possível carregar o perfil agora. Tente de novo.',[['Voltar',1]],'err');back()}}
+}
+function paint(p){
+  const mine=!!(p&&p.is_me);
+  $('#pfName').textContent=p?p.name:'';
+  $('#pfAv').innerHTML=p?avHTML(p.name,p.avatar_url,300):'<div class="ini"></div>';
+  $('#pfCam').hidden=!mine;$('#pfPhotos').hidden=!mine;$('#pcPass').hidden=!mine;
+  $('#pfPts').textContent=p?(Number(p.points)||0):'0';
+  const list=p?coverList(p.avatar_url,p.photos):[];
+  startCover($('#pfCover'),list);
+  $('#pfCover').style.cursor=(p&&(list.length||mine))?'pointer':'';
+}
+$('#pfCover').addEventListener('click',()=>{if(P&&(coverList(P.avatar_url,P.photos).length||P.is_me))openPhotos()});
+$('#pfPhotos').addEventListener('click',()=>{if(P)openPhotos()});
+$('#pfAvWrap').addEventListener('click',()=>{
+  if(!P)return;
+  if(P.is_me){pick('avatar')}else if(P.avatar_url)openViewer([P.avatar_url],0);
+});
+$('#pcPts').addEventListener('click',()=>{if(!P)return;const n=Number(P.month_points)||0;
+  modal('Pontos do mês',P.name+' adquiriu '+n+' '+(n===1?'ponto':'pontos')+' neste mês!',[['Fechar',1]])});
+
+/* ---------- fotos (grade) ---------- */
+function openPhotos(){renderPhotos();$('#phm').classList.add('open')}
+function closePhotos(){$('#phm').classList.remove('open')}
+$('#phClose').onclick=closePhotos;
+function renderPhotos(){
+  if(!P)return;const mine=P.is_me,av=P.avatar_url,ex=P.photos||[],all=coverList(av,ex);
+  $('#phTitle').textContent=mine?'Minhas fotos':'Fotos de '+P.name;
+  $('#phHint').textContent=mine?'Toque no + para adicionar até 2 fotos extras. Elas passam em slides no fundo do seu perfil, junto com a foto de perfil. Use o botão de pessoa numa foto extra para torná-la sua foto de perfil.':'';
+  let h='';
+  if(mine&&ex.length<2)h+=`<button class="phc add" data-a="add" aria-label="Adicionar foto">${IC.plus}</button>`;
+  if(av)h+=`<button class="phc" data-v="${esc(av)}"><img src="${esc(thumb(av,300))}" onerror="this.onerror=null;this.src='${esc(av)}'" alt="Foto de perfil"><span class="phb">Perfil</span></button>`;
+  ex.forEach((u,i)=>{h+=`<div class="phc" data-v="${esc(u)}"><img src="${esc(thumb(u,300))}" onerror="this.onerror=null;this.src='${esc(u)}'" alt="Foto ${i+1}">`+(mine?`<div class="pha"><button data-a="use" data-i="${i}" title="Usar como foto de perfil" aria-label="Usar como foto de perfil">${IC.up}</button><button class="del" data-a="del" data-i="${i}" title="Excluir" aria-label="Excluir foto">${IC.del}</button></div>`:'')+`</div>`});
+  if(!all.length&&!mine)h+='<div class="phs">Nenhuma foto ainda.</div>';
+  $('#phGrid').innerHTML=h;
+}
+$('#phGrid').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-a]');
+  if(b){const a=b.dataset.a,i=+b.dataset.i;
+    if(a==='add'){if((P.photos||[]).length>=2)return;return pick('photo')}
+    if(a==='use'){const ex=P.photos||[],av=P.avatar_url;if(!ex[i])return;
+      try{await setProfile({avatar:ex[i],photos:av?ex.map((u,j)=>j===i?av:u):ex.filter((_,j)=>j!==i)});await modal('Foto de perfil trocada','Essa foto agora é a sua foto de perfil.',[['Ok',1]],'ok')}catch(err){fail(err)}return}
+    if(a==='del'){const ok=await modal('Excluir foto','Tem certeza que deseja excluir esta foto?',[['Cancelar',0,'sec'],['Excluir',1]]);if(!ok)return;
+      try{await setProfile({photos:(P.photos||[]).filter((_,j)=>j!==i)})}catch(err){fail(err)}return}
+  }
+  const c=e.target.closest('[data-v]');if(c){const list=coverList(P.avatar_url,P.photos);openViewer(list,Math.max(0,list.indexOf(c.dataset.v)))}
+});
+function fail(e){if(forbidden(e))return relogin();modal('Não foi possível salvar','Verifique sua conexão e tente novamente.',[['Ok',1]],'err')}
+
+/* ---------- salvar + limpar Cloudinary ---------- */
+async function setProfile({avatar,photos}){
+  const s=me();
+  const r=await rpc('emaus_set_profile',{p_id:s.id,p_token:s.token,p_avatar:avatar==null?null:avatar,p_photos:photos==null?null:photos});
+  const old=[r&&r.old_avatar].concat((r&&r.old_photos)||[]).filter(Boolean);
+  if(avatar!=null)P.avatar_url=avatar;if(photos!=null)P.photos=photos;
+  const keep=new Set([P.avatar_url].concat(P.photos||[]));
+  cleanup(old.filter(u=>!keep.has(u)));
+  MEM=[];memT=0;paint(P);if($('#phm').classList.contains('open'))renderPhotos();
+}
+function callClean(){ /* o servidor apaga só o que está na lixeira deste membro; best-effort */
+  const s=me();if(!s)return;
+  fetch(SB+'/functions/v1/delete-cloudinary-image',{method:'POST',headers:SBH,body:JSON.stringify({emaus:{id:s.id,token:s.token}})}).catch(()=>{});
+}
+function cleanup(urls){if(urls.filter(isCl).length)callClean()}
+
+/* ---------- escolher foto → recortar 1:1 → enviar ---------- */
+let target=null,cropper=null;
+function pick(t){target=t;$('#fIn').click()}
+$('#fIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f&&/^image\//.test(f.type))startCrop(f)});
+const readURL=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});
+function loadCropper(){return new Promise(res=>{if(window.Cropper)return res(true);
+  const l=document.createElement('link');l.rel='stylesheet';l.href=CRCSS;document.head.append(l);
+  const s=document.createElement('script');s.src=CRJS;s.onload=()=>res(true);s.onerror=()=>res(false);document.head.append(s)})}
+function centerCrop(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const m=Math.min(im.width,im.height),c=document.createElement('canvas');c.width=c.height=800;
+  c.getContext('2d').drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,800,800);c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/jpeg',.92)};im.onerror=rej;im.src=src})}
+async function startCrop(file){
+  const [ok,src]=await Promise.all([loadCropper(),readURL(file)]);
+  if(!ok){try{return upload(await centerCrop(src))}catch(e){return fail(e)}}
+  const img=$('#crImg');$('#crTitle').textContent=target==='avatar'?'Ajustar foto de perfil':'Ajustar foto';
+  if(cropper){try{cropper.destroy()}catch(e){}cropper=null}
+  img.onload=()=>{requestAnimationFrame(()=>{cropper=new Cropper(img,{aspectRatio:1,viewMode:1,dragMode:'move',autoCropArea:1,movable:true,zoomable:true,rotatable:false,scalable:false,background:false,guides:true})})};
+  img.src=src;$('#crm').classList.add('open');
+}
+function closeCrop(){$('#crm').classList.remove('open');if(cropper){try{cropper.destroy()}catch(e){}cropper=null}$('#crImg').removeAttribute('src')}
+$('#crNo').onclick=closeCrop;
+$('#crYes').onclick=async()=>{
+  if(!cropper)return;const c=cropper.getCroppedCanvas({width:800,height:800,imageSmoothingQuality:'high'});if(!c)return;
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));if(!blob)return;
+  await upload(blob);
+};
+async function upload(blob){
+  const btn=$('#crYes');btn.classList.add('busy');btn.disabled=true;
+  try{
+    const fd=new FormData();fd.append('file',new File([blob],'photo.jpg',{type:'image/jpeg'}));fd.append('upload_preset',PRESET);
+    const r=await fetch('https://api.cloudinary.com/v1_1/'+CLOUD+'/upload',{method:'POST',body:fd});
+    if(!r.ok){let m='Erro no upload';try{m=(await r.json()).error.message||m}catch(e){}throw new Error(m)}
+    const d=await r.json(),url=(d.eager&&d.eager[0]&&d.eager[0].secure_url)||d.secure_url;
+    if(target==='avatar')await setProfile({avatar:url});else await setProfile({photos:((P.photos||[]).concat(url)).slice(0,2)});
+    closeCrop();
+  }catch(e){closeCrop();console.warn(e);modal('Erro ao enviar a foto','Não foi possível enviar essa imagem. Tente outra foto ou confira sua conexão.',[['Ok',1]],'err')}
+  finally{btn.classList.remove('busy');btn.disabled=false}
+}
+
+/* ---------- visualizador (zoom com dedos, duplo toque, arrastar p/ trocar) ---------- */
+const V={list:[],i:0,sc:1,tx:0,ty:0,pts:new Map(),st:null,last:0,pd:0,sc0:1};
+const fs=$('#fsStage'),fi=$('#fsImg');
+function applyV(){fi.style.transform=`translate3d(${V.tx}px,${V.ty}px,0) scale(${V.sc})`}
+function resetV(){V.sc=1;V.tx=V.ty=0;fi.style.transition='transform .15s ease-out';applyV()}
+function renderV(){fi.src=V.list[V.i]||'';$('#fsCt').textContent=V.list.length>1?(V.i+1)+' / '+V.list.length:'';$('#fsPrev').style.visibility=$('#fsNext').style.visibility=V.list.length>1?'visible':'hidden'}
+function openViewer(list,i){V.list=list;V.i=i;resetV();renderV();$('#fsv').classList.add('open')}
+function navV(d){if(V.list.length<2)return;V.i=(V.i+d+V.list.length)%V.list.length;resetV();renderV()}
+$('#fsClose').onclick=()=>$('#fsv').classList.remove('open');$('#fsPrev').onclick=()=>navV(-1);$('#fsNext').onclick=()=>navV(1);
+const dist=()=>{const a=[...V.pts.values()];return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)};
+fs.addEventListener('pointerdown',e=>{if(e.target.closest('.fsn'))return;fs.setPointerCapture(e.pointerId);V.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});fi.style.transition='none';
+  if(V.pts.size===1){V.st={x:e.clientX,y:e.clientY,tx:V.tx,ty:V.ty};const n=Date.now();if(n-V.last<300){V.sc=V.sc>1?1:2.5;V.tx=V.ty=0;fi.style.transition='transform .2s ease-out';applyV()}V.last=n}
+  else if(V.pts.size===2){V.pd=dist();V.sc0=V.sc}});
+fs.addEventListener('pointermove',e=>{if(!V.pts.has(e.pointerId))return;V.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(V.pts.size===2){V.sc=Math.min(5,Math.max(1,V.sc0*dist()/V.pd));applyV()}
+  else if(V.st&&V.sc>1){V.tx=V.st.tx+(e.clientX-V.st.x);V.ty=V.st.ty+(e.clientY-V.st.y);applyV()}});
+function endP(e){if(!V.pts.has(e.pointerId))return;const one=V.pts.size===1;V.pts.delete(e.pointerId);
+  if(one&&V.st&&V.sc===1){const dx=e.clientX-V.st.x,dy=e.clientY-V.st.y;if(Math.abs(dx)>60&&Math.abs(dy)<90)navV(dx<0?1:-1)}
+  if(V.sc<1.05)resetV();if(!V.pts.size)V.st=null}
+fs.addEventListener('pointerup',endP);fs.addEventListener('pointercancel',endP);
+
+/* ---------- trocar senha ---------- */
+const pwErr=t=>$('#pwerr').textContent=t||'';
+$('#pcPass').addEventListener('click',()=>{['pw0','pw1','pw2'].forEach(i=>$('#'+i).value='');pwErr('');$('#pwm').classList.add('open');setTimeout(()=>$('#pw0').focus(),100)});
+$('#pwNo').onclick=()=>$('#pwm').classList.remove('open');
+$('#pwYes').onclick=async()=>{
+  const o=$('#pw0').value,n=$('#pw1').value,c=$('#pw2').value;pwErr('');
+  if(!o){pwErr('Digite a sua senha atual.');return}
+  if(n.trim().length<6){pwErr('A nova senha precisa ter pelo menos 6 caracteres.');return}
+  if(n!==c){pwErr('A confirmação não confere com a nova senha.');return}
+  if(o.trim()===n.trim()){pwErr('A nova senha precisa ser diferente da atual.');return}
+  if(!navigator.onLine){pwErr('Sem internet. Conecte-se para trocar a senha.');return}
+  const b=$('#pwYes');b.classList.add('busy');let r;const s=me();
+  try{r=await rpc('emaus_change_password',{p_id:s.id,p_token:s.token,p_device:devId(),p_old:o,p_new:n})}
+  catch(e){b.classList.remove('busy');if(forbidden(e))return relogin();pwErr('Não foi possível conectar ao servidor. Tente de novo.');return}
+  b.classList.remove('busy');r=r||{};
+  switch(r.status){
+    case 'ok':saveSess({id:s.id,name:s.name,token:r.token});$('#pwm').classList.remove('open');await modal('Senha alterada!','Use a nova senha para entrar em outros aparelhos. Os outros aparelhos precisarão entrar de novo.',[['Ok',1]],'ok');break;
+    case 'wrong_old':pwErr('A senha atual está incorreta.');break;
+    case 'weak':pwErr('A nova senha precisa ter pelo menos 6 caracteres.');break;
+    case 'same':pwErr('A nova senha precisa ser diferente da atual.');break;
+    case 'in_use':pwErr('Essa senha já está em uso. Escolha outra.');break;
+    case 'throttled':pwErr('Muitas tentativas. Aguarde alguns minutos.');break;
+    default:pwErr('Não foi possível trocar agora. Tente de novo.')}
+};
 })();
 </script>
 </body>

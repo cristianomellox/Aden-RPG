@@ -37,9 +37,8 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 body.hud-hidden #home .hm,body.hud-hidden #ft,body.hud-hidden #vig{opacity:0;visibility:hidden;pointer-events:none!important;transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .35s cubic-bezier(.4,0,.2,1),visibility 0s linear .35s}
 body.hud-hidden #home .hm{transform:translateY(-30px)}
 .logo{display:block;flex:0 1 auto;min-height:0;align-self:center;max-width:min(80%,340px);max-height:25dvh;max-height:25vh;max-height:25dvh;margin:0 auto 4px;object-fit:contain;filter:drop-shadow(0 4px 12px #000)}
-#hello{flex:none;text-align:center;font-family:var(--serif);font-size:1.02rem;letter-spacing:.04em;color:#e9e1cc;text-shadow:0 2px 8px #000,0 0 14px #000;margin:2px 0 12px}
-#hello span{color:var(--gold)}#hello b{font-weight:700;color:#fff}
-#hello::after{content:"";display:block;width:64px;height:1px;margin:9px auto 0;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+#hello{flex:none;align-self:center;text-align:center;font-family:var(--serif);font-size:1.04rem;font-weight:700;letter-spacing:.04em;color:#fff;margin:2px 0 14px;padding:7px 18px 8px;border-radius:999px;background:rgba(4,4,9,.62);border:1px solid rgba(217,180,90,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.55);-webkit-text-stroke:3px rgba(0,0,0,.9);paint-order:stroke fill;text-shadow:0 1px 3px #000}
+#hello span{color:#f6d77c}#hello b{color:#fff}
 
 .cards{flex:1 1 0;min-height:0;max-height:660px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:12px}
 .card{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:0;padding:10px 8px 12px;border-radius:18px;border:1px solid var(--ln);
@@ -216,9 +215,9 @@ float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 void main(){vec4 t=texture2D(uM,vU,uB);float a=t.a*uR;vec3 c=uCol;
  if(uK>1.5){a*=.5;}
  else if(uK>.5){c=t.rgb;float l=dot(c,vec3(.3,.59,.11));
-  float b=vU.x*.75+vU.y*.45-uSh;c+=vec3(1.,.82,.4)*exp(-b*b*90.)*(.3+l)*1.45;
+  float b=vU.x*.75+vU.y*.45-uSh;c+=vec3(1.,.82,.4)*exp(-b*b*90.)*(.3+l)*1.95;
   vec2 g=floor(vU*vec2(170.,95.));float r=h(g);float tw=pow(max(0.,sin(uT*3.+r*40.)),24.)*step(.93,r)*step(.6,l);
-  tw*=smoothstep(.5,.05,length(fract(vU*vec2(170.,95.))-.5));c+=vec3(1.,.9,.6)*tw*2.0;c*=1.+.07*sin(uT*1.5+vU.x*6.);}
+  tw*=smoothstep(.5,.05,length(fract(vU*vec2(170.,95.))-.5));c+=vec3(1.,.9,.6)*tw*2.7;c*=1.+.07*sin(uT*1.5+vU.x*6.);}
  else{c*=.7+.3*vU.y;}
  gl_FragColor=vec4(c,a);}`;
 const geo=new T.PlaneGeometry(A,1),NL=12,DEP=.11,lc=(u)=>new T.Vector3(.23+.56*u,.15+.44*u,.02+.1*u);
@@ -423,25 +422,43 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
     const s=sess()||{};
     await rpc('emaus_push_subscribe',{p_endpoint:sub.endpoint,p_p256dh:b64(sub.getKey('p256dh')),p_auth:b64(sub.getKey('auth')),p_device_type:ios?'ios':'web',p_member:s.id||null,p_token:s.token||null});
   }
-  function blocked(){
-    const i='As notificações do Emaús estão bloqueadas. ';
-    if(ios)return tut('Notificações bloqueadas',['Abra o app <b>Ajustes</b> do iPhone.','Toque em <b>Notificações</b> e procure <b>Emaús</b>.','Ative <b>Permitir Notificações</b>.'],i+'Para ativar:');
-    if(/Android/i.test(UA))return tut('Notificações bloqueadas',['Abra <b>Configurações</b> do celular → <b>Apps</b> → <b>Emaús</b> → <b>Notificações</b> e ative.','Se continuar bloqueado: <b>Chrome</b> → menu (⋮) → <b>Configurações</b> → <b>Configurações de site</b> → <b>Notificações</b>.','Procure <b>'+location.host+'</b> na lista e mude para <b>Permitir</b>.'],i+'Tente primeiro:');
-    return tut('Notificações bloqueadas',['Clique no ícone de cadeado ao lado do endereço (ou no menu ⋮ do app → <b>Informações do app</b>).','Abra <b>Configurações do site</b> → <b>Notificações</b> e escolha <b>Permitir</b>.'],i+'Para ativar:');
+  let nmOpen=false,asked=false,lastPerm=nsup()?Notification.permission:'';
+  function closeNotifModal(){if(nmOpen){nmOpen=false;$('#md').hidden=true}}
+  async function blocked(){
+    nmOpen=true;const i='Parece que as notificações do Emaús estão bloqueadas. ';let p;
+    if(ios)p=tut('Notificações bloqueadas',['Abra o app <b>Ajustes</b> do iPhone.','Role até <b>Notificações</b> (ou procure “Emaús” na busca dos Ajustes).','Toque em <b>Emaús</b> e ative <b>Permitir Notificações</b>.'],i+'Para ativar:');
+    else if(/Android/i.test(UA))p=tut('Notificações bloqueadas',['Abra <b>Configurações</b> do celular → <b>Apps</b> → <b>Emaús</b> → <b>Notificações</b> e ative.','Se continuar bloqueado, o Chrome guarda a permissão por site: abra o <b>Chrome</b> → menu (⋮) → <b>Configurações</b> → <b>Configurações de site</b> → <b>Notificações</b>.','Procure <b>'+location.host+'</b> na lista e mude para <b>Permitir</b>.'],i+'Tente primeiro pelas Configurações do celular:');
+    else p=tut('Notificações bloqueadas',['Clique no cadeado ao lado do endereço (ou no menu ⋮ do app → <b>Informações do app</b>).','Abra <b>Configurações do site</b> → <b>Notificações</b> e escolha <b>Permitir</b>.'],i+'Para ativar:');
+    await p;nmOpen=false;
   }
-  function ntRefresh(){const b=$('#ntBtn');if(!isApp||!nsup()){b.hidden=true;return}const g=Notification.permission==='granted';b.hidden=g;if(g&&sess())subscribe().catch(()=>{})}
+  function ntRefresh(){const b=$('#ntBtn');if(!isApp||!nsup()){b.hidden=true;return}const g=Notification.permission==='granted';b.hidden=g;if(g){closeNotifModal();if(sess())subscribe().catch(()=>{})}}
   async function askNotif(){
     if(Notification.permission==='denied')return blocked();
     let r;try{r=await Notification.requestPermission()}catch(e){r=Notification.permission}
     if(r==='granted'){await subscribe().catch(()=>{});ntRefresh()}else if(r==='denied')blocked();
   }
   $('#ntBtn').onclick=askNotif;
+  /* Aparece em TODA abertura do app enquanto as notificações não estiverem ativas:
+     "default" -> explica e pede permissão; "denied" -> tutorial de como desbloquear. */
   async function offerNotif(){
-    if(!isApp||!nsup()||Notification.permission!=='default')return;
-    try{if(sessionStorage.getItem('emaus.nask'))return;sessionStorage.setItem('emaus.nask','1')}catch(e){}
-    const go=await modal('Ativar notificações?','Receba os avisos do grupo Emaús direto no seu aparelho: reuniões, lições e novidades.',[['Agora não',0,'sec'],['Ativar',1]]);
-    if(go)askNotif();
+    if(!isApp||!nsup()||asked||!sess())return;
+    const st=Notification.permission;if(st==='granted')return;
+    asked=true;if(st==='denied')return blocked();
+    nmOpen=true;
+    const p=modal('Ativar notificações','',[['Agora não',0,'sec'],['Permitir',1]]);
+    $('#mdx').innerHTML='<p style="margin:0 0 10px">Permita as notificações para receber no seu aparelho:</p><ul style="text-align:left;padding-left:20px;margin:0;line-height:1.6"><li>Avisos de reuniões e eventos do grupo.</li><li>Novas lições e novidades do Emaús.</li><li>Recados importantes da liderança.</li></ul>';
+    const go=await p;nmOpen=false;if(go)askNotif();
   }
+  /* Reage quando o usuário liga/desliga nas configurações e volta pro app */
+  function recheck(){
+    if(!isApp||!nsup()||!sess())return;
+    const st=Notification.permission;
+    if(st==='granted')ntRefresh();
+    else{ntRefresh();if(lastPerm==='granted'){asked=false}offerNotif()}
+    lastPerm=st;
+  }
+  try{if(isApp&&navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'notifications'}).then(s=>{s.onchange=recheck}).catch(()=>{})}catch(e){}
+  addEventListener('focus',recheck);
 
   /* ---- entrada: nome + senha ---- */
   const ST={name:'',pass:''};
@@ -497,7 +514,7 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
   }
   if(!isApp)B.classList.remove('needlogin');
   boot();
-  document.addEventListener('visibilitychange',()=>{if(document.hidden||!isApp)return;clearBadge();ntRefresh();if(Date.now()-lastPing>30*60*1000&&sess())ping(true)});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden||!isApp)return;clearBadge();recheck();if(Date.now()-lastPing>30*60*1000&&sess())ping(true)});
   addEventListener('online',()=>{if(isApp&&sess()&&!lastPing)ping(true)});
   if(isApp&&'serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='emaus-nav'){/* rotas das telas entram aqui quando existirem */}});
 })();

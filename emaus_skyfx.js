@@ -3,12 +3,12 @@
 // Só o halo da logo (raios, anel e cometa de luz), tirado do skyfx das cifras. Sem holofotes, poeira,
 // véu ou estrelas: o céu fica apenas com o pós-processamento do postfx.js.
 // Desenhado POR CIMA do panorama, no mesmo renderer do skybox (sem contexto WebGL próprio).
-// Intensidade: CFG.logoHalo (cifras = 1.1; aqui 1.32, um pouco mais forte).
+// Intensidade: CFG.logoHalo (cifras = 1.1; aqui 2.1, bem mais forte).
 // ═══════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 
-const CFG = { logoHalo: 1.32 };
+const CFG = { logoHalo: 2.1 };
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const HALO_FS = `
@@ -21,11 +21,11 @@ void main(){
     float e = length(q), a = atan(q.y, q.x);
     float edge = 1. - smoothstep(.70, 1., max(abs(p.x) / uA, abs(p.y)));
     vec3 gold = vec3(1., .80, .40), white = vec3(1., .96, .86), blue = vec3(.55, .72, 1.);
-    float glow = exp(-e * e * .55) * .20 + exp(-e * .9) * .16;
+    float glow = exp(-e * e * .55) * .30 + exp(-e * .9) * .24;
     float rays = pow(.5 + .5 * sin(a * 13. + uT * .10 + sin(a * 3. - uT * .07) * 2.), 5.) * .55 + pow(.5 + .5 * sin(a * 29. - uT * .06), 8.) * .25;
-    rays *= smoothstep(.55, 1.15, e) * exp(-max(e - 1., 0.) * .85) * .34;
+    rays *= smoothstep(.55, 1.15, e) * exp(-max(e - 1., 0.) * .85) * .55;
     float ringR = 1.5;
-    float ring = exp(-pow((e - ringR) * 9., 2.)) * (.20 + .15 * sin(a * 4. - uT * .5));
+    float ring = exp(-pow((e - ringR) * 9., 2.)) * (.30 + .20 * sin(a * 4. - uT * .5));
     float ph = uT * .45;
     float da = mod(ph - a, TAU);
     float tail = exp(-da * 2.2) * exp(-pow((e - ringR) * 11., 2.));
@@ -39,7 +39,7 @@ void main(){
     vec3 col = gold * glow * .9 + white * glow * .3 + mix(gold, white, .5) * rays + blue * ring * .8 + white * (tail * .5 + comet) + white * st * .9;
     col *= edge * uIn * uVis;
     col = min(col * uK, vec3(1.));
-    gl_FragColor = vec4(col * .6, 1.);      // aditivo
+    gl_FragColor = vec4(col * .85, 1.);      // aditivo
 }`;
 
 function additive(extra) {
@@ -71,7 +71,7 @@ export function initSkyFX({ scene, camera, renderer }) {
     }
     const haloWanted = () => {
         const c = document.body.classList;
-        return c.contains('onhome') && !c.contains('hud-hidden') && !c.contains('needinstall') && !c.contains('needlogin');
+        return c.contains('onhome') && !c.contains('hud-hidden') && !c.contains('needlogin');
     };
     let haloLastT = 0;
     function haloUpdate(t, dt) {

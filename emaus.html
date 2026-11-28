@@ -213,6 +213,9 @@ body:not(.onhome) #home{visibility:hidden}
 .wide.ck.done,.wide.ck.pend{background:rgba(10,9,16,.74);color:var(--gold2);box-shadow:none;animation:none}
 @keyframes ckp{0%,100%{box-shadow:0 0 14px rgba(217,180,90,.25)}50%{box-shadow:0 0 30px rgba(240,213,138,.55)}}
 body.needinstall #ckBtn{display:none!important}
+.pc.dim{opacity:.55;border-color:rgba(217,180,90,.15)}.pc.dim .ic3{filter:grayscale(1) brightness(.6)}
+.pc.lit{border-color:var(--gold2);background:linear-gradient(160deg,rgba(80,60,20,.62),rgba(14,11,6,.88));animation:ckp 2.4s ease-in-out infinite}
+.pc .pcs.on{color:var(--gold2)}
 
 @media (max-height:640px){.logo{max-height:20dvh}#hello{margin-bottom:8px}.cards{gap:8px}.card{padding:6px}}
 @media (min-width:700px){.logo{max-height:28dvh}}
@@ -269,6 +272,15 @@ ranking(){ /* troféu */
   [-1,1].forEach(s=>g.add(me(new T.TorusGeometry(.22,.05,12,28),GOLD,s*.68,.38,0,0,0,s>0?-Math.PI/2:Math.PI/2)));
   const st=me(star(.3,.13,.07),mat(0xffe08a,.6,.3,{emissive:0xffb830,emissiveIntensity:.5}),0,1.12,0);g.add(st);g.position.y=-.05;
   return{g,fit:.82,tick(t){g.rotation.y=t*.7;st.rotation.y=-t*2.2;st.position.y=1.1+Math.sin(t*2)*.05}}},
+checkin(){ /* pino de localização com check + ondas no chão */
+  const g=new T.Group(),pin=new T.Group();
+  const PM=mat(0xf0c850,.55,.3);pin.add(me(new T.SphereGeometry(.5,32,24),PM,0,.3,0),me(new T.ConeGeometry(.42,.95,32),PM,0,-.3,0,Math.PI,0,0));
+  const ck=mat(0xfff6dc,.1,.35,{emissive:0xffe9a8,emissiveIntensity:.55});
+  pin.add(me(BX(.11,.3,.08),ck,-.15,.22,.5,0,0,Math.PI/4),me(BX(.11,.56,.08),ck,.1,.3,.5,0,0,-Math.PI/4));
+  pin.position.y=.25;g.add(pin);
+  const rings=[0,1].map(()=>{const r=me(new T.TorusGeometry(.5,.03,10,48),GOLD.clone(),0,-.72,0,Math.PI/2,0,0);g.add(r);return r});
+  return{g,fit:1.12,tick(t){pin.position.y=.25+Math.abs(Math.sin(t*1.8))*.12;g.rotation.y=Math.sin(t*.7)*.45;
+    rings.forEach((r,i)=>{const k=((t*.7+i*.5)%1);r.scale.setScalar(.35+k*1.1);r.material.transparent=true;r.material.opacity=1-k;})}}},
 senha(){ /* cadeado */
   const g=new T.Group();g.add(me(BX(1.08,.84,.5),GOLD,0,-.32,0));
   const sh=new T.Group();sh.add(me(new T.TorusGeometry(.34,.085,14,32,Math.PI),GOLD,0,0,0),me(CY(.085,.085,.3,14),GOLD,-.34,-.15,0),me(CY(.085,.085,.3,14),GOLD,.34,-.15,0));sh.position.y=.1;g.add(sh);
@@ -567,6 +579,15 @@ raf=requestAnimationFrame(frame);
   </div>
 </section>
 
+<!-- REUNIÕES -->
+<section class="pg" id="reunioes">
+  <button class="bk" data-back aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg></button>
+  <div class="mh"><div class="mt">Reuniões</div><div class="ms">Terças · 19h às 22h</div><div class="orn"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 9l-5 4.4L17.6 20 12 16.5 6.4 20 8 13.4 3 9l6.6-.4z"/></svg></div></div>
+  <div class="pfcards" style="margin-top:22px">
+    <button class="pc dim" id="rnCk"><span class="ic3" data-i3="checkin"><svg viewBox="0 0 64 64"><path d="M32 58s18-15 18-30a18 18 0 10-36 0c0 15 18 30 18 30z"/><path d="M24 28l6 6 11-12"/></svg></span><span class="pcn">Check-in de Presença</span><span class="pcs" id="rnSt">Terças, 19h às 22h</span></button>
+  </div>
+</section>
+
 <!-- RANKING -->
 <section class="pg" id="ranking">
   <button class="bk" data-back aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg></button>
@@ -760,12 +781,12 @@ $('#hud').onclick=()=>document.body.classList.toggle('hud-hidden');
     const A=$('#auth');A.hidden=false;B.classList.add('needlogin');const ni=$('#an'),pi=$('#apw'),go=$('#ago');
     const done=s=>{A.hidden=true;B.classList.remove('needlogin');pi.value='';res(s)};
     let lim=false;
-    const nameLimit=async()=>{if(lim)return;lim=true;await modal('Atenção','O nome deve ter no máximo 14 letras.',[['Entendi',1]]);lim=false;ni.focus()};
-    ni.addEventListener('input',()=>{const a=Array.from(ni.value);if(a.length>14){ni.value=a.slice(0,14).join('');nameLimit()}});
+    const nameLimit=async()=>{if(lim)return;lim=true;await modal('Atenção','O nome deve ter no máximo 15 letras.',[['Entendi',1]]);lim=false;ni.focus()};
+    ni.addEventListener('input',()=>{const a=Array.from(ni.value);if(a.length>15){ni.value=a.slice(0,15).join('');nameLimit()}});
     async function enter(create){
       const name=ni.value.replace(/\s+/g,' ').trim(),pass=pi.value.trim();authMsg('');
       if(pass.length<6){authMsg('A senha precisa ter pelo menos 6 caracteres.');pi.focus();return}
-      if(Array.from(name).length>14){ni.value=Array.from(name).slice(0,14).join('');nameLimit();return}
+      if(Array.from(name).length>15){ni.value=Array.from(name).slice(0,15).join('');nameLimit();return}
       if(!create&&name.length<2){authMsg('Digite seu nome.');ni.focus();return}
       if(!navigator.onLine){authMsg('Sem internet. Conecte-se para entrar.');return}
       go.classList.add('busy');let r;
@@ -839,9 +860,9 @@ const forbidden=e=>/42501|forbidden/i.test(String(e&&e.message||e));
 function relogin(){LS.del('emaus.sess');location.hash='';location.reload()}
 
 /* ---------- rotas ---------- */
-function parse(){const h=location.hash.replace(/^#/,'');if(h==='membros')return{s:'membros'};if(h==='ranking')return{s:'ranking'};if(h==='perfil')return{s:'perfil',id:null};
+function parse(){const h=location.hash.replace(/^#/,'');if(h==='membros')return{s:'membros'};if(h==='ranking')return{s:'ranking'};if(h==='reunioes')return{s:'reunioes'};if(h==='perfil')return{s:'perfil',id:null};
   const m=h.match(/^perfil-([0-9a-f-]{36})$/i);return m?{s:'perfil',id:m[1].toLowerCase()}:{s:'home'}}
-function show(n){['membros','perfil','ranking'].forEach(x=>$('#'+x).classList.toggle('open',x===n));
+function show(n){['membros','perfil','ranking','reunioes'].forEach(x=>$('#'+x).classList.toggle('open',x===n));
   if(window.EmausPodium){if(n==='ranking')EmausPodium.start();else EmausPodium.stop()}B.classList.toggle('onhome',!n);if(n!=='perfil')stopCover($('#pfCover'));
   const sky=window.EmausSkybox;if(sky&&sky.pause){if(n)sky.pause();else sky.resume()}}
 function route(){
@@ -849,6 +870,7 @@ function route(){
   const r=parse();
   if(r.s==='membros'){show('membros');openMembers()}
   else if(r.s==='ranking'){show('ranking');openRanking()}
+  else if(r.s==='reunioes'){show('reunioes');ckPaint()}
   else if(r.s==='perfil'){show('perfil');openProfile(r.id||me().id)}
   else show(null);
 }
@@ -856,7 +878,7 @@ function go(h){depth++;location.hash=h}
 function back(){if(depth>0){depth--;history.back()}else{try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}route()}}
 addEventListener('hashchange',route);
 document.addEventListener('click',e=>{if(e.target.closest('[data-back]'))back()});
-document.querySelectorAll('.card[data-go]').forEach(c=>c.addEventListener('click',()=>{const g=c.dataset.go;if(g==='membros')go('membros');else if(g==='perfil')go('perfil');else if(g==='ranking')go('ranking')}));
+document.querySelectorAll('.card[data-go]').forEach(c=>c.addEventListener('click',()=>{const g=c.dataset.go;if(g==='membros')go('membros');else if(g==='perfil')go('perfil');else if(g==='ranking')go('ranking');else if(g==='reunioes')go('reunioes')}));
 window.Emaus={ready(){ready=true;route();ckInit()}};
 if(window.__emausReady)window.Emaus.ready();
 
@@ -996,8 +1018,12 @@ function ckPaint(){
   if(mine&&mine.st==='done'){cls+=' done';txt='Presença de hoje confirmada ✓'}
   else if(mine&&mine.st==='pend'){cls+=' pend';txt='Check-in aguardando validação'}
   else if(inWindow(now))txt='Check-in de presença (+'+MC.points+' pts)';
-  else{b.hidden=true;return}
-  b.className='wide '+cls;b.innerHTML=PIN+txt;b.hidden=false;
+  else{cls='';}
+  if(cls){b.className='wide '+cls;b.innerHTML=PIN+txt;b.hidden=false}else b.hidden=true;
+  /* card da tela Reuniões: aceso só no dia/horário; apagado nos outros momentos */
+  const c=$('#rnCk'),st=$('#rnSt'),lit=inWindow(now)&&!(mine&&mine.st==='done');
+  c.classList.toggle('lit',lit);c.classList.toggle('dim',!lit);st.classList.toggle('on',lit);
+  st.textContent=mine&&mine.st==='done'?'Presença confirmada hoje ✓':mine&&mine.st==='pend'?'Aguardando validação':lit?'Disponível agora · +'+MC.points+' pts':'Terças, 19h às 22h';
 }
 const hideModal=()=>{$('#md').hidden=true};
 function geoErr(e){
@@ -1012,7 +1038,7 @@ async function ckGo(){
   if(mine&&mine.st==='pend'){
     if(navigator.onLine){await syncCheckins();return}
     return modal('Check-in registrado','Seu check-in está salvo, mas ainda precisa ser validado. Assim que você estiver com internet, entre novamente no aplicativo.',[['Ok',1]])}
-  if(!inWindow(now))return modal('Fora do horário','O check-in só vale às terças-feiras, das 19h às 22h (horário de São Paulo).',[['Ok',1]]);
+  if(!inWindow(now))return modal('Check-in de Presença','Ganhe '+MC.points+' pontos ao fazer o check-in nas terças entre 19h e 22h no local da reunião.',[['Entendi',1]]);
   if(!navigator.geolocation)return modal('GPS indisponível','Este aparelho não permite usar a localização.',[['Ok',1]],'err');
   ckBusy=true;
   try{
@@ -1057,6 +1083,7 @@ async function syncCheckins(){ /* envia os check-ins feitos sem internet */
 }
 function ckInit(){loadMeet().then(ckPaint);ckPaint();syncCheckins();setInterval(ckPaint,30000)}
 $('#ckBtn').addEventListener('click',ckGo);
+$('#rnCk').addEventListener('click',ckGo);
 addEventListener('online',()=>{syncCheckins();loadMeet()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&ready){ckPaint();syncCheckins()}});
 

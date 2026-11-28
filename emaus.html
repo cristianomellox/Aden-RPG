@@ -107,6 +107,7 @@ input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,90,.16)}
 /* ===== telas internas (Membros / Perfil) ===== */
 body:not(.onhome) #ft,body:not(.onhome) .hud-toggle-btn,body:not(.onhome) #vig{display:none}
 body:not(.onhome) #emausSkyLayer{display:none!important}
+body:not(.onhome) #home{visibility:hidden}
 .pg{position:fixed;inset:0;z-index:4;display:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:radial-gradient(ellipse at 50% -10%,#2b1e11 0%,#0b0a12 46%,#050508 100%)}
 .pg.open{display:block;animation:pgin .32s cubic-bezier(.22,1,.36,1)}
 @keyframes pgin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
@@ -267,14 +268,15 @@ function scan(root){
       sc.add(glow());o.g.scale.setScalar(o.fit);sc.add(o.g);
       const cam=new T.PerspectiveCamera(30,1,.1,50);cam.position.set(0,0,4.5);
       const cv=document.createElement('canvas');cv.width=cv.height=S;cv.setAttribute('aria-hidden','true');
-      items.push({n,cv,x:cv.getContext('2d'),sc,cam,o,ph:Math.random()*5,on:false})}catch(e){console.warn('Ícone 3D',k,e)}});
+      items.push({n,cv,x:cv.getContext('2d'),sc,cam,o,ph:Math.random()*5,on:false,home:!!n.closest('#home')})}catch(e){console.warn('Ícone 3D',k,e)}});
 }
 const vis=it=>it.n.isConnected&&it.n.offsetParent!==null;
 let last=0;
 (function frame(now){requestAnimationFrame(frame);
   if(document.hidden||BODY.classList.contains('hud-hidden')||BODY.classList.contains('needinstall')||BODY.classList.contains('needlogin'))return;
   if(now-last<32)return;last=now;const t=now/1000;
-  items.forEach(it=>{if(!vis(it))return;if(RED&&it.on)return;draw(it,t)})})(0);
+  const onHome=BODY.classList.contains('onhome');
+  items.forEach(it=>{if(!vis(it)||(it.home&&!onHome))return;if(RED&&it.on)return;draw(it,t)})})(0);
 const pend=(window.EmausIcons&&window.EmausIcons.q)||[];
 window.EmausIcons={scan};scan();pend.forEach(x=>scan(x));
 })();
@@ -716,7 +718,8 @@ function relogin(){LS.del('emaus.sess');location.hash='';location.reload()}
 /* ---------- rotas ---------- */
 function parse(){const h=location.hash.replace(/^#/,'');if(h==='membros')return{s:'membros'};if(h==='perfil')return{s:'perfil',id:null};
   const m=h.match(/^perfil-([0-9a-f-]{36})$/i);return m?{s:'perfil',id:m[1].toLowerCase()}:{s:'home'}}
-function show(n){['membros','perfil'].forEach(x=>$('#'+x).classList.toggle('open',x===n));B.classList.toggle('onhome',!n);if(n!=='perfil')stopCover($('#pfCover'))}
+function show(n){['membros','perfil'].forEach(x=>$('#'+x).classList.toggle('open',x===n));B.classList.toggle('onhome',!n);if(n!=='perfil')stopCover($('#pfCover'));
+  const sky=window.EmausSkybox;if(sky&&sky.pause){if(n)sky.pause();else sky.resume()}}
 function route(){
   if(!ready||!logged()){show(null);return}
   const r=parse();
